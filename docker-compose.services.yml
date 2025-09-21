@@ -12,8 +12,8 @@ services:
 
   python-extractor:
     build:
-      context: ./python-extractor
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./python-extractor/Dockerfile
     image: python-extractor:latest
     environment:
       - MANAGER_URL=http://localhost:8081
@@ -23,8 +23,8 @@ services:
 
   synthesizer:
     build:
-      context: ./synthesizer
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./synthesizer/Dockerfile
     image: synthesizer:latest
     environment:
       - CM_NEO4J_URI=127.0.0.1:7687

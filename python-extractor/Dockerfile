@@ -2,18 +2,19 @@
 FROM rust:1.90-alpine AS builder
 
 # Install needed tools for compiling
-RUN apk add --no-cache musl-dev pkgconfig openssl-dev
+RUN apk add --no-cache musl-dev pkgconfig openssl-dev curl
 
 WORKDIR /usr/src/app
 
-# Pre-cache dependencies
-COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release && rm -rf src
+# Copy Workspace Cargo.toml
+# COPY Cargo.toml Cargo.lock ./
 
-# Copy the source
-COPY . .
+# Copy all needed crates
+COPY ./python-extractor ./python-extractor
+COPY ./models ./models
 
+# Set working directory to python-extractor
+WORKDIR /usr/src/app/python-extractor
 # Build for musl (static binary)
 RUN cargo build --release
 
@@ -26,7 +27,7 @@ RUN apk add --no-cache ca-certificates
 WORKDIR /usr/local/bin
 
 # Copy the binary from builder
-COPY --from=builder /usr/src/app/target/release/python-extractor .
+COPY --from=builder /usr/src/app/python-extractor/target/release/python-extractor .
 
 # Set logging env variable
 ENV RUST_LOG=info
