@@ -1,0 +1,40 @@
+services:
+  manager:
+    build:
+      context: ./manager
+      dockerfile: Dockerfile
+    image: manager:latest
+    environment:
+      - RUST_LOG=info
+      - DATABASE_URL=postgresql://postgres:password@localhost:5432/manager-db
+    ports:
+      - 8081:8081
+
+  python-extractor:
+    build:
+      context: ./python-extractor
+      dockerfile: Dockerfile
+    image: python-extractor:latest
+    environment:
+      - MANAGER_URL=http://localhost:8081
+      - SYNTHESIZER_URL=http://localhost:8080
+    ports:
+      - 8082:8082
+
+  synthesizer:
+    build:
+      context: ./synthesizer
+      dockerfile: Dockerfile
+    image: synthesizer:latest
+    environment:
+      - CM_NEO4J_URI=127.0.0.1:7687
+      - CM_NEO4J_USERNAME=neo4j
+      - CM_NEO4J_PASSWORD=password
+      - SDG_NEO4J_URI=127.0.0.1:7688
+      - SDG_NEO4J_USERNAME=neo4j
+      - SDG_NEO4J_PASSWORD=password
+      - IMCG_NEO4J_URI=127.0.0.1:7689
+      - IMCG_NEO4J_USERNAME=neo4j
+      - IMCG_NEO4J_PASSWORD=password
+    ports:
+      - 8080:8080
