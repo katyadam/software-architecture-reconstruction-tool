@@ -1,0 +1,32 @@
+use std::str::FromStr;
+
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema, Clone)]
+pub enum HttpMethod {
+    GET,
+    POST,
+    PUT,
+    DELETE,
+}
+
+impl Default for HttpMethod {
+    fn default() -> Self {
+        HttpMethod::GET
+    }
+}
+
+impl FromStr for HttpMethod {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            "GET" => Ok(HttpMethod::GET),
+            "POST" => Ok(HttpMethod::POST),
+            "PUT" => Ok(HttpMethod::PUT),
+            "DELETE" => Ok(HttpMethod::DELETE),
+            _ => Err(format!("Invalid HTTP method: {}", s)),
+        }
+    }
+}

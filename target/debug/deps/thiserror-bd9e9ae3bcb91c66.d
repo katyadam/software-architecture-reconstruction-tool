@@ -1,0 +1,11 @@
+/home/adamkattan/muni/VOYANTCLAIR/target/debug/deps/thiserror-bd9e9ae3bcb91c66.d: /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/lib.rs /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/aserror.rs /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/display.rs /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/provide.rs /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/var.rs
+
+/home/adamkattan/muni/VOYANTCLAIR/target/debug/deps/libthiserror-bd9e9ae3bcb91c66.rlib: /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/lib.rs /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/aserror.rs /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/display.rs /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/provide.rs /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/var.rs
+
+/home/adamkattan/muni/VOYANTCLAIR/target/debug/deps/libthiserror-bd9e9ae3bcb91c66.rmeta: /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/lib.rs /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/aserror.rs /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/display.rs /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/provide.rs /home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/var.rs
+
+/home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/lib.rs:
+/home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/aserror.rs:
+/home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/display.rs:
+/home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/provide.rs:
+/home/adamkattan/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.16/src/var.rs:

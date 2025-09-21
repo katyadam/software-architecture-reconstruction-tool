@@ -1,0 +1,27 @@
+services:
+  cm_neo4j:
+    image: neo4j:latest
+    container_name: cm_neo4j
+    environment:
+      NEO4J_AUTH: "neo4j/password"
+    ports:
+      - "7474:7474" # HTTP
+      - "7687:7687" # BOLT
+
+  sdg_neo4j:
+    image: neo4j:latest
+    container_name: sdg_neo4j
+    environment:
+      NEO4J_AUTH: "neo4j/password"
+    ports:
+      - "7475:7474"
+      - "7688:7687"
+
+  imcg_neo4j:
+    image: neo4j:latest
+    container_name: imcg_neo4j
+    environment:
+      NEO4J_AUTH: "neo4j/password"
+    ports:
+      - "7476:7474"
+      - "7689:7687"

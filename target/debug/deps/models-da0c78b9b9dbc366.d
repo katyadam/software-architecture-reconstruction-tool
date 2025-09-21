@@ -1,0 +1,14 @@
+/home/adamkattan/muni/VOYANTCLAIR/target/debug/deps/models-da0c78b9b9dbc366.d: models/src/lib.rs models/src/api.rs models/src/assignments.rs models/src/callables.rs models/src/calls.rs models/src/common.rs models/src/endpoints.rs models/src/entities.rs models/src/imports.rs models/src/restcalls.rs
+
+/home/adamkattan/muni/VOYANTCLAIR/target/debug/deps/libmodels-da0c78b9b9dbc366.rmeta: models/src/lib.rs models/src/api.rs models/src/assignments.rs models/src/callables.rs models/src/calls.rs models/src/common.rs models/src/endpoints.rs models/src/entities.rs models/src/imports.rs models/src/restcalls.rs
+
+models/src/lib.rs:
+models/src/api.rs:
+models/src/assignments.rs:
+models/src/callables.rs:
+models/src/calls.rs:
+models/src/common.rs:
+models/src/endpoints.rs:
+models/src/entities.rs:
+models/src/imports.rs:
+models/src/restcalls.rs:

@@ -1,0 +1,2 @@
+ALTER TABLE file_records
+ADD COLUMN file_size BIGINT NOT NULL DEFAULT 0;

@@ -1,0 +1,10 @@
+- [x] Test SAR logic for SDG
+- [x] Introduce Extractor Design Pattern for Python Code Element Extraction
+- [ ] Add initial_value, datatype to Parameters that are used in endpoints
+- [ ] Create presentation about this project
+- [ ] Make API for configuration to have overview about services and their files - needed to correctly connect endpoints and restcalls!!!
+- [ ] Create SAR logic for IMCG - first for SDG, cause IMCG uses SDG
+- [ ] Create tests for SAR logic
+- [ ] Evaluate precision of SAR
+- [ ] Incorporate analyses, mainly between two versions
+- [ ] Create GitHub Actions plugin for repository integration

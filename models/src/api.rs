@@ -1,0 +1,31 @@
+use crate::{CallStatement, Callable, Endpoint, Entity, Import, RestCall};
+
+#[derive(Debug)]
+pub struct CodeElementsAggregate {
+    pub imports: Vec<Import>,
+    pub entities: Vec<Entity>,
+    pub endpoints: Vec<Endpoint>,
+    pub restcalls: Vec<RestCall>,
+    pub callables: Vec<Callable>,
+    pub call_statements: Vec<CallStatement>,
+}
+
+impl CodeElementsAggregate {
+    pub fn new(
+        imports: Vec<Import>,
+        entities: Vec<Entity>,
+        endpoints: Vec<Endpoint>,
+        restcalls: Vec<RestCall>,
+        callables: Vec<Callable>,
+        call_statements: Vec<CallStatement>,
+    ) -> Self {
+        Self {
+            imports,
+            entities,
+            endpoints,
+            restcalls,
+            callables,
+            call_statements,
+        }
+    }
+}
