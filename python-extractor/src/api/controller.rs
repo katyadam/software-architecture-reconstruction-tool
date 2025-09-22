@@ -33,7 +33,6 @@ async fn process_files(
     synthesizer_connector: web::Data<SynthesizerConnector>,
     mut payload: Multipart,
     codebase_uuid_path: web::Path<Uuid>,
-    query: web::Query<ServiceNameQuery>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
 
@@ -56,8 +55,12 @@ async fn process_files(
                 // Convert to string (assuming UTF-8 text)
                 let text = String::from_utf8(file_bytes).map_err(|_| ApiError::BadRequest)?;
 
-                let code_elements_aggregate =
-                    parse(text.as_str(), &filename, &query.service_name).await;
+                let code_elements_aggregate = parse(
+                    text.as_str(),
+                    &filename,
+                    &"TODO: Service Name from Codebase Configs".to_string(),
+                )
+                .await;
 
                 synthesizer_connector
                     .send_code_elements(code_elements_aggregate, codebase_uuid)
