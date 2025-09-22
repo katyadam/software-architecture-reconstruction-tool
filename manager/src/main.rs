@@ -46,6 +46,8 @@ async fn main() -> std::io::Result<()> {
         .parse()
         .expect("PORT must be a valid u16 number");
 
+    let url: String = env::var("EXPOSE_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
+
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let pool = set_up_database_pool(&database_url, 4);
     HttpServer::new(move || {
@@ -74,7 +76,7 @@ async fn main() -> std::io::Result<()> {
                     .url("/api-docs/openapi.json", ApiDoc::openapi()),
             )
     })
-    .bind(("127.0.0.1", port))?
+    .bind((url, port))?
     .run()
     .await
 }

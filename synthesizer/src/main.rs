@@ -50,6 +50,8 @@ async fn main() -> std::io::Result<()> {
         .parse()
         .expect("PORT must be a valid u16 number");
 
+    let url: String = env::var("EXPOSE_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
+
     let cm_graph = setup_contextmap_db().await;
     let sdg_graph = setup_sdg_db().await;
     let imcg_graph = setup_imcg_db().await;
@@ -72,7 +74,7 @@ async fn main() -> std::io::Result<()> {
                     .url("/api-docs/openapi.json", ApiDoc::openapi()),
             )
     })
-    .bind(("127.0.0.1", port))?
+    .bind((url, port))?
     .run()
     .await
 }

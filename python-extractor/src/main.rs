@@ -38,6 +38,8 @@ async fn main() -> std::io::Result<()> {
         .parse()
         .expect("PORT must be a valid u16 number");
 
+    let url: String = env::var("EXPOSE_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
+
     HttpServer::new(move || {
         let manager_url: String = env::var("MANAGER_URL")
             .unwrap_or_else(|_| "http://localhost:8081".to_string())
@@ -66,7 +68,7 @@ async fn main() -> std::io::Result<()> {
                     .url("/api-docs/openapi.json", ApiDoc::openapi()),
             )
     })
-    .bind(("127.0.0.1", port))?
+    .bind((url, port))?
     .run()
     .await
 }

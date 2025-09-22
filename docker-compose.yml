@@ -6,11 +6,13 @@ services:
     image: manager:latest
     environment:
       - RUST_LOG=info
-      - DATABASE_URL=postgresql://postgres:password@localhost:5432/manager-db
+      - DATABASE_URL=postgresql://postgres:password@manager-db:5432/manager-db
+      - EXPOSE_URL=0.0.0.0
     ports:
       - 8081:8081
     depends_on:
-      - manager-db
+      manager-db:
+        condition: service_healthy
 
   python-extractor:
     build:
@@ -18,8 +20,9 @@ services:
       dockerfile: ./python-extractor/Dockerfile
     image: python-extractor:latest
     environment:
-      - MANAGER_URL=http://localhost:8081
-      - SYNTHESIZER_URL=http://localhost:8080
+      - MANAGER_URL=http://manager:8081
+      - SYNTHESIZER_URL=http://synthesizer:8080
+      - EXPOSE_URL=0.0.0.0
     ports:
       - 8082:8082
     depends_on:
@@ -32,21 +35,25 @@ services:
       dockerfile: ./synthesizer/Dockerfile
     image: synthesizer:latest
     environment:
-      - CM_NEO4J_URI=127.0.0.1:7687
+      - CM_NEO4J_URI=bolt://cm_neo4j:7687
       - CM_NEO4J_USERNAME=neo4j
       - CM_NEO4J_PASSWORD=password
-      - SDG_NEO4J_URI=127.0.0.1:7688
+      - SDG_NEO4J_URI=bolt://sdg_neo4j:7687
       - SDG_NEO4J_USERNAME=neo4j
       - SDG_NEO4J_PASSWORD=password
-      - IMCG_NEO4J_URI=127.0.0.1:7689
+      - IMCG_NEO4J_URI=bolt://imcg_neo4j:7687
       - IMCG_NEO4J_USERNAME=neo4j
       - IMCG_NEO4J_PASSWORD=password
+      - EXPOSE_URL=0.0.0.0
     ports:
       - 8080:8080
     depends_on:
-      - cm_neo4j
-      - sdg_neo4j
-      - imcg_neo4j
+      cm_neo4j:
+        condition: service_healthy
+      sdg_neo4j:
+        condition: service_healthy
+      imcg_neo4j:
+        condition: service_healthy
 
   cm_neo4j:
     image: neo4j:latest
@@ -56,6 +63,12 @@ services:
     ports:
       - "7474:7474" # HTTP
       - "7687:7687" # BOLT
+    healthcheck:
+      test:
+        ["CMD-SHELL", "cypher-shell -u neo4j -p password 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   sdg_neo4j:
     image: neo4j:latest
@@ -65,6 +78,12 @@ services:
     ports:
       - "7475:7474"
       - "7688:7687"
+    healthcheck:
+      test:
+        ["CMD-SHELL", "cypher-shell -u neo4j -p password 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   imcg_neo4j:
     image: neo4j:latest
@@ -74,6 +93,12 @@ services:
     ports:
       - "7476:7474"
       - "7689:7687"
+    healthcheck:
+      test:
+        ["CMD-SHELL", "cypher-shell -u neo4j -p password 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   manager-db:
     image: postgres:16
@@ -87,6 +112,11 @@ services:
       - "5432:5432"
     volumes:
       - manager-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d manager-db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   manager-db-data:
