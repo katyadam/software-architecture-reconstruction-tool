@@ -8,4 +8,7 @@ pub mod repository;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(health::health_check);
+    cfg.service(controller::create_configuration);
+    cfg.service(controller::get_configuration);
+    cfg.service(controller::delete_configuration);
 }

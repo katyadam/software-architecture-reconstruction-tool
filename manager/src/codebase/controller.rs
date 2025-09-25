@@ -68,7 +68,7 @@ pub async fn delete_codebase(
     codebase_repo: web::Data<PgCodebaseRepository>,
     codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
-    let projet_uuid = codebase_uuid_path.into_inner();
-    codebase_repo.delete(projet_uuid)?;
+    let codebase_uuid = codebase_uuid_path.into_inner();
+    codebase_repo.delete(codebase_uuid)?;
     Ok(HttpResponse::NoContent())
 }

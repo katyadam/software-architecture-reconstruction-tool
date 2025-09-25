@@ -8,6 +8,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
     codebase::{dto::CodebaseResponse, repository::PgCodebaseRepository},
+    configuration::repository::PgConfigurationRepository,
     errors::ApiError,
     files::repository::PgFileRecordsRepository,
     project::{dto::ProjectResponse, repository::PgProjectRepository},
@@ -55,6 +56,7 @@ async fn main() -> std::io::Result<()> {
         let project_repo = PgProjectRepository::new(pool.clone());
         let codebase_repo = PgCodebaseRepository::new(pool.clone());
         let file_records_repo = PgFileRecordsRepository::new(pool.clone());
+        let configuration_repo = PgConfigurationRepository::new(pool.clone());
         App::new()
             .wrap(Logger::default())
             .service(
@@ -72,7 +74,11 @@ async fn main() -> std::io::Result<()> {
                     .app_data(web::Data::new(file_records_repo))
                     .configure(files::configure),
             )
-            .service(web::scope("/configurations").configure(configuration::configure))
+            .service(
+                web::scope("/configurations")
+                    .app_data(web::Data::new(configuration_repo))
+                    .configure(configuration::configure),
+            )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")
                     .url("/api-docs/openapi.json", ApiDoc::openapi()),

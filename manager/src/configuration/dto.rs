@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PostConfiguration {
-    pub new_configuration_data: Value,
+    pub configuration_data: Value,
     #[schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
     pub codebase_uuid: Uuid,
 }
