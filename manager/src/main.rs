@@ -14,6 +14,7 @@ use crate::{
 };
 
 mod codebase;
+mod configuration;
 mod errors;
 mod files;
 mod project;

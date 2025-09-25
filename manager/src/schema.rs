@@ -10,6 +10,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    configurations (configuration_uuid) {
+        configuration_uuid -> Uuid,
+        codebase_uuid -> Uuid,
+        configuration_data -> Jsonb,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     file_records (id) {
         id -> Int8,
         file_path -> Text,
@@ -29,6 +38,7 @@ diesel::table! {
 }
 
 diesel::joinable!(codebases -> projects (project_uuid));
+diesel::joinable!(configurations -> codebases (codebase_uuid));
 diesel::joinable!(file_records -> codebases (codebase_uuid));
 
-diesel::allow_tables_to_appear_in_same_query!(codebases, file_records, projects,);
+diesel::allow_tables_to_appear_in_same_query!(codebases, configurations, file_records, projects,);
