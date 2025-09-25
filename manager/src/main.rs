@@ -72,6 +72,7 @@ async fn main() -> std::io::Result<()> {
                     .app_data(web::Data::new(file_records_repo))
                     .configure(files::configure),
             )
+            .service(web::scope("/configurations").configure(configuration::configure))
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")
                     .url("/api-docs/openapi.json", ApiDoc::openapi()),

@@ -6,4 +6,6 @@ pub mod health;
 pub mod model;
 pub mod repository;
 
-pub fn configure(cfg: &mut web::ServiceConfig) {}
+pub fn configure(cfg: &mut web::ServiceConfig) {
+    cfg.service(health::health_check);
+}
