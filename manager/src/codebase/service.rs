@@ -1,0 +1,42 @@
+use uuid::Uuid;
+
+use crate::{
+    codebase::{
+        model::{Codebase, NewCodebase},
+        repository::CodebaseRepository,
+    },
+    errors::ServiceError,
+};
+
+pub trait CodebaseService {
+    fn get_single(&self, uuid_to_find: Uuid) -> Result<Codebase, ServiceError>;
+    fn create(&self, new_codebase: NewCodebase) -> Result<Codebase, ServiceError>;
+    fn delete(&self, uuid_to_delete: Uuid) -> Result<(), ServiceError>;
+}
+
+pub struct CodebaseServiceImpl {
+    repository: Box<dyn CodebaseRepository>,
+}
+
+impl CodebaseServiceImpl {
+    pub fn new(repository: Box<dyn CodebaseRepository>) -> Self {
+        Self { repository }
+    }
+}
+
+impl CodebaseService for CodebaseServiceImpl {
+    fn get_single(&self, uuid_to_find: Uuid) -> Result<Codebase, ServiceError> {
+        let codebase = self.repository.get_single(uuid_to_find)?;
+        Ok(codebase)
+    }
+
+    fn create(&self, new_codebase: NewCodebase) -> Result<Codebase, ServiceError> {
+        let created_codebase = self.repository.save(new_codebase)?;
+        Ok(created_codebase)
+    }
+
+    fn delete(&self, uuid_to_delete: Uuid) -> Result<(), ServiceError> {
+        self.repository.delete(uuid_to_delete)?;
+        Ok(())
+    }
+}

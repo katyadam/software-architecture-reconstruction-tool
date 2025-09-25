@@ -1,5 +1,6 @@
 - [x] Test SAR logic for SDG
 - [x] Introduce Extractor Design Pattern for Python Code Element Extraction
+- [ ] Create services in APIs for business logic
 - [ ] Add initial_value, datatype to Parameters that are used in endpoints
 - [ ] Create presentation about this project
 - [ ] Make API for configuration to have overview about services and their files - needed to correctly connect endpoints and restcalls!!!

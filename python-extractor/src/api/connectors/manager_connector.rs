@@ -8,6 +8,7 @@ impl ManagerConnector {
     pub fn new(http_client: HttpClient) -> Self {
         Self { http_client }
     }
+
     pub async fn send_file_record(
         &self,
         file_record: PostFileRecord,

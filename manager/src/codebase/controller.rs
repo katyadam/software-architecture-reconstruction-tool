@@ -7,6 +7,7 @@ use crate::{
         dto::{CodebaseResponse, PostCodebase},
         model::NewCodebase,
         repository::{CodebaseRepository, PgCodebaseRepository},
+        service::{CodebaseService, CodebaseServiceImpl},
     },
     errors::ApiError,
 };
@@ -21,7 +22,7 @@ use crate::{
     )]
 #[post("")]
 pub async fn create_codebase(
-    codebase_repo: web::Data<PgCodebaseRepository>,
+    codebase_service: web::Data<dyn CodebaseService>,
     dto: web::Json<PostCodebase>,
 ) -> Result<impl Responder, ApiError> {
     let new_codebase = NewCodebase {
@@ -31,8 +32,7 @@ pub async fn create_codebase(
         configuration_uuid: dto.configuration_uuid,
         created_at: Utc::now(),
     };
-
-    let codebase = codebase_repo.save(new_codebase)?; // ? converts DatabaseError -> ApiError
+    let codebase = codebase_service.create(new_codebase)?; // ? converts DatabaseError -> ApiError
 
     Ok(HttpResponse::Created().json(codebase.to_response()))
 }
@@ -47,11 +47,11 @@ pub async fn create_codebase(
     )]
 #[get("/{codebase_uuid}")]
 pub async fn get_codebase(
-    codebase_repo: web::Data<PgCodebaseRepository>,
+    codebase_service: web::Data<dyn CodebaseService>,
     codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
-    let codebase = codebase_repo.get_single(codebase_uuid)?;
+    let codebase = codebase_service.get_single(codebase_uuid)?;
 
     Ok(HttpResponse::Ok().json(codebase.to_response()))
 }
@@ -66,10 +66,11 @@ pub async fn get_codebase(
     )]
 #[delete("/{codebase_uuid}")]
 pub async fn delete_codebase(
-    codebase_repo: web::Data<PgCodebaseRepository>,
+    codebase_service: web::Data<dyn CodebaseService>,
     codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
-    codebase_repo.delete(codebase_uuid)?;
+    codebase_service.delete(codebase_uuid)?;
+
     Ok(HttpResponse::NoContent())
 }
