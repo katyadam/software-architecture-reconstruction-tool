@@ -11,6 +11,7 @@ pub struct Codebase {
     pub codebase_uuid: Uuid,
     pub branch: String,
     pub project_uuid: Uuid,
+    pub configuration_uuid: Uuid,
     pub created_at: DateTime<Utc>,
 }
 
@@ -20,6 +21,7 @@ pub struct NewCodebase {
     pub codebase_uuid: Uuid,
     pub branch: String,
     pub project_uuid: Uuid,
+    pub configuration_uuid: Uuid,
     pub created_at: DateTime<Utc>,
 }
 
@@ -29,6 +31,7 @@ impl Codebase {
             codebase_uuid: self.codebase_uuid,
             branch: self.branch.clone(),
             project_uuid: self.project_uuid,
+            configuration_uuid: self.configuration_uuid,
             created_at: self.created_at.to_rfc3339(),
         }
     }

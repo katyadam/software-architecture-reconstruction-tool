@@ -8,6 +8,8 @@ pub struct PostCodebase {
     pub branch: String,
     #[schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
     pub project_uuid: Uuid,
+    #[schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
+    pub configuration_uuid: Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -16,6 +18,8 @@ pub struct UpdateCodebase {
     pub new_branch: String,
     #[schema(example = "d4c3fd92-5941-4538-b93b-298fe22c99db")]
     pub new_owner: String,
+    #[schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
+    pub new_configuration_uuid: Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -23,5 +27,6 @@ pub struct CodebaseResponse {
     pub codebase_uuid: Uuid,
     pub branch: String,
     pub project_uuid: Uuid,
+    pub configuration_uuid: Uuid,
     pub created_at: String,
 }

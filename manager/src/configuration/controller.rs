@@ -26,7 +26,7 @@ pub async fn create_configuration(
 ) -> Result<impl Responder, ApiError> {
     let new_conf = NewConfiguration {
         configuration_uuid: Uuid::new_v4(),
-        codebase_uuid: dto.codebase_uuid,
+        project_uuid: dto.project_uuid,
         configuration_data: dto.configuration_data.to_owned(),
         created_at: Utc::now(),
     };

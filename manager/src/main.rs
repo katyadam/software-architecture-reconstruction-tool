@@ -30,7 +30,10 @@ mod schema;
         codebase::controller::create_codebase,
         codebase::controller::get_codebase,
         codebase::controller::delete_codebase,
-        files::controller::add_record
+        files::controller::add_record,
+        configuration::controller::create_configuration,
+        configuration::controller::get_configuration,
+        configuration::controller::delete_configuration,
     ),
     components(schemas(ProjectResponse, ApiError, CodebaseResponse))
 )]

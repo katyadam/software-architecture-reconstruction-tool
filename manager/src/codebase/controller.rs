@@ -28,6 +28,7 @@ pub async fn create_codebase(
         codebase_uuid: Uuid::new_v4(),
         branch: dto.branch.clone(),
         project_uuid: dto.project_uuid,
+        configuration_uuid: dto.configuration_uuid,
         created_at: Utc::now(),
     };
 
