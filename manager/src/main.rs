@@ -8,7 +8,9 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
     codebase::{
-        dto::CodebaseResponse, repository::PgCodebaseRepository, service::CodebaseServiceImpl,
+        dto::CodebaseResponse,
+        repository::PgCodebaseRepository,
+        service::{CodebaseService, CodebaseServiceImpl},
     },
     configuration::repository::PgConfigurationRepository,
     errors::ApiError,
@@ -60,11 +62,13 @@ async fn main() -> std::io::Result<()> {
     let pool = set_up_database_pool(&database_url, 4);
     HttpServer::new(move || {
         let project_repo = PgProjectRepository::new(pool.clone());
-        let codebase_repo = PgCodebaseRepository::new(pool.clone());
         let file_records_repo = PgFileRecordsRepository::new(pool.clone());
         let configuration_repo = PgConfigurationRepository::new(pool.clone());
+        let codebase_repo = PgCodebaseRepository::new(pool.clone());
 
-        let codebase_service = CodebaseServiceImpl::new(Box::new(codebase_repo));
+        let codebase_service: Box<dyn CodebaseService> =
+            Box::new(CodebaseServiceImpl::new(Box::new(codebase_repo)));
+
         App::new()
             .wrap(Logger::default())
             .service(

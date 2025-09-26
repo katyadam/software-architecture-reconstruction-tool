@@ -6,8 +6,7 @@ use crate::{
     codebase::{
         dto::{CodebaseResponse, PostCodebase},
         model::NewCodebase,
-        repository::{CodebaseRepository, PgCodebaseRepository},
-        service::{CodebaseService, CodebaseServiceImpl},
+        service::CodebaseService,
     },
     configuration::model::Configuration,
     errors::ApiError,
@@ -23,7 +22,7 @@ use crate::{
     )]
 #[post("")]
 pub async fn create_codebase(
-    codebase_service: web::Data<dyn CodebaseService>,
+    codebase_service: web::Data<Box<dyn CodebaseService>>,
     dto: web::Json<PostCodebase>,
 ) -> Result<impl Responder, ApiError> {
     let new_codebase = NewCodebase {
@@ -48,7 +47,7 @@ pub async fn create_codebase(
     )]
 #[get("/{codebase_uuid}")]
 pub async fn get_codebase(
-    codebase_service: web::Data<dyn CodebaseService>,
+    codebase_service: web::Data<Box<dyn CodebaseService>>,
     codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
@@ -67,7 +66,7 @@ pub async fn get_codebase(
     )]
 #[get("/{codebase_uuid}/conf")]
 pub async fn get_codebase_configuration(
-    codebase_service: web::Data<dyn CodebaseService>,
+    codebase_service: web::Data<Box<dyn CodebaseService>>,
     codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
@@ -87,7 +86,7 @@ pub async fn get_codebase_configuration(
     )]
 #[delete("/{codebase_uuid}")]
 pub async fn delete_codebase(
-    codebase_service: web::Data<dyn CodebaseService>,
+    codebase_service: web::Data<Box<dyn CodebaseService>>,
     codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
