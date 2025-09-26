@@ -56,6 +56,11 @@ impl CodebaseRepository for PgCodebaseRepository {
                 .select(Project::as_select())
                 .first(conn)?;
 
+            configurations
+                .find(new_codebase.configuration_uuid)
+                .select(Configuration::as_select())
+                .first(conn)?;
+
             diesel::insert_into(schema::codebases::table)
                 .values(new_codebase)
                 .returning(Codebase::as_returning())
