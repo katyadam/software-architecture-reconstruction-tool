@@ -7,7 +7,7 @@ use crate::files::{
 use actix_web::{HttpResponse, Responder, post, web};
 use chrono::Utc;
 
-use crate::errors::ApiError;
+use crate::errors::api::ApiError;
 
 #[utoipa::path(
         post,

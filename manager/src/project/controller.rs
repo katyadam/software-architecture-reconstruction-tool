@@ -3,7 +3,7 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use crate::{
-    errors::ApiError,
+    errors::api::ApiError,
     project::{
         dto::{PostProject, ProjectResponse},
         model::NewProject,

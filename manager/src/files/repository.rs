@@ -4,7 +4,7 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{RunQueryDsl, SelectableHelper};
 
-use crate::errors::DatabaseError;
+use crate::errors::database::DatabaseError;
 use crate::files::model::{FileRecord, NewFileRecord};
 use crate::schema;
 

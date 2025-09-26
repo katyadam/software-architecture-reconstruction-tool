@@ -6,7 +6,7 @@ use crate::{
         repository::CodebaseRepository,
     },
     configuration::model::Configuration,
-    errors::ServiceError,
+    errors::service::ServiceError,
 };
 
 pub trait CodebaseService {

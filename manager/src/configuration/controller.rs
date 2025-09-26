@@ -8,7 +8,7 @@ use crate::{
         model::NewConfiguration,
         repository::{ConfigurationRepository, PgConfigurationRepository},
     },
-    errors::ApiError,
+    errors::api::ApiError,
 };
 
 #[utoipa::path(
@@ -27,7 +27,7 @@ pub async fn create_configuration(
     let new_conf = NewConfiguration {
         configuration_uuid: Uuid::new_v4(),
         project_uuid: dto.project_uuid,
-        configuration_data: dto.configuration_data.to_owned(),
+        configuration_data: serde_json::json!(dto.configuration_data),
         created_at: Utc::now(),
     };
 

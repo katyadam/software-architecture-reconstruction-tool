@@ -9,7 +9,7 @@ use crate::{
         service::CodebaseService,
     },
     configuration::model::Configuration,
-    errors::ApiError,
+    errors::api::ApiError,
 };
 
 #[utoipa::path(

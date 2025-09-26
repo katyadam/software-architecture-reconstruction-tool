@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::codebase::model::{Codebase, NewCodebase};
 use crate::configuration::model::Configuration;
-use crate::errors::DatabaseError;
+use crate::errors::database::DatabaseError;
 use crate::project::model::Project;
 use crate::schema;
 use crate::schema::codebases::dsl::*;

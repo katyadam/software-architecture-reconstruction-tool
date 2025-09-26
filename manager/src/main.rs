@@ -13,7 +13,7 @@ use crate::{
         service::{CodebaseService, CodebaseServiceImpl},
     },
     configuration::repository::PgConfigurationRepository,
-    errors::ApiError,
+    errors::api::ApiError,
     files::repository::PgFileRecordsRepository,
     project::{dto::ProjectResponse, repository::PgProjectRepository},
 };
