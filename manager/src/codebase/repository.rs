@@ -6,16 +6,22 @@ use diesel::{QueryDsl, RunQueryDsl, SelectableHelper, delete};
 use uuid::Uuid;
 
 use crate::codebase::model::{Codebase, NewCodebase};
+use crate::configuration::model::Configuration;
 use crate::errors::DatabaseError;
 use crate::project::model::Project;
 use crate::schema;
 use crate::schema::codebases::dsl::*;
+use crate::schema::configurations::dsl::*;
 use crate::schema::projects::dsl::*;
 
 pub trait CodebaseRepository {
     fn get_single(&self, uuid_to_find: Uuid) -> Result<Codebase, DatabaseError>;
     fn save(&self, new_codebase: NewCodebase) -> Result<Codebase, DatabaseError>;
     fn delete(&self, uuid_to_delete: Uuid) -> Result<(), DatabaseError>;
+    fn get_codebase_configuration(
+        &self,
+        codebase_uuid_for_configuration: Uuid,
+    ) -> Result<Configuration, DatabaseError>;
 }
 
 #[derive(Clone)]
@@ -61,6 +67,7 @@ impl CodebaseRepository for PgCodebaseRepository {
 
     fn delete(&self, uuid_to_delete: Uuid) -> Result<(), DatabaseError> {
         let mut conn = self.pg_pool.get()?;
+
         conn.deref_mut().transaction(|conn| {
             codebases
                 .find(uuid_to_delete)
@@ -71,5 +78,26 @@ impl CodebaseRepository for PgCodebaseRepository {
         })?;
 
         Ok(())
+    }
+
+    fn get_codebase_configuration(
+        &self,
+        codebase_uuid_for_configuration: Uuid,
+    ) -> Result<Configuration, DatabaseError> {
+        let mut conn = self.pg_pool.get()?;
+
+        let configuration = conn.deref_mut().transaction(|conn| {
+            let codebase = codebases
+                .find(codebase_uuid_for_configuration)
+                .select(Codebase::as_select())
+                .first(conn)?;
+
+            configurations
+                .find(codebase.configuration_uuid)
+                .select(Configuration::as_select())
+                .first(conn)
+        })?;
+
+        Ok(configuration)
     }
 }
