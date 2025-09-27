@@ -17,7 +17,10 @@ use crate::{
         service::{ConfigurationService, ConfigurationServiceImpl},
     },
     errors::api::ApiError,
-    files::repository::PgFileRecordsRepository,
+    files::{
+        repository::PgFileRecordsRepository,
+        service::{FileRecordsService, FileRecordsServiceImpl},
+    },
     project::{dto::ProjectResponse, repository::PgProjectRepository},
 };
 
@@ -69,6 +72,9 @@ async fn main() -> std::io::Result<()> {
         let configuration_repo = PgConfigurationRepository::new(pool.clone());
         let codebase_repo = PgCodebaseRepository::new(pool.clone());
 
+        let file_records_service: Box<dyn FileRecordsService> =
+            Box::new(FileRecordsServiceImpl::new(Box::new(file_records_repo)));
+
         let codebase_service: Box<dyn CodebaseService> =
             Box::new(CodebaseServiceImpl::new(Box::new(codebase_repo)));
 
@@ -89,7 +95,7 @@ async fn main() -> std::io::Result<()> {
             )
             .service(
                 web::scope("/file-records")
-                    .app_data(web::Data::new(file_records_repo))
+                    .app_data(web::Data::new(file_records_service))
                     .configure(files::configure),
             )
             .service(
