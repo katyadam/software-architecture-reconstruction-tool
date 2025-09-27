@@ -24,11 +24,11 @@ pub struct ConfigurationResponse {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ConfigurationData {
-    pub services: Vec<Service>,
+    services: Vec<Service>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 struct Service {
-    pub name: String,
-    pub path: String,
+    name: String,
+    path: String,
 }
