@@ -1,5 +1,5 @@
 use actix_multipart::Multipart;
-use actix_web::{HttpResponse, Responder, ResponseError, Result};
+use actix_web::{HttpResponse, Responder, Result};
 use awc::body::BoxBody;
 use futures_util::StreamExt as _;
 use log::info;
@@ -11,7 +11,7 @@ use crate::{
         connectors::{
             manager_connector::ManagerConnector, synthesizer_connector::SynthesizerConnector,
         },
-        dto::PostFileRecord,
+        dto::{PostFileRecord, ServiceDto},
     },
     error::ApiError,
 };
@@ -72,6 +72,7 @@ impl ExtractorService for ExtractorServiceImpl {
             .get_codebase_configuration(codebase_uuid)
             .await
             .map_err(|_| ApiError::OtherServerResponseError)?;
+
         while let Some(field) = payload.next().await {
             let mut field = field.map_err(|_| ApiError::BadRequest)?;
             if let Some(content_disposition) = field.content_disposition() {
@@ -90,11 +91,15 @@ impl ExtractorService for ExtractorServiceImpl {
                     let file_size: i64 = file_bytes.len() as i64;
                     // Convert to string (assuming UTF-8 text)
                     let text = String::from_utf8(file_bytes).map_err(|_| ApiError::BadRequest)?;
-
+                    let assigned_service = assign_service_name_for_file(
+                        &filename,
+                        configuration.configuration_data.services,
+                    );
                     let code_elements_aggregate = parse(
                         text.as_str(),
                         &filename,
-                        &"TODO: Service Name from Codebase Configs".to_string(),
+                        &assigned_service
+                            .unwrap_or("Can't categorize this file to a service!".to_string()),
                     )
                     .await;
 
@@ -120,4 +125,13 @@ impl ExtractorService for ExtractorServiceImpl {
 
         Ok(ServiceResponse::NoFileFoundInRequest)
     }
+}
+
+fn assign_service_name_for_file(file_name: &str, services: Vec<ServiceDto>) -> Option<String> {
+    for service in services {
+        if file_name.starts_with(&service.path) {
+            return Some(service.name);
+        }
+    }
+    None
 }

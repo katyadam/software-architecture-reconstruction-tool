@@ -1,5 +1,5 @@
 use actix_multipart::Multipart;
-use actix_web::{HttpResponse, Responder, Result, put, web};
+use actix_web::{Responder, Result, put, web};
 use uuid::Uuid;
 
 use crate::{
@@ -29,9 +29,8 @@ pub async fn process_files(
     codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
-    extractor_service
-        .process_files(&mut payload, codebase_uuid)
-        .await?;
 
-    Ok(HttpResponse::BadRequest().body("No file found in request"))
+    Ok(extractor_service
+        .process_files(&mut payload, codebase_uuid)
+        .await?)
 }
