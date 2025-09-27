@@ -21,7 +21,11 @@ use crate::{
         repository::PgFileRecordsRepository,
         service::{FileRecordsService, FileRecordsServiceImpl},
     },
-    project::{dto::ProjectResponse, repository::PgProjectRepository},
+    project::{
+        dto::ProjectResponse,
+        repository::PgProjectRepository,
+        service::{ProjectService, ProjectServiceImpl},
+    },
 };
 
 mod codebase;
@@ -72,6 +76,9 @@ async fn main() -> std::io::Result<()> {
         let configuration_repo = PgConfigurationRepository::new(pool.clone());
         let codebase_repo = PgCodebaseRepository::new(pool.clone());
 
+        let project_service: Box<dyn ProjectService> =
+            Box::new(ProjectServiceImpl::new(Box::new(project_repo)));
+
         let file_records_service: Box<dyn FileRecordsService> =
             Box::new(FileRecordsServiceImpl::new(Box::new(file_records_repo)));
 
@@ -85,7 +92,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .service(
                 web::scope("/projects")
-                    .app_data(web::Data::new(project_repo))
+                    .app_data(web::Data::new(project_service))
                     .configure(project::configure),
             )
             .service(
