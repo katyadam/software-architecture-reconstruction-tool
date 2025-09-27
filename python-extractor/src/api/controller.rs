@@ -10,7 +10,7 @@ use crate::{
         connectors::{
             manager_connector::ManagerConnector, synthesizer_connector::SynthesizerConnector,
         },
-        dto::{MultipleFileUploadSchema, PostFileRecord, ServiceNameQuery},
+        dto::{MultipleFileUploadSchema, PostFileRecord},
     },
     error::ApiError,
 };
@@ -54,6 +54,11 @@ async fn process_files(
                 let file_size: i64 = file_bytes.len() as i64;
                 // Convert to string (assuming UTF-8 text)
                 let text = String::from_utf8(file_bytes).map_err(|_| ApiError::BadRequest)?;
+
+                let configuration = manager_connector
+                    .get_codebase_configuration(codebase_uuid)
+                    .await
+                    .map_err(|_| ApiError::OtherServerResponseError)?;
 
                 let code_elements_aggregate = parse(
                     text.as_str(),

@@ -1,4 +1,10 @@
-use crate::{api::dto::PostFileRecord, client::client::HttpClient, error::HttpClientError};
+use uuid::Uuid;
+
+use crate::{
+    api::dto::{ConfigurationDto, PostFileRecord},
+    client::client::HttpClient,
+    error::HttpClientError,
+};
 
 pub struct ManagerConnector {
     http_client: HttpClient,
@@ -15,6 +21,17 @@ impl ManagerConnector {
     ) -> Result<(), HttpClientError> {
         self.http_client
             .post_json::<PostFileRecord, ()>("/file-records", &file_record)
+            .await
+    }
+
+    pub async fn get_codebase_configuration(
+        &self,
+        codebase_uuid: Uuid,
+    ) -> Result<ConfigurationDto, HttpClientError> {
+        self.http_client
+            .get_json::<ConfigurationDto>(
+                format!("/codebases/{codebase_uuid}/configuration").as_str(),
+            )
             .await
     }
 }
