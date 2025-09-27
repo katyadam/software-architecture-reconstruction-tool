@@ -12,7 +12,10 @@ use crate::{
         repository::PgCodebaseRepository,
         service::{CodebaseService, CodebaseServiceImpl},
     },
-    configuration::repository::PgConfigurationRepository,
+    configuration::{
+        repository::PgConfigurationRepository,
+        service::{ConfigurationService, ConfigurationServiceImpl},
+    },
     errors::api::ApiError,
     files::repository::PgFileRecordsRepository,
     project::{dto::ProjectResponse, repository::PgProjectRepository},
@@ -69,6 +72,9 @@ async fn main() -> std::io::Result<()> {
         let codebase_service: Box<dyn CodebaseService> =
             Box::new(CodebaseServiceImpl::new(Box::new(codebase_repo)));
 
+        let configuration_service: Box<dyn ConfigurationService> =
+            Box::new(ConfigurationServiceImpl::new(Box::new(configuration_repo)));
+
         App::new()
             .wrap(Logger::default())
             .service(
@@ -88,7 +94,7 @@ async fn main() -> std::io::Result<()> {
             )
             .service(
                 web::scope("/configurations")
-                    .app_data(web::Data::new(configuration_repo))
+                    .app_data(web::Data::new(configuration_service))
                     .configure(configuration::configure),
             )
             .service(

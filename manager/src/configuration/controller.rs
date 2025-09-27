@@ -6,7 +6,7 @@ use crate::{
     configuration::{
         dto::{ConfigurationResponse, PostConfiguration},
         model::NewConfiguration,
-        repository::{ConfigurationRepository, PgConfigurationRepository},
+        service::ConfigurationService,
     },
     errors::api::ApiError,
 };
@@ -21,7 +21,7 @@ use crate::{
     )]
 #[post("")]
 pub async fn create_configuration(
-    configuration_repo: web::Data<PgConfigurationRepository>,
+    configuration_service: web::Data<Box<dyn ConfigurationService>>,
     dto: web::Json<PostConfiguration>,
 ) -> Result<impl Responder, ApiError> {
     let new_conf = NewConfiguration {
@@ -31,7 +31,7 @@ pub async fn create_configuration(
         created_at: Utc::now(),
     };
 
-    let configuration = configuration_repo.save(new_conf)?;
+    let configuration = configuration_service.create(new_conf)?;
 
     Ok(HttpResponse::Created().json(configuration.to_response()))
 }
@@ -46,11 +46,11 @@ pub async fn create_configuration(
     )]
 #[get("/{configuration_uuid}")]
 pub async fn get_configuration(
-    configuration_repo: web::Data<PgConfigurationRepository>,
+    configuration_service: web::Data<Box<dyn ConfigurationService>>,
     configuration_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let configuration_uuid = configuration_uuid_path.into_inner();
-    let configuration = configuration_repo.get_single(configuration_uuid)?;
+    let configuration = configuration_service.get_single(configuration_uuid)?;
 
     Ok(HttpResponse::Ok().json(configuration.to_response()))
 }
@@ -65,10 +65,10 @@ pub async fn get_configuration(
     )]
 #[delete("/{configuration_uuid}")]
 pub async fn delete_configuration(
-    configuration_repo: web::Data<PgConfigurationRepository>,
+    configuration_service: web::Data<Box<dyn ConfigurationService>>,
     configuration_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let configuration_uuid = configuration_uuid_path.into_inner();
-    configuration_repo.delete(configuration_uuid)?;
+    configuration_service.delete(configuration_uuid)?;
     Ok(HttpResponse::NoContent())
 }

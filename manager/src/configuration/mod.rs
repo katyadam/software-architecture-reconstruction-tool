@@ -5,6 +5,7 @@ pub mod dto;
 pub mod health;
 pub mod model;
 pub mod repository;
+pub mod service;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(health::health_check);
