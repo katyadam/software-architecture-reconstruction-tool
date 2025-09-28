@@ -29,9 +29,7 @@ impl ManagerConnector {
         codebase_uuid: Uuid,
     ) -> Result<ConfigurationDto, HttpClientError> {
         self.http_client
-            .get_json::<ConfigurationDto>(
-                format!("/codebases/{codebase_uuid}/configuration").as_str(),
-            )
+            .get_json::<ConfigurationDto>(format!("/codebases/{codebase_uuid}/conf").as_str())
             .await
     }
 }

@@ -73,7 +73,7 @@ pub async fn get_codebase_configuration(
     let configuration: Configuration =
         codebase_service.get_codebase_configuration(codebase_uuid)?;
 
-    Ok(HttpResponse::Ok().json(configuration.to_response()))
+    Ok(HttpResponse::Ok().json(configuration.to_response().unwrap()))
 }
 
 #[utoipa::path(

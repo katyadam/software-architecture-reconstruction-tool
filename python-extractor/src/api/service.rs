@@ -1,4 +1,4 @@
-use actix_multipart::Multipart;
+use actix_multipart::{Field, Multipart};
 use actix_web::{HttpResponse, Responder, Result};
 use awc::body::BoxBody;
 use futures_util::StreamExt as _;
@@ -22,6 +22,14 @@ pub trait ExtractorService {
         payload: &mut Multipart,
         codebase_uuid: Uuid,
     ) -> Result<ServiceResponse, ApiError>;
+
+    async fn process_file(
+        &self,
+        file_name: &str,
+        field: Field,
+        configuration_services: &Vec<ServiceDto>,
+        codebase_uuid: Uuid,
+    ) -> Result<(), ApiError>;
 }
 
 pub struct ExtractorServiceImpl {
@@ -72,65 +80,86 @@ impl ExtractorService for ExtractorServiceImpl {
             .get_codebase_configuration(codebase_uuid)
             .await
             .map_err(|_| ApiError::OtherServerResponseError)?;
-
+        let mut any_file_processed: bool = false;
         while let Some(field) = payload.next().await {
-            let mut field = field.map_err(|_| ApiError::BadRequest)?;
-            if let Some(content_disposition) = field.content_disposition() {
-                if let Some(filename) = content_disposition.get_filename() {
-                    let filename = filename.to_string(); // Cloning to prevent having *field* borrowed mutable and also immutable
-                    info!("Uploaded file: {}", filename);
+            let field = field.map_err(|_| ApiError::BadRequest)?;
 
-                    // Collect file data into a single Vec<u8>
-                    let mut file_bytes = Vec::new();
-                    while let Some(chunk) = field.next().await {
-                        let data = chunk.map_err(|_| ApiError::BadRequest)?;
-                        file_bytes.extend_from_slice(&data);
-                    }
-                    info!("Uploaded file size: {} bytes", file_bytes.len());
+            let file_name_opt = field
+                .content_disposition()
+                .and_then(|cd| cd.get_filename().map(|s| s.to_owned()));
 
-                    let file_size: i64 = file_bytes.len() as i64;
-                    // Convert to string (assuming UTF-8 text)
-                    let text = String::from_utf8(file_bytes).map_err(|_| ApiError::BadRequest)?;
-                    let assigned_service = assign_service_name_for_file(
-                        &filename,
-                        configuration.configuration_data.services,
-                    );
-                    let code_elements_aggregate = parse(
-                        text.as_str(),
-                        &filename,
-                        &assigned_service
-                            .unwrap_or("Can't categorize this file to a service!".to_string()),
-                    )
-                    .await;
-
-                    self.synthesizer_connector
-                        .send_code_elements(code_elements_aggregate, codebase_uuid)
-                        .await
-                        .map_err(|_| ApiError::OtherServerResponseError)?;
-
-                    self.manager_connector
-                        .send_file_record(PostFileRecord::new(
-                            codebase_uuid,
-                            filename.clone(),
-                            file_size,
-                        ))
-                        .await
-                        .map_err(|_| ApiError::OtherServerResponseError)?;
-                    info!("Recorded File extraction in Manager.");
-
-                    return Ok(ServiceResponse::FileProcessed);
-                }
+            if let Some(file_name) = file_name_opt {
+                self.process_file(
+                    &file_name,
+                    field,
+                    &configuration.configuration_data.services,
+                    codebase_uuid,
+                )
+                .await?;
             }
+            any_file_processed = true;
         }
+        if any_file_processed {
+            Ok(ServiceResponse::FileProcessed)
+        } else {
+            Ok(ServiceResponse::NoFileFoundInRequest)
+        }
+    }
 
-        Ok(ServiceResponse::NoFileFoundInRequest)
+    async fn process_file(
+        &self,
+        file_name: &str,
+        mut field: Field,
+        configuration_services: &Vec<ServiceDto>,
+        codebase_uuid: Uuid,
+    ) -> Result<(), ApiError> {
+        info!("Uploaded file: {}", file_name);
+
+        // Collect file data into a single Vec<u8>
+        let mut file_bytes = Vec::new();
+        while let Some(chunk) = field.next().await {
+            let data = chunk.map_err(|_| ApiError::BadRequest)?;
+            file_bytes.extend_from_slice(&data);
+        }
+        info!("Uploaded file size: {} bytes", file_bytes.len());
+
+        let file_size: i64 = file_bytes.len() as i64;
+        // Convert to string (assuming UTF-8 text)
+        let text = std::str::from_utf8(&file_bytes)
+            .map_err(|_| ApiError::InternalServerError)
+            .unwrap();
+
+        let assigned_service = assign_service_name_for_file(&file_name, configuration_services);
+        let code_elements_aggregate = parse(
+            text,
+            file_name,
+            &assigned_service.unwrap_or("Can't categorize this file to a service!".to_string()),
+        )
+        .await;
+
+        self.synthesizer_connector
+            .send_code_elements(code_elements_aggregate, codebase_uuid)
+            .await
+            .map_err(|_| ApiError::OtherServerResponseError)?;
+
+        self.manager_connector
+            .send_file_record(PostFileRecord::new(
+                codebase_uuid,
+                file_name.to_string(),
+                file_size,
+            ))
+            .await
+            .map_err(|_| ApiError::OtherServerResponseError)?;
+        info!("Recorded File extraction in Manager.");
+
+        return Ok(());
     }
 }
 
-fn assign_service_name_for_file(file_name: &str, services: Vec<ServiceDto>) -> Option<String> {
+fn assign_service_name_for_file(file_name: &str, services: &Vec<ServiceDto>) -> Option<String> {
     for service in services {
         if file_name.starts_with(&service.path) {
-            return Some(service.name);
+            return Some(service.name.clone());
         }
     }
     None

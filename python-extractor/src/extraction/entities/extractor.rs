@@ -55,12 +55,8 @@ impl Extractor<Entity> for EntitiesExtractor {
                 name: entity_name.clone(),
                 superclasses: parents,
                 fields,
-                signature: format!(
-                    "{}/{}",
-                    params.file_name.map(|s| s.as_str()).unwrap_or_default(),
-                    entity_name
-                ),
-                service_name: params.service_name.cloned().unwrap_or_default(),
+                signature: format!("{}/{}", params.file_name.unwrap_or_default(), entity_name),
+                service_name: params.service_name.unwrap_or_default().to_string(),
             };
 
             entities.push(new_entity);

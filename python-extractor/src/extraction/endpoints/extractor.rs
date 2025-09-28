@@ -41,7 +41,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                 http_method: http_method.parse().unwrap_or(HttpMethod::GET),
                 parameters: arguments,
                 uri,
-                service_name: params.service_name.cloned().unwrap_or_default(),
+                service_name: params.service_name.unwrap_or_default().to_string(),
             });
         });
         endpoints
