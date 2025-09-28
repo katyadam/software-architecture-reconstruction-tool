@@ -6,9 +6,10 @@ use crate::{
     codebase::{
         dto::{CodebaseResponse, PostCodebase},
         model::NewCodebase,
-        repository::{CodebaseRepository, PgCodebaseRepository},
+        service::CodebaseService,
     },
-    errors::ApiError,
+    configuration::model::Configuration,
+    errors::api::ApiError,
 };
 
 #[utoipa::path(
@@ -21,17 +22,17 @@ use crate::{
     )]
 #[post("")]
 pub async fn create_codebase(
-    codebase_repo: web::Data<PgCodebaseRepository>,
+    codebase_service: web::Data<Box<dyn CodebaseService>>,
     dto: web::Json<PostCodebase>,
 ) -> Result<impl Responder, ApiError> {
     let new_codebase = NewCodebase {
         codebase_uuid: Uuid::new_v4(),
         branch: dto.branch.clone(),
         project_uuid: dto.project_uuid,
+        configuration_uuid: dto.configuration_uuid,
         created_at: Utc::now(),
     };
-
-    let codebase = codebase_repo.save(new_codebase)?; // ? converts DatabaseError -> ApiError
+    let codebase = codebase_service.create(new_codebase)?; // ? converts DatabaseError -> ApiError
 
     Ok(HttpResponse::Created().json(codebase.to_response()))
 }
@@ -46,13 +47,33 @@ pub async fn create_codebase(
     )]
 #[get("/{codebase_uuid}")]
 pub async fn get_codebase(
-    codebase_repo: web::Data<PgCodebaseRepository>,
+    codebase_service: web::Data<Box<dyn CodebaseService>>,
     codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
-    let codebase = codebase_repo.get_single(codebase_uuid)?;
+    let codebase = codebase_service.get_single(codebase_uuid)?;
 
     Ok(HttpResponse::Ok().json(codebase.to_response()))
+}
+
+#[utoipa::path(
+        get,
+        path = "/codebases/{codebase_uuid}/conf",
+        responses(
+            (status = 200, description = "Codebase Configuration found", body = CodebaseResponse),
+            (status = 404, description = "Codebase Configuration not found", body = ApiError),
+        ),
+    )]
+#[get("/{codebase_uuid}/conf")]
+pub async fn get_codebase_configuration(
+    codebase_service: web::Data<Box<dyn CodebaseService>>,
+    codebase_uuid_path: web::Path<Uuid>,
+) -> Result<impl Responder, ApiError> {
+    let codebase_uuid = codebase_uuid_path.into_inner();
+    let configuration: Configuration =
+        codebase_service.get_codebase_configuration(codebase_uuid)?;
+
+    Ok(HttpResponse::Ok().json(configuration.to_response().unwrap()))
 }
 
 #[utoipa::path(
@@ -65,10 +86,11 @@ pub async fn get_codebase(
     )]
 #[delete("/{codebase_uuid}")]
 pub async fn delete_codebase(
-    codebase_repo: web::Data<PgCodebaseRepository>,
+    codebase_service: web::Data<Box<dyn CodebaseService>>,
     codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
-    let projet_uuid = codebase_uuid_path.into_inner();
-    codebase_repo.delete(projet_uuid)?;
+    let codebase_uuid = codebase_uuid_path.into_inner();
+    codebase_service.delete(codebase_uuid)?;
+
     Ok(HttpResponse::NoContent())
 }

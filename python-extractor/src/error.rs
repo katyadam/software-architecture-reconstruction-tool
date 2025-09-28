@@ -15,6 +15,8 @@ pub enum ApiError {
     BadRequest,
     #[error("sending http request resulted in error")]
     OtherServerResponseError,
+    #[error("can't convert file to utf-8")]
+    Utf8ConversionError,
 }
 
 impl ResponseError for ApiError {
@@ -28,6 +30,9 @@ impl ResponseError for ApiError {
             ApiError::OtherServerResponseError => {
                 HttpResponse::BadRequest().json("sending http request resulted in error")
             }
+            ApiError::Utf8ConversionError => {
+                HttpResponse::BadRequest().json("bad request - can't convert file to utf-8")
+            }
         }
     }
 
@@ -37,6 +42,7 @@ impl ResponseError for ApiError {
             ApiError::NotFound => actix_web::http::StatusCode::NOT_FOUND,
             ApiError::BadRequest => actix_web::http::StatusCode::BAD_REQUEST,
             ApiError::OtherServerResponseError => actix_web::http::StatusCode::BAD_REQUEST,
+            ApiError::Utf8ConversionError => actix_web::http::StatusCode::BAD_REQUEST,
         }
     }
 }

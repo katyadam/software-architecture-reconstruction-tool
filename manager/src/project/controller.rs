@@ -3,11 +3,12 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use crate::{
-    errors::ApiError,
+    errors::api::ApiError,
     project::{
         dto::{PostProject, ProjectResponse},
         model::NewProject,
         repository::{PgProjectRepository, ProjectRepository},
+        service::ProjectService,
     },
 };
 
@@ -21,7 +22,7 @@ use crate::{
     )]
 #[post("")]
 pub async fn create_project(
-    project_repo: web::Data<PgProjectRepository>,
+    project_service: web::Data<Box<dyn ProjectService>>,
     dto: web::Json<PostProject>,
 ) -> Result<impl Responder, ApiError> {
     let new_project = NewProject {
@@ -31,7 +32,7 @@ pub async fn create_project(
         created_at: Utc::now(),
     };
 
-    let project = project_repo.save(new_project)?; // ? converts DatabaseError -> ApiError
+    let project = project_service.create(new_project)?; // ? converts ServiceError -> ApiError
 
     Ok(HttpResponse::Created().json(project.to_response()))
 }
@@ -46,11 +47,11 @@ pub async fn create_project(
     )]
 #[get("/{project_uuid}")]
 pub async fn get_project(
-    project_repo: web::Data<PgProjectRepository>,
+    project_service: web::Data<Box<dyn ProjectService>>,
     project_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let projet_uuid = project_uuid_path.into_inner();
-    let project = project_repo.get_single(projet_uuid)?;
+    let project = project_service.get_single(projet_uuid)?;
 
     Ok(HttpResponse::Ok().json(project.to_response()))
 }
@@ -65,10 +66,10 @@ pub async fn get_project(
     )]
 #[delete("/{project_uuid}")]
 pub async fn delete_project(
-    project_repo: web::Data<PgProjectRepository>,
+    project_service: web::Data<Box<dyn ProjectService>>,
     project_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let projet_uuid = project_uuid_path.into_inner();
-    project_repo.delete(projet_uuid)?;
+    project_service.delete(projet_uuid)?;
     Ok(HttpResponse::NoContent())
 }

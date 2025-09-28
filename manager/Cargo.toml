@@ -15,7 +15,7 @@ utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
 dotenvy = "0.15"
 uuid = { version = "1.17.0", features = ["serde", "v4"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono"] }
-diesel = { version = "2.2.12", features = ["postgres", "uuid", "chrono", "r2d2"] }
+diesel = { version = "2.2.12", features = ["postgres", "uuid", "chrono", "r2d2", "serde_json"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2.0.3"
 r2d2 = "0.8.10"

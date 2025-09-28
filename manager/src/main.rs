@@ -7,13 +7,29 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
-    codebase::{dto::CodebaseResponse, repository::PgCodebaseRepository},
-    errors::ApiError,
-    files::repository::PgFileRecordsRepository,
-    project::{dto::ProjectResponse, repository::PgProjectRepository},
+    codebase::{
+        dto::CodebaseResponse,
+        repository::PgCodebaseRepository,
+        service::{CodebaseService, CodebaseServiceImpl},
+    },
+    configuration::{
+        repository::PgConfigurationRepository,
+        service::{ConfigurationService, ConfigurationServiceImpl},
+    },
+    errors::api::ApiError,
+    files::{
+        repository::PgFileRecordsRepository,
+        service::{FileRecordsService, FileRecordsServiceImpl},
+    },
+    project::{
+        dto::ProjectResponse,
+        repository::PgProjectRepository,
+        service::{ProjectService, ProjectServiceImpl},
+    },
 };
 
 mod codebase;
+mod configuration;
 mod errors;
 mod files;
 mod project;
@@ -28,7 +44,11 @@ mod schema;
         codebase::controller::create_codebase,
         codebase::controller::get_codebase,
         codebase::controller::delete_codebase,
-        files::controller::add_record
+        codebase::controller::get_codebase_configuration,
+        files::controller::add_record,
+        configuration::controller::create_configuration,
+        configuration::controller::get_configuration,
+        configuration::controller::delete_configuration,
     ),
     components(schemas(ProjectResponse, ApiError, CodebaseResponse))
 )]
@@ -52,24 +72,43 @@ async fn main() -> std::io::Result<()> {
     let pool = set_up_database_pool(&database_url, 4);
     HttpServer::new(move || {
         let project_repo = PgProjectRepository::new(pool.clone());
-        let codebase_repo = PgCodebaseRepository::new(pool.clone());
         let file_records_repo = PgFileRecordsRepository::new(pool.clone());
+        let configuration_repo = PgConfigurationRepository::new(pool.clone());
+        let codebase_repo = PgCodebaseRepository::new(pool.clone());
+
+        let project_service: Box<dyn ProjectService> =
+            Box::new(ProjectServiceImpl::new(Box::new(project_repo)));
+
+        let file_records_service: Box<dyn FileRecordsService> =
+            Box::new(FileRecordsServiceImpl::new(Box::new(file_records_repo)));
+
+        let codebase_service: Box<dyn CodebaseService> =
+            Box::new(CodebaseServiceImpl::new(Box::new(codebase_repo)));
+
+        let configuration_service: Box<dyn ConfigurationService> =
+            Box::new(ConfigurationServiceImpl::new(Box::new(configuration_repo)));
+
         App::new()
             .wrap(Logger::default())
             .service(
                 web::scope("/projects")
-                    .app_data(web::Data::new(project_repo))
+                    .app_data(web::Data::new(project_service))
                     .configure(project::configure),
             )
             .service(
                 web::scope("/codebases")
-                    .app_data(web::Data::new(codebase_repo))
+                    .app_data(web::Data::new(codebase_service))
                     .configure(codebase::configure),
             )
             .service(
                 web::scope("/file-records")
-                    .app_data(web::Data::new(file_records_repo))
+                    .app_data(web::Data::new(file_records_service))
                     .configure(files::configure),
+            )
+            .service(
+                web::scope("/configurations")
+                    .app_data(web::Data::new(configuration_service))
+                    .configure(configuration::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

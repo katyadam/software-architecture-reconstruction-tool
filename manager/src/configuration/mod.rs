@@ -9,8 +9,7 @@ pub mod service;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(health::health_check);
-    cfg.service(controller::create_codebase);
-    cfg.service(controller::get_codebase);
-    cfg.service(controller::delete_codebase);
-    cfg.service(controller::get_codebase_configuration);
+    cfg.service(controller::create_configuration);
+    cfg.service(controller::get_configuration);
+    cfg.service(controller::delete_configuration);
 }

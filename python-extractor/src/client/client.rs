@@ -1,6 +1,7 @@
 use std::any::TypeId;
 
 use awc::Client;
+use log::{debug, error};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
@@ -57,6 +58,35 @@ impl HttpClient {
         // If the body is not empty, proceed with normal deserialization
         let resp_json: R = serde_json::from_slice(&bytes)?;
 
+        Ok(resp_json)
+    }
+
+    pub async fn get_json<R: DeserializeOwned>(&self, endpoint: &str) -> Result<R, HttpClientError>
+    where
+        R: DeserializeOwned + 'static,
+    {
+        let url = format!("{}{}", self.base_url.trim_end_matches('/'), endpoint);
+
+        let mut response = self
+            .client
+            .get(url)
+            .insert_header(("Accept", "application/json"))
+            .send()
+            .await?;
+
+        let bytes = response.body().await?;
+
+        if TypeId::of::<R>() == TypeId::of::<()>() {
+            let unit: R = serde_json::from_value(Value::Null).map_err(HttpClientError::Serde)?;
+            return Ok(unit);
+        }
+
+        if bytes.is_empty() {
+            let empty_result: Result<R, _> = serde_json::from_value(serde_json::Value::Null);
+            return empty_result.map_err(HttpClientError::Serde);
+        }
+
+        let resp_json: R = serde_json::from_slice(&bytes)?;
         Ok(resp_json)
     }
 }

@@ -1,13 +1,9 @@
-use crate::files::{
-    dto::PostFileRecord,
-    model::NewFileRecord,
-    repository::{FileRecordsRepository, PgFileRecordsRepository},
-};
+use crate::files::{dto::PostFileRecord, model::NewFileRecord, service::FileRecordsService};
 
 use actix_web::{HttpResponse, Responder, post, web};
 use chrono::Utc;
 
-use crate::errors::ApiError;
+use crate::errors::api::ApiError;
 
 #[utoipa::path(
         post,
@@ -19,7 +15,7 @@ use crate::errors::ApiError;
     )]
 #[post("")]
 pub async fn add_record(
-    file_records_repo: web::Data<PgFileRecordsRepository>,
+    file_records_repo: web::Data<Box<dyn FileRecordsService>>,
     dto: web::Json<PostFileRecord>,
 ) -> Result<impl Responder, ApiError> {
     let new_file_record = NewFileRecord {
@@ -29,7 +25,7 @@ pub async fn add_record(
         uploaded_at: Utc::now(),
     };
 
-    file_records_repo.save(new_file_record)?; // ? converts DatabaseError -> ApiError
+    file_records_repo.create(new_file_record)?; // ? converts ServiceError -> ApiError
 
     Ok(HttpResponse::Created())
 }

@@ -79,7 +79,7 @@ impl Extractor<Callable> for CallablesExtractor {
             let namespace = if let Some(c_name) = class_name {
                 Namespace::Class(c_name)
             } else {
-                Namespace::Module(params.file_name.cloned().unwrap_or_default())
+                Namespace::Module(params.file_name.unwrap_or_default().to_string())
             };
 
             let new_callable = Callable {

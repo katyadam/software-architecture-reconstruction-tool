@@ -962,6 +962,7 @@ dependencies = [
  "itoa",
  "pq-sys",
  "r2d2",
+ "serde_json",
  "uuid",
 ]
 
@@ -2665,6 +2666,7 @@ dependencies = [
  "actix-multipart",
  "actix-web",
  "awc",
+ "chrono",
  "dotenvy",
  "env_logger",
  "futures-util",

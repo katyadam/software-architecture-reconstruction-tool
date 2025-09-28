@@ -1,37 +1,24 @@
 use actix_web::{HttpResponse, ResponseError};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utoipa::ToSchema;
 
-/// Internal database layer error type
-#[derive(Error, Debug)]
-pub enum DatabaseError {
-    #[error("database error: {0}")]
-    Error(diesel::result::Error),
-    #[error("connection pool error: {0}")]
-    ConnectionError(#[from] r2d2::Error),
-    #[error("no record found")]
-    NotFound,
-}
+use crate::errors::database::DatabaseError;
 
-impl From<diesel::result::Error> for DatabaseError {
-    fn from(error: diesel::result::Error) -> Self {
-        match error {
-            diesel::result::Error::NotFound => DatabaseError::NotFound,
-            err => DatabaseError::Error(err),
-        }
-    }
-}
-
-/// User facing error type
-#[derive(Error, Debug, Serialize, ToSchema)]
+// User Facing Errors
+#[derive(Error, Debug, Serialize, Deserialize, ToSchema)]
 pub enum ApiError {
     #[error("internal server error")]
     InternalServerError,
+
     #[error("not found")]
     NotFound,
+
     #[error("bad request")]
     BadRequest,
+
+    #[error("forbidden")]
+    Forbidden,
 }
 
 impl From<DatabaseError> for ApiError {
@@ -53,6 +40,7 @@ impl ResponseError for ApiError {
             }
             ApiError::NotFound => HttpResponse::NotFound().json("not found"),
             ApiError::BadRequest => HttpResponse::BadRequest().json("bad request"),
+            ApiError::Forbidden => HttpResponse::Forbidden().json("forbidden"),
         }
     }
 
@@ -61,6 +49,7 @@ impl ResponseError for ApiError {
             ApiError::InternalServerError => actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::NotFound => actix_web::http::StatusCode::NOT_FOUND,
             ApiError::BadRequest => actix_web::http::StatusCode::BAD_REQUEST,
+            ApiError::Forbidden => actix_web::http::StatusCode::FORBIDDEN,
         }
     }
 }

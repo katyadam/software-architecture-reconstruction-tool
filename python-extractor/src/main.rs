@@ -6,6 +6,7 @@ use crate::{
             manager_connector::ManagerConnector, synthesizer_connector::SynthesizerConnector,
         },
         dto::MultipleFileUploadSchema,
+        service::ExtractorServiceImpl,
     },
     client::client::HttpClient,
 };
@@ -55,12 +56,13 @@ async fn main() -> std::io::Result<()> {
             SynthesizerConnector::new(HttpClient::new(synthesizer_url, Client::default()));
         let manager_connector =
             ManagerConnector::new(HttpClient::new(manager_url, Client::default()));
+
+        let extractor_service = ExtractorServiceImpl::new(manager_connector, synthesizer_connector);
         App::new()
             .wrap(Logger::default())
             .service(
                 web::scope("/process-files")
-                    .app_data(web::Data::new(manager_connector))
-                    .app_data(web::Data::new(synthesizer_connector))
+                    .app_data(web::Data::new(extractor_service))
                     .configure(api::configure),
             )
             .service(

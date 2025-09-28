@@ -5,7 +5,7 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{QueryDsl, RunQueryDsl, SelectableHelper, delete};
 use uuid::Uuid;
 
-use crate::errors::DatabaseError;
+use crate::errors::database::DatabaseError;
 use crate::project::model::{NewProject, Project};
 use crate::schema;
 use crate::schema::projects::dsl::*;

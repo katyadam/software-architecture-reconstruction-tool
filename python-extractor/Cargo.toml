@@ -25,5 +25,6 @@ actix-multipart = "0.7.2"
 futures-util = "0.3"
 awc = "3.7.0" 
 thiserror = "2.0.3"
+chrono = { version = "0.4", features = ["serde"] }
 
 models = { path = "../models" }
