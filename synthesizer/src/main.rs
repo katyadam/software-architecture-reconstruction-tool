@@ -15,6 +15,7 @@ use crate::{
 };
 mod contextmap;
 mod db_setup;
+mod errors;
 mod imcg;
 mod sdg;
 
