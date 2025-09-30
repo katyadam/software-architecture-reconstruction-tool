@@ -6,9 +6,21 @@ use std::{
 use models::{Endpoint, RestCall};
 use strsim::levenshtein;
 
-use crate::sdg::model::{Connection, Request, SDG, Service};
+use crate::{
+    errors::service::ServiceError,
+    sdg::{
+        dto::PostSDG,
+        model::{Connection, Request, SDG, Service},
+    },
+};
 
 pub const DISSIMILARITY_PERCENT: f32 = 0.3;
+
+pub trait SdgService {
+    fn save(&self, sdgPayload: PostSDG) -> Result<SDG, ServiceError>;
+    fn get_single(&self, codebase_uuid: &str) -> Result<SDG, ServiceError>;
+    fn delete(&self, codebase_uuid: &str) -> Result<(), ServiceError>;
+}
 
 pub fn build_sdg(endpoints: Vec<Endpoint>, restcalls: Vec<RestCall>) -> SDG {
     let services = create_service_map(&endpoints);
