@@ -1,15 +1,11 @@
-use std::sync::Arc;
-
 use actix_web::{HttpResponse, Responder, delete, get, post, web};
-use neo4rs::Graph;
 
 use crate::{
-    contextmap::dto::GetContextMapErrorReponse,
+    errors::api::ApiError,
     sdg::{
         dto::{GetSDGErrorReponse, PostSDG, PostSDGErrorResponse},
         model::SDG,
-        repository,
-        service::build_sdg,
+        service::{SdgService, SdgServiceImpl},
     },
 };
 
@@ -22,17 +18,14 @@ use crate::{
         ),
     )]
 #[post("")]
-pub async fn create_sdg(graph: web::Data<Arc<Graph>>, dto: web::Json<PostSDG>) -> impl Responder {
+pub async fn create_sdg(
+    service: web::Data<SdgServiceImpl>,
+    dto: web::Json<PostSDG>,
+) -> Result<impl Responder, ApiError> {
     let dto = dto.into_inner();
-    let sdg = build_sdg(dto.endpoints, dto.restcalls);
-    match repository::save_sdg(graph, &sdg, dto.codebase_uuid.clone()).await {
-        Ok(_) => HttpResponse::Created().json(sdg),
-        Err(e) => HttpResponse::Accepted().json(PostSDGErrorResponse {
-            sdg,
-            error: format!("{}", e),
-            warning: "SDG created but not saved.".to_string(),
-        }),
-    }
+    let sdg = service.save(dto).await?;
+
+    Ok(HttpResponse::Created().json(sdg))
 }
 
 #[utoipa::path(
@@ -48,17 +41,13 @@ pub async fn create_sdg(graph: web::Data<Arc<Graph>>, dto: web::Json<PostSDG>) -
     )]
 #[get("/{codebase_uuid}")]
 pub async fn get_sdg(
-    graph: web::Data<Arc<Graph>>,
+    service: web::Data<SdgServiceImpl>,
     codebase_uuid_path: web::Path<String>,
-) -> impl Responder {
+) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
+    let sdg = service.get_single(&codebase_uuid).await?;
 
-    match repository::get_sdg(graph, codebase_uuid).await {
-        Ok(context_map) => HttpResponse::Ok().json(context_map),
-        Err(e) => HttpResponse::BadRequest().json(GetContextMapErrorReponse {
-            error: e.to_string(),
-        }),
-    }
+    Ok(HttpResponse::Ok().json(sdg))
 }
 
 #[utoipa::path(
@@ -74,13 +63,11 @@ pub async fn get_sdg(
     )]
 #[delete("/{codebase_uuid}")]
 pub async fn delete_sdg(
-    graph: web::Data<Arc<Graph>>,
+    service: web::Data<SdgServiceImpl>,
     codebase_uuid_path: web::Path<String>,
-) -> impl Responder {
+) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
+    service.delete(&codebase_uuid).await?;
 
-    match repository::delete_sdg(graph, codebase_uuid).await {
-        Ok(_) => HttpResponse::NoContent(),
-        Err(_) => HttpResponse::BadRequest(),
-    }
+    Ok(HttpResponse::NoContent())
 }

@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
-use actix_web::web;
 use log::warn;
-use neo4rs::{BoltType, Error, Graph, query};
+use neo4rs::{BoltType, Graph, query};
 
 use crate::{
     errors::database::DatabaseError,
@@ -15,7 +14,7 @@ use crate::{
 pub trait SdgRepository {
     async fn get_single(&self, codebase_uuid: &str) -> Result<SDG, DatabaseError>;
     async fn save(&self, sdg: &SDG, codebase_uuid: &str) -> Result<(), DatabaseError>;
-    async fn delete_sdg(&self, codebase_uuid: &str) -> Result<(), DatabaseError>;
+    async fn delete(&self, codebase_uuid: &str) -> Result<(), DatabaseError>;
 }
 
 pub struct SdgRepositoryImpl {
@@ -81,7 +80,7 @@ impl SdgRepository for SdgRepositoryImpl {
         Ok(())
     }
 
-    async fn delete_sdg(&self, codebase_uuid: &str) -> Result<(), DatabaseError> {
+    async fn delete(&self, codebase_uuid: &str) -> Result<(), DatabaseError> {
         self.graph_handle
             .run(query(DELETE_SDG).param("codebase_uuid", codebase_uuid))
             .await?;

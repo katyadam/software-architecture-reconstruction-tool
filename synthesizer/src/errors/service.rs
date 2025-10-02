@@ -1,6 +1,6 @@
 use neo4rs::DeError;
 
-use crate::errors::{api::ApiError, database::DatabaseError};
+use crate::errors::{api::ApiError, builder::BuilderError, database::DatabaseError};
 
 // Business Logic Errors
 #[derive(thiserror::Error, Debug)]
@@ -34,6 +34,14 @@ impl From<ServiceError> for ApiError {
             ServiceError::ValidationError(_) => ApiError::BadRequest("can't validate".to_string()),
             ServiceError::Forbidden(_) => ApiError::Forbidden,
             ServiceError::InternalError => ApiError::InternalServerError,
+        }
+    }
+}
+
+impl From<BuilderError> for ServiceError {
+    fn from(err: BuilderError) -> Self {
+        match err {
+            BuilderError::Error(_) => ServiceError::InternalError,
         }
     }
 }

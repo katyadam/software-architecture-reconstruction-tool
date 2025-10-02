@@ -1,7 +1,8 @@
-use std::env;
+use std::{env, sync::Arc};
 
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use models::Entity;
+use neo4rs::Graph;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -9,8 +10,11 @@ use crate::{
     contextmap::dto::{GetContextMapErrorReponse, PostContextMap},
     db_setup::{setup_contextmap_db, setup_imcg_db, setup_sdg_db},
     sdg::{
+        builder::SdgBuilderImpl,
         dto::{GetSDGErrorReponse, PostSDGErrorResponse},
         model::SDG,
+        repository::SdgRepositoryImpl,
+        service::SdgServiceImpl,
     },
 };
 mod contextmap;
@@ -27,6 +31,7 @@ mod sdg;
         contextmap::controller::delete_context_map,
         sdg::controller::create_sdg,
         sdg::controller::get_sdg,
+        sdg::controller::delete_sdg
     ),
     components(schemas(
         PostContextMap,
@@ -54,10 +59,11 @@ async fn main() -> std::io::Result<()> {
     let url: String = env::var("EXPOSE_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
 
     let cm_graph = setup_contextmap_db().await;
-    let sdg_graph = setup_sdg_db().await;
     let imcg_graph = setup_imcg_db().await;
+    let sdg_graph = setup_sdg_db().await;
 
     HttpServer::new(move || {
+        let sdg_service = get_sdg_service(sdg_graph.clone());
         App::new()
             .wrap(Logger::default())
             .service(
@@ -67,7 +73,7 @@ async fn main() -> std::io::Result<()> {
             )
             .service(
                 web::scope("/sdgs")
-                    .app_data(web::Data::new(sdg_graph.clone()))
+                    .app_data(web::Data::new(sdg_service))
                     .configure(sdg::configure),
             )
             .service(
@@ -78,4 +84,11 @@ async fn main() -> std::io::Result<()> {
     .bind((url, port))?
     .run()
     .await
+}
+
+fn get_sdg_service(graph: Arc<Graph>) -> SdgServiceImpl {
+    let sdg_repository = SdgRepositoryImpl::new(graph);
+    let sdg_builder = SdgBuilderImpl::new();
+
+    SdgServiceImpl::new(sdg_repository, sdg_builder)
 }
