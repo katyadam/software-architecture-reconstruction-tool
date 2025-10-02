@@ -14,4 +14,15 @@ Another way is to make the synthesizing algorithms work without complete data (a
 
 # Investigated Solution - Preffered
 
-The extraction can gradually store extracted data into a object storage (S3 compatible storage). After the whole extraction is done, extractor sends just the place of the stored data. Sysnthesizer then loads the data and synthesizes views.
+The extraction can gradually store extracted data into a object storage. After the whole extraction is done, extractor sends just the place of the stored data. Synthesizer then loads the data and synthesizes views.
+
+## SeaweedFS
+
+Seems like the best fit. It is free to use (even for commercial usage). Has S3 gateaway so in Rust you need only s3 crate
+
+## Tasks
+
+- Implement Client on the Extractor side for storing extracted data.
+- Implement object key logic.
+- Implement REST API for getting object keys -> needs to redo synthesizer endpoints.
+- Implement deletion of extracted elements that were synthesized -> Implement Client on the Synthesizer side.

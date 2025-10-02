@@ -63,8 +63,8 @@ async fn main() -> std::io::Result<()> {
     let url: String = env::var("EXPOSE_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
 
     let cm_graph = setup_contextmap_db().await;
-    let imcg_graph = setup_imcg_db().await;
     let sdg_graph = setup_sdg_db().await;
+    let imcg_graph = setup_imcg_db().await;
 
     HttpServer::new(move || {
         let cm_service = get_cm_service(cm_graph.clone());
