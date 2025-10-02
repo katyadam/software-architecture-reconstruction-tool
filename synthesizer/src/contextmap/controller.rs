@@ -1,13 +1,12 @@
-use std::sync::Arc;
-
-use crate::contextmap::{
-    dto::{GetContextMapErrorReponse, PostContextMap, PostContextMapErrorResponse},
-    model::ContextMap,
-    repository::{self},
-    service::build_context_map,
+use crate::{
+    contextmap::{
+        dto::{GetContextMapErrorReponse, PostContextMap, PostContextMapErrorResponse},
+        model::ContextMap,
+        service::{ContextMapService, ContextMapServiceImpl},
+    },
+    errors::api::ApiError,
 };
 use actix_web::{HttpResponse, Responder, delete, get, post, web};
-use neo4rs::Graph;
 
 #[utoipa::path(
         post,
@@ -19,18 +18,13 @@ use neo4rs::Graph;
     )]
 #[post("")]
 pub async fn create_context_map(
-    graph: web::Data<Arc<Graph>>,
+    service: web::Data<ContextMapServiceImpl>,
     dto: web::Json<PostContextMap>,
-) -> impl Responder {
-    let context_map = build_context_map(&dto.entities);
-    match repository::save_context_map(graph, &context_map, dto.codebase_uuid.clone()).await {
-        Ok(_) => HttpResponse::Created().json(context_map),
-        Err(e) => HttpResponse::Accepted().json(PostContextMapErrorResponse {
-            context_map: context_map,
-            error: format!("{}", e),
-            warning: "Context Map created but not saved.".to_string(),
-        }),
-    }
+) -> Result<impl Responder, ApiError> {
+    let dto = dto.into_inner();
+    let cm = service.save(dto).await?;
+
+    Ok(HttpResponse::Created().json(cm))
 }
 
 #[utoipa::path(
@@ -46,17 +40,13 @@ pub async fn create_context_map(
     )]
 #[get("/{codebase_uuid}")]
 pub async fn get_context_map(
-    graph: web::Data<Arc<Graph>>,
+    service: web::Data<ContextMapServiceImpl>,
     codebase_uuid_path: web::Path<String>,
-) -> impl Responder {
+) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
+    let cm = service.get_single(&codebase_uuid).await?;
 
-    match repository::get_context_map(graph, codebase_uuid).await {
-        Ok(context_map) => HttpResponse::Ok().json(context_map),
-        Err(e) => HttpResponse::BadRequest().json(GetContextMapErrorReponse {
-            error: e.to_string(),
-        }),
-    }
+    Ok(HttpResponse::Ok().json(cm))
 }
 
 #[utoipa::path(
@@ -72,13 +62,11 @@ pub async fn get_context_map(
     )]
 #[delete("/{codebase_uuid}")]
 pub async fn delete_context_map(
-    graph: web::Data<Arc<Graph>>,
+    service: web::Data<ContextMapServiceImpl>,
     codebase_uuid_path: web::Path<String>,
-) -> impl Responder {
+) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
+    service.delete(&codebase_uuid).await?;
 
-    match repository::delete_context_map(graph, codebase_uuid).await {
-        Ok(_) => HttpResponse::NoContent(),
-        Err(_) => HttpResponse::BadRequest(),
-    }
+    Ok(HttpResponse::NoContent())
 }

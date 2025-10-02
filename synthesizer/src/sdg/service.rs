@@ -32,7 +32,7 @@ impl SdgService for SdgServiceImpl {
     async fn save(&self, sdg_payload: PostSDG) -> Result<SDG, ServiceError> {
         let sdg = self
             .builder
-            .build_sdg(sdg_payload.endpoints, sdg_payload.restcalls)?;
+            .build(&sdg_payload.endpoints, &sdg_payload.restcalls)?;
 
         self.repository
             .save(&sdg, &sdg_payload.codebase_uuid)

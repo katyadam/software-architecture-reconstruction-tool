@@ -3,6 +3,10 @@ use std::{env, sync::Arc};
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use models::Entity;
 use neo4rs::Graph;
+use synthesizer::contextmap::{
+    builder::ContextMapBuilderImpl, repository::ContextMapRepositoryImpl,
+    service::ContextMapServiceImpl,
+};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -63,12 +67,13 @@ async fn main() -> std::io::Result<()> {
     let sdg_graph = setup_sdg_db().await;
 
     HttpServer::new(move || {
+        let cm_service = get_cm_service(cm_graph.clone());
         let sdg_service = get_sdg_service(sdg_graph.clone());
         App::new()
             .wrap(Logger::default())
             .service(
                 web::scope("/context-maps")
-                    .app_data(web::Data::new(cm_graph.clone()))
+                    .app_data(web::Data::new(cm_service))
                     .configure(contextmap::configure),
             )
             .service(
@@ -84,6 +89,13 @@ async fn main() -> std::io::Result<()> {
     .bind((url, port))?
     .run()
     .await
+}
+
+fn get_cm_service(graph: Arc<Graph>) -> ContextMapServiceImpl {
+    let cm_repository = ContextMapRepositoryImpl::new(graph);
+    let cm_builder = ContextMapBuilderImpl::new();
+
+    ContextMapServiceImpl::new(cm_repository, cm_builder)
 }
 
 fn get_sdg_service(graph: Arc<Graph>) -> SdgServiceImpl {

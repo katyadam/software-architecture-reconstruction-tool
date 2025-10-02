@@ -12,23 +12,23 @@ use crate::{
 };
 
 pub trait SdgBuilder {
-    fn build_sdg(
+    fn build(
         &self,
-        endpoints: Vec<Endpoint>,
-        restcalls: Vec<RestCall>,
+        endpoints: &Vec<Endpoint>,
+        restcalls: &Vec<RestCall>,
     ) -> Result<SDG, BuilderError>;
 }
 
 pub struct SdgBuilderImpl {}
 
 impl SdgBuilder for SdgBuilderImpl {
-    fn build_sdg(
+    fn build(
         &self,
-        endpoints: Vec<Endpoint>,
-        restcalls: Vec<RestCall>,
+        endpoints: &Vec<Endpoint>,
+        restcalls: &Vec<RestCall>,
     ) -> Result<SDG, BuilderError> {
-        let services = Self::create_service_map(&endpoints);
-        let connections = Self::create_connections(&endpoints, &restcalls);
+        let services = Self::create_service_map(endpoints);
+        let connections = Self::create_connections(endpoints, restcalls);
         Ok(SDG {
             services,
             connections,
