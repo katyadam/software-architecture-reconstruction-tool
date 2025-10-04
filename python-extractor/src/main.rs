@@ -55,11 +55,9 @@ async fn main() -> std::io::Result<()> {
             .unwrap_or_else(|_| "http://localhost:8080".to_string())
             .parse()
             .expect("SYNTHESIZER_URL must be a valid String");
-
-        let synthesizer_connector = SynthesizerConnector::new(
-            HttpClient::new(synthesizer_url, Client::default()),
-            S3Client::new(bucket),
-        );
+        let s3_client = S3Client::new(bucket);
+        let synthesizer_connector =
+            SynthesizerConnector::new(HttpClient::new(synthesizer_url, Client::default()));
         let manager_connector =
             ManagerConnector::new(HttpClient::new(manager_url, Client::default()));
 
