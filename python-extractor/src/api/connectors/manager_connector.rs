@@ -2,7 +2,7 @@ use uuid::Uuid;
 
 use crate::{
     api::dto::{ConfigurationDto, PostFileRecord},
-    client::client::HttpClient,
+    client::http::client::HttpClient,
     error::HttpClientError,
 };
 

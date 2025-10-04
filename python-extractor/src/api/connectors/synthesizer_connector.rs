@@ -2,7 +2,7 @@ use log::info;
 use models::CodeElementsAggregate;
 use uuid::Uuid;
 
-use crate::{api::dto::PostEntities, client::client::HttpClient, error::HttpClientError};
+use crate::{api::dto::PostEntities, client::http::client::HttpClient, error::HttpClientError};
 
 pub struct SynthesizerConnector {
     http_client: HttpClient,

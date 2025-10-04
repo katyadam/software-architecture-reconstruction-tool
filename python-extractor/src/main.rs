@@ -8,7 +8,7 @@ use crate::{
         dto::MultipleFileUploadSchema,
         service::ExtractorServiceImpl,
     },
-    client::client::HttpClient,
+    client::http::client::HttpClient,
 };
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use awc::Client;
