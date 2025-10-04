@@ -2,7 +2,10 @@ use models::{CallStatement, Callable, Endpoint, Entity, RestCall};
 use s3::Bucket;
 use serde::Serialize;
 
-use crate::error::S3ClientError;
+use crate::{
+    client::s3::model::{S3ContextMap, S3Imcg, S3Sdg},
+    error::S3ClientError,
+};
 
 pub struct S3Client {
     bucket: Bucket,
@@ -18,7 +21,7 @@ impl S3Client {
         entities: &Vec<Entity>,
         path: &str,
     ) -> Result<(), S3ClientError> {
-        self.save_chunk(entities, path).await
+        self.save_chunk(&S3ContextMap::new(entities), path).await
     }
 
     pub async fn save_sdg(
@@ -27,7 +30,8 @@ impl S3Client {
         restcalls: &Vec<RestCall>,
         path: &str,
     ) -> Result<(), S3ClientError> {
-        self.save_chunk(endpoints, path).await
+        self.save_chunk(&S3Sdg::new(endpoints, restcalls), path)
+            .await
     }
 
     pub async fn save_imcg(
@@ -36,7 +40,7 @@ impl S3Client {
         calls: &Vec<CallStatement>,
         path: &str,
     ) -> Result<(), S3ClientError> {
-        self.save_chunk(callables, path).await
+        self.save_chunk(&S3Imcg::new(callables, calls), path).await
     }
 
     async fn save_chunk<T: Serialize>(
