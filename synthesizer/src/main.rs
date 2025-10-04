@@ -1,20 +1,31 @@
-use std::env;
+use std::{env, sync::Arc};
 
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use models::Entity;
+use neo4rs::Graph;
+
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
-    contextmap::dto::{GetContextMapErrorReponse, PostContextMap},
+    contextmap::{
+        builder::ContextMapBuilderImpl,
+        dto::{GetContextMapErrorReponse, PostContextMap},
+        repository::ContextMapRepositoryImpl,
+        service::ContextMapServiceImpl,
+    },
     db_setup::{setup_contextmap_db, setup_imcg_db, setup_sdg_db},
     sdg::{
+        builder::SdgBuilderImpl,
         dto::{GetSDGErrorReponse, PostSDGErrorResponse},
         model::SDG,
+        repository::SdgRepositoryImpl,
+        service::SdgServiceImpl,
     },
 };
 mod contextmap;
 mod db_setup;
+mod errors;
 mod imcg;
 mod sdg;
 
@@ -26,6 +37,7 @@ mod sdg;
         contextmap::controller::delete_context_map,
         sdg::controller::create_sdg,
         sdg::controller::get_sdg,
+        sdg::controller::delete_sdg
     ),
     components(schemas(
         PostContextMap,
@@ -57,16 +69,18 @@ async fn main() -> std::io::Result<()> {
     let imcg_graph = setup_imcg_db().await;
 
     HttpServer::new(move || {
+        let cm_service = get_cm_service(cm_graph.clone());
+        let sdg_service = get_sdg_service(sdg_graph.clone());
         App::new()
             .wrap(Logger::default())
             .service(
                 web::scope("/context-maps")
-                    .app_data(web::Data::new(cm_graph.clone()))
+                    .app_data(web::Data::new(cm_service))
                     .configure(contextmap::configure),
             )
             .service(
                 web::scope("/sdgs")
-                    .app_data(web::Data::new(sdg_graph.clone()))
+                    .app_data(web::Data::new(sdg_service))
                     .configure(sdg::configure),
             )
             .service(
@@ -77,4 +91,18 @@ async fn main() -> std::io::Result<()> {
     .bind((url, port))?
     .run()
     .await
+}
+
+fn get_cm_service(graph: Arc<Graph>) -> ContextMapServiceImpl {
+    let cm_repository = ContextMapRepositoryImpl::new(graph);
+    let cm_builder = ContextMapBuilderImpl::new();
+
+    ContextMapServiceImpl::new(cm_repository, cm_builder)
+}
+
+fn get_sdg_service(graph: Arc<Graph>) -> SdgServiceImpl {
+    let sdg_repository = SdgRepositoryImpl::new(graph);
+    let sdg_builder = SdgBuilderImpl::new();
+
+    SdgServiceImpl::new(sdg_repository, sdg_builder)
 }

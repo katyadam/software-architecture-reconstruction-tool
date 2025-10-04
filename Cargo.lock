@@ -3723,6 +3723,7 @@ dependencies = [
  "serde_json",
  "strsim",
  "testcontainers",
+ "thiserror 2.0.16",
  "tokio",
  "utoipa",
  "utoipa-swagger-ui",

@@ -18,3 +18,4 @@ uuid = { version = "1.17.0", features = ["serde", "v4"] }
 testcontainers = "0.18.0"
 strsim = "0.11"
 models = { path = "../models" }
+thiserror = "2.0.3"

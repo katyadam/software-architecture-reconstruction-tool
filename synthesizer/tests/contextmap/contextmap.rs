@@ -1,17 +1,24 @@
 use std::sync::Arc;
 
-use actix_web::{App, http::StatusCode, test};
+use actix_web::{App, http::StatusCode, test, web};
 use neo4rs::Graph;
 use synthesizer::contextmap::{
-    dto::{PostContextMap, PostContextMapErrorResponse},
-    model::ContextMap,
+    self, builder::ContextMapBuilderImpl, dto::PostContextMap, model::ContextMap,
+    repository::ContextMapRepositoryImpl, service::ContextMapServiceImpl,
 };
 use testcontainers::{GenericImage, ImageExt, runners::AsyncRunner};
 
-use crate::{common::configure_test_webapp, contextmap::data::test_entity_email};
+use crate::contextmap::data::test_entity_email;
+
+fn get_cm_service(graph: Arc<Graph>) -> ContextMapServiceImpl {
+    let cm_repository = ContextMapRepositoryImpl::new(graph);
+    let cm_builder = ContextMapBuilderImpl::new();
+
+    ContextMapServiceImpl::new(cm_repository, cm_builder)
+}
 
 #[actix_web::test]
-async fn test_create_context_map_returns_202() {
+async fn test_create_context_map_returns_201() {
     let _ = env_logger::builder().is_test(true).try_init();
     let graph = Arc::new(
         Graph::new("127.0.0.1:7687", "neo4j", "password")
@@ -28,10 +35,17 @@ async fn test_create_context_map_returns_202() {
         .expect("Neo4J Docker Container Started");
 
     // get a configuration closure
-    let configuration = configure_test_webapp(graph);
+    // let configuration = configure_test_webapp(graph);
 
     // init test app
-    let app = test::init_service(App::new().configure(configuration)).await;
+    let app = test::init_service(
+        App::new().service(
+            web::scope("/context-maps")
+                .app_data(web::Data::new(get_cm_service(graph.clone())))
+                .configure(contextmap::configure),
+        ),
+    )
+    .await;
 
     let dto = PostContextMap {
         entities: vec![test_entity_email()],
@@ -45,14 +59,14 @@ async fn test_create_context_map_returns_202() {
 
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), StatusCode::ACCEPTED);
+    assert_eq!(resp.status(), StatusCode::CREATED);
 
-    let body: PostContextMapErrorResponse = test::read_body_json(resp).await;
+    let body: ContextMap = test::read_body_json(resp).await;
     assert_eq!(
         ContextMap {
             entities: vec![test_entity_email()],
             dependencies: vec![]
         },
-        body.context_map
+        body
     );
 }

@@ -1,40 +1,48 @@
-use std::collections::HashMap;
+use crate::{
+    contextmap::{
+        builder::{ContextMapBuilder, ContextMapBuilderImpl},
+        dto::PostContextMap,
+        model::ContextMap,
+        repository::{ContextMapRepository, ContextMapRepositoryImpl},
+    },
+    errors::service::ServiceError,
+};
 
-use models::Entity;
+pub trait ContextMapService {
+    async fn save(&self, cm_payload: PostContextMap) -> Result<ContextMap, ServiceError>;
+    async fn get_single(&self, codebase_uuid: &str) -> Result<ContextMap, ServiceError>;
+    async fn delete(&self, codebase_uuid: &str) -> Result<(), ServiceError>;
+}
 
-use crate::contextmap::model::{ContextMap, Dependency};
+pub struct ContextMapServiceImpl {
+    repository: ContextMapRepositoryImpl,
+    builder: ContextMapBuilderImpl,
+}
 
-pub fn build_context_map(entities: &Vec<Entity>) -> ContextMap {
-    let collected_dependencies = connect_entities(entities);
-    ContextMap {
-        entities: entities.to_vec(),
-        dependencies: collected_dependencies,
+impl ContextMapServiceImpl {
+    pub fn new(repository: ContextMapRepositoryImpl, builder: ContextMapBuilderImpl) -> Self {
+        Self {
+            repository,
+            builder,
+        }
     }
 }
 
-pub fn connect_entities(entities: &Vec<Entity>) -> Vec<Dependency> {
-    let entities_map = create_entities_map(entities);
+impl ContextMapService for ContextMapServiceImpl {
+    async fn save(&self, cm_payload: PostContextMap) -> Result<ContextMap, ServiceError> {
+        let cm = self.builder.build(&cm_payload.entities)?;
+        self.repository.save(&cm, &cm_payload.codebase_uuid).await?;
 
-    entities
-        .iter()
-        .flat_map(|entity| {
-            entity.fields.iter().filter_map(|field| {
-                field
-                    .datatype_signature
-                    .as_ref()
-                    .filter(|sig| entities_map.contains_key(*sig))
-                    .map(|sig| Dependency {
-                        source_id: entity.signature.clone(),
-                        target_id: sig.clone(),
-                    })
-            })
-        })
-        .collect()
-}
+        Ok(cm)
+    }
 
-pub fn create_entities_map(entities: &Vec<Entity>) -> HashMap<String, &Entity> {
-    entities
-        .into_iter()
-        .map(|entity| (entity.signature.clone(), entity))
-        .collect()
+    async fn get_single(&self, codebase_uuid: &str) -> Result<ContextMap, ServiceError> {
+        let cm = self.repository.get_single(codebase_uuid).await?;
+        Ok(cm)
+    }
+
+    async fn delete(&self, codebase_uuid: &str) -> Result<(), ServiceError> {
+        self.repository.delete(codebase_uuid).await?;
+        Ok(())
+    }
 }

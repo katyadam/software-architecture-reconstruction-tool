@@ -1,5 +1,6 @@
 use actix_web::web;
 
+pub mod builder;
 pub mod controller;
 pub mod dto;
 pub mod health;
