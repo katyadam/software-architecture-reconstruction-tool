@@ -79,7 +79,7 @@ impl ExtractorService for ExtractorServiceImpl {
             .manager_connector
             .get_codebase_configuration(codebase_uuid)
             .await
-            .map_err(|_| ApiError::OtherServerResponseError)?;
+            .map_err(|e| ApiError::OtherServerResponseError(e.to_string()))?;
         let mut any_file_processed: bool = false;
         while let Some(field) = payload.next().await {
             let field = field.map_err(|_| ApiError::BadRequest)?;
@@ -140,7 +140,7 @@ impl ExtractorService for ExtractorServiceImpl {
         self.synthesizer_connector
             .send_code_elements(code_elements_aggregate, codebase_uuid)
             .await
-            .map_err(|_| ApiError::OtherServerResponseError)?;
+            .map_err(|e| ApiError::OtherServerResponseError(e.to_string()))?;
 
         self.manager_connector
             .send_file_record(PostFileRecord::new(
@@ -149,7 +149,7 @@ impl ExtractorService for ExtractorServiceImpl {
                 file_size,
             ))
             .await
-            .map_err(|_| ApiError::OtherServerResponseError)?;
+            .map_err(|e| ApiError::OtherServerResponseError(e.to_string()))?;
         info!("Recorded File extraction in Manager.");
 
         return Ok(());

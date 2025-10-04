@@ -3,7 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct Parameter {
     pub name: String,
     pub datatype: Option<String>,
@@ -30,7 +30,7 @@ pub struct Argument {
     pub value: String,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub enum Namespace {
     Class(String),
     Module(String),
@@ -45,7 +45,7 @@ impl Namespace {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct Callable {
     pub signature: String,
     pub namespace: Namespace,

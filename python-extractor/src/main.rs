@@ -8,7 +8,7 @@ use crate::{
         dto::MultipleFileUploadSchema,
         service::ExtractorServiceImpl,
     },
-    client::http::client::HttpClient,
+    client::{http::client::HttpClient, s3::client::S3Client},
 };
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use awc::Client;
@@ -52,8 +52,10 @@ async fn main() -> std::io::Result<()> {
             .parse()
             .expect("SYNTHESIZER_URL must be a valid String");
 
-        let synthesizer_connector =
-            SynthesizerConnector::new(HttpClient::new(synthesizer_url, Client::default()));
+        let synthesizer_connector = SynthesizerConnector::new(
+            HttpClient::new(synthesizer_url, Client::default()),
+            S3Client::new(),
+        );
         let manager_connector =
             ManagerConnector::new(HttpClient::new(manager_url, Client::default()));
 

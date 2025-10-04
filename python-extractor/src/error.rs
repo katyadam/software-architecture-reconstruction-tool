@@ -1,5 +1,6 @@
 use actix_web::{HttpResponse, ResponseError};
 use awc::error::{PayloadError, SendRequestError};
+use s3::error::S3Error;
 use serde::Serialize;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -13,8 +14,8 @@ pub enum ApiError {
     NotFound,
     #[error("bad request")]
     BadRequest,
-    #[error("sending http request resulted in error")]
-    OtherServerResponseError,
+    #[error("sending http request resulted in error: {0}")]
+    OtherServerResponseError(String),
     #[error("can't convert file to utf-8")]
     Utf8ConversionError,
 }
@@ -27,9 +28,7 @@ impl ResponseError for ApiError {
             }
             ApiError::NotFound => HttpResponse::NotFound().json("not found"),
             ApiError::BadRequest => HttpResponse::BadRequest().json("bad request"),
-            ApiError::OtherServerResponseError => {
-                HttpResponse::BadRequest().json("sending http request resulted in error")
-            }
+            ApiError::OtherServerResponseError(msg) => HttpResponse::BadRequest().json(msg),
             ApiError::Utf8ConversionError => {
                 HttpResponse::BadRequest().json("bad request - can't convert file to utf-8")
             }
@@ -41,7 +40,7 @@ impl ResponseError for ApiError {
             ApiError::InternalServerError => actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::NotFound => actix_web::http::StatusCode::NOT_FOUND,
             ApiError::BadRequest => actix_web::http::StatusCode::BAD_REQUEST,
-            ApiError::OtherServerResponseError => actix_web::http::StatusCode::BAD_REQUEST,
+            ApiError::OtherServerResponseError(_) => actix_web::http::StatusCode::BAD_REQUEST,
             ApiError::Utf8ConversionError => actix_web::http::StatusCode::BAD_REQUEST,
         }
     }
@@ -60,4 +59,22 @@ pub enum HttpClientError {
 
     #[error("Api Error: {0}")]
     ApiError(#[from] ApiError),
+}
+
+#[derive(Debug, Error)]
+pub enum S3ClientError {
+    #[error("Serialization error: {0}")]
+    Serde(#[from] serde_json::Error),
+
+    #[error("HTTP request error: {0}")]
+    HttpRequest(#[from] SendRequestError),
+
+    #[error("Wrong Payload: {0}")]
+    Payload(#[from] PayloadError),
+
+    #[error("Api Error: {0}")]
+    ApiError(#[from] ApiError),
+
+    #[error("S3 client error: {0}")]
+    S3(#[from] S3Error),
 }
