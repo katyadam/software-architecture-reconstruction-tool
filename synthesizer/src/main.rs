@@ -3,15 +3,17 @@ use std::{env, sync::Arc};
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use models::Entity;
 use neo4rs::Graph;
-use synthesizer::contextmap::{
-    builder::ContextMapBuilderImpl, repository::ContextMapRepositoryImpl,
-    service::ContextMapServiceImpl,
-};
+
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
-    contextmap::dto::{GetContextMapErrorReponse, PostContextMap},
+    contextmap::{
+        builder::ContextMapBuilderImpl,
+        dto::{GetContextMapErrorReponse, PostContextMap},
+        repository::ContextMapRepositoryImpl,
+        service::ContextMapServiceImpl,
+    },
     db_setup::{setup_contextmap_db, setup_imcg_db, setup_sdg_db},
     sdg::{
         builder::SdgBuilderImpl,
