@@ -33,7 +33,7 @@ pub fn get_bucket() -> Bucket {
     let credentials =
         Credentials::new(Some(&s3_access_key), Some(&s3_secret_key), None, None, None).unwrap();
 
-    *Bucket::new("code-entities", region, credentials)
+    *Bucket::new(&s3_bucket_name, region, credentials)
         .unwrap()
         .with_path_style()
 }
