@@ -9,7 +9,8 @@ use uuid::Uuid;
 use crate::{
     api::{
         connectors::{
-            manager_connector::ManagerConnector, synthesizer_connector::SynthesizerConnector,
+            manager_connector::ManagerConnector, s3_connector::S3Connector,
+            synthesizer_connector::SynthesizerConnector,
         },
         dto::{PostFileRecord, ServiceDto},
     },
@@ -35,16 +36,19 @@ pub trait ExtractorService {
 pub struct ExtractorServiceImpl {
     pub manager_connector: ManagerConnector,
     pub synthesizer_connector: SynthesizerConnector,
+    pub s3_connector: S3Connector,
 }
 
 impl ExtractorServiceImpl {
     pub fn new(
         manager_connector: ManagerConnector,
         synthesizer_connector: SynthesizerConnector,
+        s3_connector: S3Connector,
     ) -> Self {
         Self {
             manager_connector,
             synthesizer_connector,
+            s3_connector,
         }
     }
 }

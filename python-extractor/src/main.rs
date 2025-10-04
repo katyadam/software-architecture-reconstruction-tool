@@ -3,7 +3,8 @@ use std::env;
 use crate::{
     api::{
         connectors::{
-            manager_connector::ManagerConnector, synthesizer_connector::SynthesizerConnector,
+            manager_connector::ManagerConnector, s3_connector::S3Connector,
+            synthesizer_connector::SynthesizerConnector,
         },
         dto::MultipleFileUploadSchema,
         service::ExtractorServiceImpl,
@@ -56,12 +57,15 @@ async fn main() -> std::io::Result<()> {
             .parse()
             .expect("SYNTHESIZER_URL must be a valid String");
         let s3_client = S3Client::new(bucket);
+
         let synthesizer_connector =
             SynthesizerConnector::new(HttpClient::new(synthesizer_url, Client::default()));
         let manager_connector =
             ManagerConnector::new(HttpClient::new(manager_url, Client::default()));
+        let s3_connector = S3Connector::new(s3_client);
 
-        let extractor_service = ExtractorServiceImpl::new(manager_connector, synthesizer_connector);
+        let extractor_service =
+            ExtractorServiceImpl::new(manager_connector, synthesizer_connector, s3_connector);
         App::new()
             .wrap(Logger::default())
             .service(

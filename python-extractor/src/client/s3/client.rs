@@ -21,7 +21,8 @@ impl S3Client {
         entities: &Vec<Entity>,
         path: &str,
     ) -> Result<(), S3ClientError> {
-        self.save_chunk(&S3ContextMap::new(entities), path).await
+        self.save_chunk(&S3ContextMap::new(entities), &format!("{}/cm", path))
+            .await
     }
 
     pub async fn save_sdg(
@@ -30,7 +31,7 @@ impl S3Client {
         restcalls: &Vec<RestCall>,
         path: &str,
     ) -> Result<(), S3ClientError> {
-        self.save_chunk(&S3Sdg::new(endpoints, restcalls), path)
+        self.save_chunk(&S3Sdg::new(endpoints, restcalls), &format!("{}/sdg", path))
             .await
     }
 
@@ -40,7 +41,8 @@ impl S3Client {
         calls: &Vec<CallStatement>,
         path: &str,
     ) -> Result<(), S3ClientError> {
-        self.save_chunk(&S3Imcg::new(callables, calls), path).await
+        self.save_chunk(&S3Imcg::new(callables, calls), &format!("{}/imcg", path))
+            .await
     }
 
     async fn save_chunk<T: Serialize>(

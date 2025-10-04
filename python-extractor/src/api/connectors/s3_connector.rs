@@ -1,5 +1,4 @@
 use models::CodeElementsAggregate;
-use uuid::Uuid;
 
 use crate::{client::s3::client::S3Client, error::S3ClientError};
 
@@ -17,9 +16,23 @@ impl S3Connector {
     pub async fn store_code_elements(
         &self,
         code_elements: CodeElementsAggregate,
-        codebase_uuid: Uuid,
         path: &str,
     ) -> Result<(), S3ClientError> {
+        self.s3_client
+            .save_context_map(&code_elements.entities, path)
+            .await?;
+
+        self.s3_client
+            .save_sdg(&code_elements.endpoints, &code_elements.restcalls, path)
+            .await?;
+
+        self.s3_client
+            .save_imcg(
+                &code_elements.callables,
+                &code_elements.call_statements,
+                path,
+            )
+            .await?;
         Ok(())
     }
 }
