@@ -8,6 +8,7 @@ use crate::{
         dto::MultipleFileUploadSchema,
         service::ExtractorServiceImpl,
     },
+    bucket::get_bucket,
     client::{http::client::HttpClient, s3::client::S3Client},
 };
 use actix_web::{App, HttpServer, middleware::Logger, web};
@@ -16,6 +17,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 mod api;
+mod bucket;
 mod client;
 mod error;
 mod utils;
@@ -42,6 +44,8 @@ async fn main() -> std::io::Result<()> {
     let url: String = env::var("EXPOSE_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
 
     HttpServer::new(move || {
+        let bucket = get_bucket();
+
         let manager_url: String = env::var("MANAGER_URL")
             .unwrap_or_else(|_| "http://localhost:8081".to_string())
             .parse()
@@ -54,7 +58,7 @@ async fn main() -> std::io::Result<()> {
 
         let synthesizer_connector = SynthesizerConnector::new(
             HttpClient::new(synthesizer_url, Client::default()),
-            S3Client::new(),
+            S3Client::new(bucket),
         );
         let manager_connector =
             ManagerConnector::new(HttpClient::new(manager_url, Client::default()));
