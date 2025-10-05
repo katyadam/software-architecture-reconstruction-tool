@@ -1,4 +1,4 @@
-use crate::errors::{builder::BuilderError, database::DatabaseError, s3::S3ClientError};
+use crate::errors::{builder::BuilderError, database::DatabaseError};
 
 // Business Logic Errors
 #[derive(thiserror::Error, Debug)]

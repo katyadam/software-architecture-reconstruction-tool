@@ -2,6 +2,7 @@ use actix_web::web;
 
 pub mod client;
 pub mod controller;
+pub mod dto;
 pub mod health;
 mod model;
 pub mod service;

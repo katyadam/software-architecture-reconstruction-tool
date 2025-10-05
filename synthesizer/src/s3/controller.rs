@@ -1,6 +1,9 @@
 use actix_web::{HttpResponse, Responder, post, web};
 
-use crate::errors::api::ApiError;
+use crate::{
+    errors::api::ApiError,
+    s3::{dto::PostViews, service::S3Service},
+};
 
 #[utoipa::path(
         post,
@@ -10,8 +13,12 @@ use crate::errors::api::ApiError;
         ),
     )]
 #[post("")]
-pub async fn create_views(base_dir_path: web::Json<String>) -> Result<impl Responder, ApiError> {
-    let base_dir_path = base_dir_path.into_inner();
+pub async fn create_views(
+    service: web::Data<S3Service>,
+    dto: web::Json<PostViews>,
+) -> Result<impl Responder, ApiError> {
+    let dto = dto.into_inner();
+    service.save_views(dto).await?;
 
-    Ok(HttpResponse::Created().json(base_dir_path))
+    Ok(HttpResponse::Created().json("code elements loaded, views created and stored"))
 }
