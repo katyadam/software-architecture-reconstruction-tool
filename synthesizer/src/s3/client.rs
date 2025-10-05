@@ -12,8 +12,6 @@ impl S3Client {
         Self { bucket }
     }
 
-    // pub async fn load_context_map(&self, base_dir_path: &str) -> Result<(), S3ClientError> {}
-
     pub async fn load_chunks_index(&self, index_path: &str) -> Result<Vec<String>, S3ClientError> {
         self.load_chunk::<Vec<String>>(index_path).await
     }

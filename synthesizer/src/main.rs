@@ -8,6 +8,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
+    bucket::get_bucket,
     contextmap::{
         builder::ContextMapBuilderImpl,
         dto::{GetContextMapErrorReponse, PostContextMap},
@@ -15,6 +16,7 @@ use crate::{
         service::ContextMapServiceImpl,
     },
     db_setup::{setup_contextmap_db, setup_imcg_db, setup_sdg_db},
+    s3::{client::S3Client, service::S3Service},
     sdg::{
         builder::SdgBuilderImpl,
         dto::{GetSDGErrorReponse, PostSDGErrorResponse},
@@ -23,6 +25,7 @@ use crate::{
         service::SdgServiceImpl,
     },
 };
+mod bucket;
 mod contextmap;
 mod db_setup;
 mod errors;
@@ -73,9 +76,14 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         let cm_service = get_cm_service(cm_graph.clone());
         let sdg_service = get_sdg_service(sdg_graph.clone());
+        let s3_service = S3Service::new(get_s3_client(), cm_service, sdg_service);
         App::new()
             .wrap(Logger::default())
-            .service(web::scope("/views").configure(s3::configure))
+            .service(
+                web::scope("/views")
+                    .app_data(web::Data::new(s3_service))
+                    .configure(s3::configure),
+            )
             .service(
                 web::scope("/context-maps")
                     .app_data(web::Data::new(cm_service))
@@ -108,4 +116,9 @@ fn get_sdg_service(graph: Arc<Graph>) -> SdgServiceImpl {
     let sdg_builder = SdgBuilderImpl::new();
 
     SdgServiceImpl::new(sdg_repository, sdg_builder)
+}
+
+fn get_s3_client() -> S3Client {
+    let bucket = get_bucket();
+    S3Client::new(bucket)
 }
