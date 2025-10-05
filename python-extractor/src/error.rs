@@ -56,9 +56,18 @@ pub enum HttpClientError {
 
     #[error("Wrong Payload: {0}")]
     Payload(#[from] PayloadError),
+}
 
-    #[error("Api Error: {0}")]
-    ApiError(#[from] ApiError),
+impl From<HttpClientError> for ApiError {
+    fn from(err: HttpClientError) -> Self {
+        match err {
+            HttpClientError::Serde(_) => ApiError::InternalServerError,
+            HttpClientError::HttpRequest(err) => {
+                ApiError::OtherServerResponseError(err.to_string())
+            }
+            HttpClientError::Payload(_) => ApiError::BadRequest,
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -72,9 +81,17 @@ pub enum S3ClientError {
     #[error("Wrong Payload: {0}")]
     Payload(#[from] PayloadError),
 
-    #[error("Api Error: {0}")]
-    ApiError(#[from] ApiError),
-
     #[error("S3 client error: {0}")]
     S3(#[from] S3Error),
+}
+
+impl From<S3ClientError> for ApiError {
+    fn from(err: S3ClientError) -> Self {
+        match err {
+            S3ClientError::Serde(_) => ApiError::InternalServerError,
+            S3ClientError::Payload(_) => ApiError::BadRequest,
+            S3ClientError::HttpRequest(err) => ApiError::OtherServerResponseError(err.to_string()),
+            S3ClientError::S3(err) => ApiError::OtherServerResponseError(err.to_string()),
+        }
+    }
 }
