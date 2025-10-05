@@ -1,12 +1,10 @@
-use neo4rs::DeError;
-
-use crate::errors::{api::ApiError, builder::BuilderError, database::DatabaseError};
+use crate::errors::{builder::BuilderError, database::DatabaseError, s3::S3ClientError};
 
 // Business Logic Errors
 #[derive(thiserror::Error, Debug)]
 pub enum ServiceError {
-    #[error("can't deserialize")]
-    DeserializationError(DeError),
+    #[error("can't deserialize: {0}")]
+    DeserializationError(String),
 
     #[error("validation failed: {0}")]
     ValidationError(String),
@@ -14,26 +12,20 @@ pub enum ServiceError {
     #[error("operation not permitted: {0}")]
     Forbidden(String),
 
-    #[error("unexpected internal error")]
-    InternalError,
+    #[error("unexpected internal error: {0}")]
+    InternalError(String),
 }
 
 impl From<DatabaseError> for ServiceError {
     fn from(err: DatabaseError) -> Self {
         match err {
-            DatabaseError::DeserializationError(err) => ServiceError::DeserializationError(err),
-            DatabaseError::ConnectionError | DatabaseError::Error(_) => ServiceError::InternalError,
-        }
-    }
-}
-
-impl From<ServiceError> for ApiError {
-    fn from(err: ServiceError) -> Self {
-        match err {
-            ServiceError::DeserializationError(err) => ApiError::BadRequest(err.to_string()),
-            ServiceError::ValidationError(_) => ApiError::BadRequest("can't validate".to_string()),
-            ServiceError::Forbidden(_) => ApiError::Forbidden,
-            ServiceError::InternalError => ApiError::InternalServerError,
+            DatabaseError::DeserializationError(err) => {
+                ServiceError::DeserializationError(err.to_string())
+            }
+            DatabaseError::Error(err) => ServiceError::InternalError(err.to_string()),
+            DatabaseError::ConnectionError => {
+                ServiceError::InternalError("can't connect to DB".to_string())
+            }
         }
     }
 }
@@ -41,7 +33,7 @@ impl From<ServiceError> for ApiError {
 impl From<BuilderError> for ServiceError {
     fn from(err: BuilderError) -> Self {
         match err {
-            BuilderError::Error(_) => ServiceError::InternalError,
+            BuilderError::Error(err) => ServiceError::InternalError(err),
         }
     }
 }
