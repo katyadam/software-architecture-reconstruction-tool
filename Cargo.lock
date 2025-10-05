@@ -3968,6 +3968,7 @@ dependencies = [
  "actix-web",
  "dotenvy",
  "env_logger",
+ "futures",
  "log",
  "models",
  "neo4rs",
