@@ -13,7 +13,7 @@ impl SynthesizerConnector {
 
     pub async fn send_load_info(&self, base_dir_path: &str) -> Result<(), HttpClientError> {
         self.http_client
-            .post_json::<str, ()>("/load-info", base_dir_path)
+            .post_json::<str, ()>("/views", base_dir_path)
             .await?;
         info!("Load info about {} sent to synthesizer.", base_dir_path);
         Ok(())

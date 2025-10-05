@@ -19,6 +19,9 @@ pub enum ApiError {
 
     #[error("forbidden")]
     Forbidden,
+
+    #[error("Other server reponse error: {0}")]
+    OtherServerResponseError(String),
 }
 
 impl From<DatabaseError> for ApiError {
@@ -39,6 +42,9 @@ impl ResponseError for ApiError {
             ApiError::NotFound => HttpResponse::NotFound().json("not found"),
             ApiError::BadRequest(err) => HttpResponse::BadRequest().json(err),
             ApiError::Forbidden => HttpResponse::Forbidden().json("forbidden"),
+            ApiError::OtherServerResponseError(err) => {
+                HttpResponse::InternalServerError().json(err)
+            }
         }
     }
 
@@ -48,6 +54,9 @@ impl ResponseError for ApiError {
             ApiError::NotFound => actix_web::http::StatusCode::NOT_FOUND,
             ApiError::BadRequest(_) => actix_web::http::StatusCode::BAD_REQUEST,
             ApiError::Forbidden => actix_web::http::StatusCode::FORBIDDEN,
+            ApiError::OtherServerResponseError(_) => {
+                actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+            }
         }
     }
 }

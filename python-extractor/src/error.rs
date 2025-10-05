@@ -91,7 +91,7 @@ impl From<S3ClientError> for ApiError {
             S3ClientError::Serde(_) => ApiError::InternalServerError,
             S3ClientError::Payload(_) => ApiError::BadRequest,
             S3ClientError::HttpRequest(err) => ApiError::OtherServerResponseError(err.to_string()),
-            S3ClientError::S3(err) => ApiError::OtherServerResponseError(err.to_string()),
+            S3ClientError::S3(_) => ApiError::InternalServerError,
         }
     }
 }

@@ -3971,6 +3971,7 @@ dependencies = [
  "log",
  "models",
  "neo4rs",
+ "rust-s3",
  "serde",
  "serde_json",
  "strsim",

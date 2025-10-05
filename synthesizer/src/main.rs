@@ -33,6 +33,7 @@ mod sdg;
 #[derive(OpenApi)]
 #[openapi(
     paths(
+        s3::controller::create_views,
         contextmap::controller::create_context_map,
         contextmap::controller::get_context_map,
         contextmap::controller::delete_context_map,
@@ -46,7 +47,7 @@ mod sdg;
         GetContextMapErrorReponse,
         SDG,
         PostSDGErrorResponse,
-        GetSDGErrorReponse
+        GetSDGErrorReponse,
     ))
 )]
 struct ApiDoc;
@@ -74,7 +75,7 @@ async fn main() -> std::io::Result<()> {
         let sdg_service = get_sdg_service(sdg_graph.clone());
         App::new()
             .wrap(Logger::default())
-            .service(web::scope("/load-info").configure(s3::configure))
+            .service(web::scope("/views").configure(s3::configure))
             .service(
                 web::scope("/context-maps")
                     .app_data(web::Data::new(cm_service))
