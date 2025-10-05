@@ -30,6 +30,7 @@ pub trait ExtractorService {
         field: Field,
         configuration_services: &Vec<ServiceDto>,
         codebase_uuid: Uuid,
+        base_dir_path: &str,
     ) -> Result<(), ApiError>;
 }
 
@@ -84,7 +85,11 @@ impl ExtractorService for ExtractorServiceImpl {
             .get_codebase_configuration(codebase_uuid)
             .await
             .map_err(|e| ApiError::OtherServerResponseError(e.to_string()))?;
+
+        let run_id = uuid::Uuid::new_v4();
+        let base_dir_path = format!("{}/{}", codebase_uuid, run_id);
         let mut any_file_processed: bool = false;
+
         while let Some(field) = payload.next().await {
             let field = field.map_err(|_| ApiError::BadRequest)?;
 
@@ -98,6 +103,7 @@ impl ExtractorService for ExtractorServiceImpl {
                     field,
                     &configuration.configuration_data.services,
                     codebase_uuid,
+                    &base_dir_path,
                 )
                 .await?;
             }
@@ -116,6 +122,7 @@ impl ExtractorService for ExtractorServiceImpl {
         mut field: Field,
         configuration_services: &Vec<ServiceDto>,
         codebase_uuid: Uuid,
+        base_dir_path: &str,
     ) -> Result<(), ApiError> {
         info!("Uploaded file: {}", file_name);
 
@@ -141,10 +148,13 @@ impl ExtractorService for ExtractorServiceImpl {
         )
         .await;
 
+        self.s3_connector
+            .store_code_elements(code_elements_aggregate, base_dir_path)
+            .await?;
+
         self.synthesizer_connector
-            .send_code_elements(code_elements_aggregate, codebase_uuid)
-            .await
-            .map_err(|e| ApiError::OtherServerResponseError(e.to_string()))?;
+            .send_load_info(base_dir_path)
+            .await?;
 
         self.manager_connector
             .send_file_record(PostFileRecord::new(
@@ -152,8 +162,7 @@ impl ExtractorService for ExtractorServiceImpl {
                 file_name.to_string(),
                 file_size,
             ))
-            .await
-            .map_err(|e| ApiError::OtherServerResponseError(e.to_string()))?;
+            .await?;
         info!("Recorded File extraction in Manager.");
 
         return Ok(());

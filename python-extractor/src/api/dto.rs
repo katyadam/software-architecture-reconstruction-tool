@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use models::Entity;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -27,21 +26,7 @@ impl PostFileRecord {
     }
 }
 
-#[derive(Serialize)]
-pub struct PostEntities {
-    pub codebase_uuid: Uuid,
-    pub entities: Vec<Entity>,
-}
-
-impl PostEntities {
-    pub fn new(codebase_uuid: Uuid, entities: Vec<Entity>) -> Self {
-        Self {
-            codebase_uuid,
-            entities,
-        }
-    }
-}
-
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct ConfigurationDto {
     pub configuration_uuid: Uuid,
