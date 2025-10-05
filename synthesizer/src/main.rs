@@ -27,6 +27,7 @@ mod contextmap;
 mod db_setup;
 mod errors;
 mod imcg;
+mod s3;
 mod sdg;
 
 #[derive(OpenApi)]
@@ -73,6 +74,7 @@ async fn main() -> std::io::Result<()> {
         let sdg_service = get_sdg_service(sdg_graph.clone());
         App::new()
             .wrap(Logger::default())
+            .service(web::scope("/load-info").configure(s3::configure))
             .service(
                 web::scope("/context-maps")
                     .app_data(web::Data::new(cm_service))
