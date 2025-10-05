@@ -3,7 +3,7 @@ use s3::Bucket;
 use serde::Serialize;
 
 use crate::{
-    client::s3::model::{S3ContextMap, S3Imcg, S3Sdg},
+    client::s3::model::{S3ContextMapCodeElements, S3ImcgCodeElements, S3SdgCodeElements},
     error::S3ClientError,
 };
 
@@ -21,8 +21,11 @@ impl S3Client {
         entities: &Vec<Entity>,
         path: &str,
     ) -> Result<(), S3ClientError> {
-        self.save_chunk(&S3ContextMap::new(entities), &format!("{}/cm", path))
-            .await
+        self.save_chunk(
+            &S3ContextMapCodeElements::new(entities),
+            &format!("{}/cm", path),
+        )
+        .await
     }
 
     pub async fn save_sdg(
@@ -31,8 +34,11 @@ impl S3Client {
         restcalls: &Vec<RestCall>,
         path: &str,
     ) -> Result<(), S3ClientError> {
-        self.save_chunk(&S3Sdg::new(endpoints, restcalls), &format!("{}/sdg", path))
-            .await
+        self.save_chunk(
+            &S3SdgCodeElements::new(endpoints, restcalls),
+            &format!("{}/sdg", path),
+        )
+        .await
     }
 
     pub async fn save_imcg(
@@ -41,8 +47,11 @@ impl S3Client {
         calls: &Vec<CallStatement>,
         path: &str,
     ) -> Result<(), S3ClientError> {
-        self.save_chunk(&S3Imcg::new(callables, calls), &format!("{}/imcg", path))
-            .await
+        self.save_chunk(
+            &S3ImcgCodeElements::new(callables, calls),
+            &format!("{}/imcg", path),
+        )
+        .await
     }
 
     async fn save_chunk<T: Serialize>(
