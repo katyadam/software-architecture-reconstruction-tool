@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     contextmap::{
         dto::PostContextMap,
@@ -18,15 +20,15 @@ use futures::stream::{self, StreamExt};
 
 pub struct S3Service {
     s3_client: S3Client,
-    context_map_service: ContextMapServiceImpl,
-    sdg_service: SdgServiceImpl,
+    context_map_service: Arc<ContextMapServiceImpl>,
+    sdg_service: Arc<SdgServiceImpl>,
 }
 
 impl S3Service {
     pub fn new(
         s3_client: S3Client,
-        context_map_service: ContextMapServiceImpl,
-        sdg_service: SdgServiceImpl,
+        context_map_service: Arc<ContextMapServiceImpl>,
+        sdg_service: Arc<SdgServiceImpl>,
     ) -> Self {
         Self {
             s3_client,

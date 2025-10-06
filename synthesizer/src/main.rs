@@ -74,9 +74,15 @@ async fn main() -> std::io::Result<()> {
     let imcg_graph = setup_imcg_db().await;
 
     HttpServer::new(move || {
-        let cm_service = get_cm_service(cm_graph.clone());
-        let sdg_service = get_sdg_service(sdg_graph.clone());
-        let s3_service = S3Service::new(get_s3_client(), cm_service, sdg_service);
+        let cm_service = Arc::new(get_cm_service(cm_graph.clone()));
+        let sdg_service = Arc::new(get_sdg_service(sdg_graph.clone()));
+
+        // Clone Arcs to pass them where needed
+        let s3_service = Arc::new(S3Service::new(
+            get_s3_client(),
+            Arc::clone(&cm_service),
+            Arc::clone(&sdg_service),
+        ));
         App::new()
             .wrap(Logger::default())
             .service(
