@@ -27,12 +27,14 @@ impl S3SdgCodeElements {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct S3ImcgCodeElements {
     pub callables: Vec<Callable>,
     pub calls: Vec<CallStatement>,
 }
 
+#[allow(dead_code)]
 impl S3ImcgCodeElements {
     pub fn new(callables: Vec<Callable>, calls: Vec<CallStatement>) -> Self {
         Self { callables, calls }

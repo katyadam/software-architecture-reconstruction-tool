@@ -124,6 +124,7 @@ impl S3Service {
         .await
     }
 
+    #[allow(dead_code)]
     pub async fn load_imcg_elements(
         &self,
         base_dir_path: &str,

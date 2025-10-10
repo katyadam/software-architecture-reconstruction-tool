@@ -71,7 +71,7 @@ async fn main() -> std::io::Result<()> {
 
     let cm_graph = setup_contextmap_db().await;
     let sdg_graph = setup_sdg_db().await;
-    let imcg_graph = setup_imcg_db().await;
+    let _imcg_graph = setup_imcg_db().await;
 
     HttpServer::new(move || {
         let cm_service = Arc::new(get_cm_service(cm_graph.clone()));
