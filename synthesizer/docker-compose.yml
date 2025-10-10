@@ -38,4 +38,4 @@ services:
       MINIO_ROOT_PASSWORD: secretkey
       MINIO_BUCKETS: "code-elements"
     volumes:
-      - ./data/minio:/data
+      - ../data/minio:/data
