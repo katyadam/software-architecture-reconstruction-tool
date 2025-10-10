@@ -5,3 +5,4 @@ members = [
     "python-extractor",
     "synthesizer",
 ]
+resolver = "3"
