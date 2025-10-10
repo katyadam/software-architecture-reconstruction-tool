@@ -1,3 +1,4 @@
+use log::info;
 use models::{CallStatement, Callable, Endpoint, Entity, RestCall};
 use s3::Bucket;
 use serde::Serialize;
@@ -61,13 +62,31 @@ impl S3Client {
     ) -> Result<(), S3ClientError> {
         let data = serde_json::to_vec(chunk)?;
         let full_chunk_path = format!("{}/chunk-{}.json", chunk_dir_path, uuid::Uuid::new_v4());
-        self.bucket.put_object(chunk_dir_path, &data).await?;
+        self.bucket
+            .put_object(full_chunk_path.clone(), &data)
+            .await?;
 
+        self.update_index(chunk_dir_path, &full_chunk_path).await?;
+
+        Ok(())
+    }
+
+    async fn update_index(
+        &self,
+        chunk_dir_path: &str,
+        full_chunk_path: &str,
+    ) -> Result<(), S3ClientError> {
         let index_path = format!("{}/index.json", chunk_dir_path);
-        let index_data = self.bucket.get_object(&index_path).await?;
-        let mut index = serde_json::from_slice::<Vec<String>>(&index_data.bytes())?;
 
-        index.push(full_chunk_path.clone());
+        if !self.bucket.object_exists(&index_path).await? {
+            self.bucket.put_object(&index_path, b"[]").await?;
+        }
+
+        let index_data = self.bucket.get_object(&index_path).await?;
+
+        let mut index = serde_json::from_slice::<Vec<String>>(&index_data.bytes())?;
+        index.push(full_chunk_path.to_string());
+
         let index_data = serde_json::to_vec(&index)?;
         self.bucket.put_object(&index_path, &index_data).await?;
 
