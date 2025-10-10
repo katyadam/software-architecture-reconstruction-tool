@@ -13,13 +13,19 @@ use crate::{
 };
 
 pub trait ContextMapRepository {
-    async fn get_single(&self, codebase_uuid: &str) -> Result<ContextMap, DatabaseError>;
-    async fn save(
+    fn get_single(
+        &self,
+        codebase_uuid: &str,
+    ) -> impl std::future::Future<Output = Result<ContextMap, DatabaseError>> + Send;
+    fn save(
         &self,
         context_map: &ContextMap,
         codebase_uuid: &str,
-    ) -> Result<(), DatabaseError>;
-    async fn delete(&self, codebase_uuid: &str) -> Result<(), DatabaseError>;
+    ) -> impl std::future::Future<Output = Result<(), DatabaseError>> + Send;
+    fn delete(
+        &self,
+        codebase_uuid: &str,
+    ) -> impl std::future::Future<Output = Result<(), DatabaseError>> + Send;
 }
 
 pub struct ContextMapRepositoryImpl {
