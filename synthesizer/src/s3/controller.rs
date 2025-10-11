@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use actix_web::{HttpResponse, Responder, post, web};
+use log::debug;
 
 use crate::{
     errors::api::ApiError,
@@ -14,7 +17,7 @@ use crate::{
     )]
 #[post("")]
 pub async fn create_views(
-    service: web::Data<S3Service>,
+    service: web::Data<Arc<S3Service>>,
     dto: web::Json<PostViews>,
 ) -> Result<impl Responder, ApiError> {
     let dto = dto.into_inner();

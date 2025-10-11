@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use utoipa::{ToSchema, schema};
 
-#[derive(ToSchema, Deserialize)]
+#[derive(Debug, ToSchema, Deserialize)]
 pub struct PostViews {
     #[schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
     pub codebase_uuid: String,

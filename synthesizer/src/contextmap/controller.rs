@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     contextmap::{
         dto::{GetContextMapErrorReponse, PostContextMap, PostContextMapErrorResponse},
@@ -18,7 +20,7 @@ use actix_web::{HttpResponse, Responder, delete, get, post, web};
     )]
 #[post("")]
 pub async fn create_context_map(
-    service: web::Data<ContextMapServiceImpl>,
+    service: web::Data<Arc<ContextMapServiceImpl>>,
     dto: web::Json<PostContextMap>,
 ) -> Result<impl Responder, ApiError> {
     let dto = dto.into_inner();
@@ -40,7 +42,7 @@ pub async fn create_context_map(
     )]
 #[get("/{codebase_uuid}")]
 pub async fn get_context_map(
-    service: web::Data<ContextMapServiceImpl>,
+    service: web::Data<Arc<ContextMapServiceImpl>>,
     codebase_uuid_path: web::Path<String>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
@@ -62,7 +64,7 @@ pub async fn get_context_map(
     )]
 #[delete("/{codebase_uuid}")]
 pub async fn delete_context_map(
-    service: web::Data<ContextMapServiceImpl>,
+    service: web::Data<Arc<ContextMapServiceImpl>>,
     codebase_uuid_path: web::Path<String>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();

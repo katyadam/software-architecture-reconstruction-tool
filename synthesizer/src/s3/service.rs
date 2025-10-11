@@ -17,6 +17,7 @@ use crate::{
     },
 };
 use futures::stream::{self, StreamExt};
+use log::{debug, info};
 
 pub struct S3Service {
     s3_client: S3Client,
@@ -41,7 +42,6 @@ impl S3Service {
         let loaded_cm_elements = self.load_context_map_elements(&dto.base_dir_path).await?;
         let loaded_sdg_elements = self.load_sdg_elements(&dto.base_dir_path).await?;
         // let loaded_imcg_elements = self.load_imcg_elements(&dto.base_dir_path).await?;
-
         self.context_map_service
             .save(PostContextMap {
                 codebase_uuid: dto.codebase_uuid.clone(),

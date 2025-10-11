@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use actix_web::{HttpResponse, Responder, delete, get, post, web};
 
 use crate::{
@@ -19,7 +21,7 @@ use crate::{
     )]
 #[post("")]
 pub async fn create_sdg(
-    service: web::Data<SdgServiceImpl>,
+    service: web::Data<Arc<SdgServiceImpl>>,
     dto: web::Json<PostSDG>,
 ) -> Result<impl Responder, ApiError> {
     let dto = dto.into_inner();
@@ -41,7 +43,7 @@ pub async fn create_sdg(
     )]
 #[get("/{codebase_uuid}")]
 pub async fn get_sdg(
-    service: web::Data<SdgServiceImpl>,
+    service: web::Data<Arc<SdgServiceImpl>>,
     codebase_uuid_path: web::Path<String>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
@@ -63,7 +65,7 @@ pub async fn get_sdg(
     )]
 #[delete("/{codebase_uuid}")]
 pub async fn delete_sdg(
-    service: web::Data<SdgServiceImpl>,
+    service: web::Data<Arc<SdgServiceImpl>>,
     codebase_uuid_path: web::Path<String>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();

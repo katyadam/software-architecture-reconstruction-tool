@@ -9,4 +9,5 @@ pub mod service;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(health::health_check);
+    cfg.service(controller::create_views);
 }
