@@ -26,6 +26,10 @@ services:
       - "7476:7474"
       - "7689:7687"
 
+  # TODO: Now it doesn't matter, but in future it would be suitable to introduce script for:
+  # cleaning unused objects, since we are only using object storage for transfering data,
+  # the timeframe for cleaning can be set to hours/minutes.
+  # Then we want the script to be able to implicitly create "code-elements" bucket.
   minio:
     image: minio/minio:latest
     container_name: minio
@@ -36,6 +40,5 @@ services:
     environment:
       MINIO_ROOT_USER: accesskey
       MINIO_ROOT_PASSWORD: secretkey
-      MINIO_BUCKETS: "code-elements"
     volumes:
       - ../data/minio:/data
