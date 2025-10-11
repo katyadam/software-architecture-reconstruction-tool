@@ -1,6 +1,7 @@
 use log::info;
+use uuid::Uuid;
 
-use crate::{client::http::client::HttpClient, error::HttpClientError};
+use crate::{api::dto::ViewsDto, client::http::client::HttpClient, error::HttpClientError};
 
 pub struct SynthesizerConnector {
     http_client: HttpClient,
@@ -11,9 +12,19 @@ impl SynthesizerConnector {
         Self { http_client }
     }
 
-    pub async fn send_load_info(&self, base_dir_path: &str) -> Result<(), HttpClientError> {
+    pub async fn send_load_info(
+        &self,
+        codebase_uuid: Uuid,
+        base_dir_path: &str,
+    ) -> Result<(), HttpClientError> {
         self.http_client
-            .post_json::<str, ()>("/views", base_dir_path)
+            .post_json::<ViewsDto, ()>(
+                "/views",
+                &ViewsDto {
+                    codebase_uuid,
+                    base_dir_path,
+                },
+            )
             .await?;
         info!("Load info about {} sent to synthesizer.", base_dir_path);
         Ok(())

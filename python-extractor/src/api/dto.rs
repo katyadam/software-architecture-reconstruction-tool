@@ -45,3 +45,9 @@ pub struct ServiceDto {
     pub name: String,
     pub path: String,
 }
+
+#[derive(Serialize)]
+pub struct ViewsDto<'a> {
+    pub codebase_uuid: Uuid,
+    pub base_dir_path: &'a str,
+}

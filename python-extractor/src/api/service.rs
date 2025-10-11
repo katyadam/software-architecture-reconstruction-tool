@@ -153,7 +153,7 @@ impl ExtractorService for ExtractorServiceImpl {
             .await?;
 
         self.synthesizer_connector
-            .send_load_info(base_dir_path)
+            .send_load_info(codebase_uuid, base_dir_path)
             .await?;
 
         self.manager_connector
