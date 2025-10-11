@@ -41,7 +41,7 @@ async fn test_create_context_map_returns_201() {
     let app = test::init_service(
         App::new().service(
             web::scope("/context-maps")
-                .app_data(web::Data::new(get_cm_service(graph.clone())))
+                .app_data(web::Data::new(Arc::new(get_cm_service(graph.clone()))))
                 .configure(contextmap::configure),
         ),
     )
