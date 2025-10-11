@@ -8,6 +8,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
+    bucket::get_bucket,
     contextmap::{
         builder::ContextMapBuilderImpl,
         dto::{GetContextMapErrorReponse, PostContextMap},
@@ -15,6 +16,7 @@ use crate::{
         service::ContextMapServiceImpl,
     },
     db_setup::{setup_contextmap_db, setup_imcg_db, setup_sdg_db},
+    s3::{client::S3Client, service::S3Service},
     sdg::{
         builder::SdgBuilderImpl,
         dto::{GetSDGErrorReponse, PostSDGErrorResponse},
@@ -23,15 +25,18 @@ use crate::{
         service::SdgServiceImpl,
     },
 };
+mod bucket;
 mod contextmap;
 mod db_setup;
 mod errors;
 mod imcg;
+mod s3;
 mod sdg;
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
+        s3::controller::create_views,
         contextmap::controller::create_context_map,
         contextmap::controller::get_context_map,
         contextmap::controller::delete_context_map,
@@ -45,7 +50,7 @@ mod sdg;
         GetContextMapErrorReponse,
         SDG,
         PostSDGErrorResponse,
-        GetSDGErrorReponse
+        GetSDGErrorReponse,
     ))
 )]
 struct ApiDoc;
@@ -66,13 +71,25 @@ async fn main() -> std::io::Result<()> {
 
     let cm_graph = setup_contextmap_db().await;
     let sdg_graph = setup_sdg_db().await;
-    let imcg_graph = setup_imcg_db().await;
+    let _imcg_graph = setup_imcg_db().await;
 
     HttpServer::new(move || {
-        let cm_service = get_cm_service(cm_graph.clone());
-        let sdg_service = get_sdg_service(sdg_graph.clone());
+        let cm_service = Arc::new(get_cm_service(cm_graph.clone()));
+        let sdg_service = Arc::new(get_sdg_service(sdg_graph.clone()));
+
+        // Clone Arcs to pass them where needed
+        let s3_service = Arc::new(S3Service::new(
+            get_s3_client(),
+            Arc::clone(&cm_service),
+            Arc::clone(&sdg_service),
+        ));
         App::new()
             .wrap(Logger::default())
+            .service(
+                web::scope("/views")
+                    .app_data(web::Data::new(s3_service))
+                    .configure(s3::configure),
+            )
             .service(
                 web::scope("/context-maps")
                     .app_data(web::Data::new(cm_service))
@@ -105,4 +122,9 @@ fn get_sdg_service(graph: Arc<Graph>) -> SdgServiceImpl {
     let sdg_builder = SdgBuilderImpl::new();
 
     SdgServiceImpl::new(sdg_repository, sdg_builder)
+}
+
+fn get_s3_client() -> S3Client {
+    let bucket = get_bucket();
+    S3Client::new(bucket)
 }

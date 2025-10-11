@@ -118,5 +118,19 @@ services:
       timeout: 5s
       retries: 5
 
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "8333:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: accesskey
+      MINIO_ROOT_PASSWORD: secretkey
+      MINIO_BUCKETS: "code-elements"
+    volumes:
+      - ./data/minio:/data
+
 volumes:
   manager-db-data:

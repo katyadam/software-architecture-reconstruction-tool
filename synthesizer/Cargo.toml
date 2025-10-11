@@ -19,3 +19,5 @@ testcontainers = "0.18.0"
 strsim = "0.11"
 models = { path = "../models" }
 thiserror = "2.0.3"
+rust-s3 = "0.37.0"
+futures = "0.3.31"

@@ -1,8 +1,7 @@
 use log::info;
-use models::CodeElementsAggregate;
 use uuid::Uuid;
 
-use crate::{api::dto::PostEntities, client::client::HttpClient, error::HttpClientError};
+use crate::{api::dto::ViewsDto, client::http::client::HttpClient, error::HttpClientError};
 
 pub struct SynthesizerConnector {
     http_client: HttpClient,
@@ -13,16 +12,21 @@ impl SynthesizerConnector {
         Self { http_client }
     }
 
-    pub async fn send_code_elements(
+    pub async fn send_load_info(
         &self,
-        code_elements: CodeElementsAggregate,
         codebase_uuid: Uuid,
+        base_dir_path: &str,
     ) -> Result<(), HttpClientError> {
-        let payload = PostEntities::new(codebase_uuid, code_elements.entities);
         self.http_client
-            .post_json::<PostEntities, ()>("/context-maps", &payload)
+            .post_json::<ViewsDto, ()>(
+                "/views",
+                &ViewsDto {
+                    codebase_uuid,
+                    base_dir_path,
+                },
+            )
             .await?;
-        info!("Context Map Created - Entities: {:?}", payload.entities);
+        info!("Load info about {} sent to synthesizer.", base_dir_path);
         Ok(())
     }
 }

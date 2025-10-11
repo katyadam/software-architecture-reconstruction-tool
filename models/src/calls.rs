@@ -1,6 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 use crate::Argument;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CallStatement {
     pub function_name: String,
     pub arguments: Vec<Argument>,

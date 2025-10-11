@@ -3,12 +3,14 @@ use std::env;
 use crate::{
     api::{
         connectors::{
-            manager_connector::ManagerConnector, synthesizer_connector::SynthesizerConnector,
+            manager_connector::ManagerConnector, s3_connector::S3Connector,
+            synthesizer_connector::SynthesizerConnector,
         },
         dto::MultipleFileUploadSchema,
         service::ExtractorServiceImpl,
     },
-    client::client::HttpClient,
+    bucket::get_bucket,
+    client::{http::client::HttpClient, s3::client::S3Client},
 };
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use awc::Client;
@@ -16,6 +18,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 mod api;
+mod bucket;
 mod client;
 mod error;
 mod utils;
@@ -42,6 +45,8 @@ async fn main() -> std::io::Result<()> {
     let url: String = env::var("EXPOSE_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
 
     HttpServer::new(move || {
+        let bucket = get_bucket();
+
         let manager_url: String = env::var("MANAGER_URL")
             .unwrap_or_else(|_| "http://localhost:8081".to_string())
             .parse()
@@ -51,13 +56,16 @@ async fn main() -> std::io::Result<()> {
             .unwrap_or_else(|_| "http://localhost:8080".to_string())
             .parse()
             .expect("SYNTHESIZER_URL must be a valid String");
+        let s3_client = S3Client::new(bucket);
 
         let synthesizer_connector =
             SynthesizerConnector::new(HttpClient::new(synthesizer_url, Client::default()));
         let manager_connector =
             ManagerConnector::new(HttpClient::new(manager_url, Client::default()));
+        let s3_connector = S3Connector::new(s3_client);
 
-        let extractor_service = ExtractorServiceImpl::new(manager_connector, synthesizer_connector);
+        let extractor_service =
+            ExtractorServiceImpl::new(manager_connector, synthesizer_connector, s3_connector);
         App::new()
             .wrap(Logger::default())
             .service(

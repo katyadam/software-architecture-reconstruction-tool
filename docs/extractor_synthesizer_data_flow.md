@@ -26,3 +26,13 @@ Seems like the best fit. It is free to use (even for commercial usage). Has S3 g
 - Implement object key logic.
 - Implement REST API for getting object keys -> needs to redo synthesizer endpoints.
 - Implement deletion of extracted elements that were synthesized -> Implement Client on the Synthesizer side.
+
+## How to store extracted code elements within the same object/module
+
+There are 3 options:
+
+1. Store each extracted code element as a separate .json file.
+2. Everytime you want to store new extracted code element, laod the .json file and add the extracted code element to it.
+3. Store chunks of the extracted code elements, for example one file = one chunk. Create an index file to be able to load chunks into one cohesive object for better synthesizing.
+
+From those option, Option n.3 seems the best. It provides optimal storing and with an index file also optimal loading into single object.

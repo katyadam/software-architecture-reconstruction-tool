@@ -9,9 +9,18 @@ use crate::{
 };
 
 pub trait ContextMapService {
-    async fn save(&self, cm_payload: PostContextMap) -> Result<ContextMap, ServiceError>;
-    async fn get_single(&self, codebase_uuid: &str) -> Result<ContextMap, ServiceError>;
-    async fn delete(&self, codebase_uuid: &str) -> Result<(), ServiceError>;
+    fn save(
+        &self,
+        cm_payload: PostContextMap,
+    ) -> impl std::future::Future<Output = Result<ContextMap, ServiceError>> + Send;
+    fn get_single(
+        &self,
+        codebase_uuid: &str,
+    ) -> impl std::future::Future<Output = Result<ContextMap, ServiceError>> + Send;
+    fn delete(
+        &self,
+        codebase_uuid: &str,
+    ) -> impl std::future::Future<Output = Result<(), ServiceError>> + Send;
 }
 
 pub struct ContextMapServiceImpl {

@@ -1,7 +1,6 @@
 use std::any::TypeId;
 
 use awc::Client;
-use log::{debug, error};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
