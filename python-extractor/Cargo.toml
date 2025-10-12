@@ -29,3 +29,4 @@ chrono = { version = "0.4", features = ["serde"] }
 
 models = { path = "../models" }
 rust-s3 = "0.37.0"
+actix-cors = "0.7.1"
