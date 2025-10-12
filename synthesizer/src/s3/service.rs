@@ -17,7 +17,6 @@ use crate::{
     },
 };
 use futures::stream::{self, StreamExt};
-use log::{debug, info};
 
 pub struct S3Service {
     s3_client: S3Client,

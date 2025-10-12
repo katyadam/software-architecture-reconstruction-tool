@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use actix_web::{HttpResponse, Responder, post, web};
-use log::debug;
 
 use crate::{
     errors::api::ApiError,
