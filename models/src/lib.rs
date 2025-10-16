@@ -3,6 +3,7 @@ pub mod assignments;
 pub mod callables;
 pub mod calls;
 pub mod common;
+pub mod configuration;
 pub mod endpoints;
 pub mod entities;
 pub mod imports;
