@@ -1,4 +1,3 @@
-use log::info;
 use models::{CallStatement, Callable, Endpoint, Entity, RestCall};
 use s3::Bucket;
 use serde::Serialize;
