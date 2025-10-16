@@ -12,6 +12,7 @@ use crate::{
     bucket::get_bucket,
     client::{http::client::HttpClient, s3::client::S3Client},
 };
+use actix_cors::Cors;
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use awc::Client;
 use utoipa::OpenApi;
@@ -44,6 +45,9 @@ async fn main() -> std::io::Result<()> {
 
     let url: String = env::var("EXPOSE_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
 
+    let testing_client_url: String =
+        env::var("TEST_CLIENT_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
+
     HttpServer::new(move || {
         let bucket = get_bucket();
 
@@ -68,6 +72,12 @@ async fn main() -> std::io::Result<()> {
             ExtractorServiceImpl::new(manager_connector, synthesizer_connector, s3_connector);
         App::new()
             .wrap(Logger::default())
+            .wrap(
+                Cors::default()
+                    .allowed_origin(&testing_client_url) // origin of testing client (upload.html)
+                    .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+                    .allowed_headers(vec!["Content-Type"]),
+            )
             .service(
                 web::scope("/process-files")
                     .app_data(web::Data::new(extractor_service))

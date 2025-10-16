@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Folder Upload Client</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        max-width: 600px;
+        margin: 2rem auto;
+      }
+      input,
+      button {
+        margin: 0.5rem 0;
+        padding: 0.5rem;
+      }
+      #log {
+        margin-top: 1rem;
+        white-space: pre-wrap;
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Upload Folder</h2>
+
+    <label>Codebase UUID:</label><br />
+    <input
+      type="text"
+      id="endpoint"
+      size="60"
+      value="00000000-0000-0000-0000-000000000000"
+    />
+
+    <br /><br />
+    <label>Select folder to upload:</label><br />
+    <input type="file" id="folderInput" webkitdirectory multiple />
+
+    <br /><br />
+    <button id="uploadBtn">Upload</button>
+
+    <div id="log"></div>
+
+    <script>
+      const input = document.getElementById("folderInput");
+      const btn = document.getElementById("uploadBtn");
+      const log = document.getElementById("log");
+      const endpointURL = "http://localhost:8082";
+      function logMsg(msg) {
+        log.textContent += msg + "\n";
+      }
+
+      btn.addEventListener("click", async () => {
+        const codebaseUuid = document.getElementById("endpoint").value.trim();
+        const files = input.files;
+        if (!codebaseUuid) return alert("Enter endpoint URL");
+        if (!files.length) return alert("Select a folder first");
+
+        const formData = new FormData();
+        for (const file of files) {
+          // webkitRelativePath preserves folder structure (e.g. train-ticket/utils/a.py)
+          formData.append("files", file, file.webkitRelativePath);
+        }
+
+        log.textContent = "Uploading " + files.length + " files...\n";
+
+        try {
+          const res = await fetch(
+            "http://localhost:8082/process-files/" + codebaseUuid,
+            {
+              method: "PUT",
+              body: formData,
+            }
+          );
+          const text = await res.text();
+          logMsg(`Status: ${res.status}\nResponse:\n${text}`);
+        } catch (err) {
+          logMsg("Error: " + err);
+        }
+      });
+    </script>
+  </body>
+</html>
