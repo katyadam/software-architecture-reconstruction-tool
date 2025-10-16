@@ -2,15 +2,18 @@ use uuid::Uuid;
 
 use crate::{
     configuration::{
-        model::{Configuration, NewConfiguration},
+        model::{DbConfiguration, NewDbConfiguration},
         repository::ConfigurationRepository,
     },
     errors::service::ServiceError,
 };
 
 pub trait ConfigurationService {
-    fn get_single(&self, uuid_to_find: Uuid) -> Result<Configuration, ServiceError>;
-    fn create(&self, new_configuration: NewConfiguration) -> Result<Configuration, ServiceError>;
+    fn get_single(&self, uuid_to_find: Uuid) -> Result<DbConfiguration, ServiceError>;
+    fn create(
+        &self,
+        new_configuration: NewDbConfiguration,
+    ) -> Result<DbConfiguration, ServiceError>;
     fn delete(&self, uuid_to_delete: Uuid) -> Result<(), ServiceError>;
 }
 
@@ -25,12 +28,15 @@ impl ConfigurationServiceImpl {
 }
 
 impl ConfigurationService for ConfigurationServiceImpl {
-    fn get_single(&self, uuid_to_find: Uuid) -> Result<Configuration, ServiceError> {
+    fn get_single(&self, uuid_to_find: Uuid) -> Result<DbConfiguration, ServiceError> {
         let conf = self.repository.get_single(uuid_to_find)?;
         Ok(conf)
     }
 
-    fn create(&self, new_configuration: NewConfiguration) -> Result<Configuration, ServiceError> {
+    fn create(
+        &self,
+        new_configuration: NewDbConfiguration,
+    ) -> Result<DbConfiguration, ServiceError> {
         let created_conf = self.repository.save(new_configuration)?;
         Ok(created_conf)
     }

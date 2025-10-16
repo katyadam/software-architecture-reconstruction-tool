@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{
     configuration::{
         dto::{ConfigurationResponse, PostConfiguration},
-        model::NewConfiguration,
+        model::NewDbConfiguration,
         service::ConfigurationService,
     },
     errors::api::ApiError,
@@ -24,7 +24,7 @@ pub async fn create_configuration(
     configuration_service: web::Data<Box<dyn ConfigurationService>>,
     dto: web::Json<PostConfiguration>,
 ) -> Result<impl Responder, ApiError> {
-    let new_conf = NewConfiguration {
+    let new_conf = NewDbConfiguration {
         configuration_uuid: Uuid::new_v4(),
         project_uuid: dto.project_uuid,
         configuration_data: serde_json::json!(dto.configuration_data),

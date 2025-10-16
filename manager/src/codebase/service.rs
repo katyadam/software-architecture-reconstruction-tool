@@ -5,7 +5,7 @@ use crate::{
         model::{Codebase, NewCodebase},
         repository::CodebaseRepository,
     },
-    configuration::model::Configuration,
+    configuration::model::DbConfiguration,
     errors::service::ServiceError,
 };
 
@@ -16,7 +16,7 @@ pub trait CodebaseService {
     fn get_codebase_configuration(
         &self,
         codebase_uuid: Uuid,
-    ) -> Result<Configuration, ServiceError>;
+    ) -> Result<DbConfiguration, ServiceError>;
 }
 
 pub struct CodebaseServiceImpl {
@@ -48,7 +48,7 @@ impl CodebaseService for CodebaseServiceImpl {
     fn get_codebase_configuration(
         &self,
         codebase_uuid: Uuid,
-    ) -> Result<Configuration, ServiceError> {
+    ) -> Result<DbConfiguration, ServiceError> {
         let codebase_configuration = self.repository.get_codebase_configuration(codebase_uuid)?;
         Ok(codebase_configuration)
     }

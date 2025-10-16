@@ -2351,11 +2351,13 @@ dependencies = [
 name = "models"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "neo4rs",
  "serde",
  "serde_json",
  "utoipa",
  "utoipa-swagger-ui",
+ "uuid",
 ]
 
 [[package]]

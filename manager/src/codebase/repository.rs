@@ -6,7 +6,7 @@ use diesel::{QueryDsl, RunQueryDsl, SelectableHelper, delete};
 use uuid::Uuid;
 
 use crate::codebase::model::{Codebase, NewCodebase};
-use crate::configuration::model::Configuration;
+use crate::configuration::model::DbConfiguration;
 use crate::errors::database::DatabaseError;
 use crate::project::model::Project;
 use crate::schema;
@@ -21,7 +21,7 @@ pub trait CodebaseRepository {
     fn get_codebase_configuration(
         &self,
         codebase_uuid_for_configuration: Uuid,
-    ) -> Result<Configuration, DatabaseError>;
+    ) -> Result<DbConfiguration, DatabaseError>;
 }
 
 #[derive(Clone)]
@@ -58,7 +58,7 @@ impl CodebaseRepository for PgCodebaseRepository {
 
             configurations
                 .find(new_codebase.configuration_uuid)
-                .select(Configuration::as_select())
+                .select(DbConfiguration::as_select())
                 .first(conn)?;
 
             diesel::insert_into(schema::codebases::table)
@@ -88,7 +88,7 @@ impl CodebaseRepository for PgCodebaseRepository {
     fn get_codebase_configuration(
         &self,
         codebase_uuid_for_configuration: Uuid,
-    ) -> Result<Configuration, DatabaseError> {
+    ) -> Result<DbConfiguration, DatabaseError> {
         let mut conn = self.pg_pool.get()?;
 
         let configuration = conn.deref_mut().transaction(|conn| {
@@ -99,7 +99,7 @@ impl CodebaseRepository for PgCodebaseRepository {
 
             configurations
                 .find(codebase.configuration_uuid)
-                .select(Configuration::as_select())
+                .select(DbConfiguration::as_select())
                 .first(conn)
         })?;
 
