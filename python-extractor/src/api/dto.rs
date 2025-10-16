@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use models::ConfigurationData;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -31,19 +32,8 @@ impl PostFileRecord {
 pub struct ConfigurationDto {
     pub configuration_uuid: Uuid,
     pub project_uuid: Uuid,
-    pub configuration_data: ConfigurationDataDto,
+    pub configuration_data: ConfigurationData,
     pub created_at: DateTime<Utc>,
-}
-
-#[derive(Deserialize)]
-pub struct ConfigurationDataDto {
-    pub services: Vec<ServiceDto>,
-}
-
-#[derive(Deserialize)]
-pub struct ServiceDto {
-    pub name: String,
-    pub path: String,
 }
 
 #[derive(Serialize)]

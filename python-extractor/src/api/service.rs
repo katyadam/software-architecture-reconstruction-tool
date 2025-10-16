@@ -3,6 +3,7 @@ use actix_web::{HttpResponse, Responder, Result};
 use awc::body::BoxBody;
 use futures_util::StreamExt as _;
 use log::info;
+use models::configuration::ServiceDescription;
 use python_extractor::extraction::parse::parse;
 use uuid::Uuid;
 
@@ -12,7 +13,7 @@ use crate::{
             manager_connector::ManagerConnector, s3_connector::S3Connector,
             synthesizer_connector::SynthesizerConnector,
         },
-        dto::{PostFileRecord, ServiceDto},
+        dto::PostFileRecord,
     },
     error::ApiError,
 };
@@ -28,7 +29,7 @@ pub trait ExtractorService {
         &self,
         file_name: &str,
         field: Field,
-        configuration_services: &Vec<ServiceDto>,
+        service_configurations: &Vec<ServiceDescription>,
         codebase_uuid: Uuid,
         base_dir_path: &str,
     ) -> Result<(), ApiError>;
@@ -101,7 +102,7 @@ impl ExtractorService for ExtractorServiceImpl {
                 self.process_file(
                     &file_name,
                     field,
-                    &configuration.configuration_data.services,
+                    &configuration.configuration_data.service_descriptions,
                     codebase_uuid,
                     &base_dir_path,
                 )
@@ -120,7 +121,7 @@ impl ExtractorService for ExtractorServiceImpl {
         &self,
         file_name: &str,
         mut field: Field,
-        configuration_services: &Vec<ServiceDto>,
+        service_descriptions: &Vec<ServiceDescription>,
         codebase_uuid: Uuid,
         base_dir_path: &str,
     ) -> Result<(), ApiError> {
@@ -140,14 +141,9 @@ impl ExtractorService for ExtractorServiceImpl {
             .map_err(|_| ApiError::InternalServerError)
             .unwrap();
 
-        let assigned_service = assign_service_name_for_file(&file_name, configuration_services);
-        let code_elements_aggregate = parse(
-            text,
-            file_name,
-            &assigned_service.unwrap_or("Can't categorize this file to a service!".to_string()),
-        )
-        .await;
-
+        let assigned_service_desc =
+            assign_service_description_to_file(&file_name, service_descriptions.clone());
+        let code_elements_aggregate = parse(text, file_name, assigned_service_desc).await;
         self.s3_connector
             .store_code_elements(code_elements_aggregate, base_dir_path)
             .await?;
@@ -169,11 +165,12 @@ impl ExtractorService for ExtractorServiceImpl {
     }
 }
 
-fn assign_service_name_for_file(file_name: &str, services: &Vec<ServiceDto>) -> Option<String> {
-    for service in services {
-        if file_name.starts_with(&service.path) {
-            return Some(service.name.clone());
-        }
-    }
-    None
+fn assign_service_description_to_file(
+    file_name: &str,
+    service_descs: Vec<ServiceDescription>,
+) -> ServiceDescription {
+    service_descs
+        .into_iter()
+        .find(|sd| file_name.starts_with(&sd.base_dir_path))
+        .unwrap_or_default()
 }

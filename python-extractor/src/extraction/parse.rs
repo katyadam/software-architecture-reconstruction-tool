@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use models::CodeElementsAggregate;
+use models::{CodeElementsAggregate, configuration::ServiceDescription};
 use tokio::task;
 use tree_sitter::Parser;
 
@@ -15,7 +15,11 @@ use crate::extraction::{
     restcalls::{evaluator::evaluate_restcalls, extractor::RestcallsExtractor},
 };
 
-pub async fn parse(code: &str, file_name: &str, service_name: &str) -> CodeElementsAggregate {
+pub async fn parse(
+    code: &str,
+    file_name: &str,
+    service_desc: ServiceDescription,
+) -> CodeElementsAggregate {
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_python::LANGUAGE.into())
@@ -24,12 +28,11 @@ pub async fn parse(code: &str, file_name: &str, service_name: &str) -> CodeEleme
     let tree = parser.parse(code, None).expect("Error parsing code");
     let owned_code = code.to_owned();
     let owned_file_name = file_name.to_owned();
-    let owned_service_name = service_name.to_owned();
 
     let tree_arc = Arc::new(tree);
     let code_arc = Arc::new(owned_code);
     let file_name_arc = Arc::new(owned_file_name);
-    let service_name_arc = Arc::new(owned_service_name);
+    let service_name_arc = Arc::new(service_desc.name);
 
     // Running parsing function in parallel
     let assignments_handle = task::spawn_blocking({
