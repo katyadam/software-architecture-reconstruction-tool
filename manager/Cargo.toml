@@ -19,3 +19,4 @@ diesel = { version = "2.2.12", features = ["postgres", "uuid", "chrono", "r2d2",
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2.0.3"
 r2d2 = "0.8.10"
+models = { path = "../models" }

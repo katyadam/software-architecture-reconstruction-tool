@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
 use diesel::Queryable;
 use diesel::prelude::*;
+use models::ConfigurationData;
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::configuration::dto::ConfigurationData;
 use crate::configuration::dto::ConfigurationResponse;
 use crate::errors::model::ModelError;
 

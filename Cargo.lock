@@ -2248,6 +2248,7 @@ dependencies = [
  "dotenvy",
  "env_logger",
  "log",
+ "models",
  "r2d2",
  "serde",
  "serde_json",
@@ -2351,13 +2352,11 @@ dependencies = [
 name = "models"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "neo4rs",
  "serde",
  "serde_json",
  "utoipa",
  "utoipa-swagger-ui",
- "uuid",
 ]
 
 [[package]]

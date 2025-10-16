@@ -1,17 +1,12 @@
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-pub struct Configuration {
-    pub configuration_uuid: Uuid,
-    pub project_uuid: Uuid,
-    pub configuration_data: ConfigurationData,
-    pub created_at: DateTime<Utc>,
-}
-
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ConfigurationData {
-    serviceDescriptions: Vec<ServiceDescription>,
+    service_descriptions: Vec<ServiceDescription>,
 }
 
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ServiceDescription {
     name: String,
     base_dir_path: String,

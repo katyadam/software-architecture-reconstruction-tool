@@ -1,3 +1,4 @@
+use models::ConfigurationData;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -15,16 +16,4 @@ pub struct ConfigurationResponse {
     pub project_uuid: Uuid,
     pub configuration_data: ConfigurationData,
     pub created_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct ConfigurationData {
-    services: Vec<Service>,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-struct Service {
-    name: String,
-    path: String,
-    base_urls: Vec<String>,
 }

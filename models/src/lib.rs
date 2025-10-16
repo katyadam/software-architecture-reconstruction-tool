@@ -14,6 +14,7 @@ pub use assignments::{Assignment, AssignmentKey, Scope};
 pub use callables::{Argument, Callable, Namespace, Parameter};
 pub use calls::CallStatement;
 pub use common::HttpMethod;
+pub use configuration::ConfigurationData;
 pub use endpoints::Endpoint;
 pub use entities::{Entity, Field};
 pub use imports::Import;
