@@ -17,8 +17,8 @@ fn restcalls_extraction() {
     let filename = "./examples/python/restcalls.py";
     let code = load_file(filename).unwrap();
     let tree = get_tree(&code);
-    let restcalls = RestcallsExtractor
-        .extract(ExtractParams::new(&tree, &code).service_name(&s!("test_service")));
+    let restcalls =
+        RestcallsExtractor.extract(ExtractParams::new(&tree, &code).file_name(&filename));
     let expected = vec![
         RestCall {
             function_name: s!("create_item"),
@@ -28,7 +28,7 @@ fn restcalls_extraction() {
             }],
             http_method: HttpMethod::POST,
             target_uri: s!("{BASE_URL}/items/"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         RestCall {
             function_name: s!("get_items"),
@@ -38,14 +38,14 @@ fn restcalls_extraction() {
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/items/"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         RestCall {
             function_name: s!("get_item_by_id"),
             function_arguments: vec![],
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/items/{item_id}"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         RestCall {
             function_name: s!("create_user"),
@@ -55,7 +55,7 @@ fn restcalls_extraction() {
             }],
             http_method: HttpMethod::POST,
             target_uri: s!("{BASE_URL}/users/"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         RestCall {
             function_name: s!("get_users"),
@@ -65,7 +65,7 @@ fn restcalls_extraction() {
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/users/"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         RestCall {
             function_name: s!("search"),
@@ -75,7 +75,7 @@ fn restcalls_extraction() {
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/search/"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
     ];
 
@@ -87,8 +87,8 @@ fn restcalls_evaluation() {
     let filename = "./examples/python/restcalls.py";
     let code = load_file(filename).unwrap();
     let tree = get_tree(&code);
-    let mut restcalls = RestcallsExtractor
-        .extract(ExtractParams::new(&tree, &code).service_name(&s!("test_service")));
+    let mut restcalls =
+        RestcallsExtractor.extract(ExtractParams::new(&tree, &code).file_name(&filename));
     let assignments_map = get_assignments_map(&tree, &code);
     evaluate_restcalls(&mut restcalls, assignments_map);
     let expected = vec![
@@ -102,7 +102,7 @@ fn restcalls_evaluation() {
             }],
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/items/"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         RestCall {
             function_name: s!("get_items"),
@@ -112,14 +112,14 @@ fn restcalls_evaluation() {
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/items/"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         RestCall {
             function_name: s!("get_item_by_id"),
             function_arguments: vec![],
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/items/{item_id}"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         RestCall {
             function_name: s!("create_user"),
@@ -129,7 +129,7 @@ fn restcalls_evaluation() {
             }],
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/users/"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         RestCall {
             function_name: s!("get_users"),
@@ -139,7 +139,7 @@ fn restcalls_evaluation() {
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/users/"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         RestCall {
             function_name: s!("search"),
@@ -149,7 +149,7 @@ fn restcalls_evaluation() {
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/search/"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
     ];
 

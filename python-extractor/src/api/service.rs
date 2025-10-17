@@ -29,7 +29,6 @@ pub trait ExtractorService {
         &self,
         file_name: &str,
         field: Field,
-        service_configurations: &Vec<ServiceDescription>,
         codebase_uuid: Uuid,
         base_dir_path: &str,
     ) -> Result<(), ApiError>;
@@ -99,14 +98,8 @@ impl ExtractorService for ExtractorServiceImpl {
                 .and_then(|cd| cd.get_filename().map(|s| s.to_owned()));
 
             if let Some(file_name) = file_name_opt {
-                self.process_file(
-                    &file_name,
-                    field,
-                    &configuration.configuration_data.service_descriptions,
-                    codebase_uuid,
-                    &base_dir_path,
-                )
-                .await?;
+                self.process_file(&file_name, field, codebase_uuid, &base_dir_path)
+                    .await?;
             }
             any_file_processed = true;
         }
@@ -121,7 +114,6 @@ impl ExtractorService for ExtractorServiceImpl {
         &self,
         file_name: &str,
         mut field: Field,
-        service_descriptions: &Vec<ServiceDescription>,
         codebase_uuid: Uuid,
         base_dir_path: &str,
     ) -> Result<(), ApiError> {
@@ -141,9 +133,7 @@ impl ExtractorService for ExtractorServiceImpl {
             .map_err(|_| ApiError::InternalServerError)
             .unwrap();
 
-        let assigned_service_desc =
-            assign_service_description_to_file(&file_name, service_descriptions.clone());
-        let code_elements_aggregate = parse(text, file_name, assigned_service_desc).await;
+        let code_elements_aggregate = parse(text, file_name).await;
         self.s3_connector
             .store_code_elements(code_elements_aggregate, base_dir_path)
             .await?;
@@ -165,12 +155,12 @@ impl ExtractorService for ExtractorServiceImpl {
     }
 }
 
-fn assign_service_description_to_file(
-    file_name: &str,
-    service_descs: Vec<ServiceDescription>,
-) -> ServiceDescription {
-    service_descs
-        .into_iter()
-        .find(|sd| file_name.starts_with(&sd.base_dir_path))
-        .unwrap_or_default()
-}
+// fn assign_service_description_to_file(
+//     file_name: &str,
+//     service_descs: Vec<ServiceDescription>,
+// ) -> ServiceDescription {
+//     service_descs
+//         .into_iter()
+//         .find(|sd| file_name.starts_with(&sd.base_dir_path))
+//         .unwrap_or_default()
+// }

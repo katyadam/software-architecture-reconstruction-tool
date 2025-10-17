@@ -9,5 +9,5 @@ pub struct Endpoint {
     pub http_method: HttpMethod,
     pub parameters: Vec<String>,
     pub uri: String,
-    pub service_name: String,
+    pub file_path: String,
 }

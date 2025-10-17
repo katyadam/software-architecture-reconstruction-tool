@@ -17,11 +17,8 @@ fn base_test() {
     let filename = "./examples/python/entities.py";
     let code = load_file(filename).unwrap();
     let tree = get_tree(&code);
-    let mut entities = EntitiesExtractor.extract(
-        ExtractParams::new(&tree, &code)
-            .file_name(&s!(filename))
-            .service_name(&s!("test_service")),
-    );
+    let mut entities =
+        EntitiesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
     let imports = ImportsExtractor.extract(ExtractParams::new(&tree, &code));
     evaluate_entity_fields(&imports, &mut entities, &filename);
     let expected = vec![
@@ -43,14 +40,14 @@ fn base_test() {
                 },
             ],
             signature: s!("./examples/python/entities.py/Email"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         Entity {
             name: s!("Item2"),
             superclasses: strs!["BaseModel", "Else"],
             fields: vec![],
             signature: s!("./examples/python/entities.py/Item2"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         Entity {
             name: s!("Item"),
@@ -88,7 +85,7 @@ fn base_test() {
                 },
             ],
             signature: s!("./examples/python/entities.py/Item"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         Entity {
             name: s!("ItemCreate"),
@@ -120,7 +117,7 @@ fn base_test() {
                 },
             ],
             signature: s!("./examples/python/entities.py/ItemCreate"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         Entity {
             name: s!("User"),
@@ -146,7 +143,7 @@ fn base_test() {
                 },
             ],
             signature: s!("./examples/python/entities.py/User"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
         Entity {
             name: s!("UserCreate"),
@@ -166,7 +163,7 @@ fn base_test() {
                 },
             ],
             signature: s!("./examples/python/entities.py/UserCreate"),
-            service_name: s!("test_service"),
+            file_path: s!(filename),
         },
     ];
 

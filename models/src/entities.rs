@@ -8,7 +8,7 @@ pub struct Entity {
     pub superclasses: Vec<String>,
     pub fields: Vec<Field>,
     pub signature: String,
-    pub service_name: String,
+    pub file_path: String,
 }
 
 #[derive(Debug, PartialEq, Eq, ToSchema, Serialize, Deserialize, Clone)]
@@ -24,7 +24,7 @@ impl Into<BoltType> for Entity {
         let mut map = BoltMap::new();
         map.put("name".into(), self.name.into());
         map.put("signature".into(), self.signature.into());
-        map.put("service_name".into(), self.service_name.into());
+        map.put("file_path".into(), self.file_path.into());
 
         let superclasses_list: BoltType = BoltType::List(BoltList {
             value: self
@@ -108,7 +108,7 @@ impl TryFrom<BoltNode> for Entity {
             }
         };
 
-        let service_name = match node.get("service_name") {
+        let file_path = match node.get("file_path") {
             Ok(BoltType::String(s)) => s.value,
             _ => return Err(DeError::NoSuchProperty),
         };
@@ -117,7 +117,7 @@ impl TryFrom<BoltNode> for Entity {
             name: name,
             superclasses: superclasses,
             fields,
-            service_name,
+            file_path,
         })
     }
 }

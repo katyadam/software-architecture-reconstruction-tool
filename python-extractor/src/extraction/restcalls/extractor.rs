@@ -47,7 +47,7 @@ impl Extractor<RestCall> for RestcallsExtractor {
                 function_arguments: function_parameters,
                 http_method: http_method.parse().unwrap_or(HttpMethod::GET),
                 target_uri: target_uri.clone(),
-                service_name: params.service_name.unwrap_or_default().to_string(),
+                file_path: params.file_name.unwrap_or_default().to_string(),
             };
 
             restcalls.push(rest_call);

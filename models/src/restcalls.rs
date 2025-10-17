@@ -9,5 +9,5 @@ pub struct RestCall {
     pub function_arguments: Vec<Argument>,
     pub http_method: HttpMethod,
     pub target_uri: String,
-    pub service_name: String,
+    pub file_path: String,
 }
