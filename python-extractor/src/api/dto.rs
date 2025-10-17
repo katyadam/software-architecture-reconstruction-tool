@@ -1,6 +1,4 @@
-use chrono::{DateTime, Utc};
-use models::ConfigurationData;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use uuid::Uuid;
 
 #[allow(dead_code)]
@@ -25,15 +23,6 @@ impl PostFileRecord {
             file_size,
         }
     }
-}
-
-#[allow(dead_code)]
-#[derive(Deserialize)]
-pub struct ConfigurationDto {
-    pub configuration_uuid: Uuid,
-    pub project_uuid: Uuid,
-    pub configuration_data: ConfigurationData,
-    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize)]

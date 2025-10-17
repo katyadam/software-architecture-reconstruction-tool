@@ -1,7 +1,8 @@
+use clients::http::{client::HttpClient, error::HttpClientError};
 use log::info;
 use uuid::Uuid;
 
-use crate::{api::dto::ViewsDto, client::http::client::HttpClient, error::HttpClientError};
+use crate::api::dto::ViewsDto;
 
 pub struct SynthesizerConnector {
     http_client: HttpClient,

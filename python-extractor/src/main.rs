@@ -10,11 +10,12 @@ use crate::{
         service::ExtractorServiceImpl,
     },
     bucket::get_bucket,
-    client::{http::client::HttpClient, s3::client::S3Client},
+    client::s3::client::S3Client,
 };
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use awc::Client;
+use clients::http::client::HttpClient;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 

@@ -1,4 +1,5 @@
-use crate::{api::dto::PostFileRecord, client::http::client::HttpClient, error::HttpClientError};
+use crate::api::dto::PostFileRecord;
+use clients::http::{client::HttpClient, error::HttpClientError};
 
 pub struct ManagerConnector {
     http_client: HttpClient,

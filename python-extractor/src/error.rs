@@ -1,5 +1,6 @@
 use actix_web::{HttpResponse, ResponseError};
 use awc::error::{PayloadError, SendRequestError};
+use clients::http::error::HttpClientError;
 use s3::error::S3Error;
 use serde::Serialize;
 use thiserror::Error;
@@ -44,18 +45,6 @@ impl ResponseError for ApiError {
             ApiError::Utf8ConversionError => actix_web::http::StatusCode::BAD_REQUEST,
         }
     }
-}
-
-#[derive(Debug, Error)]
-pub enum HttpClientError {
-    #[error("Serialization error: {0}")]
-    Serde(#[from] serde_json::Error),
-
-    #[error("HTTP request error: {0}")]
-    HttpRequest(#[from] SendRequestError),
-
-    #[error("Wrong Payload: {0}")]
-    Payload(#[from] PayloadError),
 }
 
 impl From<HttpClientError> for ApiError {
