@@ -3,7 +3,6 @@ use actix_web::{HttpResponse, Responder, Result};
 use awc::body::BoxBody;
 use futures_util::StreamExt as _;
 use log::info;
-use models::configuration::ServiceDescription;
 use python_extractor::extraction::parse::parse;
 use uuid::Uuid;
 
@@ -80,12 +79,6 @@ impl ExtractorService for ExtractorServiceImpl {
         payload: &mut Multipart,
         codebase_uuid: Uuid,
     ) -> Result<ServiceResponse, ApiError> {
-        let configuration = self
-            .manager_connector
-            .get_codebase_configuration(codebase_uuid)
-            .await
-            .map_err(|e| ApiError::OtherServerResponseError(e.to_string()))?;
-
         let run_id = uuid::Uuid::new_v4();
         let base_dir_path = format!("{}/{}", codebase_uuid, run_id);
         let mut any_file_processed: bool = false;

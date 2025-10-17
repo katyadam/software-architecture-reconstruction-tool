@@ -60,6 +60,7 @@ impl HttpClient {
         Ok(resp_json)
     }
 
+    #[allow(dead_code)]
     pub async fn get_json<R: DeserializeOwned>(&self, endpoint: &str) -> Result<R, HttpClientError>
     where
         R: DeserializeOwned + 'static,
