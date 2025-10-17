@@ -59,7 +59,7 @@ impl TryFrom<BoltNode> for Service {
                     )
                     .unwrap_or(Endpoint {
                         uri: "Bad Deserialization!".to_string(),
-                        service_name: "Bad Deserialization!".to_string(),
+                        file_path: "Bad Deserialization!".to_string(),
                         function_name: "Bad Deserialization!".to_string(),
                         http_method: models::HttpMethod::DELETE,
                         parameters: vec![],
@@ -194,7 +194,7 @@ impl TryFrom<BoltMap> for Request {
                 ser_endpoint.value.as_str(),
             )
             .unwrap_or(Endpoint {
-                service_name: "Bad Deserialization!".to_string(),
+                file_path: "Bad Deserialization!".to_string(),
                 function_name: "Bad Deserialization!".to_string(),
                 http_method: models::HttpMethod::DELETE,
                 parameters: vec![],
@@ -211,7 +211,7 @@ impl TryFrom<BoltMap> for Request {
                 ser_restcall.value.as_str(),
             )
             .unwrap_or(RestCall {
-                service_name: "Bad Deserialization!".to_string(),
+                file_path: "Bad Deserialization!".to_string(),
                 function_name: "Bad Deserialization!".to_string(),
                 http_method: models::HttpMethod::DELETE,
                 function_arguments: vec![],

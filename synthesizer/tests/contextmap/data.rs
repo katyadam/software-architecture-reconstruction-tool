@@ -19,6 +19,6 @@ pub fn test_entity_email() -> Entity {
             },
         ],
         signature: "./examples/python/entities.py/Email".to_string(),
-        service_name: "test_component".to_string(),
+        file_path: "./examples/python/entities.py".to_string(),
     }
 }

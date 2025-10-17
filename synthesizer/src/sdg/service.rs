@@ -1,4 +1,5 @@
 use crate::{
+    connectors::manager_connector::{self, ManagerConnector},
     errors::service::ServiceError,
     sdg::{
         builder::{SdgBuilder, SdgBuilderImpl},
@@ -17,13 +18,19 @@ pub trait SdgService {
 pub struct SdgServiceImpl {
     repository: SdgRepositoryImpl,
     builder: SdgBuilderImpl,
+    manager_connector: ManagerConnector,
 }
 
 impl SdgServiceImpl {
-    pub fn new(repository: SdgRepositoryImpl, builder: SdgBuilderImpl) -> Self {
+    pub fn new(
+        repository: SdgRepositoryImpl,
+        builder: SdgBuilderImpl,
+        manager_connector: ManagerConnector,
+    ) -> Self {
         Self {
             repository,
             builder,
+            manager_connector,
         }
     }
 }

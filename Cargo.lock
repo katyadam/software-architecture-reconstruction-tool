@@ -706,6 +706,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "clients"
+version = "0.1.0"
+dependencies = [
+ "awc",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.16",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2852,6 +2862,7 @@ dependencies = [
  "actix-web",
  "awc",
  "chrono",
+ "clients",
  "dotenvy",
  "env_logger",
  "futures-util",
@@ -3983,6 +3994,9 @@ name = "synthesizer"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "awc",
+ "chrono",
+ "clients",
  "dotenvy",
  "env_logger",
  "futures",

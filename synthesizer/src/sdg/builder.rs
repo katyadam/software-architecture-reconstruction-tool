@@ -104,7 +104,7 @@ impl SdgBuilderImpl {
                 {
                     continue;
                 }
-
+                // TODO: Should be introduced compare of domains where endpoints lives and from restcall calls
                 let cur_dist = levenshtein(&endpoint.uri, &restcall.target_uri) as i32;
                 if cur_dist < min_dist {
                     min_dist = cur_dist;
