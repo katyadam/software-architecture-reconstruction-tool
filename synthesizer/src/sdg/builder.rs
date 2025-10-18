@@ -1,4 +1,4 @@
-use std::{cmp::min, collections::HashMap, fmt::format, i32};
+use std::{cmp::min, collections::HashMap};
 
 use models::{ConfigurationData, Endpoint, RestCall, configuration::ServiceDescription};
 use strsim::levenshtein;
