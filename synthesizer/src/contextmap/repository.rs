@@ -3,6 +3,7 @@ use std::sync::Arc;
 use log::warn;
 use models::Entity;
 use neo4rs::{BoltType, Graph, query};
+use uuid::Uuid;
 
 use crate::{
     contextmap::{
@@ -15,16 +16,16 @@ use crate::{
 pub trait ContextMapRepository {
     fn get_single(
         &self,
-        codebase_uuid: &str,
+        codebase_uuid: Uuid,
     ) -> impl std::future::Future<Output = Result<ContextMap, DatabaseError>> + Send;
     fn save(
         &self,
         context_map: &ContextMap,
-        codebase_uuid: &str,
+        codebase_uuid: Uuid,
     ) -> impl std::future::Future<Output = Result<(), DatabaseError>> + Send;
     fn delete(
         &self,
-        codebase_uuid: &str,
+        codebase_uuid: Uuid,
     ) -> impl std::future::Future<Output = Result<(), DatabaseError>> + Send;
 }
 
@@ -39,10 +40,10 @@ impl ContextMapRepositoryImpl {
 }
 
 impl ContextMapRepository for ContextMapRepositoryImpl {
-    async fn get_single(&self, codebase_uuid: &str) -> Result<ContextMap, DatabaseError> {
+    async fn get_single(&self, codebase_uuid: Uuid) -> Result<ContextMap, DatabaseError> {
         let mut result = self
             .graph_handle
-            .execute(query(GET_CONTEXT_MAP).param("codebase_uuid", codebase_uuid))
+            .execute(query(GET_CONTEXT_MAP).param("codebase_uuid", codebase_uuid.to_string()))
             .await?;
         let mut context_map = ContextMap {
             entities: Vec::new(),
@@ -81,22 +82,22 @@ impl ContextMapRepository for ContextMapRepositoryImpl {
     async fn save(
         &self,
         context_map: &ContextMap,
-        codebase_uuid: &str,
+        codebase_uuid: Uuid,
     ) -> Result<(), DatabaseError> {
         self.graph_handle
             .run(
                 query(CREATE_CONTEXT_MAP)
                     .param("entities", context_map.entities.clone())
                     .param("dependencies", context_map.dependencies.clone())
-                    .param("codebase_uuid", codebase_uuid),
+                    .param("codebase_uuid", codebase_uuid.to_string()),
             )
             .await?;
         Ok(())
     }
 
-    async fn delete(&self, codebase_uuid: &str) -> Result<(), DatabaseError> {
+    async fn delete(&self, codebase_uuid: Uuid) -> Result<(), DatabaseError> {
         self.graph_handle
-            .run(query(DELETE_CONTEXT_MAP).param("codebase_uuid", codebase_uuid))
+            .run(query(DELETE_CONTEXT_MAP).param("codebase_uuid", codebase_uuid.to_string()))
             .await?;
         Ok(())
     }

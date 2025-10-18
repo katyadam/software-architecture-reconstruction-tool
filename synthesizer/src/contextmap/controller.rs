@@ -9,6 +9,7 @@ use crate::{
     errors::api::ApiError,
 };
 use actix_web::{HttpResponse, Responder, delete, get, post, web};
+use uuid::Uuid;
 
 #[utoipa::path(
         post,
@@ -43,10 +44,10 @@ pub async fn create_context_map(
 #[get("/{codebase_uuid}")]
 pub async fn get_context_map(
     service: web::Data<Arc<ContextMapServiceImpl>>,
-    codebase_uuid_path: web::Path<String>,
+    codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
-    let cm = service.get_single(&codebase_uuid).await?;
+    let cm = service.get_single(codebase_uuid).await?;
 
     Ok(HttpResponse::Ok().json(cm))
 }
@@ -65,10 +66,10 @@ pub async fn get_context_map(
 #[delete("/{codebase_uuid}")]
 pub async fn delete_context_map(
     service: web::Data<Arc<ContextMapServiceImpl>>,
-    codebase_uuid_path: web::Path<String>,
+    codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
-    service.delete(&codebase_uuid).await?;
+    service.delete(codebase_uuid).await?;
 
     Ok(HttpResponse::NoContent())
 }

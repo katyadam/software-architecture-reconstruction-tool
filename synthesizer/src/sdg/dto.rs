@@ -1,13 +1,14 @@
 use models::{Endpoint, RestCall};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use crate::sdg::model::SDG;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PostSDG {
     #[schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
-    pub codebase_uuid: String,
+    pub codebase_uuid: Uuid,
 
     #[schema(example = json!([
         {

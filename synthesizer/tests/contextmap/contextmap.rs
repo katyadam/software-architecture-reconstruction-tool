@@ -7,6 +7,7 @@ use synthesizer::contextmap::{
     repository::ContextMapRepositoryImpl, service::ContextMapServiceImpl,
 };
 use testcontainers::{GenericImage, ImageExt, runners::AsyncRunner};
+use uuid::Uuid;
 
 use crate::contextmap::data::test_entity_email;
 
@@ -49,7 +50,7 @@ async fn test_create_context_map_returns_201() {
 
     let dto = PostContextMap {
         entities: vec![test_entity_email()],
-        codebase_uuid: "f42a8512-e2d4-48c8-bad1-623be3ea0548".to_string(),
+        codebase_uuid: Uuid::parse_str("f42a8512-e2d4-48c8-bad1-623be3ea0548").unwrap(),
     };
 
     let req = test::TestRequest::post()

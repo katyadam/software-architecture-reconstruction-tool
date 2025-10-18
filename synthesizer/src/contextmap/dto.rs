@@ -1,13 +1,14 @@
 use models::Entity;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use crate::contextmap::model::ContextMap;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PostContextMap {
     #[schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
-    pub codebase_uuid: String,
+    pub codebase_uuid: Uuid,
 
     #[schema(example = json!([
         {
