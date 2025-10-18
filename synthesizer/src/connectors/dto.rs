@@ -3,6 +3,7 @@ use models::ConfigurationData;
 use serde::Deserialize;
 use uuid::Uuid;
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct ConfigurationDto {
     pub configuration_uuid: Uuid,

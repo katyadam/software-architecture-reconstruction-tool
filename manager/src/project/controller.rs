@@ -7,7 +7,6 @@ use crate::{
     project::{
         dto::{PostProject, ProjectResponse},
         model::NewProject,
-        repository::{PgProjectRepository, ProjectRepository},
         service::ProjectService,
     },
 };

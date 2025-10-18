@@ -7,6 +7,7 @@ use synthesizer::contextmap::{
     service::ContextMapServiceImpl,
 };
 
+#[allow(dead_code)]
 pub fn configure_test_webapp(graph: Arc<Graph>) -> impl Fn(&mut ServiceConfig) {
     move |config: &mut ServiceConfig| {
         let cm_service = get_cm_service(graph.clone());
