@@ -1,19 +1,8 @@
 use models::{Endpoint, RestCall};
 use neo4rs::{BoltList, BoltMap, BoltNode, BoltString, BoltType, DeError};
-use serde::{Deserialize, Serialize, de::Unexpected};
-use utoipa::ToSchema;
+use serde::de::Unexpected;
 
-#[derive(ToSchema, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SDG {
-    pub services: Vec<Service>,
-    pub connections: Vec<Connection>,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, PartialEq, Eq)]
-pub struct Service {
-    pub name: String,
-    pub endpoints: Vec<Endpoint>,
-}
+use crate::sdg::model::types::{Connection, Request, Service};
 
 impl Into<BoltType> for Service {
     fn into(self) -> BoltType {
@@ -32,6 +21,15 @@ impl Into<BoltType> for Service {
                 .collect(),
         });
         map.put("endpoints".into(), serialized_endpoints);
+
+        let converted_urls: BoltType = BoltType::List(BoltList {
+            value: self
+                .urls
+                .into_iter()
+                .map(|url| BoltType::String(BoltString::new(&url)))
+                .collect(),
+        });
+        map.put("urls".into(), converted_urls);
 
         BoltType::Map(map)
     }
@@ -77,15 +75,31 @@ impl TryFrom<BoltNode> for Service {
             }
         };
 
-        Ok(Service { name, endpoints })
-    }
-}
+        let urls = match node.get("urls") {
+            Ok(BoltType::List(l)) => l
+                .value
+                .into_iter()
+                .map(|url| match url {
+                    BoltType::String(s) => Ok(s.value),
+                    _ => Err(DeError::InvalidType {
+                        received: Unexpected::Other("Non BoltString type").into(),
+                        expected: "BoltString".to_string(),
+                    }),
+                })
+                .collect::<Result<Vec<String>, DeError>>()?,
+            _ => {
+                return Err(DeError::Other(
+                    "Urls argument not present in Service".to_string(),
+                ));
+            }
+        };
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, PartialEq, Eq)]
-pub struct Connection {
-    pub source_id: String,
-    pub target_id: String,
-    pub requests: Vec<Request>,
+        Ok(Service {
+            name,
+            endpoints,
+            urls,
+        })
+    }
 }
 
 impl Into<BoltType> for Connection {
@@ -159,12 +173,6 @@ impl TryFrom<BoltMap> for Connection {
             requests,
         })
     }
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, PartialEq, Eq)]
-pub struct Request {
-    pub endpoint: Endpoint,
-    pub restcall: RestCall,
 }
 
 impl Into<BoltType> for Request {

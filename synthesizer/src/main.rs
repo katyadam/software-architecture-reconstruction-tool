@@ -22,7 +22,7 @@ use crate::{
     sdg::{
         builder::SdgBuilderImpl,
         dto::{GetSDGErrorReponse, PostSDGErrorResponse},
-        model::SDG,
+        model::types::SDG,
         repository::SdgRepositoryImpl,
         service::SdgServiceImpl,
     },

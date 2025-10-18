@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::sdg::model::SDG;
+use crate::sdg::model::types::SDG;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PostSDG {

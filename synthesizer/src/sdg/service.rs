@@ -6,7 +6,7 @@ use crate::{
     sdg::{
         builder::{SdgBuilder, SdgBuilderImpl},
         dto::PostSDG,
-        model::SDG,
+        model::types::SDG,
         repository::{SdgRepository, SdgRepositoryImpl},
     },
 };
@@ -41,11 +41,14 @@ impl SdgService for SdgServiceImpl {
     async fn save(&self, sdg_payload: PostSDG) -> Result<SDG, ServiceError> {
         let configuration = self
             .manager_connector
-            .get_codebase_configuration(sdg_payload.codebase_uuid);
+            .get_codebase_configuration(sdg_payload.codebase_uuid)
+            .await?;
 
-        let sdg = self
-            .builder
-            .build(&sdg_payload.endpoints, &sdg_payload.restcalls)?;
+        let sdg = self.builder.build(
+            sdg_payload.endpoints,
+            sdg_payload.restcalls,
+            configuration.configuration_data,
+        )?;
 
         self.repository
             .save(&sdg, sdg_payload.codebase_uuid)

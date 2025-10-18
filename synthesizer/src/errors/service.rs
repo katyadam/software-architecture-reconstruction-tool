@@ -1,3 +1,5 @@
+use clients::http::error::HttpClientError;
+
 use crate::errors::{builder::BuilderError, database::DatabaseError};
 
 #[allow(dead_code)]
@@ -35,6 +37,16 @@ impl From<BuilderError> for ServiceError {
     fn from(err: BuilderError) -> Self {
         match err {
             BuilderError::Error(err) => ServiceError::InternalError(err),
+        }
+    }
+}
+
+impl From<HttpClientError> for ServiceError {
+    fn from(err: HttpClientError) -> Self {
+        match err {
+            HttpClientError::Serde(err) => ServiceError::DeserializationError(err.to_string()),
+            HttpClientError::HttpRequest(err) => ServiceError::InternalError(err.to_string()),
+            HttpClientError::Payload(err) => ServiceError::InternalError(err.to_string()),
         }
     }
 }
