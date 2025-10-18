@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    i32::{self},
-};
+use std::{cmp::min, collections::HashMap, fmt::format, i32};
 
 use models::{ConfigurationData, Endpoint, RestCall, configuration::ServiceDescription};
 use strsim::levenshtein;
@@ -141,6 +138,49 @@ impl SdgBuilderImpl {
         connections_map.into_values().collect()
     }
 
+    fn exact_match(&self, endpoint: &AssignedEndpoint, restcall: &AssignedRestCall) -> bool {
+        if !endpoint.data.uri.starts_with("http") {
+            for url in &endpoint.service.urls {
+                let to_match = format!(
+                    "{}/{}",
+                    url.trim_end_matches("/"),
+                    endpoint.data.uri.trim_start_matches("/")
+                );
+                if to_match == restcall.data.target_uri {
+                    return true;
+                }
+            }
+        } else {
+            return endpoint.data.uri == restcall.data.target_uri;
+        }
+        false
+    }
+
+    fn get_levenshtein_distance(
+        &self,
+        endpoint: &AssignedEndpoint,
+        restcall: &AssignedRestCall,
+    ) -> usize {
+        let mut lowest_score = usize::MAX;
+
+        for prefix in endpoint
+            .service
+            .urls
+            .iter()
+            .chain(std::iter::once(&"".to_string()))
+        {
+            let endpoint_test_uri = format!(
+                "{}/{}",
+                prefix.trim_end_matches("/"),
+                endpoint.data.uri.trim_start_matches("/")
+            );
+            let score = levenshtein(&endpoint_test_uri, &restcall.data.target_uri);
+            lowest_score = min(lowest_score, score);
+        }
+
+        lowest_score
+    }
+
     fn create_endpoint_restcall_pairs(
         &self,
         endpoints: Vec<AssignedEndpoint>,
@@ -149,7 +189,7 @@ impl SdgBuilderImpl {
         let mut restcall_endpoint: Vec<(AssignedRestCall, AssignedEndpoint)> = Vec::new();
         for restcall in restcalls {
             let mut matched_endpoint: Option<&AssignedEndpoint> = None;
-            let mut min_dist = i32::MAX;
+            let mut min_dist = usize::MAX;
             let mut length_of_longest_str = 0;
 
             for endpoint in &endpoints {
@@ -158,8 +198,12 @@ impl SdgBuilderImpl {
                 {
                     continue;
                 }
-                // TODO: Should be introduced compare of domains where endpoints lives and from restcall calls
-                let cur_dist = levenshtein(&endpoint.data.uri, &restcall.data.target_uri) as i32;
+                if self.exact_match(endpoint, &restcall) {
+                    matched_endpoint = Some(&endpoint);
+                    break;
+                }
+
+                let cur_dist = self.get_levenshtein_distance(&endpoint, &restcall);
                 if cur_dist < min_dist {
                     min_dist = cur_dist;
                     matched_endpoint = Some(&endpoint);
