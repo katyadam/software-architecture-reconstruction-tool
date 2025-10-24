@@ -191,7 +191,7 @@ impl SdgBuilderImpl {
             let mut matched_endpoint: Option<&AssignedEndpoint> = None;
             let mut min_dist = usize::MAX;
             let mut length_of_longest_str = 0;
-
+            let mut was_matched_exactly = false;
             for endpoint in &endpoints {
                 if endpoint.data.http_method != restcall.data.http_method
                     || endpoint.service.name == restcall.service.name
@@ -200,6 +200,7 @@ impl SdgBuilderImpl {
                 }
                 if self.exact_match(endpoint, &restcall) {
                     matched_endpoint = Some(&endpoint);
+                    was_matched_exactly = true;
                     break;
                 }
 
@@ -214,7 +215,7 @@ impl SdgBuilderImpl {
 
             if let Some(endpoint) = matched_endpoint {
                 let percent = length_of_longest_str as f32 * Self::DISSIMILARITY_PERCENT;
-                if percent > min_dist as f32 {
+                if percent > min_dist as f32 || was_matched_exactly {
                     restcall_endpoint.push((restcall, endpoint.to_owned()));
                 }
             }
