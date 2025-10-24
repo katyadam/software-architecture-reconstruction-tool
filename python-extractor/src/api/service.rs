@@ -96,6 +96,11 @@ impl ExtractorService for ExtractorServiceImpl {
             }
             any_file_processed = true;
         }
+
+        self.synthesizer_connector
+            .send_load_info(codebase_uuid, &base_dir_path)
+            .await?;
+
         if any_file_processed {
             Ok(ServiceResponse::FileProcessed)
         } else {
@@ -129,10 +134,6 @@ impl ExtractorService for ExtractorServiceImpl {
         let code_elements_aggregate = parse(text, file_name).await;
         self.s3_connector
             .store_code_elements(code_elements_aggregate, base_dir_path)
-            .await?;
-
-        self.synthesizer_connector
-            .send_load_info(codebase_uuid, base_dir_path)
             .await?;
 
         self.manager_connector
