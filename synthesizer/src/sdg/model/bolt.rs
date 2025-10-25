@@ -105,8 +105,8 @@ impl TryFrom<BoltNode> for Service {
 impl Into<BoltType> for Connection {
     fn into(self) -> BoltType {
         let mut map = BoltMap::new();
-        map.put("source".into(), self.source_id.into());
-        map.put("target".into(), self.target_id.into());
+        map.put("source_id".into(), self.source_id.into());
+        map.put("target_id".into(), self.target_id.into());
         let serialized_requests: BoltType = BoltType::List(BoltList {
             value: self
                 .requests
@@ -126,7 +126,7 @@ impl TryFrom<BoltMap> for Connection {
     type Error = DeError;
 
     fn try_from(node: BoltMap) -> Result<Self, Self::Error> {
-        let source_id = match node.get("source") {
+        let source_id = match node.get("source_id") {
             Ok(BoltType::String(s)) => s.value,
             Ok(BoltType::Null(_)) => {
                 return Err(DeError::Other("Source is NULL!".to_string()));
@@ -134,7 +134,7 @@ impl TryFrom<BoltMap> for Connection {
             _ => return Err(DeError::NoSuchProperty),
         };
 
-        let target_id = match node.get("target") {
+        let target_id = match node.get("target_id") {
             Ok(BoltType::String(s)) => s.value,
             Ok(BoltType::Null(_)) => {
                 return Err(DeError::Other("Target is NULL!".to_string()));
