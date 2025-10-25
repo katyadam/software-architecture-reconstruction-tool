@@ -38,6 +38,7 @@ mod errors;
 mod imcg;
 mod s3;
 mod sdg;
+mod tests;
 
 #[derive(OpenApi)]
 #[openapi(
