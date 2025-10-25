@@ -28,7 +28,8 @@ impl SdgBuilder for SdgBuilderImpl {
     ) -> Result<SDG, BuilderError> {
         let assigned_endpoints =
             self.get_assigned_endpoints(endpoints, &configuration.service_descriptions);
-        let services = self.map_endpoints_to_services(&assigned_endpoints);
+        let services = self
+            .map_endpoints_to_services(&assigned_endpoints, &configuration.service_descriptions);
 
         let assigned_restcalls =
             self.get_assigned_restcalls(restcalls, &configuration.service_descriptions);
@@ -89,10 +90,26 @@ impl SdgBuilderImpl {
             .collect()
     }
 
-    fn map_endpoints_to_services(&self, endpoints: &[AssignedEndpoint]) -> Vec<Service> {
-        let mut service_map: HashMap<String, Service> = HashMap::new();
+    fn map_endpoints_to_services(
+        &self,
+        assigned_endpoints: &[AssignedEndpoint],
+        service_descs: &[ServiceDescription],
+    ) -> Vec<Service> {
+        let mut service_map: HashMap<String, Service> = service_descs
+            .iter()
+            .map(|s_desc| {
+                (
+                    s_desc.name.clone(),
+                    Service {
+                        name: s_desc.name.to_string(),
+                        endpoints: Vec::new(),
+                        urls: s_desc.urls.clone(),
+                    },
+                )
+            })
+            .collect();
 
-        for endpoint in endpoints {
+        for endpoint in assigned_endpoints {
             service_map
                 .entry(endpoint.service.name.clone())
                 .or_insert_with(|| Service {
