@@ -21,3 +21,7 @@ models = { path = "../models" }
 thiserror = "2.0.3"
 rust-s3 = "0.37.0"
 futures = "0.3.31"
+chrono = { version = "0.4", features = ["serde"] }
+awc = "3.7.0" 
+
+clients = { path = "../clients" }

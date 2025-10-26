@@ -1,19 +1,8 @@
 use models::{Endpoint, RestCall};
 use neo4rs::{BoltList, BoltMap, BoltNode, BoltString, BoltType, DeError};
-use serde::{Deserialize, Serialize, de::Unexpected};
-use utoipa::ToSchema;
+use serde::de::Unexpected;
 
-#[derive(ToSchema, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SDG {
-    pub services: Vec<Service>,
-    pub connections: Vec<Connection>,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, PartialEq, Eq)]
-pub struct Service {
-    pub name: String,
-    pub endpoints: Vec<Endpoint>,
-}
+use crate::sdg::model::types::{Connection, Request, Service};
 
 impl Into<BoltType> for Service {
     fn into(self) -> BoltType {
@@ -32,6 +21,15 @@ impl Into<BoltType> for Service {
                 .collect(),
         });
         map.put("endpoints".into(), serialized_endpoints);
+
+        let converted_urls: BoltType = BoltType::List(BoltList {
+            value: self
+                .urls
+                .into_iter()
+                .map(|url| BoltType::String(BoltString::new(&url)))
+                .collect(),
+        });
+        map.put("urls".into(), converted_urls);
 
         BoltType::Map(map)
     }
@@ -59,7 +57,7 @@ impl TryFrom<BoltNode> for Service {
                     )
                     .unwrap_or(Endpoint {
                         uri: "Bad Deserialization!".to_string(),
-                        service_name: "Bad Deserialization!".to_string(),
+                        file_path: "Bad Deserialization!".to_string(),
                         function_name: "Bad Deserialization!".to_string(),
                         http_method: models::HttpMethod::DELETE,
                         parameters: vec![],
@@ -77,22 +75,38 @@ impl TryFrom<BoltNode> for Service {
             }
         };
 
-        Ok(Service { name, endpoints })
-    }
-}
+        let urls = match node.get("urls") {
+            Ok(BoltType::List(l)) => l
+                .value
+                .into_iter()
+                .map(|url| match url {
+                    BoltType::String(s) => Ok(s.value),
+                    _ => Err(DeError::InvalidType {
+                        received: Unexpected::Other("Non BoltString type").into(),
+                        expected: "BoltString".to_string(),
+                    }),
+                })
+                .collect::<Result<Vec<String>, DeError>>()?,
+            _ => {
+                return Err(DeError::Other(
+                    "Urls argument not present in Service".to_string(),
+                ));
+            }
+        };
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, PartialEq, Eq)]
-pub struct Connection {
-    pub source_id: String,
-    pub target_id: String,
-    pub requests: Vec<Request>,
+        Ok(Service {
+            name,
+            endpoints,
+            urls,
+        })
+    }
 }
 
 impl Into<BoltType> for Connection {
     fn into(self) -> BoltType {
         let mut map = BoltMap::new();
-        map.put("source".into(), self.source_id.into());
-        map.put("target".into(), self.target_id.into());
+        map.put("source_id".into(), self.source_id.into());
+        map.put("target_id".into(), self.target_id.into());
         let serialized_requests: BoltType = BoltType::List(BoltList {
             value: self
                 .requests
@@ -112,7 +126,7 @@ impl TryFrom<BoltMap> for Connection {
     type Error = DeError;
 
     fn try_from(node: BoltMap) -> Result<Self, Self::Error> {
-        let source_id = match node.get("source") {
+        let source_id = match node.get("source_id") {
             Ok(BoltType::String(s)) => s.value,
             Ok(BoltType::Null(_)) => {
                 return Err(DeError::Other("Source is NULL!".to_string()));
@@ -120,7 +134,7 @@ impl TryFrom<BoltMap> for Connection {
             _ => return Err(DeError::NoSuchProperty),
         };
 
-        let target_id = match node.get("target") {
+        let target_id = match node.get("target_id") {
             Ok(BoltType::String(s)) => s.value,
             Ok(BoltType::Null(_)) => {
                 return Err(DeError::Other("Target is NULL!".to_string()));
@@ -161,12 +175,6 @@ impl TryFrom<BoltMap> for Connection {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, PartialEq, Eq)]
-pub struct Request {
-    pub endpoint: Endpoint,
-    pub restcall: RestCall,
-}
-
 impl Into<BoltType> for Request {
     fn into(self) -> BoltType {
         let mut map = BoltMap::new();
@@ -194,7 +202,7 @@ impl TryFrom<BoltMap> for Request {
                 ser_endpoint.value.as_str(),
             )
             .unwrap_or(Endpoint {
-                service_name: "Bad Deserialization!".to_string(),
+                file_path: "Bad Deserialization!".to_string(),
                 function_name: "Bad Deserialization!".to_string(),
                 http_method: models::HttpMethod::DELETE,
                 parameters: vec![],
@@ -211,7 +219,7 @@ impl TryFrom<BoltMap> for Request {
                 ser_restcall.value.as_str(),
             )
             .unwrap_or(RestCall {
-                service_name: "Bad Deserialization!".to_string(),
+                file_path: "Bad Deserialization!".to_string(),
                 function_name: "Bad Deserialization!".to_string(),
                 http_method: models::HttpMethod::DELETE,
                 function_arguments: vec![],

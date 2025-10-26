@@ -1,6 +1,7 @@
 use std::{env, sync::Arc};
 
 use actix_web::{App, HttpServer, middleware::Logger, web};
+use clients::http::client::HttpClient;
 use models::Entity;
 use neo4rs::Graph;
 
@@ -9,6 +10,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
     bucket::get_bucket,
+    connectors::manager_connector::ManagerConnector,
     contextmap::{
         builder::ContextMapBuilderImpl,
         dto::{GetContextMapErrorReponse, PostContextMap},
@@ -20,18 +22,23 @@ use crate::{
     sdg::{
         builder::SdgBuilderImpl,
         dto::{GetSDGErrorReponse, PostSDGErrorResponse},
-        model::SDG,
+        model::types::SDG,
         repository::SdgRepositoryImpl,
         service::SdgServiceImpl,
     },
 };
+
+use awc::Client;
+
 mod bucket;
+mod connectors;
 mod contextmap;
 mod db_setup;
 mod errors;
 mod imcg;
 mod s3;
 mod sdg;
+mod tests;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -68,6 +75,7 @@ async fn main() -> std::io::Result<()> {
         .expect("PORT must be a valid u16 number");
 
     let url: String = env::var("EXPOSE_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let manager_url: String = env::var("MANAGER_URL").expect("MANAGER_URL must be specified!");
 
     let cm_graph = setup_contextmap_db().await;
     let sdg_graph = setup_sdg_db().await;
@@ -75,7 +83,7 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         let cm_service = Arc::new(get_cm_service(cm_graph.clone()));
-        let sdg_service = Arc::new(get_sdg_service(sdg_graph.clone()));
+        let sdg_service = Arc::new(get_sdg_service(sdg_graph.clone(), &manager_url));
 
         // Clone Arcs to pass them where needed
         let s3_service = Arc::new(S3Service::new(
@@ -117,11 +125,12 @@ fn get_cm_service(graph: Arc<Graph>) -> ContextMapServiceImpl {
     ContextMapServiceImpl::new(cm_repository, cm_builder)
 }
 
-fn get_sdg_service(graph: Arc<Graph>) -> SdgServiceImpl {
+fn get_sdg_service(graph: Arc<Graph>, manager_url: &str) -> SdgServiceImpl {
     let sdg_repository = SdgRepositoryImpl::new(graph);
     let sdg_builder = SdgBuilderImpl::new();
-
-    SdgServiceImpl::new(sdg_repository, sdg_builder)
+    let manager_connector =
+        ManagerConnector::new(HttpClient::new(manager_url.to_owned(), Client::default()));
+    SdgServiceImpl::new(sdg_repository, sdg_builder, manager_connector)
 }
 
 fn get_s3_client() -> S3Client {

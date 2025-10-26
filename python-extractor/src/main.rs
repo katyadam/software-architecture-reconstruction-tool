@@ -10,11 +10,12 @@ use crate::{
         service::ExtractorServiceImpl,
     },
     bucket::get_bucket,
-    client::{http::client::HttpClient, s3::client::S3Client},
+    client::s3::client::S3Client,
 };
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use awc::Client;
+use clients::http::client::HttpClient;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -74,9 +75,9 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .wrap(
                 Cors::default()
-                    .allowed_origin(&testing_client_url) // origin of testing client (upload.html)
-                    .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
-                    .allowed_headers(vec!["Content-Type"]),
+                    .allow_any_origin()
+                    .allow_any_method()
+                    .allow_any_header(),
             )
             .service(
                 web::scope("/process-files")

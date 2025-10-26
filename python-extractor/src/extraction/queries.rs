@@ -1,24 +1,120 @@
 pub const RESTCALLS_QUERY: &str = r#"
-(function_definition name: (identifier) @function.name (block (expression_statement (assignment right: [(await
-	(call 
-      function: (attribute 
-          attribute: (identifier) @http.method (#any-of? @http.method 
-              "get"
-              "post"
-              "put"
-              "delete"
-      ))
-      arguments: (argument_list (string) @uri) @function.params)
- )(call
-      function: (attribute 
-          attribute: (identifier) @http.method (#any-of? @http.method 
-              "get"
-              "post"
-              "put"
-              "delete"
-      ))
-      arguments: (argument_list (string) @uri) @function.params)
-]))))
+;; ────────────────────────────────────────────────────────────────────────────
+;; PATTERN 1 — no with_statement
+;; ────────────────────────────────────────────────────────────────────────────
+(function_definition
+  name: (identifier) @function.name
+  (block
+    (expression_statement
+      [
+        ;; ─── await without assignment ────────────────────────────────
+        (await
+          (call
+            function: (attribute
+              attribute: (identifier) @http.method
+              (#any-of? @http.method "get" "post" "put" "delete")
+            )
+            arguments: (argument_list (string) @uri) @function.params
+          )
+        )
+
+        ;; ─── non-await without assignment ────────────────────────────
+        (call
+          function: (attribute
+            attribute: (identifier) @http.method
+            (#any-of? @http.method "get" "post" "put" "delete")
+          )
+          arguments: (argument_list (string) @uri) @function.params
+        )
+
+        ;; ─── assignments ─────────────────────────────────────────────
+        (assignment
+          right: [
+            ;; await assignment
+            (await
+              (call
+                function: (attribute
+                  attribute: (identifier) @http.method
+                  (#any-of? @http.method "get" "post" "put" "delete")
+                )
+                arguments: (argument_list (string) @uri) @function.params
+              )
+            )
+            ;; non-await assignment
+            (call
+              function: (attribute
+                attribute: (identifier) @http.method
+                (#any-of? @http.method "get" "post" "put" "delete")
+              )
+              arguments: (argument_list (string) @uri) @function.params
+            )
+          ]
+        )
+      ]
+    )
+  )
+)
+
+
+;; ────────────────────────────────────────────────────────────────────────────
+;; PATTERN 2 — with_statement → block → expression_statement
+;; ────────────────────────────────────────────────────────────────────────────
+(function_definition 
+  name: (identifier) @function.name
+  (block
+    (with_statement
+      (block
+        (expression_statement
+          [
+            ;; ─── await without assignment ────────────────────────────────
+            (await
+              (call
+                function: (attribute
+                  attribute: (identifier) @http.method
+                  (#any-of? @http.method "get" "post" "put" "delete")
+                )
+                arguments: (argument_list (string) @uri) @function.params
+              )
+            )
+
+            ;; ─── non-await without assignment ────────────────────────────
+            (call
+              function: (attribute
+                attribute: (identifier) @http.method
+                (#any-of? @http.method "get" "post" "put" "delete")
+              )
+              arguments: (argument_list (string) @uri) @function.params
+            )
+
+            ;; ─── assignments ─────────────────────────────────────────────
+            (assignment
+              right: [
+                ;; await assignment
+                (await
+                  (call
+                    function: (attribute
+                      attribute: (identifier) @http.method
+                      (#any-of? @http.method "get" "post" "put" "delete")
+                    )
+                    arguments: (argument_list (string) @uri) @function.params
+                  )
+                )
+                ;; non-await assignment
+                (call
+                  function: (attribute
+                    attribute: (identifier) @http.method
+                    (#any-of? @http.method "get" "post" "put" "delete")
+                  )
+                  arguments: (argument_list (string) @uri) @function.params
+                )
+              ]
+            )
+          ]
+        )
+      )
+    )
+  )
+)
 "#;
 
 pub const ENDPOINTS_QUERY: &str = r#"

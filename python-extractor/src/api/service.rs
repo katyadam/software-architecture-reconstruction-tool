@@ -12,7 +12,7 @@ use crate::{
             manager_connector::ManagerConnector, s3_connector::S3Connector,
             synthesizer_connector::SynthesizerConnector,
         },
-        dto::{PostFileRecord, ServiceDto},
+        dto::PostFileRecord,
     },
     error::ApiError,
 };
@@ -28,7 +28,6 @@ pub trait ExtractorService {
         &self,
         file_name: &str,
         field: Field,
-        configuration_services: &Vec<ServiceDto>,
         codebase_uuid: Uuid,
         base_dir_path: &str,
     ) -> Result<(), ApiError>;
@@ -80,12 +79,6 @@ impl ExtractorService for ExtractorServiceImpl {
         payload: &mut Multipart,
         codebase_uuid: Uuid,
     ) -> Result<ServiceResponse, ApiError> {
-        let configuration = self
-            .manager_connector
-            .get_codebase_configuration(codebase_uuid)
-            .await
-            .map_err(|e| ApiError::OtherServerResponseError(e.to_string()))?;
-
         let run_id = uuid::Uuid::new_v4();
         let base_dir_path = format!("{}/{}", codebase_uuid, run_id);
         let mut any_file_processed: bool = false;
@@ -98,17 +91,16 @@ impl ExtractorService for ExtractorServiceImpl {
                 .and_then(|cd| cd.get_filename().map(|s| s.to_owned()));
 
             if let Some(file_name) = file_name_opt {
-                self.process_file(
-                    &file_name,
-                    field,
-                    &configuration.configuration_data.services,
-                    codebase_uuid,
-                    &base_dir_path,
-                )
-                .await?;
+                self.process_file(&file_name, field, codebase_uuid, &base_dir_path)
+                    .await?;
             }
             any_file_processed = true;
         }
+
+        self.synthesizer_connector
+            .send_load_info(codebase_uuid, &base_dir_path)
+            .await?;
+
         if any_file_processed {
             Ok(ServiceResponse::FileProcessed)
         } else {
@@ -120,7 +112,6 @@ impl ExtractorService for ExtractorServiceImpl {
         &self,
         file_name: &str,
         mut field: Field,
-        configuration_services: &Vec<ServiceDto>,
         codebase_uuid: Uuid,
         base_dir_path: &str,
     ) -> Result<(), ApiError> {
@@ -140,20 +131,9 @@ impl ExtractorService for ExtractorServiceImpl {
             .map_err(|_| ApiError::InternalServerError)
             .unwrap();
 
-        let assigned_service = assign_service_name_for_file(&file_name, configuration_services);
-        let code_elements_aggregate = parse(
-            text,
-            file_name,
-            &assigned_service.unwrap_or("Can't categorize this file to a service!".to_string()),
-        )
-        .await;
-
+        let code_elements_aggregate = parse(text, file_name).await;
         self.s3_connector
             .store_code_elements(code_elements_aggregate, base_dir_path)
-            .await?;
-
-        self.synthesizer_connector
-            .send_load_info(codebase_uuid, base_dir_path)
             .await?;
 
         self.manager_connector
@@ -169,11 +149,12 @@ impl ExtractorService for ExtractorServiceImpl {
     }
 }
 
-fn assign_service_name_for_file(file_name: &str, services: &Vec<ServiceDto>) -> Option<String> {
-    for service in services {
-        if file_name.starts_with(&service.path) {
-            return Some(service.name.clone());
-        }
-    }
-    None
-}
+// fn assign_service_description_to_file(
+//     file_name: &str,
+//     service_descs: Vec<ServiceDescription>,
+// ) -> ServiceDescription {
+//     service_descs
+//         .into_iter()
+//         .find(|sd| file_name.starts_with(&sd.base_dir_path))
+//         .unwrap_or_default()
+// }

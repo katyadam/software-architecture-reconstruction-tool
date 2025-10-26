@@ -1,5 +1,6 @@
 use crate::errors::{api::ApiError, database::DatabaseError};
 
+#[allow(dead_code)]
 // Business Logic Errors
 #[derive(thiserror::Error, Debug)]
 pub enum ServiceError {

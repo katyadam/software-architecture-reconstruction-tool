@@ -4,7 +4,7 @@ use awc::Client;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
-use crate::error::HttpClientError;
+use crate::http::error::HttpClientError;
 
 pub struct HttpClient {
     base_url: String,
@@ -60,6 +60,7 @@ impl HttpClient {
         Ok(resp_json)
     }
 
+    #[allow(dead_code)]
     pub async fn get_json<R: DeserializeOwned>(&self, endpoint: &str) -> Result<R, HttpClientError>
     where
         R: DeserializeOwned + 'static,

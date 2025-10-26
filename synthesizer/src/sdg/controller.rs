@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use actix_web::{HttpResponse, Responder, delete, get, post, web};
+use uuid::Uuid;
 
 use crate::{
     errors::api::ApiError,
     sdg::{
         dto::{GetSDGErrorReponse, PostSDG, PostSDGErrorResponse},
-        model::SDG,
+        model::types::SDG,
         service::{SdgService, SdgServiceImpl},
     },
 };
@@ -44,10 +45,10 @@ pub async fn create_sdg(
 #[get("/{codebase_uuid}")]
 pub async fn get_sdg(
     service: web::Data<Arc<SdgServiceImpl>>,
-    codebase_uuid_path: web::Path<String>,
+    codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
-    let sdg = service.get_single(&codebase_uuid).await?;
+    let sdg = service.get_single(codebase_uuid).await?;
 
     Ok(HttpResponse::Ok().json(sdg))
 }
@@ -66,10 +67,10 @@ pub async fn get_sdg(
 #[delete("/{codebase_uuid}")]
 pub async fn delete_sdg(
     service: web::Data<Arc<SdgServiceImpl>>,
-    codebase_uuid_path: web::Path<String>,
+    codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
-    service.delete(&codebase_uuid).await?;
+    service.delete(codebase_uuid).await?;
 
     Ok(HttpResponse::NoContent())
 }

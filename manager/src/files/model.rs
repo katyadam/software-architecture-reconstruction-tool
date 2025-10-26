@@ -5,7 +5,7 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::schema::file_records;
-
+#[allow(dead_code)]
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = file_records)]
 pub struct FileRecord {

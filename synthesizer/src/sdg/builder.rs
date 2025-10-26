@@ -1,21 +1,19 @@
-use std::{
-    collections::HashMap,
-    i32::{self},
-};
+use std::{cmp::min, collections::HashMap};
 
-use models::{Endpoint, RestCall};
+use models::{ConfigurationData, Endpoint, RestCall, configuration::ServiceDescription};
 use strsim::levenshtein;
 
 use crate::{
     errors::builder::BuilderError,
-    sdg::model::{Connection, Request, SDG, Service},
+    sdg::model::types::{AssignedEndpoint, AssignedRestCall, Connection, Request, SDG, Service},
 };
 
 pub trait SdgBuilder {
     fn build(
         &self,
-        endpoints: &Vec<Endpoint>,
-        restcalls: &Vec<RestCall>,
+        endpoints: Vec<Endpoint>,
+        restcalls: Vec<RestCall>,
+        configuration: ConfigurationData,
     ) -> Result<SDG, BuilderError>;
 }
 
@@ -24,11 +22,18 @@ pub struct SdgBuilderImpl {}
 impl SdgBuilder for SdgBuilderImpl {
     fn build(
         &self,
-        endpoints: &Vec<Endpoint>,
-        restcalls: &Vec<RestCall>,
+        endpoints: Vec<Endpoint>,
+        restcalls: Vec<RestCall>,
+        configuration: ConfigurationData,
     ) -> Result<SDG, BuilderError> {
-        let services = Self::create_service_map(endpoints);
-        let connections = Self::create_connections(endpoints, restcalls);
+        let assigned_endpoints =
+            self.get_assigned_endpoints(endpoints, &configuration.service_descriptions);
+        let services = self
+            .map_endpoints_to_services(&assigned_endpoints, &configuration.service_descriptions);
+
+        let assigned_restcalls =
+            self.get_assigned_restcalls(restcalls, &configuration.service_descriptions);
+        let connections = self.create_connections(assigned_endpoints, assigned_restcalls);
         Ok(SDG {
             services,
             connections,
@@ -43,26 +48,89 @@ impl SdgBuilderImpl {
 
     const DISSIMILARITY_PERCENT: f32 = 0.3;
 
-    fn create_service_map(endpoints: &[Endpoint]) -> Vec<Service> {
-        let mut service_map: HashMap<String, Service> = HashMap::new();
+    fn assign_service_description_to_file(
+        &self,
+        file_name: &str,
+        service_descs: &[ServiceDescription],
+    ) -> ServiceDescription {
+        service_descs
+            .iter()
+            .find(|sd| file_name.starts_with(&sd.base_dir_path))
+            .cloned()
+            .unwrap_or_default()
+    }
 
-        for endpoint in endpoints {
+    fn get_assigned_endpoints(
+        &self,
+        endpoints: Vec<Endpoint>,
+        service_descs: &[ServiceDescription],
+    ) -> Vec<AssignedEndpoint> {
+        endpoints
+            .into_iter()
+            .map(|endpoint| {
+                let service_desc =
+                    self.assign_service_description_to_file(&endpoint.file_path, service_descs);
+                AssignedEndpoint::new(endpoint, service_desc)
+            })
+            .collect()
+    }
+
+    fn get_assigned_restcalls(
+        &self,
+        restcalls: Vec<RestCall>,
+        service_descs: &[ServiceDescription],
+    ) -> Vec<AssignedRestCall> {
+        restcalls
+            .into_iter()
+            .map(|restcall| {
+                let service_desc =
+                    self.assign_service_description_to_file(&restcall.file_path, service_descs);
+                AssignedRestCall::new(restcall, service_desc)
+            })
+            .collect()
+    }
+
+    fn map_endpoints_to_services(
+        &self,
+        assigned_endpoints: &[AssignedEndpoint],
+        service_descs: &[ServiceDescription],
+    ) -> Vec<Service> {
+        let mut service_map: HashMap<String, Service> = service_descs
+            .iter()
+            .map(|s_desc| {
+                (
+                    s_desc.name.clone(),
+                    Service {
+                        name: s_desc.name.to_string(),
+                        endpoints: Vec::new(),
+                        urls: s_desc.urls.clone(),
+                    },
+                )
+            })
+            .collect();
+
+        for endpoint in assigned_endpoints {
             service_map
-                .entry(endpoint.service_name.clone())
+                .entry(endpoint.service.name.clone())
                 .or_insert_with(|| Service {
-                    name: endpoint.service_name.clone(),
+                    name: endpoint.service.name.clone(),
                     endpoints: Vec::new(),
+                    urls: endpoint.service.urls.clone(),
                 })
                 .endpoints
-                .push(endpoint.clone());
+                .push(endpoint.data.clone());
         }
 
         service_map.into_values().collect()
     }
 
-    fn create_connections(endpoints: &[Endpoint], restcalls: &[RestCall]) -> Vec<Connection> {
-        let restcall_endpoint: HashMap<RestCall, &Endpoint> =
-            Self::create_endpoint_restcall_pairs(endpoints, restcalls);
+    fn create_connections(
+        &self,
+        endpoints: Vec<AssignedEndpoint>,
+        restcalls: Vec<AssignedRestCall>,
+    ) -> Vec<Connection> {
+        let restcall_endpoint: Vec<(AssignedRestCall, AssignedEndpoint)> =
+            self.create_endpoint_restcall_pairs(endpoints, restcalls);
 
         let mut connections_map: HashMap<String, Connection> = HashMap::new();
 
@@ -70,54 +138,102 @@ impl SdgBuilderImpl {
             connections_map
                 .entry(format!(
                     "{}__{}",
-                    restcall.service_name, endpoint.service_name
+                    restcall.service.name, endpoint.service.name
                 ))
                 .or_insert_with(|| Connection {
-                    source_id: restcall.service_name.clone(),
-                    target_id: endpoint.service_name.clone(),
+                    source_id: restcall.service.name.clone(),
+                    target_id: endpoint.service.name.clone(),
                     requests: Vec::new(),
                 })
                 .requests
                 .push(Request {
-                    endpoint: endpoint.clone(),
-                    restcall,
+                    endpoint: endpoint.data.clone(),
+                    restcall: restcall.data.clone(),
                 });
         }
 
         connections_map.into_values().collect()
     }
 
-    fn create_endpoint_restcall_pairs<'a>(
-        endpoints: &'a [Endpoint],
-        restcalls: &[RestCall],
-    ) -> HashMap<RestCall, &'a Endpoint> {
-        // We are using HashMap instead of Pairs to prevent RestCall matching multiple possible Endpoints
-        let mut restcall_endpoint: HashMap<RestCall, &Endpoint> = HashMap::new();
-        for restcall in restcalls {
-            let mut matched_endpoint: Option<&Endpoint> = None;
-            let mut min_dist = i32::MAX;
-            let mut length_of_longest_str = 0;
+    fn exact_match(&self, endpoint: &AssignedEndpoint, restcall: &AssignedRestCall) -> bool {
+        if !endpoint.data.uri.starts_with("http") {
+            for url in &endpoint.service.urls {
+                let to_match = format!(
+                    "{}/{}",
+                    url.trim_end_matches("/"),
+                    endpoint.data.uri.trim_start_matches("/")
+                );
+                if to_match == restcall.data.target_uri {
+                    return true;
+                }
+            }
+        } else {
+            return endpoint.data.uri == restcall.data.target_uri;
+        }
+        false
+    }
 
-            for endpoint in endpoints {
-                if endpoint.http_method != restcall.http_method
-                    || endpoint.service_name == restcall.service_name
+    fn get_levenshtein_distance(
+        &self,
+        endpoint: &AssignedEndpoint,
+        restcall: &AssignedRestCall,
+    ) -> usize {
+        let mut lowest_score = usize::MAX;
+
+        for prefix in endpoint
+            .service
+            .urls
+            .iter()
+            .chain(std::iter::once(&"".to_string()))
+        {
+            let endpoint_test_uri = format!(
+                "{}/{}",
+                prefix.trim_end_matches("/"),
+                endpoint.data.uri.trim_start_matches("/")
+            );
+            let score = levenshtein(&endpoint_test_uri, &restcall.data.target_uri);
+            lowest_score = min(lowest_score, score);
+        }
+
+        lowest_score
+    }
+
+    fn create_endpoint_restcall_pairs(
+        &self,
+        endpoints: Vec<AssignedEndpoint>,
+        restcalls: Vec<AssignedRestCall>,
+    ) -> Vec<(AssignedRestCall, AssignedEndpoint)> {
+        let mut restcall_endpoint: Vec<(AssignedRestCall, AssignedEndpoint)> = Vec::new();
+        for restcall in restcalls {
+            let mut matched_endpoint: Option<&AssignedEndpoint> = None;
+            let mut min_dist = usize::MAX;
+            let mut length_of_longest_str = 0;
+            let mut was_matched_exactly = false;
+            for endpoint in &endpoints {
+                if endpoint.data.http_method != restcall.data.http_method
+                    || endpoint.service.name == restcall.service.name
                 {
                     continue;
                 }
+                if self.exact_match(endpoint, &restcall) {
+                    matched_endpoint = Some(&endpoint);
+                    was_matched_exactly = true;
+                    break;
+                }
 
-                let cur_dist = levenshtein(&endpoint.uri, &restcall.target_uri) as i32;
+                let cur_dist = self.get_levenshtein_distance(&endpoint, &restcall);
                 if cur_dist < min_dist {
                     min_dist = cur_dist;
-                    matched_endpoint = Some(endpoint);
+                    matched_endpoint = Some(&endpoint);
                     length_of_longest_str =
-                        std::cmp::max(endpoint.uri.len(), restcall.target_uri.len());
+                        std::cmp::max(endpoint.data.uri.len(), restcall.data.target_uri.len());
                 }
             }
 
             if let Some(endpoint) = matched_endpoint {
                 let percent = length_of_longest_str as f32 * Self::DISSIMILARITY_PERCENT;
-                if percent > min_dist as f32 {
-                    restcall_endpoint.insert(restcall.clone(), endpoint);
+                if percent > min_dist as f32 || was_matched_exactly {
+                    restcall_endpoint.push((restcall, endpoint.to_owned()));
                 }
             }
         }

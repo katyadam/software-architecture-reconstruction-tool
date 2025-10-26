@@ -15,7 +15,7 @@ use crate::extraction::{
     restcalls::{evaluator::evaluate_restcalls, extractor::RestcallsExtractor},
 };
 
-pub async fn parse(code: &str, file_name: &str, service_name: &str) -> CodeElementsAggregate {
+pub async fn parse(code: &str, file_name: &str) -> CodeElementsAggregate {
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_python::LANGUAGE.into())
@@ -24,12 +24,10 @@ pub async fn parse(code: &str, file_name: &str, service_name: &str) -> CodeEleme
     let tree = parser.parse(code, None).expect("Error parsing code");
     let owned_code = code.to_owned();
     let owned_file_name = file_name.to_owned();
-    let owned_service_name = service_name.to_owned();
 
     let tree_arc = Arc::new(tree);
     let code_arc = Arc::new(owned_code);
     let file_name_arc = Arc::new(owned_file_name);
-    let service_name_arc = Arc::new(owned_service_name);
 
     // Running parsing function in parallel
     let assignments_handle = task::spawn_blocking({
@@ -47,11 +45,10 @@ pub async fn parse(code: &str, file_name: &str, service_name: &str) -> CodeEleme
     let endpoints_handle = task::spawn_blocking({
         let tree = Arc::clone(&tree_arc);
         let code = Arc::clone(&code_arc);
-        let service_name = Arc::clone(&service_name_arc);
+        let file_name = Arc::clone(&file_name_arc);
         move || {
             EndpointsExtractor.extract(
-                ExtractParams::new(&Arc::clone(&tree), &Arc::clone(&code))
-                    .service_name(&service_name),
+                ExtractParams::new(&Arc::clone(&tree), &Arc::clone(&code)).file_name(&file_name),
             )
         }
     });
@@ -59,11 +56,10 @@ pub async fn parse(code: &str, file_name: &str, service_name: &str) -> CodeEleme
     let restcalls_handle = task::spawn_blocking({
         let tree = Arc::clone(&tree_arc);
         let code = Arc::clone(&code_arc);
-        let service_name = Arc::clone(&service_name_arc);
+        let file_name = Arc::clone(&file_name_arc);
         move || {
             RestcallsExtractor.extract(
-                ExtractParams::new(&Arc::clone(&tree), &Arc::clone(&code))
-                    .service_name(&service_name),
+                ExtractParams::new(&Arc::clone(&tree), &Arc::clone(&code)).file_name(&file_name),
             )
         }
     });
@@ -72,12 +68,9 @@ pub async fn parse(code: &str, file_name: &str, service_name: &str) -> CodeEleme
         let tree = Arc::clone(&tree_arc);
         let code = Arc::clone(&code_arc);
         let file_name = Arc::clone(&file_name_arc);
-        let service_name = Arc::clone(&service_name_arc);
         move || {
             EntitiesExtractor.extract(
-                ExtractParams::new(&Arc::clone(&tree), &Arc::clone(&code))
-                    .file_name(&file_name)
-                    .service_name(&service_name),
+                ExtractParams::new(&Arc::clone(&tree), &Arc::clone(&code)).file_name(&file_name),
             )
         }
     });

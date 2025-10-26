@@ -1,5 +1,4 @@
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use uuid::Uuid;
 
 #[allow(dead_code)]
@@ -24,26 +23,6 @@ impl PostFileRecord {
             file_size,
         }
     }
-}
-
-#[allow(dead_code)]
-#[derive(Deserialize)]
-pub struct ConfigurationDto {
-    pub configuration_uuid: Uuid,
-    pub project_uuid: Uuid,
-    pub configuration_data: ConfigurationDataDto,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Deserialize)]
-pub struct ConfigurationDataDto {
-    pub services: Vec<ServiceDto>,
-}
-
-#[derive(Deserialize)]
-pub struct ServiceDto {
-    pub name: String,
-    pub path: String,
 }
 
 #[derive(Serialize)]

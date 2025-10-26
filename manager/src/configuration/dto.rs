@@ -1,3 +1,4 @@
+use models::ConfigurationData;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -10,25 +11,9 @@ pub struct PostConfiguration {
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct UpdateConfiguration {
-    pub new_configuration_data: ConfigurationData,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ConfigurationResponse {
     pub configuration_uuid: Uuid,
     pub project_uuid: Uuid,
     pub configuration_data: ConfigurationData,
     pub created_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct ConfigurationData {
-    services: Vec<Service>,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-struct Service {
-    name: String,
-    path: String,
 }

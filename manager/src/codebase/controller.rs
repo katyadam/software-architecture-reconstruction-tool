@@ -8,7 +8,7 @@ use crate::{
         model::NewCodebase,
         service::CodebaseService,
     },
-    configuration::model::Configuration,
+    configuration::model::DbConfiguration,
     errors::api::ApiError,
 };
 
@@ -70,7 +70,7 @@ pub async fn get_codebase_configuration(
     codebase_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
-    let configuration: Configuration =
+    let configuration: DbConfiguration =
         codebase_service.get_codebase_configuration(codebase_uuid)?;
 
     Ok(HttpResponse::Ok().json(configuration.to_response().unwrap()))

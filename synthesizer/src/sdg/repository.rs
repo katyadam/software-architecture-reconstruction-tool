@@ -2,19 +2,20 @@ use std::sync::Arc;
 
 use log::warn;
 use neo4rs::{BoltType, Graph, query};
+use uuid::Uuid;
 
 use crate::{
     errors::database::DatabaseError,
     sdg::{
-        model::{Connection, SDG, Service},
+        model::types::{Connection, SDG, Service},
         queries::{CREATE_SDG, DELETE_SDG, GET_SDG},
     },
 };
 
 pub trait SdgRepository {
-    async fn get_single(&self, codebase_uuid: &str) -> Result<SDG, DatabaseError>;
-    async fn save(&self, sdg: &SDG, codebase_uuid: &str) -> Result<(), DatabaseError>;
-    async fn delete(&self, codebase_uuid: &str) -> Result<(), DatabaseError>;
+    async fn get_single(&self, codebase_uuid: Uuid) -> Result<SDG, DatabaseError>;
+    async fn save(&self, sdg: &SDG, codebase_uuid: Uuid) -> Result<(), DatabaseError>;
+    async fn delete(&self, codebase_uuid: Uuid) -> Result<(), DatabaseError>;
 }
 
 pub struct SdgRepositoryImpl {
@@ -28,10 +29,10 @@ impl SdgRepositoryImpl {
 }
 
 impl SdgRepository for SdgRepositoryImpl {
-    async fn get_single(&self, codebase_uuid: &str) -> Result<SDG, DatabaseError> {
+    async fn get_single(&self, codebase_uuid: Uuid) -> Result<SDG, DatabaseError> {
         let mut result = self
             .graph_handle
-            .execute(query(GET_SDG).param("codebase_uuid", codebase_uuid))
+            .execute(query(GET_SDG).param("codebase_uuid", codebase_uuid.to_string()))
             .await?;
 
         let mut sdg = SDG {
@@ -68,21 +69,21 @@ impl SdgRepository for SdgRepositoryImpl {
         Ok(sdg)
     }
 
-    async fn save(&self, sdg: &SDG, codebase_uuid: &str) -> Result<(), DatabaseError> {
+    async fn save(&self, sdg: &SDG, codebase_uuid: Uuid) -> Result<(), DatabaseError> {
         self.graph_handle
             .run(
                 query(CREATE_SDG)
                     .param("services", sdg.services.clone())
                     .param("connections", sdg.connections.clone())
-                    .param("codebase_uuid", codebase_uuid),
+                    .param("codebase_uuid", codebase_uuid.to_string()),
             )
             .await?;
         Ok(())
     }
 
-    async fn delete(&self, codebase_uuid: &str) -> Result<(), DatabaseError> {
+    async fn delete(&self, codebase_uuid: Uuid) -> Result<(), DatabaseError> {
         self.graph_handle
-            .run(query(DELETE_SDG).param("codebase_uuid", codebase_uuid))
+            .run(query(DELETE_SDG).param("codebase_uuid", codebase_uuid.to_string()))
             .await?;
         Ok(())
     }
