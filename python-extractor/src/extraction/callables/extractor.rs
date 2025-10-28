@@ -44,12 +44,18 @@ impl Extractor<Callable> for CallablesExtractor {
             let mut is_async = false;
             let mut hash = String::new();
             let mut class_name: Option<String> = None;
+            let mut is_constructor = false;
             m.captures.into_iter().for_each(|capture| {
                 let capture_text =
                     &params.code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
                 let value = String::from_utf8_lossy(capture_text).to_string();
                 match query.capture_names()[capture.index as usize] {
-                    "function.name" => name = value,
+                    "function.name" => {
+                        name = value;
+                        if name.starts_with("__init__") {
+                            is_constructor = true;
+                        }
+                    }
                     "function.params" => {
                         parameters.extend(parse_parameters(&value));
                     }
@@ -71,10 +77,10 @@ impl Extractor<Callable> for CallablesExtractor {
                 }
             });
 
-            if seen.contains(&name) {
+            if seen.contains(&hash) {
                 continue;
             }
-            seen.insert(name.clone());
+            seen.insert(hash.clone());
 
             let namespace = if let Some(c_name) = class_name {
                 Namespace::Class(c_name)
@@ -84,11 +90,12 @@ impl Extractor<Callable> for CallablesExtractor {
 
             let new_callable = Callable {
                 signature: get_signature(&namespace, &name, &parameters),
-                namespace: namespace,
-                parameters: parameters,
-                return_type: return_type,
-                is_async: is_async,
-                hash: hash,
+                namespace,
+                parameters,
+                return_type,
+                is_async,
+                is_constructor,
+                hash,
             };
 
             callables.push(new_callable);
