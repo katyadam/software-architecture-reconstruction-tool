@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{
     errors::database::DatabaseError,
     sdg::{
-        model::types::{Connection, SDG, Service},
+        model::{Connection, SDG, Service},
         queries::{CREATE_SDG, DELETE_SDG, GET_SDG},
     },
 };

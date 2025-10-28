@@ -7,7 +7,7 @@ use crate::{
     errors::api::ApiError,
     sdg::{
         dto::{GetSDGErrorReponse, PostSDG, PostSDGErrorResponse},
-        model::types::SDG,
+        model::SDG,
         service::{SdgService, SdgServiceImpl},
     },
 };

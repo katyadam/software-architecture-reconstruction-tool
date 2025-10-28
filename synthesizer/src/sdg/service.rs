@@ -6,7 +6,7 @@ use crate::{
     sdg::{
         builder::{SdgBuilder, SdgBuilderImpl},
         dto::PostSDG,
-        model::types::SDG,
+        model::SDG,
         repository::{SdgRepository, SdgRepositoryImpl},
     },
 };

@@ -5,7 +5,7 @@ use strsim::levenshtein;
 
 use crate::{
     errors::builder::BuilderError,
-    sdg::model::types::{AssignedEndpoint, AssignedRestCall, Connection, Request, SDG, Service},
+    sdg::model::{AssignedEndpoint, AssignedRestCall, Connection, Request, SDG, Service},
 };
 
 pub trait SdgBuilder {

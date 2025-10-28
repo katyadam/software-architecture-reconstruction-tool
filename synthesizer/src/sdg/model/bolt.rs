@@ -2,7 +2,7 @@ use models::{Endpoint, RestCall};
 use neo4rs::{BoltList, BoltMap, BoltNode, BoltString, BoltType, DeError};
 use serde::de::Unexpected;
 
-use crate::sdg::model::types::{Connection, Request, Service};
+use crate::sdg::model::{Connection, Request, Service};
 
 impl Into<BoltType> for Service {
     fn into(self) -> BoltType {
