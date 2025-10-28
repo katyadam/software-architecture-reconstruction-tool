@@ -174,6 +174,7 @@ pub const ENTITIES_QUERY: &str = r#"
 "#;
 
 pub const CALLABLES_QUERY: &str = r#"
+[
 ;; Case 1: Function inside a class (same as before)
 (
   (class_definition
@@ -200,6 +201,7 @@ pub const CALLABLES_QUERY: &str = r#"
     body: (block) @function.body
   ) @function
 )
+  ]
 "#;
 
 pub const CALL_QUERY: &str = r#"
