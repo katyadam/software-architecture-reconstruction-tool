@@ -1,8 +1,10 @@
 use std::fmt::{self, Display};
 
-use serde::{Deserialize, Serialize};
+use neo4rs::{BoltList, BoltMap, BoltNode, BoltString, BoltType, DeError};
+use serde::{Deserialize, Serialize, de::Unexpected};
+use utoipa::ToSchema;
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Parameter {
     pub name: String,
     pub datatype: Option<String>,
@@ -23,7 +25,7 @@ impl fmt::Display for Parameter {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Namespace {
     Class(String),
     Module(String),
@@ -38,7 +40,7 @@ impl Namespace {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Callable {
     pub signature: String,
     pub namespace: Namespace,
@@ -82,5 +84,105 @@ impl Display for Callable {
             self.return_type.clone().unwrap_or_else(|| "void".into()),
             self.hash,
         )
+    }
+}
+
+impl Into<BoltType> for Callable {
+    fn into(self) -> BoltType {
+        let mut map = BoltMap::new();
+        map.put("signature".into(), self.signature.into());
+        map.put("return_type".into(), self.return_type.into());
+        map.put("is_async".into(), self.is_async.into());
+        map.put("is_constructor".into(), self.is_constructor.into());
+        map.put("hash".into(), self.hash.into());
+
+        let namespace_json = serde_json::to_string(&self.namespace).unwrap();
+        map.put("namespace".into(), namespace_json.into());
+
+        let parameters_list: BoltType = BoltType::List(BoltList {
+            value: self
+                .parameters
+                .into_iter()
+                .map(|parameter| {
+                    let json = serde_json::to_string(&parameter).unwrap();
+                    BoltType::String(BoltString::new(&json))
+                })
+                .collect(),
+        });
+        map.put("parameters".into(), parameters_list);
+
+        BoltType::Map(map)
+    }
+}
+
+impl TryFrom<BoltNode> for Callable {
+    type Error = DeError;
+
+    fn try_from(node: BoltNode) -> Result<Self, Self::Error> {
+        let signature = match node.get("id") {
+            Ok(BoltType::String(s)) => s.value,
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
+        let return_type = match node.get("return_type") {
+            Ok(BoltType::String(s)) => s.value,
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
+        let is_async = match node.get("is_async") {
+            Ok(BoltType::Boolean(b)) => b.value,
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
+        let is_constructor = match node.get("is_constructor") {
+            Ok(BoltType::Boolean(b)) => b.value,
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
+        let hash = match node.get("hash") {
+            Ok(BoltType::String(s)) => s.value,
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
+        let namespace: Namespace = match node.get("namespace") {
+            Ok(BoltType::String(s)) => serde_json::from_str(&s.value).unwrap(),
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
+        let parameters = match node.get("parameters") {
+            Ok(BoltType::List(l)) => l
+                .value
+                .into_iter()
+                .map(|field| match field {
+                    BoltType::String(json_field) => Ok(serde_json::from_str(
+                        json_field.value.as_str(),
+                    )
+                    .unwrap_or(Parameter {
+                        name: "Undeserialized".to_string(),
+                        datatype: None,
+                        initial_value: None,
+                    })),
+                    _ => Err(DeError::InvalidType {
+                        received: Unexpected::Other("Non BoltString type").into(),
+                        expected: "BoltString".to_string(),
+                    }),
+                })
+                .collect::<Result<Vec<Parameter>, DeError>>()?,
+            _ => {
+                return Err(DeError::Other(
+                    "Parameters argument not present in Callable".to_string(),
+                ));
+            }
+        };
+
+        Ok(Callable {
+            signature,
+            namespace,
+            parameters,
+            return_type: Some(return_type),
+            is_async,
+            is_constructor,
+            hash,
+        })
     }
 }

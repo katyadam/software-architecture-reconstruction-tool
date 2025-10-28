@@ -113,9 +113,9 @@ impl TryFrom<BoltNode> for Entity {
             _ => return Err(DeError::NoSuchProperty),
         };
         Ok(Entity {
-            signature: signature,
-            name: name,
-            superclasses: superclasses,
+            signature,
+            name,
+            superclasses,
             fields,
             file_path,
         })
