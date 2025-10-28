@@ -1,0 +1,50 @@
+use uuid::Uuid;
+
+use crate::{
+    connectors::manager_connector::ManagerConnector,
+    errors::service::ServiceError,
+    imcg::{
+        construction::builder::ImcgBuilderImpl, dto::PostIMCG, model::IMCG,
+        repository::ImcgRepositoryImpl,
+    },
+};
+
+pub trait ImcgService {
+    async fn save(&self, imcg_payload: PostIMCG) -> Result<IMCG, ServiceError>;
+    async fn get_single(&self, codebase_uuid: Uuid) -> Result<IMCG, ServiceError>;
+    async fn delete(&self, codebase_uuid: Uuid) -> Result<(), ServiceError>;
+}
+
+pub struct ImcgServiceImpl {
+    repository: ImcgRepositoryImpl,
+    builder: ImcgBuilderImpl,
+    manager_connector: ManagerConnector,
+}
+
+impl ImcgServiceImpl {
+    pub fn new(
+        repository: ImcgRepositoryImpl,
+        builder: ImcgBuilderImpl,
+        manager_connector: ManagerConnector,
+    ) -> Self {
+        Self {
+            repository,
+            builder,
+            manager_connector,
+        }
+    }
+}
+
+impl ImcgService for ImcgServiceImpl {
+    async fn save(&self, imcg_payload: PostIMCG) -> Result<IMCG, ServiceError> {
+        todo!();
+    }
+
+    async fn get_single(&self, codebase_uuid: Uuid) -> Result<IMCG, ServiceError> {
+        todo!();
+    }
+
+    async fn delete(&self, codebase_uuid: Uuid) -> Result<(), ServiceError> {
+        todo!();
+    }
+}

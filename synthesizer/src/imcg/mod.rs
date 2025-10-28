@@ -1,3 +1,4 @@
+pub mod construction;
 pub mod controller;
 pub mod dto;
 pub mod health;
