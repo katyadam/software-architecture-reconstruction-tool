@@ -1,3 +1,5 @@
+use std::fmt::{self, Display};
+
 // Differentiating between original and used naming, due to aliasing.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Import {
@@ -22,5 +24,15 @@ impl Import {
             name_alias: name_alias.to_string(),
             codeword: codeword.to_string(),
         }
+    }
+}
+
+impl Display for Import {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}.{} ({}.{}) Using: {}",
+            self.orig_module, self.orig_name, self.module_alias, self.name_alias, self.codeword
+        )
     }
 }

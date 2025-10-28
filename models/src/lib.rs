@@ -11,8 +11,8 @@ pub mod restcalls;
 
 pub use api::CodeElementsAggregate;
 pub use assignments::{Assignment, AssignmentKey, Scope};
-pub use callables::{Argument, Callable, Namespace, Parameter};
-pub use calls::CallStatement;
+pub use callables::{Callable, Namespace, Parameter};
+pub use calls::{Argument, CallStatement};
 pub use common::HttpMethod;
 pub use configuration::ConfigurationData;
 pub use endpoints::Endpoint;
