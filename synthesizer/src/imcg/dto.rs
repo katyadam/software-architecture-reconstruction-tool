@@ -2,6 +2,8 @@ use models::{CallStatement, Callable, Import};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+use crate::imcg::model::IMCG;
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PostIMCG {
     #[schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
@@ -47,4 +49,20 @@ pub struct PostIMCG {
         }
     ]))]
     pub imports: Vec<Import>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema, Debug)]
+pub struct PostIMCGErrorResponse {
+    #[schema(example = "IMCG created but not saved.")]
+    pub warning: String,
+    #[schema(example = "Some Error occured.")]
+    pub error: String,
+
+    pub imcg: IMCG,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct GetIMCGErrorReponse {
+    #[schema(example = "Some Error occured.")]
+    pub error: String,
 }

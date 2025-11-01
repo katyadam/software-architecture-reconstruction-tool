@@ -1,7 +1,6 @@
 use uuid::Uuid;
 
 use crate::{
-    connectors::manager_connector::ManagerConnector,
     errors::service::ServiceError,
     imcg::{
         construction::builder::{ImcgBuilder, ImcgBuilderImpl},

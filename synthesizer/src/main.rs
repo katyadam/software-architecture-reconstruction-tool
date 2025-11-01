@@ -19,7 +19,10 @@ use crate::{
     },
     db_setup::{setup_contextmap_db, setup_imcg_db, setup_sdg_db},
     imcg::{
-        construction::builder::ImcgBuilderImpl, repository::ImcgRepositoryImpl,
+        construction::builder::ImcgBuilderImpl,
+        dto::{GetIMCGErrorReponse, PostIMCGErrorResponse},
+        model::IMCG,
+        repository::ImcgRepositoryImpl,
         service::ImcgServiceImpl,
     },
     s3::{client::S3Client, service::S3Service},
@@ -53,7 +56,10 @@ mod tests;
         contextmap::controller::delete_context_map,
         sdg::controller::create_sdg,
         sdg::controller::get_sdg,
-        sdg::controller::delete_sdg
+        sdg::controller::delete_sdg,
+        imcg::controller::create_imcg,
+        imcg::controller::get_imcg,
+        imcg::controller::delete_imcg
     ),
     components(schemas(
         PostContextMap,
@@ -62,6 +68,9 @@ mod tests;
         SDG,
         PostSDGErrorResponse,
         GetSDGErrorReponse,
+        IMCG,
+        PostIMCGErrorResponse,
+        GetIMCGErrorReponse
     ))
 )]
 struct ApiDoc;
@@ -88,7 +97,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         let cm_service = Arc::new(get_cm_service(cm_graph.clone()));
         let sdg_service = Arc::new(get_sdg_service(sdg_graph.clone(), &manager_url));
-        let imcg_service = Arc::new(get_imcg_service(imcg_graph.clone(), &manager_url));
+        let imcg_service = Arc::new(get_imcg_service(imcg_graph.clone()));
         // Clone Arcs to pass them where needed
         let s3_service = Arc::new(S3Service::new(
             get_s3_client(),
@@ -112,6 +121,11 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/sdgs")
                     .app_data(web::Data::new(sdg_service))
                     .configure(sdg::configure),
+            )
+            .service(
+                web::scope("/imcgs")
+                    .app_data(web::Data::new(imcg_service))
+                    .configure(imcg::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")
@@ -138,7 +152,7 @@ fn get_sdg_service(graph: Arc<Graph>, manager_url: &str) -> SdgServiceImpl {
     SdgServiceImpl::new(sdg_repository, sdg_builder, manager_connector)
 }
 
-fn get_imcg_service(graph: Arc<Graph>, manager_url: &str) -> ImcgServiceImpl {
+fn get_imcg_service(graph: Arc<Graph>) -> ImcgServiceImpl {
     let imcg_repository = ImcgRepositoryImpl::new(graph);
     let imcg_builder = ImcgBuilderImpl::new();
     ImcgServiceImpl::new(imcg_repository, imcg_builder)

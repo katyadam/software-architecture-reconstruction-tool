@@ -1,9 +1,6 @@
-use models::{CallStatement, Callable, ConfigurationData, Import};
+use models::{CallStatement, Callable, Import};
 
-use crate::{
-    errors::builder::BuilderError,
-    imcg::model::{Call, IMCG},
-};
+use crate::{errors::builder::BuilderError, imcg::model::IMCG};
 
 pub trait ImcgBuilder {
     fn build(
