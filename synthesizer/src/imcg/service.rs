@@ -4,8 +4,10 @@ use crate::{
     connectors::manager_connector::ManagerConnector,
     errors::service::ServiceError,
     imcg::{
-        construction::builder::ImcgBuilderImpl, dto::PostIMCG, model::IMCG,
-        repository::ImcgRepositoryImpl,
+        construction::builder::{ImcgBuilder, ImcgBuilderImpl},
+        dto::PostIMCG,
+        model::IMCG,
+        repository::{ImcgRepository, ImcgRepositoryImpl},
     },
 };
 
@@ -18,33 +20,39 @@ pub trait ImcgService {
 pub struct ImcgServiceImpl {
     repository: ImcgRepositoryImpl,
     builder: ImcgBuilderImpl,
-    manager_connector: ManagerConnector,
 }
 
 impl ImcgServiceImpl {
-    pub fn new(
-        repository: ImcgRepositoryImpl,
-        builder: ImcgBuilderImpl,
-        manager_connector: ManagerConnector,
-    ) -> Self {
+    pub fn new(repository: ImcgRepositoryImpl, builder: ImcgBuilderImpl) -> Self {
         Self {
             repository,
             builder,
-            manager_connector,
         }
     }
 }
 
 impl ImcgService for ImcgServiceImpl {
     async fn save(&self, imcg_payload: PostIMCG) -> Result<IMCG, ServiceError> {
-        todo!();
+        let imcg: IMCG = self.builder.build(
+            imcg_payload.callables,
+            imcg_payload.call_statements,
+            imcg_payload.imports,
+        )?;
+
+        self.repository
+            .save(&imcg, imcg_payload.codebase_uuid)
+            .await?;
+
+        Ok(imcg)
     }
 
     async fn get_single(&self, codebase_uuid: Uuid) -> Result<IMCG, ServiceError> {
-        todo!();
+        let imcg = self.repository.get_single(codebase_uuid).await?;
+        Ok(imcg)
     }
 
     async fn delete(&self, codebase_uuid: Uuid) -> Result<(), ServiceError> {
-        todo!();
+        self.repository.delete(codebase_uuid).await?;
+        Ok(())
     }
 }

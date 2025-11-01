@@ -141,9 +141,7 @@ fn get_sdg_service(graph: Arc<Graph>, manager_url: &str) -> SdgServiceImpl {
 fn get_imcg_service(graph: Arc<Graph>, manager_url: &str) -> ImcgServiceImpl {
     let imcg_repository = ImcgRepositoryImpl::new(graph);
     let imcg_builder = ImcgBuilderImpl::new();
-    let manager_connector =
-        ManagerConnector::new(HttpClient::new(manager_url.to_owned(), Client::default()));
-    ImcgServiceImpl::new(imcg_repository, imcg_builder, manager_connector)
+    ImcgServiceImpl::new(imcg_repository, imcg_builder)
 }
 
 fn get_s3_client() -> S3Client {
