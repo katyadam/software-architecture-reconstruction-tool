@@ -8,11 +8,11 @@ mod bolt;
 
 #[derive(ToSchema, Debug, Serialize, Deserialize)]
 pub struct IMCG {
-    callables: Vec<Callable>,
-    calls: Vec<Call>,
+    pub callables: Vec<Callable>,
+    pub calls: Vec<Call>,
 }
 
-#[derive(ToSchema, Debug, Serialize, Deserialize)]
+#[derive(ToSchema, Debug, Serialize, Deserialize, Clone)]
 pub struct Call {
     source_id: String,
     target_id: String,

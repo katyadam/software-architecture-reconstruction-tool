@@ -21,7 +21,6 @@ use crate::{
     },
 };
 use futures::stream::{self, StreamExt};
-use models::imports;
 
 pub struct S3Service {
     s3_client: S3Client,
@@ -64,7 +63,6 @@ impl S3Service {
             })
             .await?;
 
-        // TODO: Implement IMCG creation
         self.imcg_service
             .save(PostIMCG {
                 codebase_uuid: dto.codebase_uuid,

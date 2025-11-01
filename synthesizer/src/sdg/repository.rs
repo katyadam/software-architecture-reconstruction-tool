@@ -47,11 +47,11 @@ impl SdgRepository for SdgRepositoryImpl {
             for bolt_service in services_bolt_type {
                 if let BoltType::Node(node) = bolt_service {
                     match Service::try_from(node) {
-                        Ok(entity) => sdg.services.push(entity),
-                        Err(e) => warn!("Failed to deserialize Entity: {:?}", e),
+                        Ok(service) => sdg.services.push(service),
+                        Err(e) => warn!("Failed to deserialize Service: {:?}", e),
                     }
                 } else {
-                    warn!("Unexpected BoltType for entity: {:?}", bolt_service);
+                    warn!("Unexpected BoltType for service: {:?}", bolt_service);
                 }
             }
 

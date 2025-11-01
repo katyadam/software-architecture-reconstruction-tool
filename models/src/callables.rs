@@ -4,7 +4,7 @@ use neo4rs::{BoltList, BoltMap, BoltNode, BoltString, BoltType, DeError};
 use serde::{Deserialize, Serialize, de::Unexpected};
 use utoipa::ToSchema;
 
-#[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct Parameter {
     pub name: String,
     pub datatype: Option<String>,
@@ -25,7 +25,7 @@ impl fmt::Display for Parameter {
     }
 }
 
-#[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub enum Namespace {
     Class(String),
     Module(String),
@@ -40,7 +40,7 @@ impl Namespace {
     }
 }
 
-#[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct Callable {
     pub signature: String,
     pub namespace: Namespace,
