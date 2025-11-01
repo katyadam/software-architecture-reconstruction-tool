@@ -1,7 +1,10 @@
 use std::fmt::{self, Display};
 
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+
 // Differentiating between original and used naming, due to aliasing.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Import {
     pub orig_module: String,
     pub orig_name: String,
@@ -9,6 +12,7 @@ pub struct Import {
     pub name_alias: String,
     pub codeword: String,
 }
+
 impl Import {
     pub fn from_parts(
         orig_module: &str,

@@ -6,6 +6,10 @@ use crate::{
         service::{ContextMapService, ContextMapServiceImpl},
     },
     errors::s3::{S3ClientError, S3ServiceError},
+    imcg::{
+        dto::PostIMCG,
+        service::{ImcgService, ImcgServiceImpl},
+    },
     s3::{
         client::S3Client,
         dto::PostViews,
@@ -17,11 +21,13 @@ use crate::{
     },
 };
 use futures::stream::{self, StreamExt};
+use models::imports;
 
 pub struct S3Service {
     s3_client: S3Client,
     context_map_service: Arc<ContextMapServiceImpl>,
     sdg_service: Arc<SdgServiceImpl>,
+    imcg_service: Arc<ImcgServiceImpl>,
 }
 
 impl S3Service {
@@ -29,18 +35,20 @@ impl S3Service {
         s3_client: S3Client,
         context_map_service: Arc<ContextMapServiceImpl>,
         sdg_service: Arc<SdgServiceImpl>,
+        imcg_service: Arc<ImcgServiceImpl>,
     ) -> Self {
         Self {
             s3_client,
             context_map_service,
             sdg_service,
+            imcg_service,
         }
     }
 
     pub async fn save_views(&self, dto: PostViews) -> Result<(), S3ServiceError> {
         let loaded_cm_elements = self.load_context_map_elements(&dto.base_dir_path).await?;
         let loaded_sdg_elements = self.load_sdg_elements(&dto.base_dir_path).await?;
-        // let loaded_imcg_elements = self.load_imcg_elements(&dto.base_dir_path).await?;
+        let loaded_imcg_elements = self.load_imcg_elements(&dto.base_dir_path).await?;
         self.context_map_service
             .save(PostContextMap {
                 codebase_uuid: dto.codebase_uuid.clone(),
@@ -50,14 +58,21 @@ impl S3Service {
 
         self.sdg_service
             .save(PostSDG {
-                codebase_uuid: dto.codebase_uuid,
+                codebase_uuid: dto.codebase_uuid.clone(),
                 endpoints: loaded_sdg_elements.endpoints,
                 restcalls: loaded_sdg_elements.restcalls,
             })
             .await?;
 
         // TODO: Implement IMCG creation
-
+        self.imcg_service
+            .save(PostIMCG {
+                codebase_uuid: dto.codebase_uuid,
+                callables: loaded_imcg_elements.callables,
+                call_statements: loaded_imcg_elements.calls,
+                imports: loaded_imcg_elements.imports,
+            })
+            .await?;
         Ok(())
     }
 
@@ -123,7 +138,6 @@ impl S3Service {
         .await
     }
 
-    #[allow(dead_code)]
     pub async fn load_imcg_elements(
         &self,
         base_dir_path: &str,
@@ -132,16 +146,17 @@ impl S3Service {
         self.load_and_merge_chunks::<S3ImcgCodeElements, _, S3ImcgCodeElements>(
             &index_path,
             |chunks| {
-                let (callables, calls) = chunks.into_iter().fold(
-                    (Vec::new(), Vec::new()),
-                    |(mut callables_aggr, mut calls_aggr), chunk| {
+                let (callables, calls, imports) = chunks.into_iter().fold(
+                    (Vec::new(), Vec::new(), Vec::new()),
+                    |(mut callables_aggr, mut calls_aggr, mut imports_aggr), chunk| {
                         callables_aggr.extend(chunk.callables);
                         calls_aggr.extend(chunk.calls);
+                        imports_aggr.extend(chunk.imports);
 
-                        (callables_aggr, calls_aggr)
+                        (callables_aggr, calls_aggr, imports_aggr)
                     },
                 );
-                S3ImcgCodeElements::new(callables, calls)
+                S3ImcgCodeElements::new(callables, calls, imports)
             },
         )
         .await

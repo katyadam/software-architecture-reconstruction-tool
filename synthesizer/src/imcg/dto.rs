@@ -1,4 +1,4 @@
-use models::{CallStatement, Callable};
+use models::{CallStatement, Callable, Import};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -36,4 +36,15 @@ pub struct PostIMCG {
         }
     ]))]
     pub call_statements: Vec<CallStatement>,
+
+    #[schema(example = json!([
+        {
+            "orig_module": "os.path",
+            "orig_name": "join",
+            "module_alias": "os_path",
+            "name_alias": "join_path",
+            "codeword": "import_statement_1"
+        }
+    ]))]
+    pub imports: Vec<Import>,
 }
