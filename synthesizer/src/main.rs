@@ -18,6 +18,10 @@ use crate::{
         service::ContextMapServiceImpl,
     },
     db_setup::{setup_contextmap_db, setup_imcg_db, setup_sdg_db},
+    imcg::{
+        construction::builder::ImcgBuilderImpl, repository::ImcgRepositoryImpl,
+        service::ImcgServiceImpl,
+    },
     s3::{client::S3Client, service::S3Service},
     sdg::{
         builder::SdgBuilderImpl,
@@ -79,17 +83,18 @@ async fn main() -> std::io::Result<()> {
 
     let cm_graph = setup_contextmap_db().await;
     let sdg_graph = setup_sdg_db().await;
-    let _imcg_graph = setup_imcg_db().await;
+    let imcg_graph = setup_imcg_db().await;
 
     HttpServer::new(move || {
         let cm_service = Arc::new(get_cm_service(cm_graph.clone()));
         let sdg_service = Arc::new(get_sdg_service(sdg_graph.clone(), &manager_url));
-
+        let imcg_service = Arc::new(get_imcg_service(imcg_graph.clone(), &manager_url));
         // Clone Arcs to pass them where needed
         let s3_service = Arc::new(S3Service::new(
             get_s3_client(),
             Arc::clone(&cm_service),
             Arc::clone(&sdg_service),
+            Arc::clone(&imcg_service),
         ));
         App::new()
             .wrap(Logger::default())
@@ -131,6 +136,14 @@ fn get_sdg_service(graph: Arc<Graph>, manager_url: &str) -> SdgServiceImpl {
     let manager_connector =
         ManagerConnector::new(HttpClient::new(manager_url.to_owned(), Client::default()));
     SdgServiceImpl::new(sdg_repository, sdg_builder, manager_connector)
+}
+
+fn get_imcg_service(graph: Arc<Graph>, manager_url: &str) -> ImcgServiceImpl {
+    let imcg_repository = ImcgRepositoryImpl::new(graph);
+    let imcg_builder = ImcgBuilderImpl::new();
+    let manager_connector =
+        ManagerConnector::new(HttpClient::new(manager_url.to_owned(), Client::default()));
+    ImcgServiceImpl::new(imcg_repository, imcg_builder, manager_connector)
 }
 
 fn get_s3_client() -> S3Client {
