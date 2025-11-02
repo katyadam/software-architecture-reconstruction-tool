@@ -15,7 +15,11 @@ pub struct PostSDG {
             "function_name": "read_items",
             "http_method": "GET",
             "parameters": [
-                "skip", "limit", "q"
+                {
+                    "name": "skip",
+                    "datatype": "int",
+                    "initial_value": "0"
+                }
             ],
             "service_name": "ItemService",
             "uri": "/items/"
