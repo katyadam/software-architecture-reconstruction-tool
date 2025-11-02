@@ -3,7 +3,7 @@ use python_extractor::{
         endpoints::extractor::EndpointsExtractor,
         extractor::{ExtractParams, Extractor},
     },
-    s, strs,
+    s,
     utils::load_file,
 };
 
