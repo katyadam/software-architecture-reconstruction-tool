@@ -1,4 +1,4 @@
-use models::{CallStatement, Callable, Import};
+use models::{CallStatement, Callable, Import, configuration::ServiceDescription};
 
 use crate::{errors::builder::BuilderError, imcg::model::IMCG};
 
@@ -8,6 +8,7 @@ pub trait ImcgBuilder {
         callables: Vec<Callable>,
         call_statements: Vec<CallStatement>,
         imports: Vec<Import>,
+        service_descriptions: Vec<ServiceDescription>,
     ) -> Result<IMCG, BuilderError>;
 }
 
@@ -25,6 +26,7 @@ impl ImcgBuilder for ImcgBuilderImpl {
         callables: Vec<Callable>,
         call_statements: Vec<CallStatement>,
         imports: Vec<Import>,
+        service_descriptions: Vec<ServiceDescription>,
     ) -> Result<IMCG, BuilderError> {
         todo!()
     }
