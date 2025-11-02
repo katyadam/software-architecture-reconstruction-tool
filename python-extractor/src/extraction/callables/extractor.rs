@@ -17,12 +17,12 @@ pub fn get_callable_header(parameters: &Vec<Parameter>) -> String {
 }
 
 pub fn get_signature(namespace: &Namespace, name: &String, parameters: &Vec<Parameter>) -> String {
-    return format!(
+    format!(
         "{}/{}{}",
         namespace.get_signature(),
         name,
         get_callable_header(parameters)
-    );
+    )
 }
 
 pub struct CallablesExtractor;
@@ -96,6 +96,7 @@ impl Extractor<Callable> for CallablesExtractor {
                 is_async,
                 is_constructor,
                 hash,
+                file_path: params.file_name.unwrap_or_default().to_string(),
             };
 
             callables.push(new_callable);

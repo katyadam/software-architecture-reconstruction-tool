@@ -1,15 +1,31 @@
+use log::debug;
 use models::Argument;
 use tree_sitter::Node;
 
 pub fn extract_param_names(params_node: Node, code: &str) -> Vec<String> {
     let mut names = vec![];
     let mut cursor = params_node.walk();
+
     for param in params_node.named_children(&mut cursor) {
-        if let Some(name_node) = param.child_by_field_name("name") {
-            let name = name_node.utf8_text(code.as_bytes()).unwrap().to_string();
-            names.push(name);
+        debug!("{:?}", param.kind());
+
+        match param.kind() {
+            "identifier" => {
+                let name = param.utf8_text(code.as_bytes()).unwrap().to_string();
+                names.push(name);
+            }
+            "typed_parameter" => {
+                if let Some(ident_node) =
+                    param.child_by_field_name("name").or_else(|| param.child(0))
+                {
+                    let name = ident_node.utf8_text(code.as_bytes()).unwrap().to_string();
+                    names.push(name);
+                }
+            }
+            _ => {}
         }
     }
+
     names
 }
 

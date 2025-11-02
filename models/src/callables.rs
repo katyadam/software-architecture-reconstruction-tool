@@ -49,6 +49,7 @@ pub struct Callable {
     pub is_async: bool,
     pub is_constructor: bool,
     pub hash: String,
+    pub file_path: String,
 }
 
 impl Display for Namespace {
@@ -110,6 +111,8 @@ impl Into<BoltType> for Callable {
                 .collect(),
         });
         map.put("parameters".into(), parameters_list);
+
+        map.put("file_path".into(), self.file_path.into());
 
         BoltType::Map(map)
     }
@@ -175,6 +178,11 @@ impl TryFrom<BoltNode> for Callable {
             }
         };
 
+        let file_path = match node.get("file_path") {
+            Ok(BoltType::String(s)) => serde_json::from_str(&s.value).unwrap(),
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
         Ok(Callable {
             signature,
             namespace,
@@ -183,6 +191,7 @@ impl TryFrom<BoltNode> for Callable {
             is_async,
             is_constructor,
             hash,
+            file_path,
         })
     }
 }
