@@ -21,11 +21,7 @@ fn simple_test() {
         Callable {
             signature: s!("module:./examples/python/callgraph/simple.py/A()"),
             namespace: Namespace::Module(s!("./examples/python/callgraph/simple.py")),
-            parameters: vec![Parameter {
-                name: s!(""),
-                datatype: None,
-                initial_value: None,
-            }],
+            parameters: vec![],
             return_type: None,
             is_async: false,
             is_constructor: false,
@@ -35,11 +31,7 @@ fn simple_test() {
         Callable {
             signature: s!("module:./examples/python/callgraph/simple.py/B()"),
             namespace: Namespace::Module(s!("./examples/python/callgraph/simple.py")),
-            parameters: vec![Parameter {
-                name: s!(""),
-                datatype: None,
-                initial_value: None,
-            }],
+            parameters: vec![],
             return_type: None,
             is_async: false,
             is_constructor: false,
@@ -90,11 +82,7 @@ fn nested_test() {
         Callable {
             signature: s!("module:./examples/python/callgraph/nested.py/C()"),
             namespace: Namespace::Module(s!("./examples/python/callgraph/nested.py")),
-            parameters: vec![Parameter {
-                name: s!(""),
-                datatype: None,
-                initial_value: None,
-            }],
+            parameters: vec![],
             return_type: None,
             is_async: false,
             is_constructor: false,
@@ -104,11 +92,7 @@ fn nested_test() {
         Callable {
             signature: s!("module:./examples/python/callgraph/nested.py/D()"),
             namespace: Namespace::Module(s!("./examples/python/callgraph/nested.py")),
-            parameters: vec![Parameter {
-                name: s!(""),
-                datatype: None,
-                initial_value: None,
-            }],
+            parameters: vec![],
             return_type: None,
             is_async: false,
             is_constructor: false,

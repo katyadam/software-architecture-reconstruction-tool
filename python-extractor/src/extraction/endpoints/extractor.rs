@@ -1,4 +1,4 @@
-use crate::extraction::common::extract_param_names;
+use crate::extraction::callables::parser::parse_parameters;
 use crate::extraction::extractor::{ExtractParams, Extractor};
 use crate::extraction::queries::ENDPOINTS_QUERY;
 use models::{Endpoint, HttpMethod};
@@ -18,7 +18,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
             let mut function_name = String::new();
             let mut http_method = String::new();
             let mut uri = String::new();
-            let mut arguments = vec![];
+            let mut parameters = vec![];
 
             m.captures.into_iter().for_each(|capture| {
                 let capture_text =
@@ -29,8 +29,8 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                     "http.method" => http_method = value,
                     "http.uri" => uri = value.trim_matches('"').to_string(),
                     "function.params" => {
-                        let param_names = extract_param_names(capture.node, &params.code);
-                        arguments.extend(param_names);
+                        let p = parse_parameters(&value);
+                        parameters.extend(p);
                     }
                     _ => {}
                 }
@@ -39,7 +39,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
             endpoints.push(Endpoint {
                 function_name: function_name,
                 http_method: http_method.parse().unwrap_or(HttpMethod::GET),
-                parameters: arguments,
+                parameters,
                 uri,
                 file_path: params.file_name.unwrap_or_default().to_string(),
             });
