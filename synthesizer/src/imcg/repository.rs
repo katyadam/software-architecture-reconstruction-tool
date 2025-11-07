@@ -1,14 +1,13 @@
 use std::sync::Arc;
 
 use log::warn;
-use models::Callable;
 use neo4rs::{BoltType, Graph, query};
 use uuid::Uuid;
 
 use crate::{
     errors::database::DatabaseError,
     imcg::{
-        model::{Call, IMCG},
+        model::{Call, IMCG, ServiceCallable},
         queries::{CREATE_IMCG, DELETE_IMCG, GET_IMCG},
     },
 };
@@ -47,7 +46,7 @@ impl ImcgRepository for ImcgRepositoryImpl {
 
             for bolt_service in callables_bolt_type {
                 if let BoltType::Node(node) = bolt_service {
-                    match Callable::try_from(node) {
+                    match ServiceCallable::try_from(node) {
                         Ok(callable) => imcg.callables.push(callable),
                         Err(e) => warn!("Failed to deserialize Callable: {:?}", e),
                     }

@@ -8,6 +8,7 @@ SET c.return_type = callable.return_type
 SET c.is_async = callable.is_async
 SET c.is_constructor = callable.is_constructor
 SET c.hash = callable.hash
+SET c.service_name = callable.service_name
 
 WITH $calls AS calls
 UNWIND calls AS call

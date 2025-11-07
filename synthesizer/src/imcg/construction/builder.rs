@@ -8,7 +8,7 @@ pub trait ImcgBuilder {
         callables: Vec<Callable>,
         call_statements: Vec<CallStatement>,
         imports: Vec<Import>,
-        service_descriptions: Vec<ServiceDescription>,
+        service_descs: Vec<ServiceDescription>,
     ) -> Result<IMCG, BuilderError>;
 }
 
@@ -26,7 +26,7 @@ impl ImcgBuilder for ImcgBuilderImpl {
         callables: Vec<Callable>,
         call_statements: Vec<CallStatement>,
         imports: Vec<Import>,
-        service_descriptions: Vec<ServiceDescription>,
+        service_descs: Vec<ServiceDescription>,
     ) -> Result<IMCG, BuilderError> {
         todo!()
     }
