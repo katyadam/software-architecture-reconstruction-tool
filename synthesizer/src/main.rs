@@ -46,6 +46,7 @@ mod imcg;
 mod s3;
 mod sdg;
 mod tests;
+mod utils;
 
 #[derive(OpenApi)]
 #[openapi(

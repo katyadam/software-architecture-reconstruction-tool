@@ -12,6 +12,12 @@ pub struct IMCG {
     pub calls: Vec<Call>,
 }
 
+impl IMCG {
+    pub fn new(callables: Vec<ServiceCallable>, calls: Vec<Call>) -> Self {
+        Self { callables, calls }
+    }
+}
+
 #[derive(ToSchema, Debug, Serialize, Deserialize, Clone)]
 pub struct Call {
     source_id: String,

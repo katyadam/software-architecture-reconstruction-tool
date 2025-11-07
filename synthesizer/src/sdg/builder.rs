@@ -6,6 +6,7 @@ use strsim::levenshtein;
 use crate::{
     errors::builder::BuilderError,
     sdg::model::{AssignedEndpoint, AssignedRestCall, Connection, Request, SDG, Service},
+    utils::assign_service_description_to_file,
 };
 
 pub trait SdgBuilder {
@@ -48,18 +49,6 @@ impl SdgBuilderImpl {
 
     const DISSIMILARITY_PERCENT: f32 = 0.3;
 
-    fn assign_service_description_to_file(
-        &self,
-        file_name: &str,
-        service_descs: &[ServiceDescription],
-    ) -> ServiceDescription {
-        service_descs
-            .iter()
-            .find(|sd| file_name.starts_with(&sd.base_dir_path))
-            .cloned()
-            .unwrap_or_default()
-    }
-
     fn get_assigned_endpoints(
         &self,
         endpoints: Vec<Endpoint>,
@@ -69,7 +58,7 @@ impl SdgBuilderImpl {
             .into_iter()
             .map(|endpoint| {
                 let service_desc =
-                    self.assign_service_description_to_file(&endpoint.file_path, service_descs);
+                    assign_service_description_to_file(&endpoint.file_path, service_descs);
                 AssignedEndpoint::new(endpoint, service_desc)
             })
             .collect()
@@ -84,7 +73,7 @@ impl SdgBuilderImpl {
             .into_iter()
             .map(|restcall| {
                 let service_desc =
-                    self.assign_service_description_to_file(&restcall.file_path, service_descs);
+                    assign_service_description_to_file(&restcall.file_path, service_descs);
                 AssignedRestCall::new(restcall, service_desc)
             })
             .collect()

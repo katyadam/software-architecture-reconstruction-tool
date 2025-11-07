@@ -1,6 +1,10 @@
 use models::{CallStatement, Callable, Import, configuration::ServiceDescription};
 
-use crate::{errors::builder::BuilderError, imcg::model::IMCG};
+use crate::{
+    errors::builder::BuilderError,
+    imcg::model::{IMCG, ServiceCallable},
+    utils::assign_service_description_to_file,
+};
 
 pub trait ImcgBuilder {
     fn build(
@@ -18,6 +22,21 @@ impl ImcgBuilderImpl {
     pub fn new() -> Self {
         Self {}
     }
+
+    fn get_service_callables(
+        &self,
+        callables: Vec<Callable>,
+        service_descs: Vec<ServiceDescription>,
+    ) -> Vec<ServiceCallable> {
+        callables
+            .iter()
+            .map(|callable| {
+                let service_desc =
+                    assign_service_description_to_file(&callable.file_path, &service_descs);
+                ServiceCallable::new(callable.to_owned(), service_desc.name)
+            })
+            .collect()
+    }
 }
 
 impl ImcgBuilder for ImcgBuilderImpl {
@@ -28,6 +47,7 @@ impl ImcgBuilder for ImcgBuilderImpl {
         imports: Vec<Import>,
         service_descs: Vec<ServiceDescription>,
     ) -> Result<IMCG, BuilderError> {
-        todo!()
+        let service_callables = self.get_service_callables(callables, service_descs);
+        Ok(IMCG::new(Vec::new(), Vec::new()))
     }
 }
