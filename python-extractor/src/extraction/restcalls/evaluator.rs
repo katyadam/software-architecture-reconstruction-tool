@@ -51,7 +51,7 @@ pub fn evaluate_restcalls(
     assignments_map: HashMap<AssignmentKey, Assignment>,
 ) {
     restcalls.iter_mut().for_each(|rcall| {
-        rcall.function_arguments.iter_mut().for_each(|param| {
+        rcall.call_arguments.iter_mut().for_each(|param| {
             evaluate_parameter(&rcall.function_name, param, &assignments_map);
         });
 

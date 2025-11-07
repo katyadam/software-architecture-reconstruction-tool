@@ -222,7 +222,7 @@ impl TryFrom<BoltMap> for Request {
                 file_path: "Bad Deserialization!".to_string(),
                 function_name: "Bad Deserialization!".to_string(),
                 http_method: models::HttpMethod::DELETE,
-                function_arguments: vec![],
+                call_arguments: vec![],
                 target_uri: "Bad Deserialization!".to_string(),
             })),
             _ => Err(DeError::InvalidType {

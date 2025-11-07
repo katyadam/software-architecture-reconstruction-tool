@@ -2,9 +2,10 @@ pub const RESTCALLS_QUERY: &str = r#"
 ;; ────────────────────────────────────────────────────────────────────────────
 ;; PATTERN 1 — no with_statement
 ;; ────────────────────────────────────────────────────────────────────────────
-(function_definition
+(function_definition 
   name: (identifier) @function.name
-  (block
+  parameters: (parameters) @function.parameters
+  body: (block
     (expression_statement
       [
         ;; ─── await without assignment ────────────────────────────────
@@ -14,7 +15,7 @@ pub const RESTCALLS_QUERY: &str = r#"
               attribute: (identifier) @http.method
               (#any-of? @http.method "get" "post" "put" "delete")
             )
-            arguments: (argument_list (string) @uri) @function.params
+            arguments: (argument_list (string) @uri) @call.args
           )
         )
 
@@ -24,7 +25,7 @@ pub const RESTCALLS_QUERY: &str = r#"
             attribute: (identifier) @http.method
             (#any-of? @http.method "get" "post" "put" "delete")
           )
-          arguments: (argument_list (string) @uri) @function.params
+          arguments: (argument_list (string) @uri) @call.args
         )
 
         ;; ─── assignments ─────────────────────────────────────────────
@@ -37,7 +38,7 @@ pub const RESTCALLS_QUERY: &str = r#"
                   attribute: (identifier) @http.method
                   (#any-of? @http.method "get" "post" "put" "delete")
                 )
-                arguments: (argument_list (string) @uri) @function.params
+                arguments: (argument_list (string) @uri) @call.args
               )
             )
             ;; non-await assignment
@@ -46,7 +47,7 @@ pub const RESTCALLS_QUERY: &str = r#"
                 attribute: (identifier) @http.method
                 (#any-of? @http.method "get" "post" "put" "delete")
               )
-              arguments: (argument_list (string) @uri) @function.params
+              arguments: (argument_list (string) @uri) @call.args
             )
           ]
         )
@@ -55,13 +56,13 @@ pub const RESTCALLS_QUERY: &str = r#"
   )
 )
 
-
 ;; ────────────────────────────────────────────────────────────────────────────
 ;; PATTERN 2 — with_statement → block → expression_statement
 ;; ────────────────────────────────────────────────────────────────────────────
 (function_definition 
   name: (identifier) @function.name
-  (block
+  parameters: (parameters) @function.parameters
+  body: (block
     (with_statement
       (block
         (expression_statement
@@ -73,7 +74,7 @@ pub const RESTCALLS_QUERY: &str = r#"
                   attribute: (identifier) @http.method
                   (#any-of? @http.method "get" "post" "put" "delete")
                 )
-                arguments: (argument_list (string) @uri) @function.params
+                arguments: (argument_list (string) @uri) @call.args
               )
             )
 
@@ -83,7 +84,7 @@ pub const RESTCALLS_QUERY: &str = r#"
                 attribute: (identifier) @http.method
                 (#any-of? @http.method "get" "post" "put" "delete")
               )
-              arguments: (argument_list (string) @uri) @function.params
+              arguments: (argument_list (string) @uri) @call.args
             )
 
             ;; ─── assignments ─────────────────────────────────────────────
@@ -96,7 +97,7 @@ pub const RESTCALLS_QUERY: &str = r#"
                       attribute: (identifier) @http.method
                       (#any-of? @http.method "get" "post" "put" "delete")
                     )
-                    arguments: (argument_list (string) @uri) @function.params
+                    arguments: (argument_list (string) @uri) @call.args
                   )
                 )
                 ;; non-await assignment
@@ -105,7 +106,7 @@ pub const RESTCALLS_QUERY: &str = r#"
                     attribute: (identifier) @http.method
                     (#any-of? @http.method "get" "post" "put" "delete")
                   )
-                  arguments: (argument_list (string) @uri) @function.params
+                  arguments: (argument_list (string) @uri) @call.args
                 )
               ]
             )
@@ -131,20 +132,23 @@ pub const ENDPOINTS_QUERY: &str = r#"
 
 pub const ASSINGMENTS_QUERY: &str = r#"
 [
-(function_definition (identifier) @function.name
-	(block
-    	(expression_statement
-        	(assignment 
-				left: (identifier) @variable
-				right: [(string) (dictionary)] @value
-			)
-		)
-	)
+(
+  function_definition
+    name: (identifier) @function.name
+    parameters: (parameters) @function.params
+    body: (block
+      (expression_statement
+        (assignment
+          left: (_) @variable
+          right: (_) @value
+        )
+      )
+    )
 )
 (expression_statement
 	(assignment 
-		left: (identifier) @variable
-        right: (string) @value
+		left: (_) @variable
+        right: (_) @value
 	)
 )
 ]

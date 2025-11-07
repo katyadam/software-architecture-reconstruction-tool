@@ -65,21 +65,21 @@ mod tests {
             vec![
                 RestCall {
                     function_name: "get_user".to_string(),
-                    function_arguments: vec![],
+                    call_arguments: vec![],
                     http_method: HttpMethod::GET,
                     target_uri: "http://user-service:8000/users/{id}".to_string(),
                     file_path: "crm/admin-user-service/src/api/user_connector.py".to_string(),
                 },
                 RestCall {
                     function_name: "create_user".to_string(),
-                    function_arguments: vec![],
+                    call_arguments: vec![],
                     http_method: HttpMethod::POST,
                     target_uri: "http://user-service:8000/users".to_string(),
                     file_path: "crm/admin-user-service/src/api/user_connector.py".to_string(),
                 },
                 RestCall {
                     function_name: "delete_user".to_string(),
-                    function_arguments: vec![],
+                    call_arguments: vec![],
                     http_method: HttpMethod::DELETE,
                     target_uri: "http://user-service:8000/users/{id}".to_string(),
                     file_path: "crm/admin-user-service/src/api/user_connector.py".to_string(),

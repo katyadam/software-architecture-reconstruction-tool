@@ -17,7 +17,8 @@ impl Extractor<RestCall> for RestcallsExtractor {
         let mut restcalls: Vec<RestCall> = vec![];
         matches.for_each(|m| {
             let mut function_name = String::new();
-            let mut function_parameters = vec![];
+            let mut function_parameters = String::new();
+            let mut call_arguments = vec![];
             let mut http_method = String::new();
             let mut target_uri = String::new();
 
@@ -35,16 +36,17 @@ impl Extractor<RestCall> for RestcallsExtractor {
                         }
                     }
                     "function.name" => function_name = value,
-                    "function.params" => {
+                    "function.parameters" => function_parameters = value,
+                    "call.args" => {
                         let param_names = extract_function_arguments(capture.node, &params.code);
-                        function_parameters.extend(param_names);
+                        call_arguments.extend(param_names);
                     }
                     _ => {}
                 }
             });
             let rest_call = RestCall {
-                function_name: function_name.clone(),
-                function_arguments: function_parameters,
+                function_name: function_name.clone() + &function_parameters,
+                call_arguments,
                 http_method: http_method.parse().unwrap_or(HttpMethod::GET),
                 target_uri: target_uri.clone(),
                 file_path: params.file_name.unwrap_or_default().to_string(),

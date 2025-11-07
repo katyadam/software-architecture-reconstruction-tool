@@ -1,27 +1,24 @@
 from typing import List, Optional
 from user import User
-from repository import UserRepository
 
 
-class UserService:
-    def __init__(self, repository: UserRepository):
-        self.repository = repository
+class UserRepository:
+    def __init__(self):
+        self._users: List[User] = []
 
-    def create_user(self, name: str, email: str) -> User:
-        # Simple business rule: email must be unique
-        existing = [u for u in self.repository.get_all() if u.email == email]
-        if existing:
-            raise ValueError(f"User with email {email} already exists")
+    def get_all(self) -> List[User]:
+        return self._users
 
-        new_user = User(id=len(self.repository.get_all()) +
-                        1, name=name, email=email)
-        return self.repository.save(new_user)
+    def get_by_id(self, user_id: int) -> Optional[User]:
+        return next((u for u in self._users if u.id == user_id), None)
 
-    def get_user(self, user_id: int) -> Optional[User]:
-        return self.repository.get_by_id(user_id)
+    def save(self, user: User) -> User:
+        self._users.append(user)
+        return user
 
-    def list_users(self) -> List[User]:
-        return self.repository.get_all()
-
-    def delete_user(self, user_id: int) -> bool:
-        return self.repository.delete(user_id)
+    def delete(self, user_id: int) -> bool:
+        user = self.get_by_id(user_id)
+        if user:
+            self._users.remove(user)
+            return True
+        return False

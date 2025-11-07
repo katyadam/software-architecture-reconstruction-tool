@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use log::warn;
 use models::{Assignment, AssignmentKey, Scope};
 use tree_sitter::{Query, QueryCursor, StreamingIterator, Tree};
 
@@ -12,6 +13,7 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
     let mut assignments_map: HashMap<AssignmentKey, Assignment> = HashMap::new();
     matches.for_each(|m| {
         let mut function_name: Option<String> = None;
+        let mut function_params: Option<String> = None;
         let mut variable_name = String::new();
         let mut variable_value = String::new();
 
@@ -20,14 +22,23 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
             let value = String::from_utf8_lossy(capture_text).to_string();
             match query.capture_names()[capture.index as usize] {
                 "function.name" => function_name = Some(value),
+                "function.params" => function_params = Some(value),
                 "variable" => variable_name = value,
                 "value" => variable_value = value,
                 _ => {}
             }
         });
-        let scope = match function_name {
-            Some(func_name) => Scope::Function(func_name),
-            None => Scope::Global,
+        let scope = match (function_name, function_params) {
+            (Some(func_name), Some(params)) => Scope::Function(func_name + &params),
+            (None, None) => Scope::Global,
+            (None, Some(_)) => {
+                warn!("Non compatible assignment. The assignment has function params but not function name!");
+                Scope::Global
+            },
+            (Some(_), None) => {
+                warn!("Non compatible assignment. The assignment has function name but not function params!");
+                Scope::Global
+            },
         };
 
         let new_assignment = Assignment {

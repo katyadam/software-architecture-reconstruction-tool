@@ -21,8 +21,8 @@ fn restcalls_extraction() {
         RestcallsExtractor.extract(ExtractParams::new(&tree, &code).file_name(&filename));
     let expected = vec![
         RestCall {
-            function_name: s!("create_item"),
-            function_arguments: vec![Argument {
+            function_name: s!("create_item(client, name, description, price, in_stock=True)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("payload"),
             }],
@@ -31,8 +31,8 @@ fn restcalls_extraction() {
             file_path: s!(filename),
         },
         RestCall {
-            function_name: s!("get_items"),
-            function_arguments: vec![Argument {
+            function_name: s!("get_items(client, skip=0, limit=10, q=None)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("params"),
             }],
@@ -41,15 +41,15 @@ fn restcalls_extraction() {
             file_path: s!(filename),
         },
         RestCall {
-            function_name: s!("get_item_by_id"),
-            function_arguments: vec![],
+            function_name: s!("get_item_by_id(client, item_id)"),
+            call_arguments: vec![],
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/items/{item_id}"),
             file_path: s!(filename),
         },
         RestCall {
-            function_name: s!("create_user"),
-            function_arguments: vec![Argument {
+            function_name: s!("create_user(client, username, email)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("payload"),
             }],
@@ -58,8 +58,8 @@ fn restcalls_extraction() {
             file_path: s!(filename),
         },
         RestCall {
-            function_name: s!("get_users"),
-            function_arguments: vec![Argument {
+            function_name: s!("get_users(client, limit=10)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"limit\": limit}"),
             }],
@@ -68,8 +68,8 @@ fn restcalls_extraction() {
             file_path: s!(filename),
         },
         RestCall {
-            function_name: s!("search"),
-            function_arguments: vec![Argument {
+            function_name: s!("search(client, query)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"q\": query}"),
             }],
@@ -93,8 +93,8 @@ fn restcalls_evaluation() {
     evaluate_restcalls(&mut restcalls, assignments_map);
     let expected = vec![
         RestCall {
-            function_name: s!("create_item"),
-            function_arguments: vec![Argument {
+            function_name: s!("create_item(client, name, description, price, in_stock=True)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!(
                     "{\n        \"name\": name,\n        \"description\": description,\n        \"price\": price,\n        \"in_stock\": in_stock\n    }"
@@ -105,8 +105,8 @@ fn restcalls_evaluation() {
             file_path: s!(filename),
         },
         RestCall {
-            function_name: s!("get_items"),
-            function_arguments: vec![Argument {
+            function_name: s!("get_items(client, skip=0, limit=10, q=None)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"skip\": skip, \"limit\": limit}"),
             }],
@@ -115,15 +115,15 @@ fn restcalls_evaluation() {
             file_path: s!(filename),
         },
         RestCall {
-            function_name: s!("get_item_by_id"),
-            function_arguments: vec![],
+            function_name: s!("get_item_by_id(client, item_id)"),
+            call_arguments: vec![],
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/items/{item_id}"),
             file_path: s!(filename),
         },
         RestCall {
-            function_name: s!("create_user"),
-            function_arguments: vec![Argument {
+            function_name: s!("create_user(client, username, email)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("{\n        \"username\": username,\n        \"email\": email\n    }"),
             }],
@@ -132,8 +132,8 @@ fn restcalls_evaluation() {
             file_path: s!(filename),
         },
         RestCall {
-            function_name: s!("get_users"),
-            function_arguments: vec![Argument {
+            function_name: s!("get_users(client, limit=10)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"limit\": limit}"),
             }],
@@ -142,8 +142,8 @@ fn restcalls_evaluation() {
             file_path: s!(filename),
         },
         RestCall {
-            function_name: s!("search"),
-            function_arguments: vec![Argument {
+            function_name: s!("search(client, query)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"q\": query}"),
             }],
@@ -167,8 +167,8 @@ fn should_extract_all_types_of_restcall() {
     evaluate_restcalls(&mut restcalls, assignments_map);
     let expected = vec![
         RestCall {
-            function_name: s!("endpoint_with_withblock_restcall"),
-            function_arguments: vec![Argument {
+            function_name: s!("endpoint_with_withblock_restcall(data: ProxyItemCreate)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("data.dict()"),
             }],
@@ -177,8 +177,8 @@ fn should_extract_all_types_of_restcall() {
             file_path: s!("./examples/python/restcalls/different_types.py"),
         },
         RestCall {
-            function_name: s!("withblock_restcall_assignment"),
-            function_arguments: vec![Argument {
+            function_name: s!("withblock_restcall_assignment(data: ProxyItemCreate)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("data.dict()"),
             }],
@@ -187,8 +187,8 @@ fn should_extract_all_types_of_restcall() {
             file_path: s!("./examples/python/restcalls/different_types.py"),
         },
         RestCall {
-            function_name: s!("restcall_assignment"),
-            function_arguments: vec![Argument {
+            function_name: s!("restcall_assignment(client, skip=0, limit=10, q=None)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"skip\": skip, \"limit\": limit}"),
             }],
@@ -197,8 +197,8 @@ fn should_extract_all_types_of_restcall() {
             file_path: s!("./examples/python/restcalls/different_types.py"),
         },
         RestCall {
-            function_name: s!("restcall_no_assignment"),
-            function_arguments: vec![Argument {
+            function_name: s!("restcall_no_assignment(client, username, email)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("{\n        \"username\": username,\n        \"email\": email\n    }"),
             }],
@@ -207,8 +207,8 @@ fn should_extract_all_types_of_restcall() {
             file_path: s!("./examples/python/restcalls/different_types.py"),
         },
         RestCall {
-            function_name: s!("await_restcall_assignment"),
-            function_arguments: vec![Argument {
+            function_name: s!("await_restcall_assignment(client, username, email)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("{\n        \"username\": username,\n        \"email\": email\n    }"),
             }],
@@ -217,8 +217,8 @@ fn should_extract_all_types_of_restcall() {
             file_path: s!("./examples/python/restcalls/different_types.py"),
         },
         RestCall {
-            function_name: s!("await_restcall_no_assignment"),
-            function_arguments: vec![Argument {
+            function_name: s!("await_restcall_no_assignment(client, username, email)"),
+            call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("{\n        \"username\": username,\n        \"email\": email\n    }"),
             }],

@@ -98,6 +98,7 @@ impl Extractor<CallStatement> for CallsExtractor {
                 enclosing_function_name: enclosing_func_name,
                 enclosing_class_name: enclosing_class_name,
                 is_self_invoke: function_name.starts_with("self"),
+                invoked_on: None,
             };
 
             call_statements.push(new_call_statement);
