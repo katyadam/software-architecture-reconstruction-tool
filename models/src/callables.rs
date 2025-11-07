@@ -1,7 +1,6 @@
 use std::fmt::{self, Display};
 
-use neo4rs::{BoltList, BoltMap, BoltNode, BoltString, BoltType, DeError};
-use serde::{Deserialize, Serialize, de::Unexpected};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]

@@ -15,6 +15,7 @@ pub struct CallStatement {
     pub arguments: Vec<Argument>,
     pub enclosing_function_name: Option<String>,
     pub enclosing_class_name: Option<String>,
+    pub is_self_invoke: bool,
 }
 
 impl Display for CallStatement {
@@ -40,7 +41,7 @@ impl Display for CallStatement {
         if prefix.is_empty() {
             write!(f, "{}({})", self.function_name, args)
         } else {
-            write!(f, "{} ─▶ {}({})", prefix, self.function_name, args)
+            write!(f, "{} >>> {}({})", prefix, self.function_name, args)
         }
     }
 }

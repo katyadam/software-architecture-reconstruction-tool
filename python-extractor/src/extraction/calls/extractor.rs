@@ -93,10 +93,11 @@ impl Extractor<CallStatement> for CallsExtractor {
             });
 
             let new_call_statement = CallStatement {
-                function_name: function_name,
+                function_name: function_name.clone(),
                 arguments: arguments,
                 enclosing_function_name: enclosing_func_name,
                 enclosing_class_name: enclosing_class_name,
+                is_self_invoke: function_name.starts_with("self"),
             };
 
             call_statements.push(new_call_statement);

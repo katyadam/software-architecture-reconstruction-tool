@@ -21,6 +21,7 @@ fn simple_test() {
         arguments: vec![],
         enclosing_function_name: Some(s!("B")),
         enclosing_class_name: None,
+        is_self_invoke: false,
     }];
     assert_eq!(calls, expected);
 }
@@ -37,6 +38,7 @@ fn nested_test() {
             arguments: vec![],
             enclosing_function_name: Some(s!("A")),
             enclosing_class_name: None,
+            is_self_invoke: false,
         },
         CallStatement {
             function_name: s!("A"),
@@ -46,6 +48,7 @@ fn nested_test() {
             }],
             enclosing_function_name: Some(s!("B")),
             enclosing_class_name: None,
+            is_self_invoke: false,
         },
         CallStatement {
             function_name: s!("B"),
@@ -55,12 +58,14 @@ fn nested_test() {
             }],
             enclosing_function_name: Some(s!("D")),
             enclosing_class_name: None,
+            is_self_invoke: false,
         },
         CallStatement {
             function_name: s!("C"),
             arguments: vec![],
             enclosing_function_name: Some(s!("D")),
             enclosing_class_name: None,
+            is_self_invoke: false,
         },
     ];
 
@@ -79,6 +84,7 @@ fn classes_test() {
             arguments: vec![],
             enclosing_function_name: Some(s!("divide")),
             enclosing_class_name: Some(s!("Divider")),
+            is_self_invoke: true,
         },
         CallStatement {
             function_name: s!("sum"),
@@ -94,6 +100,7 @@ fn classes_test() {
             ],
             enclosing_function_name: Some(s!("divide")),
             enclosing_class_name: Some(s!("Divider")),
+            is_self_invoke: false,
         },
     ];
     assert_eq!(calls, expected);
@@ -121,12 +128,14 @@ fn classes_imports_test() {
             ],
             enclosing_function_name: Some(s!("divide")),
             enclosing_class_name: Some(s!("Math")),
+            is_self_invoke: false,
         },
         CallStatement {
             function_name: s!("divider.divide"),
             arguments: vec![],
             enclosing_function_name: Some(s!("divide")),
             enclosing_class_name: Some(s!("Math")),
+            is_self_invoke: false,
         },
         CallStatement {
             function_name: s!("sum"),
@@ -142,6 +151,7 @@ fn classes_imports_test() {
             ],
             enclosing_function_name: Some(s!("sum")),
             enclosing_class_name: Some(s!("Math")),
+            is_self_invoke: false,
         },
         CallStatement {
             function_name: s!("classes.sum"),
@@ -157,6 +167,7 @@ fn classes_imports_test() {
             ],
             enclosing_function_name: Some(s!("product")),
             enclosing_class_name: Some(s!("Math")),
+            is_self_invoke: false,
         },
         CallStatement {
             function_name: s!("product"),
@@ -172,6 +183,7 @@ fn classes_imports_test() {
             ],
             enclosing_function_name: Some(s!("product")),
             enclosing_class_name: Some(s!("Math")),
+            is_self_invoke: false,
         },
     ];
 
