@@ -48,7 +48,7 @@ pub fn evaluate_target_uri(
 
 pub fn evaluate_restcalls(
     restcalls: &mut Vec<RestCall>,
-    assignments_map: HashMap<AssignmentKey, Assignment>,
+    assignments_map: &HashMap<AssignmentKey, Assignment>,
 ) {
     restcalls.iter_mut().for_each(|rcall| {
         rcall.call_arguments.iter_mut().for_each(|param| {

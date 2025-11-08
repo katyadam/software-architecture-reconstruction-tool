@@ -139,12 +139,34 @@ pub const ASSINGMENTS_QUERY: &str = r#"
       (expression_statement
         (assignment
           left: (_) @variable
+          type: (_) @type
           right: (_) @value
         )
       )
     )
 )
-(module
+(function_definition
+    name: (identifier) @function.name
+    parameters: (parameters) @function.params
+    body: (block
+      (expression_statement
+        (assignment
+          left: (_) @variable
+          right: (_) @value
+        )
+      )
+    )
+)
+(module 
+  (expression_statement
+	  (assignment 
+		  left: (_) @variable
+      type: (_) @type
+      right: (_) @value
+	  )
+  )
+)
+(module 
   (expression_statement
 	  (assignment 
 		  left: (_) @variable

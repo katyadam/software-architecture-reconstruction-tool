@@ -42,7 +42,14 @@ impl Display for CallStatement {
         if prefix.is_empty() {
             write!(f, "{}({})", self.function_name, args)
         } else {
-            write!(f, "{} >>> {}({})", prefix, self.function_name, args)
+            write!(
+                f,
+                "{} >>> {}({}) -- INVOKED ON: {}",
+                prefix,
+                self.function_name,
+                args,
+                self.invoked_on.clone().unwrap_or("".to_string())
+            )
         }
     }
 }

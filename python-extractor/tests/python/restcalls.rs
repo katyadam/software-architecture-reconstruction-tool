@@ -90,7 +90,7 @@ fn restcalls_evaluation() {
     let mut restcalls =
         RestcallsExtractor.extract(ExtractParams::new(&tree, &code).file_name(&filename));
     let assignments_map = get_assignments_map(&tree, &code);
-    evaluate_restcalls(&mut restcalls, assignments_map);
+    evaluate_restcalls(&mut restcalls, &assignments_map);
     let expected = vec![
         RestCall {
             function_name: s!("create_item(client, name, description, price, in_stock=True)"),
@@ -164,7 +164,7 @@ fn should_extract_all_types_of_restcall() {
     let mut restcalls =
         RestcallsExtractor.extract(ExtractParams::new(&tree, &code).file_name(&filename));
     let assignments_map = get_assignments_map(&tree, &code);
-    evaluate_restcalls(&mut restcalls, assignments_map);
+    evaluate_restcalls(&mut restcalls, &assignments_map);
     let expected = vec![
         RestCall {
             function_name: s!("endpoint_with_withblock_restcall(data: ProxyItemCreate)"),

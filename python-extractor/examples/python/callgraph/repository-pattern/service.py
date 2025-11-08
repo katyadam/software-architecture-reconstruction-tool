@@ -5,7 +5,7 @@ from repository import UserRepository
 
 class UserService:
     def __init__(self, repository: UserRepository):
-        self.repository = repository
+        self.repository: UserRepository = repository
 
     def create_user(self, name: str, email: str) -> User:
         # Simple business rule: email must be unique

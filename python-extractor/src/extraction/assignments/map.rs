@@ -16,6 +16,7 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
         let mut function_params: Option<String> = None;
         let mut variable_name = String::new();
         let mut variable_value = String::new();
+        let mut variable_type = String::new();
 
         m.captures.into_iter().for_each(|capture| {
             let capture_text = &code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
@@ -24,6 +25,7 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
                 "function.name" => function_name = Some(value),
                 "function.params" => function_params = Some(value),
                 "variable" => variable_name = value,
+                "type" => variable_type = value,
                 "value" => variable_value = value,
                 _ => {}
             }
@@ -43,6 +45,7 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
 
         let new_assignment = Assignment {
             variable_name: variable_name.clone(),
+            variable_type,
             value: variable_value,
         };
 

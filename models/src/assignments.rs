@@ -1,6 +1,7 @@
 #[derive(Debug, Clone)]
 pub struct Assignment {
     pub variable_name: String,
+    pub variable_type: String,
     pub value: String,
 }
 
