@@ -132,8 +132,7 @@ pub const ENDPOINTS_QUERY: &str = r#"
 
 pub const ASSINGMENTS_QUERY: &str = r#"
 [
-(
-  function_definition
+(function_definition
     name: (identifier) @function.name
     parameters: (parameters) @function.params
     body: (block
@@ -145,11 +144,13 @@ pub const ASSINGMENTS_QUERY: &str = r#"
       )
     )
 )
-(expression_statement
-	(assignment 
-		left: (_) @variable
-        right: (_) @value
-	)
+(module
+  (expression_statement
+	  (assignment 
+		  left: (_) @variable
+      right: (_) @value
+	  )
+  )
 )
 ]
 "#;
