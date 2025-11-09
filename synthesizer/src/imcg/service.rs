@@ -4,7 +4,7 @@ use crate::{
     connectors::manager_connector::ManagerConnector,
     errors::service::ServiceError,
     imcg::{
-        construction::builder::{ImcgBuilder, ImcgBuilderImpl},
+        construction::inter::{ImcgBuilder, ImcgBuilderImpl},
         dto::PostIMCG,
         model::IMCG,
         repository::{ImcgRepository, ImcgRepositoryImpl},

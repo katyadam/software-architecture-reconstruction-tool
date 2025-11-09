@@ -1,4 +1,4 @@
-use models::{Callable, configuration::ServiceDescription};
+use models::Callable;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

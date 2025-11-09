@@ -19,7 +19,7 @@ use crate::{
     },
     db_setup::{setup_contextmap_db, setup_imcg_db, setup_sdg_db},
     imcg::{
-        construction::builder::ImcgBuilderImpl,
+        construction::inter::ImcgBuilderImpl,
         dto::{GetIMCGErrorReponse, PostIMCGErrorResponse},
         model::IMCG,
         repository::ImcgRepositoryImpl,
