@@ -25,6 +25,7 @@ fn restcalls_extraction() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("payload"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::POST,
             target_uri: s!("{BASE_URL}/items/"),
@@ -35,6 +36,7 @@ fn restcalls_extraction() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("params"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/items/"),
@@ -52,6 +54,7 @@ fn restcalls_extraction() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("payload"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::POST,
             target_uri: s!("{BASE_URL}/users/"),
@@ -62,6 +65,7 @@ fn restcalls_extraction() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"limit\": limit}"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/users/"),
@@ -72,6 +76,7 @@ fn restcalls_extraction() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"q\": query}"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/search/"),
@@ -99,6 +104,7 @@ fn restcalls_evaluation() {
                 value: s!(
                     "{\n        \"name\": name,\n        \"description\": description,\n        \"price\": price,\n        \"in_stock\": in_stock\n    }"
                 ),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/items/"),
@@ -109,6 +115,7 @@ fn restcalls_evaluation() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"skip\": skip, \"limit\": limit}"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/items/"),
@@ -126,6 +133,7 @@ fn restcalls_evaluation() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("{\n        \"username\": username,\n        \"email\": email\n    }"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/users/"),
@@ -136,6 +144,7 @@ fn restcalls_evaluation() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"limit\": limit}"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/users/"),
@@ -146,6 +155,7 @@ fn restcalls_evaluation() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"q\": query}"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/search/"),
@@ -171,6 +181,7 @@ fn should_extract_all_types_of_restcall() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("data.dict()"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/items/"),
@@ -181,6 +192,7 @@ fn should_extract_all_types_of_restcall() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("data.dict()"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/items/"),
@@ -191,6 +203,7 @@ fn should_extract_all_types_of_restcall() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"skip\": skip, \"limit\": limit}"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/items/"),
@@ -201,6 +214,7 @@ fn should_extract_all_types_of_restcall() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("{\n        \"username\": username,\n        \"email\": email\n    }"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/users/"),
@@ -211,6 +225,7 @@ fn should_extract_all_types_of_restcall() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("{\n        \"username\": username,\n        \"email\": email\n    }"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/users/"),
@@ -221,6 +236,7 @@ fn should_extract_all_types_of_restcall() {
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("{\n        \"username\": username,\n        \"email\": email\n    }"),
+                datatype: s!("any"),
             }],
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/users/"),

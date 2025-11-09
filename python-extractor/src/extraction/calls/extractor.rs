@@ -87,11 +87,13 @@ impl Extractor<CallStatement> for CallsExtractor {
                                         Argument {
                                             assigned_variable: spl.get(0).unwrap().to_string(),
                                             value: spl.get(1).unwrap().to_string(),
+                                            datatype: "any".to_string(),
                                         }
                                     } else {
                                         Argument {
                                             assigned_variable: "".to_string(),
                                             value: arg.to_string(),
+                                            datatype: "any".to_string(),
                                         }
                                     }
                                 })

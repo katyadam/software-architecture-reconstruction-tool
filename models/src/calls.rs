@@ -7,6 +7,7 @@ use utoipa::ToSchema;
 pub struct Argument {
     pub assigned_variable: String,
     pub value: String,
+    pub datatype: String,
 }
 
 #[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize)]

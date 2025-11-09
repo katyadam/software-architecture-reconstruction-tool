@@ -56,6 +56,7 @@ fn nested_test() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("func"),
+                datatype: s!("any"),
             }],
             enclosing_function_name: Some(s!("B")),
             enclosing_class_name: None,
@@ -70,6 +71,7 @@ fn nested_test() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("C"),
+                datatype: s!("any"),
             }],
             enclosing_function_name: Some(s!("D")),
             enclosing_class_name: None,
@@ -121,10 +123,12 @@ fn classes_test() {
                 Argument {
                     assigned_variable: s!("a"),
                     value: s!("self.a"),
+                    datatype: s!("any"),
                 },
                 Argument {
                     assigned_variable: s!("b"),
                     value: s!("self.b"),
+                    datatype: s!("any"),
                 },
             ],
             enclosing_function_name: Some(s!("divide")),
@@ -153,10 +157,12 @@ fn classes_imports_test() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("self.a"),
+                    datatype: s!("any"),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("self.b"),
+                    datatype: s!("any"),
                 },
             ],
             enclosing_function_name: Some(s!("divide")),
@@ -184,11 +190,14 @@ fn classes_imports_test() {
             arguments: vec![
                 Argument {
                     assigned_variable: s!(""),
+
                     value: s!("self.a"),
+                    datatype: s!("any"),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("self.b"),
+                    datatype: s!("any"),
                 },
             ],
             enclosing_function_name: Some(s!("sum")),
@@ -205,11 +214,14 @@ fn classes_imports_test() {
             arguments: vec![
                 Argument {
                     assigned_variable: s!(""),
+
                     value: s!("5"),
+                    datatype: s!("any"),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("4"),
+                    datatype: s!("any"),
                 },
             ],
             enclosing_function_name: Some(s!("product")),
@@ -226,10 +238,12 @@ fn classes_imports_test() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("self.a"),
+                    datatype: s!("any"),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("self.b"),
+                    datatype: s!("any"),
                 },
             ],
             enclosing_function_name: Some(s!("product")),
@@ -272,6 +286,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("f\"User with email {email} already exists\""),
+                datatype: s!("any"),
             }],
             enclosing_function_name: Some(s!("create_user")),
             enclosing_class_name: Some(s!("UserService")),
@@ -287,14 +302,18 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
                 Argument {
                     assigned_variable: s!("id"),
                     value: s!("len(self.repository.get_all()) +\n                        1"),
+                    datatype: s!("any"),
                 },
                 Argument {
                     assigned_variable: s!("name"),
                     value: s!("name"),
+
+                    datatype: s!("any"),
                 },
                 Argument {
                     assigned_variable: s!("email"),
                     value: s!("email"),
+                    datatype: s!("any"),
                 },
             ],
             enclosing_function_name: Some(s!("create_user")),
@@ -310,6 +329,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("self.repository.get_all"),
+                datatype: s!("any"),
             }],
             enclosing_function_name: Some(s!("create_user")),
             enclosing_class_name: Some(s!("UserService")),
@@ -335,6 +355,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("new_user"),
+                datatype: s!("any"),
             }],
             enclosing_function_name: Some(s!("create_user")),
             enclosing_class_name: Some(s!("UserService")),
@@ -349,6 +370,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("user_id"),
+                datatype: s!("any"),
             }],
             enclosing_function_name: Some(s!("get_user")),
             enclosing_class_name: Some(s!("UserService")),
@@ -374,6 +396,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("user_id"),
+                datatype: s!("any"),
             }],
             enclosing_function_name: Some(s!("delete_user")),
             enclosing_class_name: Some(s!("UserService")),
@@ -404,10 +427,12 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("name"),
+                    datatype: s!("any"),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("email"),
+                    datatype: s!("any"),
                 },
             ],
             enclosing_function_name: Some(s!("create_user")),
@@ -423,6 +448,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("e"),
+                datatype: s!("any"),
             }],
             enclosing_function_name: Some(s!("create_user")),
             enclosing_class_name: Some(s!("UserController")),
@@ -438,6 +464,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("user_id"),
+                datatype: s!("any"),
             }],
             enclosing_function_name: Some(s!("get_user")),
             enclosing_class_name: Some(s!("UserController")),
@@ -465,6 +492,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("user_id"),
+                datatype: s!("any"),
             }],
             enclosing_function_name: Some(s!("delete_user")),
             enclosing_class_name: Some(s!("UserController")),
