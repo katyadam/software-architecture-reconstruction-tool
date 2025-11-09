@@ -15,6 +15,7 @@ pub struct CallStatement {
     pub arguments: Vec<Argument>,
     pub enclosing_function_name: Option<String>,
     pub enclosing_class_name: Option<String>,
+    pub enclosing_function_hash: Option<String>,
     pub is_self_invoke: bool,
     pub invoked_on: Option<String>,
 }
