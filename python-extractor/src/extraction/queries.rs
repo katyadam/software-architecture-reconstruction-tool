@@ -131,50 +131,11 @@ pub const ENDPOINTS_QUERY: &str = r#"
 "#;
 
 pub const ASSINGMENTS_QUERY: &str = r#"
-[
+(assignment left: (_) @variable right: (_) @value)
+(assignment left: (_) @variable type: (_) @type right: (_) @value)
 (function_definition
     name: (identifier) @function.name
-    parameters: (parameters) @function.params
-    body: (block
-      (expression_statement
-        (assignment
-          left: (_) @variable
-          type: (_) @type
-          right: (_) @value
-        )
-      )
-    )
-)
-(function_definition
-    name: (identifier) @function.name
-    parameters: (parameters) @function.params
-    body: (block
-      (expression_statement
-        (assignment
-          left: (_) @variable
-          right: (_) @value
-        )
-      )
-    )
-)
-(module 
-  (expression_statement
-	  (assignment 
-		  left: (_) @variable
-      type: (_) @type
-      right: (_) @value
-	  )
-  )
-)
-(module 
-  (expression_statement
-	  (assignment 
-		  left: (_) @variable
-      right: (_) @value
-	  )
-  )
-)
-]
+    parameters: (parameters) @function.params)
 "#;
 
 pub const ENTITIES_QUERY: &str = r#"
