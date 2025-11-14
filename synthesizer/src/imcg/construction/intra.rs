@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use models::{CallStatement, Import};
+use models::{CallStatement, Import, Namespace};
 
 use crate::{
     errors::builder::BuilderError,
@@ -46,7 +46,7 @@ impl CallGraphBuilderImpl {
             })
             .collect();
 
-        Ok(CallGraph::new(vec![], calls))
+        Ok(CallGraph::new(callables, calls))
     }
 
     fn get_callables_map(callables: &[ServiceCallable]) -> HashMap<String, &ServiceCallable> {
@@ -81,6 +81,17 @@ impl CallGraphBuilderImpl {
         call_statement: &CallStatement,
         callables: &[ServiceCallable],
     ) -> Option<String> {
-        todo!()
+        let invoked_on = call_statement.invoked_on.as_deref()?;
+
+        callables
+            .iter()
+            .find(|callable| {
+                if let Namespace::Class(ref class_name) = callable.callable.namespace {
+                    class_name == invoked_on
+                } else {
+                    false
+                }
+            })
+            .map(|c| c.callable.signature.to_string())
     }
 }
