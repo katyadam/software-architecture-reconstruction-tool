@@ -70,14 +70,14 @@ fn split_top_level_commas(s: &str) -> Vec<String> {
 }
 
 /// Parse a function parameter list like "(a: int = 3, b: str = Path(..., gt=0))"
-pub fn parse_parameters(parameters_string: &String) -> Vec<Parameter> {
+pub fn parse_parameters(parameters_string: &str) -> Vec<Parameter> {
     // Gracefully handle functions with no params: "()" or empty string
     let working_str = parameters_string
         .trim()
         .strip_prefix('(')
-        .unwrap_or(parameters_string.as_str())
+        .unwrap_or(parameters_string)
         .strip_suffix(')')
-        .unwrap_or_else(|| parameters_string.as_str())
+        .unwrap_or_else(|| parameters_string)
         .trim()
         .to_string();
 
