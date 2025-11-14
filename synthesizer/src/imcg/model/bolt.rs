@@ -10,6 +10,7 @@ use crate::{
 impl Into<BoltType> for ServiceCallable {
     fn into(self) -> BoltType {
         let mut map = BoltMap::new();
+        map.put("name".into(), self.callable.name.into());
         map.put("signature".into(), self.callable.signature.into());
         map.put("return_type".into(), self.callable.return_type.into());
         map.put("is_async".into(), self.callable.is_async.into());
@@ -44,6 +45,11 @@ impl TryFrom<BoltNode> for ServiceCallable {
     type Error = DeError;
 
     fn try_from(node: BoltNode) -> Result<Self, Self::Error> {
+        let name = match node.get("name") {
+            Ok(BoltType::String(s)) => s.value,
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
         let signature = match node.get("id") {
             Ok(BoltType::String(s)) => s.value,
             _ => return Err(DeError::NoSuchProperty),
@@ -112,6 +118,7 @@ impl TryFrom<BoltNode> for ServiceCallable {
 
         Ok(ServiceCallable::new(
             Callable {
+                name,
                 signature,
                 namespace,
                 parameters,

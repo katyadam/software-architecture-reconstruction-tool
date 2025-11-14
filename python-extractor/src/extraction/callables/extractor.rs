@@ -10,19 +10,14 @@ use crate::extraction::{
     queries::CALLABLES_QUERY,
 };
 
-pub fn get_callable_header(parameters: &Vec<Parameter>) -> String {
+fn get_callable_header(parameters: &Vec<Parameter>) -> String {
     let params: Vec<String> = parameters.iter().map(|p| p.to_string()).collect();
     let joined = params.join(", ");
     return format!("({})", joined);
 }
 
-pub fn get_signature(namespace: &Namespace, name: &String, parameters: &Vec<Parameter>) -> String {
-    format!(
-        "{}/{}{}",
-        namespace.get_signature(),
-        name,
-        get_callable_header(parameters)
-    )
+fn get_callable_name_with_params(name: &str, parameters: &Vec<Parameter>) -> String {
+    format!("{}{}", name, get_callable_header(parameters))
 }
 
 pub struct CallablesExtractor;
@@ -88,8 +83,11 @@ impl Extractor<Callable> for CallablesExtractor {
                 Namespace::Module(params.file_name.unwrap_or_default().to_string())
             };
 
+            let name_with_params = get_callable_name_with_params(&name, &parameters);
+
             let new_callable = Callable {
-                signature: get_signature(&namespace, &name, &parameters),
+                name: name_with_params.clone(),
+                signature: format!("{}/{}", namespace.get_signature(), name_with_params),
                 namespace,
                 parameters,
                 return_type,

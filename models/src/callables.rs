@@ -41,6 +41,7 @@ impl Namespace {
 
 #[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct Callable {
+    pub name: String,
     pub signature: String,
     pub namespace: Namespace,
     pub parameters: Vec<Parameter>,

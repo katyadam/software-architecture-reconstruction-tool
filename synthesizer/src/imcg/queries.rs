@@ -2,6 +2,7 @@ pub const CREATE_IMCG: &str = r#"
 UNWIND $callables AS callable
 MERGE (c:Callable {id: callable.signature, codebase_uuid: $codebase_uuid})
 SET c.codebase_uuid = $codebase_uuid
+SET c.name = callable.name
 SET c.namespace = callable.namespace
 SET c.parameters = callable.parameters
 SET c.return_type = callable.return_type
