@@ -29,9 +29,16 @@ fn find_enclosing_information(
         node = parent;
     }
     if let Some(node) = function_node {
-        if let Some(name_node) = node.child_by_field_name("name") {
+        if let (Some(name_node), Some(params_node)) = (
+            node.child_by_field_name("name"),
+            node.child_by_field_name("parameters"),
+        ) {
             let name_bytes = &code.as_bytes()[name_node.start_byte()..name_node.end_byte()];
-            function_name = Some(String::from_utf8_lossy(name_bytes).to_string());
+            let params_bytes = &code.as_bytes()[params_node.start_byte()..params_node.end_byte()];
+            function_name = Some(
+                String::from_utf8_lossy(name_bytes).to_string()
+                    + &String::from_utf8_lossy(params_bytes).to_string(),
+            );
         }
         if let Some(function_body_node) = node.child_by_field_name("body") {
             let function_body_bytes =
