@@ -10,9 +10,10 @@ use crate::{
     },
 };
 
+#[derive(Debug)]
 pub struct CallGraph {
-    pub callables: Vec<ServiceCallable>,
-    pub calls: Vec<Call>,
+    callables: Vec<ServiceCallable>,
+    calls: Vec<Call>,
 }
 
 impl CallGraph {
@@ -39,13 +40,14 @@ impl CallGraphBuilderImpl {
             .iter()
             .filter_map(|stmt| {
                 let function_hash = stmt.enclosing_function_hash.as_ref()?;
-                let source = callables_map.get(function_hash)?;
-                let target_id = Self::find_target_id(&stmt, &callables)?;
-                Some(Call::new(
-                    source.callable.signature.clone(),
-                    target_id,
-                    None,
-                ))
+                let source = callables_map.get(function_hash);
+                match source {
+                    Some(src) => {
+                        let target_id = Self::find_target_id(&stmt, &callables)?;
+                        Some(Call::new(src.callable.signature.clone(), target_id, None))
+                    }
+                    None => None,
+                }
             })
             .collect();
 
@@ -55,12 +57,12 @@ impl CallGraphBuilderImpl {
     fn get_callables_map(callables: &[ServiceCallable]) -> HashMap<String, &ServiceCallable> {
         let mut map = HashMap::with_capacity(callables.len());
         for c in callables {
-            map.insert(c.callable.signature.clone(), c);
+            map.insert(c.callable.hash.clone(), c);
         }
         map
     }
 
-    pub fn find_target_id(
+    fn find_target_id(
         call_statement: &CallStatement,
         callables: &[ServiceCallable],
     ) -> Option<String> {
@@ -120,10 +122,8 @@ mod tests {
     fn testing() {
         let callables = get_callables();
         let call_statements = get_call_statements();
-        call_statements.iter().for_each(|cs| {
-            let res = CallGraphBuilderImpl::find_target_id(&cs, &callables);
-            println!("{res:?}");
-        });
+        let res = CallGraphBuilderImpl::build(callables, call_statements, vec![]).unwrap();
+        println!("{res:?}");
     }
 
     fn get_call_statements() -> Vec<CallStatement> {
@@ -193,7 +193,7 @@ mod tests {
                     return_type: None,
                     is_async: false,
                     is_constructor: false,
-                    hash: "b9ee44d39137ad72fb72086d588215dc00a601ffc9c606f705230b76bb43a501"
+                    hash: "f9200cee7b04503e164b685447c9b5b6d8b6c46d64b4a1349e039db057512c55"
                         .to_string(),
                     file_path: "./examples/python/callgraph/simple.py".to_string(),
                 },
