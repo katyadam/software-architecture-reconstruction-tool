@@ -22,6 +22,7 @@ fn restcalls_extraction() {
     let expected = vec![
         RestCall {
             function_name: s!("create_item(client, name, description, price, in_stock=True)"),
+            function_hash: s!("afa02c3cc6ad3266bdb082ee5fd59da7bf9dfe5dfdffab62dcd15e63767190d7"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("payload"),
@@ -33,6 +34,7 @@ fn restcalls_extraction() {
         },
         RestCall {
             function_name: s!("get_items(client, skip=0, limit=10, q=None)"),
+            function_hash: s!("055042d0e729e4f644a5248202166c09d27303f290b5ea9bc454054a85a5ca37"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("params"),
@@ -44,6 +46,7 @@ fn restcalls_extraction() {
         },
         RestCall {
             function_name: s!("get_item_by_id(client, item_id)"),
+            function_hash: s!("520b826947096ff0d74f8c220d0e5eef242674e1a1703dd555beaaa31c1eb005"),
             call_arguments: vec![],
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/items/{item_id}"),
@@ -51,6 +54,7 @@ fn restcalls_extraction() {
         },
         RestCall {
             function_name: s!("create_user(client, username, email)"),
+            function_hash: s!("28c43beff05e39512caad64915e9712bcd46971e0ed481a7eded80800682d323"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("payload"),
@@ -62,6 +66,7 @@ fn restcalls_extraction() {
         },
         RestCall {
             function_name: s!("get_users(client, limit=10)"),
+            function_hash: s!("c104b36cd276fe55ee93ddc980be3571136d7578d929aa4dc06bd6c0cec46b29"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"limit\": limit}"),
@@ -73,6 +78,7 @@ fn restcalls_extraction() {
         },
         RestCall {
             function_name: s!("search(client, query)"),
+            function_hash: s!("6212962b8d696d80dc03f12a1ddc465e85103d47b3bdce515d29658def10bb49"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"q\": query}"),
@@ -99,6 +105,7 @@ fn restcalls_evaluation() {
     let expected = vec![
         RestCall {
             function_name: s!("create_item(client, name, description, price, in_stock=True)"),
+            function_hash: s!("afa02c3cc6ad3266bdb082ee5fd59da7bf9dfe5dfdffab62dcd15e63767190d7"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!(
@@ -112,6 +119,8 @@ fn restcalls_evaluation() {
         },
         RestCall {
             function_name: s!("get_items(client, skip=0, limit=10, q=None)"),
+            function_hash: s!("055042d0e729e4f644a5248202166c09d27303f290b5ea9bc454054a85a5ca37"),
+
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"skip\": skip, \"limit\": limit}"),
@@ -123,6 +132,8 @@ fn restcalls_evaluation() {
         },
         RestCall {
             function_name: s!("get_item_by_id(client, item_id)"),
+
+            function_hash: s!("520b826947096ff0d74f8c220d0e5eef242674e1a1703dd555beaaa31c1eb005"),
             call_arguments: vec![],
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/items/{item_id}"),
@@ -130,6 +141,8 @@ fn restcalls_evaluation() {
         },
         RestCall {
             function_name: s!("create_user(client, username, email)"),
+
+            function_hash: s!("28c43beff05e39512caad64915e9712bcd46971e0ed481a7eded80800682d323"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("{\n        \"username\": username,\n        \"email\": email\n    }"),
@@ -141,6 +154,7 @@ fn restcalls_evaluation() {
         },
         RestCall {
             function_name: s!("get_users(client, limit=10)"),
+            function_hash: s!("c104b36cd276fe55ee93ddc980be3571136d7578d929aa4dc06bd6c0cec46b29"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"limit\": limit}"),
@@ -152,6 +166,7 @@ fn restcalls_evaluation() {
         },
         RestCall {
             function_name: s!("search(client, query)"),
+            function_hash: s!("6212962b8d696d80dc03f12a1ddc465e85103d47b3bdce515d29658def10bb49"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"q\": query}"),
@@ -178,6 +193,7 @@ fn should_extract_all_types_of_restcall() {
     let expected = vec![
         RestCall {
             function_name: s!("endpoint_with_withblock_restcall(data: ProxyItemCreate)"),
+            function_hash: s!("fc2daf1e0f6ec57bb37709b801791367a3cfd6065a0e298cb9ac45905a7e98d1"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("data.dict()"),
@@ -189,6 +205,7 @@ fn should_extract_all_types_of_restcall() {
         },
         RestCall {
             function_name: s!("withblock_restcall_assignment(data: ProxyItemCreate)"),
+            function_hash: s!("15afbd16c19e74e78c29dcda1baa94ff0b40d33a4c4721ee050372d6a1d96258"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("data.dict()"),
@@ -200,6 +217,7 @@ fn should_extract_all_types_of_restcall() {
         },
         RestCall {
             function_name: s!("restcall_assignment(client, skip=0, limit=10, q=None)"),
+            function_hash: s!("ff31910e5c469e50be506cff25ba0327329290a86de5b8c88c135de8824f905e"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("params"),
                 value: s!("{\"skip\": skip, \"limit\": limit}"),
@@ -211,6 +229,7 @@ fn should_extract_all_types_of_restcall() {
         },
         RestCall {
             function_name: s!("restcall_no_assignment(client, username, email)"),
+            function_hash: s!("a6c710dded34b961089f5a268302fb0448d6dca9ac87ebb8e7892fa5633a4f95"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("{\n        \"username\": username,\n        \"email\": email\n    }"),
@@ -222,6 +241,7 @@ fn should_extract_all_types_of_restcall() {
         },
         RestCall {
             function_name: s!("await_restcall_assignment(client, username, email)"),
+            function_hash: s!("fe73f93925fc417362d5b550090167b84c9175a17c4f5d80a0f86fcb6fe7473f"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("{\n        \"username\": username,\n        \"email\": email\n    }"),
@@ -233,6 +253,7 @@ fn should_extract_all_types_of_restcall() {
         },
         RestCall {
             function_name: s!("await_restcall_no_assignment(client, username, email)"),
+            function_hash: s!("31d2676275664125e30230a31dabbc0c7cb77d02b5a160e170b646b36b126e4b"),
             call_arguments: vec![Argument {
                 assigned_variable: s!("json"),
                 value: s!("{\n        \"username\": username,\n        \"email\": email\n    }"),

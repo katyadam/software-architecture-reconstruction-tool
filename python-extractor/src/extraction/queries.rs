@@ -54,7 +54,7 @@ pub const RESTCALLS_QUERY: &str = r#"
       ]
     )
   )
-)
+) @function
 
 ;; ────────────────────────────────────────────────────────────────────────────
 ;; PATTERN 2 — with_statement → block → expression_statement
@@ -115,7 +115,7 @@ pub const RESTCALLS_QUERY: &str = r#"
       )
     )
   )
-)
+) @function
 "#;
 
 pub const ENDPOINTS_QUERY: &str = r#"
@@ -126,7 +126,7 @@ pub const ENDPOINTS_QUERY: &str = r#"
     ) @finder (#match? @finder "app."))
     (function_definition 
         name: (identifier) @function.name
-        parameters: (parameters) @function.params)
+        parameters: (parameters) @function.params) @function
 )
 "#;
 

@@ -1,4 +1,5 @@
 use models::{HttpMethod, RestCall};
+use sha2::{Digest, Sha256};
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
 
 use crate::extraction::{
@@ -21,6 +22,7 @@ impl Extractor<RestCall> for RestcallsExtractor {
             let mut call_arguments = vec![];
             let mut http_method = String::new();
             let mut target_uri = String::new();
+            let mut function_hash = String::new();
 
             m.captures.into_iter().for_each(|capture| {
                 let capture_text =
@@ -41,11 +43,17 @@ impl Extractor<RestCall> for RestcallsExtractor {
                         let param_names = extract_function_arguments(capture.node, &params.code);
                         call_arguments.extend(param_names);
                     }
+                    "function" => {
+                        let mut hasher = Sha256::new();
+                        hasher.update(value.as_bytes());
+                        function_hash = format!("{:x}", hasher.finalize());
+                    }
                     _ => {}
                 }
             });
             let rest_call = RestCall {
                 function_name: function_name.clone() + &function_parameters,
+                function_hash,
                 call_arguments,
                 http_method: http_method.parse().unwrap_or(HttpMethod::GET),
                 target_uri: target_uri.clone(),

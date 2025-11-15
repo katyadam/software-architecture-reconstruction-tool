@@ -2,6 +2,7 @@ use crate::extraction::callables::parser::parse_parameters;
 use crate::extraction::extractor::{ExtractParams, Extractor};
 use crate::extraction::queries::ENDPOINTS_QUERY;
 use models::{Endpoint, HttpMethod};
+use sha2::{Digest, Sha256};
 use tree_sitter::StreamingIterator;
 use tree_sitter::{Query, QueryCursor};
 
@@ -19,6 +20,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
             let mut http_method = String::new();
             let mut uri = String::new();
             let mut parameters = vec![];
+            let mut function_hash = String::new();
 
             m.captures.into_iter().for_each(|capture| {
                 let capture_text =
@@ -32,12 +34,18 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                         let p = parse_parameters(&value);
                         parameters.extend(p);
                     }
+                    "function" => {
+                        let mut hasher = Sha256::new();
+                        hasher.update(value.as_bytes());
+                        function_hash = format!("{:x}", hasher.finalize());
+                    }
                     _ => {}
                 }
             });
 
             endpoints.push(Endpoint {
-                function_name: function_name,
+                function_name,
+                function_hash,
                 http_method: http_method.parse().unwrap_or(HttpMethod::GET),
                 parameters,
                 uri,
