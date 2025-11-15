@@ -2,7 +2,10 @@ use models::{CallStatement, Callable, Import, configuration::ServiceDescription}
 
 use crate::{
     errors::builder::BuilderError,
-    imcg::model::{IMCG, ServiceCallable},
+    imcg::{
+        construction::intra::CallGraphBuilderImpl,
+        model::{IMCG, ServiceCallable},
+    },
     utils::assign_service_description_to_file,
 };
 
@@ -48,6 +51,8 @@ impl ImcgBuilder for ImcgBuilderImpl {
         service_descs: Vec<ServiceDescription>,
     ) -> Result<IMCG, BuilderError> {
         let service_callables = self.get_service_callables(callables, service_descs);
-        Ok(IMCG::new(Vec::new(), Vec::new()))
+        let cg_builder = CallGraphBuilderImpl::new();
+        let intra_cg = cg_builder.build(service_callables, call_statements, imports)?;
+        Ok(IMCG::new(intra_cg.callables, intra_cg.calls))
     }
 }

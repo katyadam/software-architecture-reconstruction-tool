@@ -12,8 +12,8 @@ use crate::{
 
 #[derive(Debug)]
 pub struct CallGraph {
-    callables: Vec<ServiceCallable>,
-    calls: Vec<Call>,
+    pub callables: Vec<ServiceCallable>,
+    pub calls: Vec<Call>,
 }
 
 impl CallGraph {
@@ -30,6 +30,7 @@ impl CallGraphBuilderImpl {
     }
 
     pub fn build(
+        self,
         callables: Vec<ServiceCallable>,
         call_statements: Vec<CallStatement>,
         imports: Vec<Import>,
@@ -43,7 +44,7 @@ impl CallGraphBuilderImpl {
                 let source = callables_map.get(function_hash);
                 match source {
                     Some(src) => {
-                        let target_id = Self::find_target_id(&stmt, &callables)?;
+                        let target_id = Self::find_target_id(&stmt, &callables, &src.service_name)?;
                         Some(Call::new(src.callable.signature.clone(), target_id, None))
                     }
                     None => None,
@@ -65,21 +66,24 @@ impl CallGraphBuilderImpl {
     fn find_target_id(
         call_statement: &CallStatement,
         callables: &[ServiceCallable],
+        source_service_name: &str,
     ) -> Option<String> {
         // Searching for target that lays in Class, due to invoked_on is not None - Some(class_name)
         if call_statement.invoked_on.is_some() {
-            return Self::invoked_on_lookup(call_statement, callables);
+            return Self::invoked_on_lookup(call_statement, callables, source_service_name);
         }
         // Searching for target using target callable name and callable name matching
-        Self::exhaustive_lookup(call_statement, callables)
+        Self::exhaustive_lookup(call_statement, callables, source_service_name)
     }
 
     fn exhaustive_lookup(
         call_statement: &CallStatement,
         callables: &[ServiceCallable],
+        source_service_name: &str,
     ) -> Option<String> {
         callables
             .iter()
+            .filter(|callable| callable.service_name == source_service_name)
             .map(|callable| {
                 let score = get_score(callable, call_statement);
                 (score, callable) // pair score + callable
@@ -97,11 +101,13 @@ impl CallGraphBuilderImpl {
     fn invoked_on_lookup(
         call_statement: &CallStatement,
         callables: &[ServiceCallable],
+        source_service_name: &str,
     ) -> Option<String> {
         let invoked_on = call_statement.invoked_on.as_deref()?;
 
         callables
             .iter()
+            .filter(|callable| callable.service_name == source_service_name)
             .find(|callable| {
                 if let Namespace::Class(ref class_name) = callable.callable.namespace {
                     class_name == invoked_on
@@ -122,7 +128,10 @@ mod tests {
     fn testing() {
         let callables = get_callables();
         let call_statements = get_call_statements();
-        let res = CallGraphBuilderImpl::build(callables, call_statements, vec![]).unwrap();
+        let cg_builder = CallGraphBuilderImpl::new();
+        let res = cg_builder
+            .build(callables, call_statements, vec![])
+            .unwrap();
         println!("{res:?}");
     }
 
