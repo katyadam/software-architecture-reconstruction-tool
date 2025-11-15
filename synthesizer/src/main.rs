@@ -98,7 +98,11 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         let cm_service = Arc::new(get_cm_service(cm_graph.clone()));
         let sdg_service = Arc::new(get_sdg_service(sdg_graph.clone(), &manager_url));
-        let imcg_service = Arc::new(get_imcg_service(imcg_graph.clone(), &manager_url));
+        let imcg_service = Arc::new(get_imcg_service(
+            imcg_graph.clone(),
+            &manager_url,
+            Arc::clone(&sdg_service),
+        ));
         // Clone Arcs to pass them where needed
         let s3_service = Arc::new(S3Service::new(
             get_s3_client(),
@@ -153,12 +157,21 @@ fn get_sdg_service(graph: Arc<Graph>, manager_url: &str) -> SdgServiceImpl {
     SdgServiceImpl::new(sdg_repository, sdg_builder, manager_connector)
 }
 
-fn get_imcg_service(graph: Arc<Graph>, manager_url: &str) -> ImcgServiceImpl {
+fn get_imcg_service(
+    graph: Arc<Graph>,
+    manager_url: &str,
+    sdg_service: Arc<SdgServiceImpl>,
+) -> ImcgServiceImpl {
     let imcg_repository = ImcgRepositoryImpl::new(graph);
     let imcg_builder = ImcgBuilderImpl::new();
     let manager_connector =
         ManagerConnector::new(HttpClient::new(manager_url.to_owned(), Client::default()));
-    ImcgServiceImpl::new(imcg_repository, imcg_builder, manager_connector)
+    ImcgServiceImpl::new(
+        imcg_repository,
+        imcg_builder,
+        manager_connector,
+        sdg_service,
+    )
 }
 
 fn get_s3_client() -> S3Client {

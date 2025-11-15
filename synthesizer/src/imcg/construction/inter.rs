@@ -6,6 +6,7 @@ use crate::{
         construction::intra::CallGraphBuilderImpl,
         model::{IMCG, ServiceCallable},
     },
+    sdg::model::SDG,
     utils::assign_service_description_to_file,
 };
 
@@ -16,6 +17,7 @@ pub trait ImcgBuilder {
         call_statements: Vec<CallStatement>,
         imports: Vec<Import>,
         service_descs: Vec<ServiceDescription>,
+        sdg: &SDG,
     ) -> Result<IMCG, BuilderError>;
 }
 
@@ -49,6 +51,7 @@ impl ImcgBuilder for ImcgBuilderImpl {
         call_statements: Vec<CallStatement>,
         imports: Vec<Import>,
         service_descs: Vec<ServiceDescription>,
+        sdg: &SDG,
     ) -> Result<IMCG, BuilderError> {
         let service_callables = self.get_service_callables(callables, service_descs);
         let cg_builder = CallGraphBuilderImpl::new();

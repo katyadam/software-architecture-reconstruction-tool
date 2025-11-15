@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use uuid::Uuid;
 
 use crate::{
@@ -8,6 +10,10 @@ use crate::{
         dto::PostIMCG,
         model::IMCG,
         repository::{ImcgRepository, ImcgRepositoryImpl},
+    },
+    sdg::{
+        model::SDG,
+        service::{SdgService, SdgServiceImpl},
     },
 };
 
@@ -21,6 +27,7 @@ pub struct ImcgServiceImpl {
     repository: ImcgRepositoryImpl,
     builder: ImcgBuilderImpl,
     manager_connector: ManagerConnector,
+    sdg_service: Arc<SdgServiceImpl>,
 }
 
 impl ImcgServiceImpl {
@@ -28,11 +35,13 @@ impl ImcgServiceImpl {
         repository: ImcgRepositoryImpl,
         builder: ImcgBuilderImpl,
         manager_connector: ManagerConnector,
+        sdg_service: Arc<SdgServiceImpl>,
     ) -> Self {
         Self {
             repository,
             builder,
             manager_connector,
+            sdg_service,
         }
     }
 }
@@ -43,7 +52,10 @@ impl ImcgService for ImcgServiceImpl {
             .manager_connector
             .get_codebase_configuration(imcg_payload.codebase_uuid)
             .await?;
-
+        let sdg: SDG = self
+            .sdg_service
+            .get_single(imcg_payload.codebase_uuid)
+            .await?;
         let imcg: IMCG = self.builder.build(
             imcg_payload.callables,
             imcg_payload.call_statements,
@@ -51,6 +63,7 @@ impl ImcgService for ImcgServiceImpl {
             codebase_configuration
                 .configuration_data
                 .service_descriptions,
+            &sdg,
         )?;
 
         self.repository
