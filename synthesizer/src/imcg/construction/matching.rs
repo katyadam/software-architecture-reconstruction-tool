@@ -1,4 +1,4 @@
-use models::{Argument, CallStatement, Parameter};
+use models::CallStatement;
 
 use crate::imcg::model::ServiceCallable;
 

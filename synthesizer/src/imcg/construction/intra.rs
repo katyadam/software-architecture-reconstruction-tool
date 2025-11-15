@@ -32,11 +32,10 @@ impl CallGraphBuilderImpl {
     pub fn build(
         self,
         callables: Vec<ServiceCallable>,
+        callables_map: &HashMap<String, ServiceCallable>,
         call_statements: Vec<CallStatement>,
         imports: Vec<Import>,
     ) -> Result<CallGraph, BuilderError> {
-        let callables_map = Self::get_callables_map(&callables);
-
         let calls: Vec<Call> = call_statements
             .iter()
             .filter_map(|stmt| {
@@ -53,14 +52,6 @@ impl CallGraphBuilderImpl {
             .collect();
 
         Ok(CallGraph::new(callables, calls))
-    }
-
-    fn get_callables_map(callables: &[ServiceCallable]) -> HashMap<String, &ServiceCallable> {
-        let mut map = HashMap::with_capacity(callables.len());
-        for c in callables {
-            map.insert(c.callable.hash.clone(), c);
-        }
-        map
     }
 
     fn find_target_id(
@@ -116,98 +107,5 @@ impl CallGraphBuilderImpl {
                 }
             })
             .map(|c| c.callable.signature.to_string())
-    }
-}
-
-mod tests {
-    use models::{Argument, CallStatement, Callable, Namespace, Parameter};
-
-    use crate::imcg::{construction::intra::CallGraphBuilderImpl, model::ServiceCallable};
-
-    #[test]
-    fn testing() {
-        let callables = get_callables();
-        let call_statements = get_call_statements();
-        let cg_builder = CallGraphBuilderImpl::new();
-        let res = cg_builder
-            .build(callables, call_statements, vec![])
-            .unwrap();
-        println!("{res:?}");
-    }
-
-    fn get_call_statements() -> Vec<CallStatement> {
-        vec![CallStatement {
-            function_name: "A".to_string(),
-            arguments: vec![
-                Argument {
-                    assigned_variable: "".to_string(),
-                    value: "a".to_string(),
-                    datatype: "int".to_string(),
-                },
-                Argument {
-                    assigned_variable: "".to_string(),
-                    value: "c".to_string(),
-                    datatype: "any".to_string(),
-                },
-            ],
-            enclosing_function_name: Some("B(a: int)".to_string()),
-            enclosing_class_name: None,
-            enclosing_function_hash: Some(
-                "f9200cee7b04503e164b685447c9b5b6d8b6c46d64b4a1349e039db057512c55".to_string(),
-            ),
-            is_self_invoke: false,
-            invoked_on: None,
-        }]
-    }
-
-    fn get_callables() -> Vec<ServiceCallable> {
-        vec![
-            ServiceCallable {
-                callable: Callable {
-                    name: "A(x: int, y: int)".to_string(),
-                    signature: "module:./examples/python/callgraph/simple.py/A(x: int, y: int)"
-                        .to_string(),
-                    namespace: Namespace::Module(
-                        "./examples/python/callgraph/simple.py".to_string(),
-                    ),
-                    parameters: vec![
-                        Parameter {
-                            name: "x".to_string(),
-                            datatype: Some("int".to_string()),
-                            initial_value: None,
-                        },
-                        Parameter {
-                            name: "y".to_string(),
-                            datatype: Some("int".to_string()),
-                            initial_value: None,
-                        },
-                    ],
-                    return_type: None,
-                    is_async: false,
-                    is_constructor: false,
-                    hash: "d74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1"
-                        .to_string(),
-                    file_path: "./examples/python/callgraph/simple.py".to_string(),
-                },
-                service_name: "Test".to_string(),
-            },
-            ServiceCallable {
-                callable: Callable {
-                    name: "B(a: int)".to_string(),
-                    signature: "module:./examples/python/callgraph/simple.py/B(a: int)".to_string(),
-                    namespace: Namespace::Module(
-                        "./examples/python/callgraph/simple.py".to_string(),
-                    ),
-                    parameters: vec![],
-                    return_type: None,
-                    is_async: false,
-                    is_constructor: false,
-                    hash: "f9200cee7b04503e164b685447c9b5b6d8b6c46d64b4a1349e039db057512c55"
-                        .to_string(),
-                    file_path: "./examples/python/callgraph/simple.py".to_string(),
-                },
-                service_name: "Test".to_string(),
-            },
-        ]
     }
 }

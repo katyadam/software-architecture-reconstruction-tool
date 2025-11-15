@@ -1,12 +1,14 @@
+use std::collections::HashMap;
+
 use models::{CallStatement, Callable, Import, configuration::ServiceDescription};
 
 use crate::{
     errors::builder::BuilderError,
     imcg::{
-        construction::intra::CallGraphBuilderImpl,
-        model::{IMCG, ServiceCallable},
+        construction::{intra::CallGraphBuilderImpl, map::get_callables_map},
+        model::{Call, IMCG, ServiceCallable},
     },
-    sdg::model::SDG,
+    sdg::model::{Request, SDG},
     utils::assign_service_description_to_file,
 };
 
@@ -42,6 +44,42 @@ impl ImcgBuilderImpl {
             })
             .collect()
     }
+
+    fn create_imcg_calls(
+        &self,
+        sdg: &SDG,
+        callables_map: &HashMap<String, ServiceCallable>,
+    ) -> Result<Vec<Call>, BuilderError> {
+        sdg.connections
+            .iter()
+            .flat_map(|conn| conn.requests.iter())
+            .map(|rq| self.create_call_from_request(&rq, &callables_map))
+            .collect()
+    }
+
+    fn create_call_from_request(
+        &self,
+        request: &Request,
+        callables_map: &HashMap<String, ServiceCallable>,
+    ) -> Result<Call, BuilderError> {
+        let endpoint = callables_map
+            .get(&request.endpoint.function_hash)
+            .ok_or_else(|| {
+                BuilderError::Error(format!("Missing endpoint function: {:?}", request.endpoint))
+            })?;
+
+        let restcall = callables_map
+            .get(&request.restcall.function_hash)
+            .ok_or_else(|| {
+                BuilderError::Error(format!("Missing restcall function: {:?}", request.restcall))
+            })?;
+
+        Ok(Call::new(
+            restcall.callable.signature.clone(),
+            endpoint.callable.signature.clone(),
+            Some(request.clone()),
+        ))
+    }
 }
 
 impl ImcgBuilder for ImcgBuilderImpl {
@@ -54,8 +92,15 @@ impl ImcgBuilder for ImcgBuilderImpl {
         sdg: &SDG,
     ) -> Result<IMCG, BuilderError> {
         let service_callables = self.get_service_callables(callables, service_descs);
+        let callables_map = get_callables_map(&service_callables);
         let cg_builder = CallGraphBuilderImpl::new();
-        let intra_cg = cg_builder.build(service_callables, call_statements, imports)?;
-        Ok(IMCG::new(intra_cg.callables, intra_cg.calls))
+        let intra_cg =
+            cg_builder.build(service_callables, &callables_map, call_statements, imports)?;
+
+        let mut imcg_calls = self.create_imcg_calls(sdg, &callables_map)?;
+        let mut merged_calls = intra_cg.calls;
+        merged_calls.append(&mut imcg_calls);
+
+        Ok(IMCG::new(intra_cg.callables, merged_calls))
     }
 }
