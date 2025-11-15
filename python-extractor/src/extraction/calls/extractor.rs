@@ -40,13 +40,10 @@ fn find_enclosing_information(
                     + &String::from_utf8_lossy(params_bytes).to_string(),
             );
         }
-        if let Some(function_body_node) = node.child_by_field_name("body") {
-            let function_body_bytes =
-                &code.as_bytes()[function_body_node.start_byte()..function_body_node.end_byte()];
-            let mut hasher = Sha256::new();
-            hasher.update(function_body_bytes);
-            enclosing_function_hash = Some(format!("{:x}", hasher.finalize()));
-        }
+        let function_bytes = &code.as_bytes()[node.start_byte()..node.end_byte()];
+        let mut hasher = Sha256::new();
+        hasher.update(function_bytes);
+        enclosing_function_hash = Some(format!("{:x}", hasher.finalize()));
     }
 
     if let Some(name_node) = class_node.and_then(|n| n.child_by_field_name("name")) {

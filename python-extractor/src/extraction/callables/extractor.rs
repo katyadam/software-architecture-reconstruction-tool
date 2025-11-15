@@ -61,8 +61,6 @@ impl Extractor<Callable> for CallablesExtractor {
                         if value.starts_with("async") {
                             is_async = true;
                         }
-                    }
-                    "function.body" => {
                         let mut hasher = Sha256::new();
                         hasher.update(value.as_bytes());
                         hash = format!("{:x}", hasher.finalize());

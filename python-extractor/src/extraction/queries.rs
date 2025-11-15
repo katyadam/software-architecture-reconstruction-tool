@@ -173,7 +173,7 @@ pub const CALLABLES_QUERY: &str = r#"
         parameters: (parameters) @function.params
         (#optional? return_type)
         return_type: (type)? @function.return_type
-        body: (block) @function.body
+        body: (block) @function.body ;; Can be omitted
       ) @function
     )
   )
@@ -186,7 +186,7 @@ pub const CALLABLES_QUERY: &str = r#"
     parameters: (parameters) @function.params
     (#optional? return_type)
     return_type: (type)? @function.return_type
-    body: (block) @function.body
+    body: (block) @function.body ;; Can be omitted
   ) @function
 )
   ]
