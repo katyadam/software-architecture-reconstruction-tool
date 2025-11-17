@@ -74,7 +74,7 @@ impl ImcgRepository for ImcgRepositoryImpl {
             .run(
                 query(CREATE_IMCG)
                     .param("callables", imcg.callables.clone())
-                    .param("connections", imcg.calls.clone())
+                    .param("calls", imcg.calls.clone())
                     .param("codebase_uuid", codebase_uuid.to_string()),
             )
             .await?;
