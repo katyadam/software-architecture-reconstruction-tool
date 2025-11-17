@@ -68,7 +68,6 @@ impl S3Service {
                 codebase_uuid: dto.codebase_uuid,
                 callables: loaded_imcg_elements.callables,
                 call_statements: loaded_imcg_elements.calls,
-                imports: loaded_imcg_elements.imports,
             })
             .await?;
         Ok(())
@@ -144,17 +143,16 @@ impl S3Service {
         self.load_and_merge_chunks::<S3ImcgCodeElements, _, S3ImcgCodeElements>(
             &index_path,
             |chunks| {
-                let (callables, calls, imports) = chunks.into_iter().fold(
-                    (Vec::new(), Vec::new(), Vec::new()),
-                    |(mut callables_aggr, mut calls_aggr, mut imports_aggr), chunk| {
+                let (callables, calls) = chunks.into_iter().fold(
+                    (Vec::new(), Vec::new()),
+                    |(mut callables_aggr, mut calls_aggr), chunk| {
                         callables_aggr.extend(chunk.callables);
                         calls_aggr.extend(chunk.calls);
-                        imports_aggr.extend(chunk.imports);
 
-                        (callables_aggr, calls_aggr, imports_aggr)
+                        (callables_aggr, calls_aggr)
                     },
                 );
-                S3ImcgCodeElements::new(callables, calls, imports)
+                S3ImcgCodeElements::new(callables, calls)
             },
         )
         .await

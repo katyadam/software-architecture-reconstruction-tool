@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use models::{CallStatement, Callable, Import, configuration::ServiceDescription};
+use models::{CallStatement, Callable, configuration::ServiceDescription};
 
 use crate::{
     errors::builder::BuilderError,
@@ -17,7 +17,6 @@ pub trait ImcgBuilder {
         &self,
         callables: Vec<Callable>,
         call_statements: Vec<CallStatement>,
-        imports: Vec<Import>,
         service_descs: Vec<ServiceDescription>,
         sdg: &SDG,
     ) -> Result<IMCG, BuilderError>;
@@ -87,15 +86,13 @@ impl ImcgBuilder for ImcgBuilderImpl {
         &self,
         callables: Vec<Callable>,
         call_statements: Vec<CallStatement>,
-        imports: Vec<Import>,
         service_descs: Vec<ServiceDescription>,
         sdg: &SDG,
     ) -> Result<IMCG, BuilderError> {
         let service_callables = self.get_service_callables(callables, service_descs);
         let callables_map = get_callables_map(&service_callables);
         let cg_builder = CallGraphBuilderImpl::new();
-        let intra_cg =
-            cg_builder.build(service_callables, &callables_map, call_statements, imports)?;
+        let intra_cg = cg_builder.build(service_callables, &callables_map, call_statements)?;
 
         let mut imcg_calls = self.create_imcg_calls(sdg, &callables_map)?;
         let mut merged_calls = intra_cg.calls;

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use models::{CallStatement, Import, Namespace};
+use models::{CallStatement, Namespace};
 
 use crate::{
     errors::builder::BuilderError,
@@ -34,7 +34,6 @@ impl CallGraphBuilderImpl {
         callables: Vec<ServiceCallable>,
         callables_map: &HashMap<String, ServiceCallable>,
         call_statements: Vec<CallStatement>,
-        imports: Vec<Import>,
     ) -> Result<CallGraph, BuilderError> {
         let calls: Vec<Call> = call_statements
             .iter()
