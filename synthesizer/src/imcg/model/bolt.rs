@@ -150,7 +150,7 @@ impl TryFrom<BoltMap> for Call {
     type Error = DeError;
 
     fn try_from(node: BoltMap) -> Result<Self, Self::Error> {
-        let source_id = match node.get("source_id") {
+        let source_id = match node.get("source") {
             Ok(BoltType::String(s)) => s.value,
             Ok(BoltType::Null(_)) => {
                 return Err(DeError::Other("Source is NULL!".to_string()));
@@ -158,7 +158,7 @@ impl TryFrom<BoltMap> for Call {
             _ => return Err(DeError::NoSuchProperty),
         };
 
-        let target_id = match node.get("target_id") {
+        let target_id = match node.get("target") {
             Ok(BoltType::String(s)) => s.value,
             Ok(BoltType::Null(_)) => {
                 return Err(DeError::Other("Target is NULL!".to_string()));

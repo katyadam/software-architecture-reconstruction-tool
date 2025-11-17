@@ -127,7 +127,7 @@ impl TryFrom<BoltMap> for Connection {
     type Error = DeError;
 
     fn try_from(node: BoltMap) -> Result<Self, Self::Error> {
-        let source_id = match node.get("source_id") {
+        let source_id = match node.get("source") {
             Ok(BoltType::String(s)) => s.value,
             Ok(BoltType::Null(_)) => {
                 return Err(DeError::Other("Source is NULL!".to_string()));
@@ -135,7 +135,7 @@ impl TryFrom<BoltMap> for Connection {
             _ => return Err(DeError::NoSuchProperty),
         };
 
-        let target_id = match node.get("target_id") {
+        let target_id = match node.get("target") {
             Ok(BoltType::String(s)) => s.value,
             Ok(BoltType::Null(_)) => {
                 return Err(DeError::Other("Target is NULL!".to_string()));
@@ -161,6 +161,9 @@ impl TryFrom<BoltMap> for Connection {
                     }),
                 })
                 .collect::<Result<Vec<Request>, DeError>>()?,
+            Err(e) => {
+                return Err(DeError::Other(e.to_string()));
+            }
             _ => {
                 return Err(DeError::Other(
                     "Requests argument not present in Connection".to_string(),

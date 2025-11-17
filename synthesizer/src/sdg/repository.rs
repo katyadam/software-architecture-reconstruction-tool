@@ -59,7 +59,7 @@ impl SdgRepository for SdgRepositoryImpl {
                 if let BoltType::Map(map) = bolt_dep {
                     match Connection::try_from(map) {
                         Ok(dep) => sdg.connections.push(dep),
-                        Err(e) => warn!("Failed to deserialize Connection: {:?}", e),
+                        _ => (),
                     }
                 } else {
                     warn!("Unexpected BoltType for connection: {:?}", bolt_dep);

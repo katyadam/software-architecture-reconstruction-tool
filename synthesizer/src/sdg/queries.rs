@@ -3,6 +3,7 @@ UNWIND $services AS service
 MERGE (s:Service {id: service.name, codebase_uuid: $codebase_uuid})
 SET s.name = service.name
 SET s.endpoints = service.endpoints
+SET s.urls = service.urls
 SET s.codebase_uuid = $codebase_uuid
 
 WITH $connections AS connections
@@ -17,7 +18,9 @@ pub const GET_SDG: &str = r#"
 MATCH (s:Service {codebase_uuid: $codebase_uuid})
 OPTIONAL MATCH (s)-[r:DEPENDS_ON]->(target:Service)
 WHERE target.codebase_uuid = $codebase_uuid
-WITH collect(DISTINCT s) AS all_services, collect(DISTINCT {source: s.id, target: target.id}) AS all_connections
+WITH
+    collect(DISTINCT s) AS all_services,
+    collect(DISTINCT {source: s.id, target: target.id, requests: r.requests}) AS all_connections
 RETURN all_services, all_connections
 "#;
 

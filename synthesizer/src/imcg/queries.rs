@@ -23,7 +23,9 @@ pub const GET_IMCG: &str = r#"
 MATCH (c:Callable {codebase_uuid: $codebase_uuid})
 OPTIONAL MATCH (c)-[r:DEPENDS_ON]->(target:Callable)
 WHERE target.codebase_uuid = $codebase_uuid
-WITH collect(DISTINCT c) AS all_callables, collect(DISTINCT {source: c.id, target: target.id}) AS all_calls
+WITH 
+    collect(DISTINCT c) AS all_callables,
+    collect(DISTINCT  {source: s.id, target: target.id, request: r.request}) AS all_calls
 RETURN all_callables, all_calls
 "#;
 
