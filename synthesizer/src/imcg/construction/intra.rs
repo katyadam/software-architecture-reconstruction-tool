@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use log::debug;
 use models::{CallStatement, Namespace};
 
 use crate::{

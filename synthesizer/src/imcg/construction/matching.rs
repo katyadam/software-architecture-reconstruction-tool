@@ -9,19 +9,28 @@ fn match_arg_and_param_datatypes(arg_datatype: &str, param_datatype: &Option<Str
     }
 }
 
-pub(crate) fn get_score(callable: &ServiceCallable, call_statement: &CallStatement) -> i32 {
-    if let Some(function_name) = callable.callable.name.split("(").next() {
-        if function_name != call_statement.function_name {
-            return 0;
-        }
+pub(crate) fn get_score(callable: &ServiceCallable, call_stmt: &CallStatement) -> i32 {
+    // 1. Function name must match
+    let callable_name = callable.callable.name.split('(').next().unwrap_or_default();
+
+    if callable_name != call_stmt.function_name {
+        return 0;
     }
 
-    let matches = call_statement
+    // 2. Count datatype matches
+    let match_count = call_stmt
         .arguments
         .iter()
         .zip(&callable.callable.parameters)
         .filter(|(arg, param)| match_arg_and_param_datatypes(&arg.datatype, &param.datatype))
         .count();
 
-    1 + matches as i32
+    // 3. Base score from argument count match
+    let base_score = if call_stmt.arguments.len() == callable.callable.parameters.len() {
+        2
+    } else {
+        1
+    };
+
+    base_score + match_count as i32
 }
