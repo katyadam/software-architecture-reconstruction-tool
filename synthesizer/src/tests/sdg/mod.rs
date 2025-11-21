@@ -15,6 +15,7 @@ mod tests {
         let sdg = service
             .build(sample_data.0, sample_data.1, configuration)
             .expect("This test doesn't produce error!");
+        println!("{sdg:?}");
         assert!(
             sdg.services.len() == 2,
             "Incorrect number of services, should be 2"
