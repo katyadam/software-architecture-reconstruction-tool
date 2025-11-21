@@ -13,14 +13,14 @@ pub struct Parameter {
 impl fmt::Display for Parameter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let to_print = match (&self.datatype, &self.initial_value) {
-            (None, None) => format!("{}", self.name),
+            (None, None) => self.name.to_string(),
             (Some(datatype), None) => format!("{}:{}", self.name, datatype),
             (None, Some(initial_value)) => format!("{}={}", self.name, initial_value),
             (Some(datatype), Some(initial_value)) => {
                 format!("{}:{}={}", self.name, datatype, initial_value)
             }
         };
-        write!(f, "{}", to_print)
+        write!(f, "{to_print}")
     }
 }
 
@@ -33,8 +33,8 @@ pub enum Namespace {
 impl Namespace {
     pub fn get_signature(&self) -> String {
         match self {
-            Namespace::Class(value) => format!("class:{}", value),
-            Namespace::Module(value) => format!("module:{}", value),
+            Namespace::Class(value) => format!("class:{value}"),
+            Namespace::Module(value) => format!("module:{value}"),
         }
     }
 }
@@ -63,13 +63,6 @@ impl Display for Namespace {
 
 impl Display for Callable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let params = self
-            .parameters
-            .iter()
-            .map(|p| p.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-
         write!(
             f,
             "\nFILE: {}\nNAMESPACE: {}\nSIGN: {}\nHASH: {}",

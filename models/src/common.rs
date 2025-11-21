@@ -3,18 +3,13 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema, Clone, Default)]
 pub enum HttpMethod {
+    #[default]
     GET,
     POST,
     PUT,
     DELETE,
-}
-
-impl Default for HttpMethod {
-    fn default() -> Self {
-        HttpMethod::GET
-    }
 }
 
 impl FromStr for HttpMethod {
@@ -26,7 +21,7 @@ impl FromStr for HttpMethod {
             "POST" => Ok(HttpMethod::POST),
             "PUT" => Ok(HttpMethod::PUT),
             "DELETE" => Ok(HttpMethod::DELETE),
-            _ => Err(format!("Invalid HTTP method: {}", s)),
+            _ => Err(format!("Invalid HTTP method: {s}")),
         }
     }
 }

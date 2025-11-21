@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[derive(ToSchema, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SDG {
+pub struct Sdg {
     pub services: Vec<Service>,
     pub connections: Vec<Connection>,
 }

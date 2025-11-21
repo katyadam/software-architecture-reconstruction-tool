@@ -80,7 +80,7 @@ impl ExtractorService for ExtractorServiceImpl {
         codebase_uuid: Uuid,
     ) -> Result<ServiceResponse, ApiError> {
         let run_id = uuid::Uuid::new_v4();
-        let base_dir_path = format!("{}/{}", codebase_uuid, run_id);
+        let base_dir_path = format!("{codebase_uuid}/{run_id}");
         let mut any_file_processed: bool = false;
 
         while let Some(field) = payload.next().await {
@@ -115,7 +115,7 @@ impl ExtractorService for ExtractorServiceImpl {
         codebase_uuid: Uuid,
         base_dir_path: &str,
     ) -> Result<(), ApiError> {
-        info!("Uploaded file: {}", file_name);
+        info!("Uploaded file: {file_name}");
 
         // Collect file data into a single Vec<u8>
         let mut file_bytes = Vec::new();
@@ -145,7 +145,7 @@ impl ExtractorService for ExtractorServiceImpl {
             .await?;
         info!("Recorded File extraction in Manager.");
 
-        return Ok(());
+        Ok(())
     }
 }
 

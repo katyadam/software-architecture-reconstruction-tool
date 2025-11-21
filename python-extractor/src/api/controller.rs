@@ -30,7 +30,7 @@ pub async fn process_files(
 ) -> Result<impl Responder, ApiError> {
     let codebase_uuid = codebase_uuid_path.into_inner();
 
-    Ok(extractor_service
+    extractor_service
         .process_files(&mut payload, codebase_uuid)
-        .await?)
+        .await
 }

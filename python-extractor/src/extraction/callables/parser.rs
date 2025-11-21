@@ -77,7 +77,7 @@ pub fn parse_parameters(parameters_string: &str) -> Vec<Parameter> {
         .strip_prefix('(')
         .unwrap_or(parameters_string)
         .strip_suffix(')')
-        .unwrap_or_else(|| parameters_string)
+        .unwrap_or(parameters_string)
         .trim()
         .to_string();
 
@@ -92,7 +92,7 @@ pub fn parse_parameters(parameters_string: &str) -> Vec<Parameter> {
 }
 
 /// Parse a single parameter expression into a `Parameter`.
-pub fn parse_field(parameter_string: &String) -> Option<Parameter> {
+pub fn parse_field(parameter_string: &str) -> Option<Parameter> {
     let s = parameter_string.trim();
 
     if s.is_empty() {

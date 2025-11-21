@@ -46,7 +46,7 @@ async fn main() -> std::io::Result<()> {
 
     let url: String = env::var("EXPOSE_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
 
-    let testing_client_url: String =
+    let _testing_client_url: String =
         env::var("TEST_CLIENT_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
 
     HttpServer::new(move || {

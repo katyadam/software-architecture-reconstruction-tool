@@ -14,10 +14,11 @@ pub(in crate::extraction) fn infer_argument_type(
     }
 
     // Try resolving in global scope if local didn't find anything
-    if arg.datatype == "any" && matches!(arg_enclosing_scope, Scope::Function(_)) {
-        if let Some(found_type) = resolve_type(&arg.value, &Scope::Global, assignments_map) {
-            arg.datatype = found_type;
-        }
+    if arg.datatype == "any"
+        && matches!(arg_enclosing_scope, Scope::Function(_))
+        && let Some(found_type) = resolve_type(&arg.value, &Scope::Global, assignments_map)
+    {
+        arg.datatype = found_type;
     }
 }
 
@@ -81,5 +82,5 @@ fn get_function_params(function_decl: &str) -> Vec<Parameter> {
         .map(|(start, end)| &function_decl[start..=end])
         .unwrap_or_default();
 
-    parse_parameters(&params_str.to_string())
+    parse_parameters(params_str)
 }

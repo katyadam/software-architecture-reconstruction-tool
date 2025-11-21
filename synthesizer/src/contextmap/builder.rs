@@ -7,13 +7,13 @@ use crate::{
 
 use models::Entity;
 pub trait ContextMapBuilder {
-    fn build(&self, entities: &Vec<Entity>) -> Result<ContextMap, BuilderError>;
+    fn build(&self, entities: &[Entity]) -> Result<ContextMap, BuilderError>;
 }
 
 pub struct ContextMapBuilderImpl {}
 
 impl ContextMapBuilder for ContextMapBuilderImpl {
-    fn build(&self, entities: &Vec<Entity>) -> Result<ContextMap, BuilderError> {
+    fn build(&self, entities: &[Entity]) -> Result<ContextMap, BuilderError> {
         let collected_dependencies = Self::connect_entities(entities);
         Ok(ContextMap {
             entities: entities.to_vec(),
@@ -22,12 +22,18 @@ impl ContextMapBuilder for ContextMapBuilderImpl {
     }
 }
 
+impl Default for ContextMapBuilderImpl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ContextMapBuilderImpl {
     pub fn new() -> Self {
         Self {}
     }
 
-    fn connect_entities(entities: &Vec<Entity>) -> Vec<Dependency> {
+    fn connect_entities(entities: &[Entity]) -> Vec<Dependency> {
         let entities_map = Self::create_entities_map(entities);
 
         entities
@@ -47,9 +53,9 @@ impl ContextMapBuilderImpl {
             .collect()
     }
 
-    fn create_entities_map(entities: &Vec<Entity>) -> HashMap<String, &Entity> {
+    fn create_entities_map(entities: &[Entity]) -> HashMap<String, &Entity> {
         entities
-            .into_iter()
+            .iter()
             .map(|entity| (entity.signature.clone(), entity))
             .collect()
     }

@@ -37,7 +37,7 @@ fn find_enclosing_information(
             let params_bytes = &code.as_bytes()[params_node.start_byte()..params_node.end_byte()];
             function_name = Some(
                 String::from_utf8_lossy(name_bytes).to_string()
-                    + &String::from_utf8_lossy(params_bytes).to_string(),
+                    + &String::from_utf8_lossy(params_bytes),
             );
         }
         let function_bytes = &code.as_bytes()[node.start_byte()..node.end_byte()];
@@ -71,7 +71,7 @@ impl Extractor<CallStatement> for CallsExtractor {
             let mut enclosing_class_name: Option<String> = None;
             let mut enclosing_function_hash: Option<String> = None;
 
-            m.captures.into_iter().for_each(|capture| {
+            m.captures.iter().for_each(|capture| {
                 let capture_text =
                     &params.code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
                 let value = String::from_utf8_lossy(capture_text).to_string();
@@ -89,7 +89,7 @@ impl Extractor<CallStatement> for CallsExtractor {
                                     if arg.contains("=") {
                                         let spl: Vec<&str> = arg.split("=").collect();
                                         Argument {
-                                            assigned_variable: spl.get(0).unwrap().to_string(),
+                                            assigned_variable: spl.first().unwrap().to_string(),
                                             value: spl.get(1).unwrap().to_string(),
                                             datatype: "any".to_string(),
                                         }
@@ -117,7 +117,7 @@ impl Extractor<CallStatement> for CallsExtractor {
 
             let new_call_statement = CallStatement {
                 function_name: function_name.clone(),
-                arguments: arguments,
+                arguments,
                 enclosing_function_name,
                 enclosing_class_name,
                 enclosing_function_hash,

@@ -4,13 +4,13 @@ use std::{env, sync::Arc};
 
 async fn run_index_query(graph: &Arc<Graph>, index_query: &str) {
     match graph.run(query(index_query)).await {
-        Ok(_) => info!("Successfully created index: {}", index_query),
+        Ok(_) => info!("Successfully created index: {index_query}"),
         Err(e) => {
             let msg = e.to_string();
             if msg.contains("already exists") {
-                info!("Index already exists. Skipping: {}", index_query);
+                info!("Index already exists. Skipping: {index_query}");
             } else {
-                error!("Database setup error: {}", msg);
+                error!("Database setup error: {msg}");
             }
         }
     };

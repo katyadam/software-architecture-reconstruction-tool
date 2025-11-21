@@ -24,7 +24,7 @@ impl Extractor<RestCall> for RestcallsExtractor {
             let mut target_uri = String::new();
             let mut function_hash = String::new();
 
-            m.captures.into_iter().for_each(|capture| {
+            m.captures.iter().for_each(|capture| {
                 let capture_text =
                     &params.code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
                 let value = String::from_utf8_lossy(capture_text).to_string();
@@ -40,7 +40,7 @@ impl Extractor<RestCall> for RestcallsExtractor {
                     "function.name" => function_name = value,
                     "function.parameters" => function_parameters = value,
                     "call.args" => {
-                        let param_names = extract_function_arguments(capture.node, &params.code);
+                        let param_names = extract_function_arguments(capture.node, params.code);
                         call_arguments.extend(param_names);
                     }
                     "function" => {

@@ -102,7 +102,7 @@ pub async fn parse(code: &str, file_name: &str) -> CodeElementsAggregate {
 
     // MAYBE: Evaluate together with extraction?
     evaluate_restcalls(&mut restcalls, &assignments_map);
-    evaluate_entity_fields(&imports, &mut entities, &file_name);
+    evaluate_entity_fields(&imports, &mut entities, file_name);
     evaluate_invocations(&mut call_statements, &assignments_map);
 
     CodeElementsAggregate::new(

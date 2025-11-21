@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::sdg::model::SDG;
+use crate::sdg::model::Sdg;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PostSDG {
@@ -54,7 +54,7 @@ pub struct PostSDGErrorResponse {
     #[schema(example = "Some Error occured.")]
     pub error: String,
 
-    pub sdg: SDG,
+    pub sdg: Sdg,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]

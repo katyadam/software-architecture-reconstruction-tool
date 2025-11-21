@@ -8,18 +8,18 @@ use crate::{
     imcg::{
         construction::inter::{ImcgBuilder, ImcgBuilderImpl},
         dto::PostIMCG,
-        model::IMCG,
+        model::Imcg,
         repository::{ImcgRepository, ImcgRepositoryImpl},
     },
     sdg::{
-        model::SDG,
+        model::Sdg,
         service::{SdgService, SdgServiceImpl},
     },
 };
 
 pub trait ImcgService {
-    async fn save(&self, imcg_payload: PostIMCG) -> Result<IMCG, ServiceError>;
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<IMCG, ServiceError>;
+    async fn save(&self, imcg_payload: PostIMCG) -> Result<Imcg, ServiceError>;
+    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Imcg, ServiceError>;
     async fn delete(&self, codebase_uuid: Uuid) -> Result<(), ServiceError>;
 }
 
@@ -47,16 +47,16 @@ impl ImcgServiceImpl {
 }
 
 impl ImcgService for ImcgServiceImpl {
-    async fn save(&self, imcg_payload: PostIMCG) -> Result<IMCG, ServiceError> {
+    async fn save(&self, imcg_payload: PostIMCG) -> Result<Imcg, ServiceError> {
         let codebase_configuration = self
             .manager_connector
             .get_codebase_configuration(imcg_payload.codebase_uuid)
             .await?;
-        let sdg: SDG = self
+        let sdg: Sdg = self
             .sdg_service
             .get_single(imcg_payload.codebase_uuid)
             .await?;
-        let imcg: IMCG = self.builder.build(
+        let imcg: Imcg = self.builder.build(
             imcg_payload.callables,
             imcg_payload.call_statements,
             codebase_configuration
@@ -72,7 +72,7 @@ impl ImcgService for ImcgServiceImpl {
         Ok(imcg)
     }
 
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<IMCG, ServiceError> {
+    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Imcg, ServiceError> {
         let imcg = self.repository.get_single(codebase_uuid).await?;
         Ok(imcg)
     }

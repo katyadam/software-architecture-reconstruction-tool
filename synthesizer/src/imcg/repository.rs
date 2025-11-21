@@ -7,14 +7,14 @@ use uuid::Uuid;
 use crate::{
     errors::database::DatabaseError,
     imcg::{
-        model::{Call, IMCG, ServiceCallable},
+        model::{Call, Imcg, ServiceCallable},
         queries::{CREATE_IMCG, DELETE_IMCG, GET_IMCG},
     },
 };
 
 pub trait ImcgRepository {
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<IMCG, DatabaseError>;
-    async fn save(&self, imcg: &IMCG, codebase_uuid: Uuid) -> Result<(), DatabaseError>;
+    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Imcg, DatabaseError>;
+    async fn save(&self, imcg: &Imcg, codebase_uuid: Uuid) -> Result<(), DatabaseError>;
     async fn delete(&self, codebase_uuid: Uuid) -> Result<(), DatabaseError>;
 }
 
@@ -29,13 +29,13 @@ impl ImcgRepositoryImpl {
 }
 
 impl ImcgRepository for ImcgRepositoryImpl {
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<IMCG, DatabaseError> {
+    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Imcg, DatabaseError> {
         let mut result = self
             .graph_handle
             .execute(query(GET_IMCG).param("codebase_uuid", codebase_uuid.to_string()))
             .await?;
 
-        let mut imcg = IMCG {
+        let mut imcg = Imcg {
             callables: Vec::new(),
             calls: Vec::new(),
         };
@@ -48,10 +48,10 @@ impl ImcgRepository for ImcgRepositoryImpl {
                 if let BoltType::Node(node) = bolt_service {
                     match ServiceCallable::try_from(node) {
                         Ok(callable) => imcg.callables.push(callable),
-                        Err(e) => warn!("Failed to deserialize Callable: {:?}", e),
+                        Err(e) => warn!("Failed to deserialize Callable: {e:?}"),
                     }
                 } else {
-                    warn!("Unexpected BoltType for Callable: {:?}", bolt_service);
+                    warn!("Unexpected BoltType for Callable: {bolt_service:?}");
                 }
             }
 
@@ -59,17 +59,17 @@ impl ImcgRepository for ImcgRepositoryImpl {
                 if let BoltType::Map(map) = bolt_dep {
                     match Call::try_from(map) {
                         Ok(call) => imcg.calls.push(call),
-                        Err(e) => warn!("Failed to deserialize Call: {:?}", e),
+                        Err(e) => warn!("Failed to deserialize Call: {e:?}"),
                     }
                 } else {
-                    warn!("Unexpected BoltType for Call: {:?}", bolt_dep);
+                    warn!("Unexpected BoltType for Call: {bolt_dep:?}");
                 }
             }
         }
         Ok(imcg)
     }
 
-    async fn save(&self, imcg: &IMCG, codebase_uuid: Uuid) -> Result<(), DatabaseError> {
+    async fn save(&self, imcg: &Imcg, codebase_uuid: Uuid) -> Result<(), DatabaseError> {
         self.graph_handle
             .run(
                 query(CREATE_IMCG)

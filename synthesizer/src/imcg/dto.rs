@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::imcg::model::IMCG;
+use crate::imcg::model::Imcg;
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PostIMCG {
     #[schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
@@ -47,7 +47,7 @@ pub struct PostIMCGErrorResponse {
     #[schema(example = "Some Error occured.")]
     pub error: String,
 
-    pub imcg: IMCG,
+    pub imcg: Imcg,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]

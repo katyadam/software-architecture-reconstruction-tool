@@ -4,14 +4,14 @@ use serde::de::Unexpected;
 
 use crate::sdg::model::{Connection, Request, Service};
 
-impl Into<BoltType> for Service {
-    fn into(self) -> BoltType {
+impl From<Service> for BoltType {
+    fn from(value: Service) -> Self {
         let mut map = BoltMap::new();
 
-        map.put("name".into(), self.name.into());
+        map.put("name".into(), value.name.into());
 
         let serialized_endpoints: BoltType = BoltType::List(BoltList {
-            value: self
+            value: value
                 .endpoints
                 .into_iter()
                 .map(|endpoint| {
@@ -23,7 +23,7 @@ impl Into<BoltType> for Service {
         map.put("endpoints".into(), serialized_endpoints);
 
         let converted_urls: BoltType = BoltType::List(BoltList {
-            value: self
+            value: value
                 .urls
                 .into_iter()
                 .map(|url| BoltType::String(BoltString::new(&url)))
@@ -103,13 +103,13 @@ impl TryFrom<BoltNode> for Service {
     }
 }
 
-impl Into<BoltType> for Connection {
-    fn into(self) -> BoltType {
+impl From<Connection> for BoltType {
+    fn from(value: Connection) -> Self {
         let mut map = BoltMap::new();
-        map.put("source_id".into(), self.source_id.into());
-        map.put("target_id".into(), self.target_id.into());
+        map.put("source_id".into(), value.source_id.into());
+        map.put("target_id".into(), value.target_id.into());
         let serialized_requests: BoltType = BoltType::List(BoltList {
-            value: self
+            value: value
                 .requests
                 .into_iter()
                 .map(|restcall| {
@@ -179,16 +179,16 @@ impl TryFrom<BoltMap> for Connection {
     }
 }
 
-impl Into<BoltType> for Request {
-    fn into(self) -> BoltType {
+impl From<Request> for BoltType {
+    fn from(value: Request) -> Self {
         let mut map = BoltMap::new();
-        let endpoint_json = serde_json::to_string(&self.endpoint).unwrap();
+        let endpoint_json = serde_json::to_string(&value.endpoint).unwrap();
         map.put(
             "endpoint".into(),
             BoltType::String(BoltString::new(&endpoint_json)),
         );
 
-        let restcall_json = serde_json::to_string(&self.restcall).unwrap();
+        let restcall_json = serde_json::to_string(&value.restcall).unwrap();
         map.put(
             "restcall".into(),
             BoltType::String(BoltString::new(&restcall_json)),

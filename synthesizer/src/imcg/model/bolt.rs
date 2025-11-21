@@ -7,21 +7,24 @@ use crate::{
     sdg::model::Request,
 };
 
-impl Into<BoltType> for ServiceCallable {
-    fn into(self) -> BoltType {
+impl From<ServiceCallable> for BoltType {
+    fn from(value: ServiceCallable) -> Self {
         let mut map = BoltMap::new();
-        map.put("name".into(), self.callable.name.into());
-        map.put("signature".into(), self.callable.signature.into());
-        map.put("return_type".into(), self.callable.return_type.into());
-        map.put("is_async".into(), self.callable.is_async.into());
-        map.put("is_constructor".into(), self.callable.is_constructor.into());
-        map.put("hash".into(), self.callable.hash.into());
+        map.put("name".into(), value.callable.name.into());
+        map.put("signature".into(), value.callable.signature.into());
+        map.put("return_type".into(), value.callable.return_type.into());
+        map.put("is_async".into(), value.callable.is_async.into());
+        map.put(
+            "is_constructor".into(),
+            value.callable.is_constructor.into(),
+        );
+        map.put("hash".into(), value.callable.hash.into());
 
-        let namespace_json = serde_json::to_string(&self.callable.namespace).unwrap();
+        let namespace_json = serde_json::to_string(&value.callable.namespace).unwrap();
         map.put("namespace".into(), namespace_json.into());
 
         let parameters_list: BoltType = BoltType::List(BoltList {
-            value: self
+            value: value
                 .callable
                 .parameters
                 .into_iter()
@@ -33,9 +36,9 @@ impl Into<BoltType> for ServiceCallable {
         });
         map.put("parameters".into(), parameters_list);
 
-        map.put("file_path".into(), self.callable.file_path.into());
+        map.put("file_path".into(), value.callable.file_path.into());
 
-        map.put("service_name".into(), self.service_name.into());
+        map.put("service_name".into(), value.service_name.into());
 
         BoltType::Map(map)
     }
@@ -128,18 +131,18 @@ impl TryFrom<BoltNode> for ServiceCallable {
                 hash,
                 file_path,
             },
-            service_name.into(),
+            service_name,
         ))
     }
 }
 
-impl Into<BoltType> for Call {
-    fn into(self) -> BoltType {
+impl From<Call> for BoltType {
+    fn from(value: Call) -> Self {
         let mut map = BoltMap::new();
-        map.put("source_id".into(), self.source_id.into());
-        map.put("target_id".into(), self.target_id.into());
+        map.put("source_id".into(), value.source_id.into());
+        map.put("target_id".into(), value.target_id.into());
 
-        let request_json = serde_json::to_string(&self.request).unwrap();
+        let request_json = serde_json::to_string(&value.request).unwrap();
         map.put("request".into(), request_json.into());
 
         BoltType::Map(map)

@@ -36,7 +36,7 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
         let mut function_name = String::new();
         let mut function_params = String::new();
 
-        m.captures.into_iter().for_each(|capture| {
+        m.captures.iter().for_each(|capture| {
             let node = capture.node;
             let capture_text = &code.as_bytes()[node.start_byte()..node.end_byte()];
             let value = String::from_utf8_lossy(capture_text).to_string();

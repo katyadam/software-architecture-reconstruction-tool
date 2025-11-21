@@ -1,3 +1,5 @@
+#![allow(clippy::arc_with_non_send_sync)]
+
 use std::{env, sync::Arc};
 
 use actix_web::{App, HttpServer, middleware::Logger, web};
@@ -21,7 +23,7 @@ use crate::{
     imcg::{
         construction::inter::ImcgBuilderImpl,
         dto::{GetIMCGErrorReponse, PostIMCGErrorResponse},
-        model::IMCG,
+        model::Imcg,
         repository::ImcgRepositoryImpl,
         service::ImcgServiceImpl,
     },
@@ -29,7 +31,7 @@ use crate::{
     sdg::{
         builder::SdgBuilderImpl,
         dto::{GetSDGErrorReponse, PostSDGErrorResponse},
-        model::SDG,
+        model::Sdg,
         repository::SdgRepositoryImpl,
         service::SdgServiceImpl,
     },
@@ -66,16 +68,15 @@ mod utils;
         PostContextMap,
         Entity,
         GetContextMapErrorReponse,
-        SDG,
+        Sdg,
         PostSDGErrorResponse,
         GetSDGErrorReponse,
-        IMCG,
+        Imcg,
         PostIMCGErrorResponse,
         GetIMCGErrorReponse
     ))
 )]
 struct ApiDoc;
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();

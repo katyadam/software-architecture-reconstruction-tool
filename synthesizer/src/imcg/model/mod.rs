@@ -7,12 +7,12 @@ use crate::sdg::model::Request;
 mod bolt;
 
 #[derive(ToSchema, Debug, Serialize, Deserialize)]
-pub struct IMCG {
+pub struct Imcg {
     pub callables: Vec<ServiceCallable>,
     pub calls: Vec<Call>,
 }
 
-impl IMCG {
+impl Imcg {
     pub fn new(callables: Vec<ServiceCallable>, calls: Vec<Call>) -> Self {
         Self { callables, calls }
     }

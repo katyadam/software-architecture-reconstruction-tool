@@ -26,11 +26,11 @@ fn get_assignment(
 }
 
 pub fn evaluate_parameter(
-    function_name: &String,
+    function_name: &str,
     param: &mut Argument,
     assignments_map: &HashMap<AssignmentKey, Assignment>,
 ) {
-    if let Some(assignment) = get_assignment(&function_name, &param.value, assignments_map) {
+    if let Some(assignment) = get_assignment(function_name, &param.value, assignments_map) {
         param.value = assignment.value.clone();
     }
 }
@@ -45,7 +45,7 @@ pub fn evaluate_target_uri(
     let new_uri = re.replace_all(target_uri, |caps: &regex::Captures| {
         let variable_name = &caps[1];
 
-        let assignment = match get_assignment(function_name, variable_name, &assignments_map) {
+        let assignment = match get_assignment(function_name, variable_name, assignments_map) {
             Some(a) => a,
             None => return caps[0].to_owned(), // keep placeholder
         };
@@ -69,18 +69,14 @@ pub fn evaluate_target_uri(
 }
 
 pub fn evaluate_restcalls(
-    restcalls: &mut Vec<RestCall>,
+    restcalls: &mut [RestCall],
     assignments_map: &HashMap<AssignmentKey, Assignment>,
 ) {
     restcalls.iter_mut().for_each(|rcall| {
         rcall.call_arguments.iter_mut().for_each(|param| {
-            evaluate_parameter(&rcall.function_name, param, &assignments_map);
+            evaluate_parameter(&rcall.function_name, param, assignments_map);
         });
 
-        evaluate_target_uri(
-            &rcall.function_name,
-            &mut rcall.target_uri,
-            &assignments_map,
-        );
+        evaluate_target_uri(&rcall.function_name, &mut rcall.target_uri, assignments_map);
     });
 }

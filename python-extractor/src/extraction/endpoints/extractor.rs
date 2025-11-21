@@ -22,7 +22,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
             let mut parameters = vec![];
             let mut function_hash = String::new();
 
-            m.captures.into_iter().for_each(|capture| {
+            m.captures.iter().for_each(|capture| {
                 let capture_text =
                     &params.code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
                 let value = String::from_utf8_lossy(capture_text).to_string();

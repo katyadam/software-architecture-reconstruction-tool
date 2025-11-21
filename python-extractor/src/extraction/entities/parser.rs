@@ -9,7 +9,7 @@ pub fn parse_superclasses(superclasses_node: Node, code: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn parse_fields(fields_string: &String) -> Vec<Field> {
+pub fn parse_fields(fields_string: &str) -> Vec<Field> {
     // First strip () from the string
     let working_str = fields_string
         .strip_prefix("(")
@@ -18,14 +18,14 @@ pub fn parse_fields(fields_string: &String) -> Vec<Field> {
         .unwrap();
     // For each parameter, extract its Field and collect only those that are Some()
     working_str
-        .split(|c| c == ',' || c == '\n')
+        .split([',', '\n'])
         .map(|s| s.trim_start())
-        .filter_map(|s| parse_field(&s.to_string()))
+        .filter_map(parse_field)
         .collect()
 }
 
-pub fn parse_field(field_string: &String) -> Option<Field> {
-    let field_split: Vec<&str> = field_string.split(|c| c == ':' || c == '=').collect();
+pub fn parse_field(field_string: &str) -> Option<Field> {
+    let field_split: Vec<&str> = field_string.split([':', '=']).collect();
     match field_split.len() {
         0 => None,
         1 => Some(Field {

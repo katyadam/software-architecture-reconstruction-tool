@@ -6,9 +6,9 @@ use crate::{
     errors::builder::BuilderError,
     imcg::{
         construction::{intra::CallGraphBuilderImpl, map::get_callables_map},
-        model::{Call, IMCG, ServiceCallable},
+        model::{Call, Imcg, ServiceCallable},
     },
-    sdg::model::{Request, SDG},
+    sdg::model::{Request, Sdg},
     utils::assign_service_description_to_file,
 };
 
@@ -18,8 +18,8 @@ pub trait ImcgBuilder {
         callables: Vec<Callable>,
         call_statements: Vec<CallStatement>,
         service_descs: Vec<ServiceDescription>,
-        sdg: &SDG,
-    ) -> Result<IMCG, BuilderError>;
+        sdg: &Sdg,
+    ) -> Result<Imcg, BuilderError>;
 }
 
 pub struct ImcgBuilderImpl {}
@@ -46,13 +46,13 @@ impl ImcgBuilderImpl {
 
     fn create_imcg_calls(
         &self,
-        sdg: &SDG,
+        sdg: &Sdg,
         callables_map: &HashMap<String, ServiceCallable>,
     ) -> Result<Vec<Call>, BuilderError> {
         sdg.connections
             .iter()
             .flat_map(|conn| conn.requests.iter())
-            .map(|rq| self.create_call_from_request(&rq, &callables_map))
+            .map(|rq| self.create_call_from_request(rq, callables_map))
             .collect()
     }
 
@@ -87,8 +87,8 @@ impl ImcgBuilder for ImcgBuilderImpl {
         callables: Vec<Callable>,
         call_statements: Vec<CallStatement>,
         service_descs: Vec<ServiceDescription>,
-        sdg: &SDG,
-    ) -> Result<IMCG, BuilderError> {
+        sdg: &Sdg,
+    ) -> Result<Imcg, BuilderError> {
         let service_callables = self.get_service_callables(callables, service_descs);
         let callables_map = get_callables_map(&service_callables);
         let cg_builder = CallGraphBuilderImpl::new();
@@ -98,6 +98,6 @@ impl ImcgBuilder for ImcgBuilderImpl {
         let mut merged_calls = intra_cg.calls;
         merged_calls.append(&mut imcg_calls);
 
-        Ok(IMCG::new(intra_cg.callables, merged_calls))
+        Ok(Imcg::new(intra_cg.callables, merged_calls))
     }
 }

@@ -10,13 +10,13 @@ use crate::extraction::{
     queries::CALLABLES_QUERY,
 };
 
-fn get_callable_header(parameters: &Vec<Parameter>) -> String {
+fn get_callable_header(parameters: &[Parameter]) -> String {
     let params: Vec<String> = parameters.iter().map(|p| p.to_string()).collect();
     let joined = params.join(", ");
-    return format!("({})", joined);
+    format!("({joined})")
 }
 
-fn get_callable_name_with_params(name: &str, parameters: &Vec<Parameter>) -> String {
+fn get_callable_name_with_params(name: &str, parameters: &[Parameter]) -> String {
     format!("{}{}", name, get_callable_header(parameters))
 }
 
@@ -40,7 +40,7 @@ impl Extractor<Callable> for CallablesExtractor {
             let mut hash = String::new();
             let mut class_name: Option<String> = None;
             let mut is_constructor = false;
-            m.captures.into_iter().for_each(|capture| {
+            m.captures.iter().for_each(|capture| {
                 let capture_text =
                     &params.code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
                 let value = String::from_utf8_lossy(capture_text).to_string();

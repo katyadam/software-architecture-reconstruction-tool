@@ -16,15 +16,12 @@ impl S3Client {
         self.load_chunk::<Vec<String>>(index_path).await
     }
 
-    pub async fn load_chunk<R: DeserializeOwned>(
-        &self,
-        chunk_path: &str,
-    ) -> Result<R, S3ClientError>
+    pub async fn load_chunk<R>(&self, chunk_path: &str) -> Result<R, S3ClientError>
     where
         R: DeserializeOwned + 'static,
     {
         let response = self.bucket.get_object(chunk_path).await?;
-        let parsed: R = serde_json::from_slice(&response.bytes())?;
+        let parsed: R = serde_json::from_slice(response.bytes())?;
 
         Ok(parsed)
     }

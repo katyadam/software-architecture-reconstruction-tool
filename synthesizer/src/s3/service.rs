@@ -50,14 +50,14 @@ impl S3Service {
         let loaded_imcg_elements = self.load_imcg_elements(&dto.base_dir_path).await?;
         self.context_map_service
             .save(PostContextMap {
-                codebase_uuid: dto.codebase_uuid.clone(),
+                codebase_uuid: dto.codebase_uuid,
                 entities: loaded_cm_elements.entities,
             })
             .await?;
 
         self.sdg_service
             .save(PostSDG {
-                codebase_uuid: dto.codebase_uuid.clone(),
+                codebase_uuid: dto.codebase_uuid,
                 endpoints: loaded_sdg_elements.endpoints,
                 restcalls: loaded_sdg_elements.restcalls,
             })
@@ -98,7 +98,7 @@ impl S3Service {
         &self,
         base_dir_path: &str,
     ) -> Result<S3ContextMapCodeElements, S3ServiceError> {
-        let index_path = format!("{}/cm/index.json", base_dir_path);
+        let index_path = format!("{base_dir_path}/cm/index.json");
         self.load_and_merge_chunks::<S3ContextMapCodeElements, _, S3ContextMapCodeElements>(
             &index_path,
             |chunks| {
@@ -116,7 +116,7 @@ impl S3Service {
         &self,
         base_dir_path: &str,
     ) -> Result<S3SdgCodeElements, S3ServiceError> {
-        let index_path = format!("{}/sdg/index.json", base_dir_path);
+        let index_path = format!("{base_dir_path}/sdg/index.json");
         self.load_and_merge_chunks::<S3SdgCodeElements, _, S3SdgCodeElements>(
             &index_path,
             |chunks| {
@@ -139,7 +139,7 @@ impl S3Service {
         &self,
         base_dir_path: &str,
     ) -> Result<S3ImcgCodeElements, S3ServiceError> {
-        let index_path = format!("{}/imcg/index.json", base_dir_path);
+        let index_path = format!("{base_dir_path}/imcg/index.json");
         self.load_and_merge_chunks::<S3ImcgCodeElements, _, S3ImcgCodeElements>(
             &index_path,
             |chunks| {

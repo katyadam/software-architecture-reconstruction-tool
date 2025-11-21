@@ -5,7 +5,7 @@ use strsim::levenshtein;
 
 use crate::{
     errors::builder::BuilderError,
-    sdg::model::{AssignedEndpoint, AssignedRestCall, Connection, Request, SDG, Service},
+    sdg::model::{AssignedEndpoint, AssignedRestCall, Connection, Request, Sdg, Service},
     utils::assign_service_description_to_file,
 };
 
@@ -15,7 +15,7 @@ pub trait SdgBuilder {
         endpoints: Vec<Endpoint>,
         restcalls: Vec<RestCall>,
         configuration: ConfigurationData,
-    ) -> Result<SDG, BuilderError>;
+    ) -> Result<Sdg, BuilderError>;
 }
 
 pub struct SdgBuilderImpl {}
@@ -26,7 +26,7 @@ impl SdgBuilder for SdgBuilderImpl {
         endpoints: Vec<Endpoint>,
         restcalls: Vec<RestCall>,
         configuration: ConfigurationData,
-    ) -> Result<SDG, BuilderError> {
+    ) -> Result<Sdg, BuilderError> {
         let assigned_endpoints =
             self.get_assigned_endpoints(endpoints, &configuration.service_descriptions);
         let services = self
@@ -35,7 +35,7 @@ impl SdgBuilder for SdgBuilderImpl {
         let assigned_restcalls =
             self.get_assigned_restcalls(restcalls, &configuration.service_descriptions);
         let connections = self.create_connections(assigned_endpoints, assigned_restcalls);
-        Ok(SDG {
+        Ok(Sdg {
             services,
             connections,
         })
@@ -205,15 +205,15 @@ impl SdgBuilderImpl {
                     continue;
                 }
                 if self.exact_match(endpoint, &restcall) {
-                    matched_endpoint = Some(&endpoint);
+                    matched_endpoint = Some(endpoint);
                     was_matched_exactly = true;
                     break;
                 }
 
-                let cur_dist = self.get_levenshtein_distance(&endpoint, &restcall);
+                let cur_dist = self.get_levenshtein_distance(endpoint, &restcall);
                 if cur_dist < min_dist {
                     min_dist = cur_dist;
-                    matched_endpoint = Some(&endpoint);
+                    matched_endpoint = Some(endpoint);
                     length_of_longest_str =
                         std::cmp::max(endpoint.data.uri.len(), restcall.data.target_uri.len());
                 }
