@@ -10,13 +10,6 @@ use python_extractor::{
 
 use crate::python::utils::get_tree;
 
-fn print_hashes(calls: &Vec<Callable>) {
-    calls.iter().for_each(|c| {
-        let h = &c.hash;
-        println!("{h:?}");
-    });
-}
-
 #[test]
 fn simple_test() {
     let filename = "./examples/python/callgraph/simple.py";

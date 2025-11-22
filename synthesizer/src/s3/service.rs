@@ -50,14 +50,15 @@ impl S3Service {
         let loaded_imcg_elements = self.load_imcg_elements(&dto.base_dir_path).await?;
         self.context_map_service
             .save(PostContextMap {
-                codebase_uuid: dto.codebase_uuid,
+                codebase_uuid: dto.identifier.codebase_uuid,
+                commit_hash: dto.identifier.commit_hash,
                 entities: loaded_cm_elements.entities,
             })
             .await?;
 
         self.sdg_service
             .save(PostSDG {
-                codebase_uuid: dto.codebase_uuid,
+                codebase_uuid: dto.identifier.codebase_uuid,
                 endpoints: loaded_sdg_elements.endpoints,
                 restcalls: loaded_sdg_elements.restcalls,
             })
@@ -65,7 +66,7 @@ impl S3Service {
 
         self.imcg_service
             .save(PostIMCG {
-                codebase_uuid: dto.codebase_uuid,
+                codebase_uuid: dto.identifier.codebase_uuid,
                 callables: loaded_imcg_elements.callables,
                 call_statements: loaded_imcg_elements.calls,
             })

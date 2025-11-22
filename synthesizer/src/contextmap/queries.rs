@@ -1,4 +1,7 @@
 pub const CREATE_CONTEXT_MAP: &str = r#"
+MATCH (e:Entity {codebase_uuid: $codebase_uuid})
+DETACH DELETE e;
+
 UNWIND $entities AS entity
 MERGE (e:Entity {id: entity.signature, codebase_uuid: $codebase_uuid})
 SET e.id = entity.signature

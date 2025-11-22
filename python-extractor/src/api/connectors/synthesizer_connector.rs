@@ -1,6 +1,6 @@
 use clients::http::{client::HttpClient, error::HttpClientError};
 use log::info;
-use uuid::Uuid;
+use models::api::ProcessFilesIdentifier;
 
 use crate::api::dto::ViewsDto;
 
@@ -15,14 +15,14 @@ impl SynthesizerConnector {
 
     pub async fn send_load_info(
         &self,
-        codebase_uuid: Uuid,
+        identifier: ProcessFilesIdentifier,
         base_dir_path: &str,
     ) -> Result<(), HttpClientError> {
         self.http_client
             .post_json::<ViewsDto, ()>(
                 "/views",
                 &ViewsDto {
-                    codebase_uuid,
+                    identifier,
                     base_dir_path,
                 },
             )

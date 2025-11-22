@@ -3,6 +3,7 @@ use actix_web::{HttpResponse, Responder, Result};
 use awc::body::BoxBody;
 use futures_util::StreamExt as _;
 use log::info;
+use models::api::ProcessFilesIdentifier;
 use python_extractor::extraction::parse::parse;
 use uuid::Uuid;
 
@@ -21,7 +22,7 @@ pub trait ExtractorService {
     async fn process_files(
         &self,
         payload: &mut Multipart,
-        codebase_uuid: Uuid,
+        process_files_identifier: ProcessFilesIdentifier,
     ) -> Result<ServiceResponse, ApiError>;
 
     async fn process_file(
@@ -77,10 +78,10 @@ impl ExtractorService for ExtractorServiceImpl {
     async fn process_files(
         &self,
         payload: &mut Multipart,
-        codebase_uuid: Uuid,
+        identifier: ProcessFilesIdentifier,
     ) -> Result<ServiceResponse, ApiError> {
         let run_id = uuid::Uuid::new_v4();
-        let base_dir_path = format!("{codebase_uuid}/{run_id}");
+        let base_dir_path = format!("{}/{run_id}", identifier.codebase_uuid);
         let mut any_file_processed: bool = false;
 
         while let Some(field) = payload.next().await {
@@ -91,14 +92,14 @@ impl ExtractorService for ExtractorServiceImpl {
                 .and_then(|cd| cd.get_filename().map(|s| s.to_owned()));
 
             if let Some(file_name) = file_name_opt {
-                self.process_file(&file_name, field, codebase_uuid, &base_dir_path)
+                self.process_file(&file_name, field, identifier.codebase_uuid, &base_dir_path)
                     .await?;
             }
             any_file_processed = true;
         }
 
         self.synthesizer_connector
-            .send_load_info(codebase_uuid, &base_dir_path)
+            .send_load_info(identifier, &base_dir_path)
             .await?;
 
         if any_file_processed {
