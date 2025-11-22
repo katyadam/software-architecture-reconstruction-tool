@@ -36,3 +36,7 @@ There are 3 options:
 3. Store chunks of the extracted code elements, for example one file = one chunk. Create an index file to be able to load chunks into one cohesive object for better synthesizing.
 
 From those option, Option n.3 seems the best. It provides optimal storing and with an index file also optimal loading into single object.
+
+## Illustration
+
+![Illustration](./images/ext_synt_data_flow.png)
