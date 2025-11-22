@@ -31,7 +31,9 @@
       size="60"
       value="00000000-0000-0000-0000-000000000000"
     />
-
+    <br />
+    <label>Commit Hash:</label><br />
+    <input type="text" id="hash" size="60" value="" />
     <br /><br />
     <label>Select folder to upload:</label><br />
     <input type="file" id="folderInput" webkitdirectory multiple />
@@ -52,8 +54,10 @@
 
       btn.addEventListener("click", async () => {
         const codebaseUuid = document.getElementById("endpoint").value.trim();
+        const commitHash = document.getElementById("hash").value.trim();
         const files = input.files;
-        if (!codebaseUuid) return alert("Enter endpoint URL");
+        if (!codebaseUuid) return alert("Enter codebase uuid");
+        if (!codebaseUuid) return alert("Enter commit hash");
         if (!files.length) return alert("Select a folder first");
 
         const formData = new FormData();
@@ -66,7 +70,10 @@
 
         try {
           const res = await fetch(
-            "http://localhost:8082/process-files/" + codebaseUuid,
+            "http://localhost:8082/process-files/" +
+              codebaseUuid +
+              "/" +
+              commitHash,
             {
               method: "PUT",
               body: formData,
