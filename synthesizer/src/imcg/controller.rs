@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use actix_web::{HttpResponse, Responder, delete, get, post, web};
-use uuid::Uuid;
+use models::api::ProcessFilesIdentifier;
 
 #[utoipa::path(
         post,
@@ -31,45 +31,53 @@ pub async fn create_imcg(
 }
 
 #[utoipa::path(
-        get,
-        path = "/imcgs/{codebase_uuid}",
-        params(
-            ("codebase_uuid", Path, description = "Codebase UUID of the IMCG to get", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
-        ),
-        responses(
-            (status = 200, description = "IMCG successfully retrieved", body = Imcg),
-            (status = 400, description = "IMCG  cannot be retrieved", body = GetIMCGErrorReponse),
-        ),
-    )]
-#[get("/{codebase_uuid}")]
+    get,
+    path = "/imcgs/{codebase_uuid}/{commit_hash}",
+    params(
+        ("codebase_uuid", Path, description = "Codebase UUID of the IMCG to get", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6"),
+        ("commit_hash", Path, description = "Git commit hash of the IMCG to get", example = "abc123def4567890abc123def4567890abc123de")
+    ),
+    responses(
+        (status = 200, description = "IMCG successfully retrieved", body = Imcg),
+        (status = 400, description = "IMCG cannot be retrieved", body = GetIMCGErrorReponse),
+    ),
+)]
+#[get("/{codebase_uuid}/{commit_hash}")]
 pub async fn get_imcg(
     service: web::Data<Arc<ImcgServiceImpl>>,
-    codebase_uuid_path: web::Path<Uuid>,
+    path: web::Path<ProcessFilesIdentifier>,
 ) -> Result<impl Responder, ApiError> {
-    let codebase_uuid = codebase_uuid_path.into_inner();
-    let cm = service.get_single(codebase_uuid).await?;
+    let identifier = path.into_inner();
 
-    Ok(HttpResponse::Ok().json(cm))
+    let imcg = service
+        .get_single(identifier.codebase_uuid, &identifier.commit_hash)
+        .await?;
+
+    Ok(HttpResponse::Ok().json(imcg))
 }
 
 #[utoipa::path(
-        delete,
-        path = "/imcgs/{codebase_uuid}",
-        params(
-            ("codebase_uuid", Path, description = "Codebase UUID of the IMCG to delete", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
-        ),
-        responses(
-            (status = 204, description = "IMCG successfully deleted"),
-            (status = 400, description = "IMCG couldn't be deleted"),
-        ),
-    )]
-#[delete("/{codebase_uuid}")]
+    delete,
+    path = "/imcgs/{codebase_uuid}/{commit_hash}",
+    params(
+        ("codebase_uuid", Path, description = "Codebase UUID of the IMCG to delete", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6"),
+        ("commit_hash", Path, description = "Git commit hash of the IMCG to delete", example = "abc123def4567890abc123def4567890abc123de")
+    ),
+    responses(
+        (status = 204, description = "IMCG successfully deleted"),
+        (status = 400, description = "IMCG couldn't be deleted"),
+    ),
+)]
+#[delete("/{codebase_uuid}/{commit_hash}")]
 pub async fn delete_imcg(
     service: web::Data<Arc<ImcgServiceImpl>>,
-    codebase_uuid_path: web::Path<Uuid>,
+    path: web::Path<ProcessFilesIdentifier>,
 ) -> Result<impl Responder, ApiError> {
-    let codebase_uuid = codebase_uuid_path.into_inner();
-    service.delete(codebase_uuid).await?;
+    let identifier = path.into_inner();
+
+    service
+        .delete(identifier.codebase_uuid, &identifier.commit_hash)
+        .await?;
 
     Ok(HttpResponse::NoContent())
 }

@@ -13,8 +13,9 @@ use crate::{
 
 pub trait SdgService {
     async fn save(&self, sdg_payload: PostSDG) -> Result<Sdg, ServiceError>;
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Sdg, ServiceError>;
-    async fn delete(&self, codebase_uuid: Uuid) -> Result<(), ServiceError>;
+    async fn get_single(&self, codebase_uuid: Uuid, commit_hash: &str)
+    -> Result<Sdg, ServiceError>;
+    async fn delete(&self, codebase_uuid: Uuid, commit_hash: &str) -> Result<(), ServiceError>;
 }
 
 pub struct SdgServiceImpl {
@@ -51,19 +52,26 @@ impl SdgService for SdgServiceImpl {
         )?;
 
         self.repository
-            .save(&sdg, sdg_payload.codebase_uuid)
+            .save(&sdg, sdg_payload.codebase_uuid, &sdg_payload.commit_hash)
             .await?;
 
         Ok(sdg)
     }
 
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Sdg, ServiceError> {
-        let sdg = self.repository.get_single(codebase_uuid).await?;
+    async fn get_single(
+        &self,
+        codebase_uuid: Uuid,
+        commit_hash: &str,
+    ) -> Result<Sdg, ServiceError> {
+        let sdg = self
+            .repository
+            .get_single(codebase_uuid, commit_hash)
+            .await?;
         Ok(sdg)
     }
 
-    async fn delete(&self, codebase_uuid: Uuid) -> Result<(), ServiceError> {
-        self.repository.delete(codebase_uuid).await?;
+    async fn delete(&self, codebase_uuid: Uuid, commit_hash: &str) -> Result<(), ServiceError> {
+        self.repository.delete(codebase_uuid, commit_hash).await?;
         Ok(())
     }
 }

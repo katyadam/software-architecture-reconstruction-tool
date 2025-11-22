@@ -51,7 +51,7 @@ impl S3Service {
         self.context_map_service
             .save(PostContextMap {
                 codebase_uuid: dto.identifier.codebase_uuid,
-                commit_hash: dto.identifier.commit_hash,
+                commit_hash: dto.identifier.commit_hash.clone(),
                 entities: loaded_cm_elements.entities,
             })
             .await?;
@@ -59,6 +59,7 @@ impl S3Service {
         self.sdg_service
             .save(PostSDG {
                 codebase_uuid: dto.identifier.codebase_uuid,
+                commit_hash: dto.identifier.commit_hash.clone(),
                 endpoints: loaded_sdg_elements.endpoints,
                 restcalls: loaded_sdg_elements.restcalls,
             })
@@ -67,6 +68,7 @@ impl S3Service {
         self.imcg_service
             .save(PostIMCG {
                 codebase_uuid: dto.identifier.codebase_uuid,
+                commit_hash: dto.identifier.commit_hash.clone(),
                 callables: loaded_imcg_elements.callables,
                 call_statements: loaded_imcg_elements.calls,
             })

@@ -13,9 +13,18 @@ use crate::{
 };
 
 pub trait ImcgRepository {
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Imcg, DatabaseError>;
-    async fn save(&self, imcg: &Imcg, codebase_uuid: Uuid) -> Result<(), DatabaseError>;
-    async fn delete(&self, codebase_uuid: Uuid) -> Result<(), DatabaseError>;
+    async fn get_single(
+        &self,
+        codebase_uuid: Uuid,
+        commit_hash: &str,
+    ) -> Result<Imcg, DatabaseError>;
+    async fn save(
+        &self,
+        imcg: &Imcg,
+        codebase_uuid: Uuid,
+        commit_hash: &str,
+    ) -> Result<(), DatabaseError>;
+    async fn delete(&self, codebase_uuid: Uuid, commit_hash: &str) -> Result<(), DatabaseError>;
 }
 
 pub struct ImcgRepositoryImpl {
@@ -29,10 +38,18 @@ impl ImcgRepositoryImpl {
 }
 
 impl ImcgRepository for ImcgRepositoryImpl {
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Imcg, DatabaseError> {
+    async fn get_single(
+        &self,
+        codebase_uuid: Uuid,
+        commit_hash: &str,
+    ) -> Result<Imcg, DatabaseError> {
         let mut result = self
             .graph_handle
-            .execute(query(GET_IMCG).param("codebase_uuid", codebase_uuid.to_string()))
+            .execute(
+                query(GET_IMCG)
+                    .param("codebase_uuid", codebase_uuid.to_string())
+                    .param("commit_hash", commit_hash.to_string()),
+            )
             .await?;
 
         let mut imcg = Imcg {
@@ -69,21 +86,31 @@ impl ImcgRepository for ImcgRepositoryImpl {
         Ok(imcg)
     }
 
-    async fn save(&self, imcg: &Imcg, codebase_uuid: Uuid) -> Result<(), DatabaseError> {
+    async fn save(
+        &self,
+        imcg: &Imcg,
+        codebase_uuid: Uuid,
+        commit_hash: &str,
+    ) -> Result<(), DatabaseError> {
         self.graph_handle
             .run(
                 query(CREATE_IMCG)
                     .param("callables", imcg.callables.clone())
                     .param("calls", imcg.calls.clone())
-                    .param("codebase_uuid", codebase_uuid.to_string()),
+                    .param("codebase_uuid", codebase_uuid.to_string())
+                    .param("commit_hash", commit_hash.to_string()),
             )
             .await?;
         Ok(())
     }
 
-    async fn delete(&self, codebase_uuid: Uuid) -> Result<(), DatabaseError> {
+    async fn delete(&self, codebase_uuid: Uuid, commit_hash: &str) -> Result<(), DatabaseError> {
         self.graph_handle
-            .run(query(DELETE_IMCG).param("codebase_uuid", codebase_uuid.to_string()))
+            .run(
+                query(DELETE_IMCG)
+                    .param("codebase_uuid", codebase_uuid.to_string())
+                    .param("commit_hash", commit_hash.to_string()),
+            )
             .await?;
         Ok(())
     }
