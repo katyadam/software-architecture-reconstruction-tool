@@ -25,8 +25,6 @@ impl From<neo4rs::Error> for DatabaseError {
 
 impl From<DeError> for DatabaseError {
     fn from(error: DeError) -> Self {
-        match error {
-            err => DatabaseError::DeserializationError(err),
-        }
+        DatabaseError::DeserializationError(error)
     }
 }

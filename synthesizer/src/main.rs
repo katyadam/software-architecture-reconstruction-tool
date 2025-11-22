@@ -1,3 +1,5 @@
+#![allow(clippy::arc_with_non_send_sync)]
+
 use std::{env, sync::Arc};
 
 use actix_web::{App, HttpServer, middleware::Logger, web};
@@ -18,11 +20,18 @@ use crate::{
         service::ContextMapServiceImpl,
     },
     db_setup::{setup_contextmap_db, setup_imcg_db, setup_sdg_db},
+    imcg::{
+        construction::inter::ImcgBuilderImpl,
+        dto::{GetIMCGErrorReponse, PostIMCGErrorResponse},
+        model::Imcg,
+        repository::ImcgRepositoryImpl,
+        service::ImcgServiceImpl,
+    },
     s3::{client::S3Client, service::S3Service},
     sdg::{
         builder::SdgBuilderImpl,
         dto::{GetSDGErrorReponse, PostSDGErrorResponse},
-        model::types::SDG,
+        model::Sdg,
         repository::SdgRepositoryImpl,
         service::SdgServiceImpl,
     },
@@ -39,6 +48,7 @@ mod imcg;
 mod s3;
 mod sdg;
 mod tests;
+mod utils;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -49,19 +59,24 @@ mod tests;
         contextmap::controller::delete_context_map,
         sdg::controller::create_sdg,
         sdg::controller::get_sdg,
-        sdg::controller::delete_sdg
+        sdg::controller::delete_sdg,
+        imcg::controller::create_imcg,
+        imcg::controller::get_imcg,
+        imcg::controller::delete_imcg
     ),
     components(schemas(
         PostContextMap,
         Entity,
         GetContextMapErrorReponse,
-        SDG,
+        Sdg,
         PostSDGErrorResponse,
         GetSDGErrorReponse,
+        Imcg,
+        PostIMCGErrorResponse,
+        GetIMCGErrorReponse
     ))
 )]
 struct ApiDoc;
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
@@ -79,17 +94,22 @@ async fn main() -> std::io::Result<()> {
 
     let cm_graph = setup_contextmap_db().await;
     let sdg_graph = setup_sdg_db().await;
-    let _imcg_graph = setup_imcg_db().await;
+    let imcg_graph = setup_imcg_db().await;
 
     HttpServer::new(move || {
         let cm_service = Arc::new(get_cm_service(cm_graph.clone()));
         let sdg_service = Arc::new(get_sdg_service(sdg_graph.clone(), &manager_url));
-
+        let imcg_service = Arc::new(get_imcg_service(
+            imcg_graph.clone(),
+            &manager_url,
+            Arc::clone(&sdg_service),
+        ));
         // Clone Arcs to pass them where needed
         let s3_service = Arc::new(S3Service::new(
             get_s3_client(),
             Arc::clone(&cm_service),
             Arc::clone(&sdg_service),
+            Arc::clone(&imcg_service),
         ));
         App::new()
             .wrap(Logger::default())
@@ -107,6 +127,11 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/sdgs")
                     .app_data(web::Data::new(sdg_service))
                     .configure(sdg::configure),
+            )
+            .service(
+                web::scope("/imcgs")
+                    .app_data(web::Data::new(imcg_service))
+                    .configure(imcg::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")
@@ -131,6 +156,23 @@ fn get_sdg_service(graph: Arc<Graph>, manager_url: &str) -> SdgServiceImpl {
     let manager_connector =
         ManagerConnector::new(HttpClient::new(manager_url.to_owned(), Client::default()));
     SdgServiceImpl::new(sdg_repository, sdg_builder, manager_connector)
+}
+
+fn get_imcg_service(
+    graph: Arc<Graph>,
+    manager_url: &str,
+    sdg_service: Arc<SdgServiceImpl>,
+) -> ImcgServiceImpl {
+    let imcg_repository = ImcgRepositoryImpl::new(graph);
+    let imcg_builder = ImcgBuilderImpl::new();
+    let manager_connector =
+        ManagerConnector::new(HttpClient::new(manager_url.to_owned(), Client::default()));
+    ImcgServiceImpl::new(
+        imcg_repository,
+        imcg_builder,
+        manager_connector,
+        sdg_service,
+    )
 }
 
 fn get_s3_client() -> S3Client {

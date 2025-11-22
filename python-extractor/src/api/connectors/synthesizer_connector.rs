@@ -27,7 +27,7 @@ impl SynthesizerConnector {
                 },
             )
             .await?;
-        info!("Load info about {} sent to synthesizer.", base_dir_path);
+        info!("Load info about {base_dir_path} sent to synthesizer.");
         Ok(())
     }
 }

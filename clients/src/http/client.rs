@@ -16,11 +16,7 @@ impl HttpClient {
         Self { base_url, client }
     }
 
-    pub async fn post_json<T: Serialize, R: DeserializeOwned>(
-        &self,
-        endpoint: &str,
-        body: &T,
-    ) -> Result<R, HttpClientError>
+    pub async fn post_json<T, R>(&self, endpoint: &str, body: &T) -> Result<R, HttpClientError>
     where
         T: Serialize + ?Sized,
         R: DeserializeOwned + 'static,
@@ -61,7 +57,7 @@ impl HttpClient {
     }
 
     #[allow(dead_code)]
-    pub async fn get_json<R: DeserializeOwned>(&self, endpoint: &str) -> Result<R, HttpClientError>
+    pub async fn get_json<R>(&self, endpoint: &str) -> Result<R, HttpClientError>
     where
         R: DeserializeOwned + 'static,
     {

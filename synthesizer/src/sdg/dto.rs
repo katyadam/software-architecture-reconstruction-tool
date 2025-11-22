@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::sdg::model::types::SDG;
+use crate::sdg::model::Sdg;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PostSDG {
@@ -13,11 +13,16 @@ pub struct PostSDG {
     #[schema(example = json!([
         {
             "function_name": "read_items",
+            "function_hash": "abrakadabra",
             "http_method": "GET",
             "parameters": [
-                "skip", "limit", "q"
+                {
+                    "name": "skip",
+                    "datatype": "int",
+                    "initial_value": "0"
+                }
             ],
-            "service_name": "ItemService",
+            "file_path": "/serviceA/endpoints.py",
             "uri": "/items/"
         }
     ]))]
@@ -26,15 +31,17 @@ pub struct PostSDG {
     #[schema(example = json!([
         {
             "function_name": "get_items",
-            "function_arguments": [
+            "function_hash": "dabrakadabra",
+            "call_arguments": [
                 {
                     "assigned_variable": "params",
-                    "value": "{\"skip\": skip, \"limit\": limit}"
+                    "value": "{\"skip\": skip, \"limit\": limit}",
+                    "datatype": "str"
                 }
             ],
             "http_method": "GET",
             "target_uri": "http://localhost:8000/items/",
-            "service_name": "OrderService",
+            "file_path": "/serviceB/restcalls.py",
         }
     ]))]
     pub restcalls: Vec<RestCall>,
@@ -47,7 +54,7 @@ pub struct PostSDGErrorResponse {
     #[schema(example = "Some Error occured.")]
     pub error: String,
 
-    pub sdg: SDG,
+    pub sdg: Sdg,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]

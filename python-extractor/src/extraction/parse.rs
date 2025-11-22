@@ -7,7 +7,7 @@ use tree_sitter::Parser;
 use crate::extraction::{
     assignments::map::get_assignments_map,
     callables::extractor::CallablesExtractor,
-    calls::extractor::CallsExtractor,
+    calls::{evaluator::evaluate_invocations, extractor::CallsExtractor},
     endpoints::extractor::EndpointsExtractor,
     entities::{evaluator::evaluate_entity_fields, extractor::EntitiesExtractor},
     extractor::{ExtractParams, Extractor},
@@ -98,11 +98,12 @@ pub async fn parse(code: &str, file_name: &str) -> CodeElementsAggregate {
     let mut restcalls = restcalls_handle.await.unwrap();
     let mut entities = entities_handle.await.unwrap();
     let callables = callables_handle.await.unwrap();
-    let call_statements = calls_handle.await.unwrap();
+    let mut call_statements = calls_handle.await.unwrap();
 
     // MAYBE: Evaluate together with extraction?
-    evaluate_restcalls(&mut restcalls, assignments_map);
-    evaluate_entity_fields(&imports, &mut entities, &file_name);
+    evaluate_restcalls(&mut restcalls, &assignments_map);
+    evaluate_entity_fields(&imports, &mut entities, file_name);
+    evaluate_invocations(&mut call_statements, &assignments_map);
 
     CodeElementsAggregate::new(
         imports,

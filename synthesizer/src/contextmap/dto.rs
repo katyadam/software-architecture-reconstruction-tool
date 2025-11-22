@@ -23,7 +23,8 @@ pub struct PostContextMap {
                     "datatype_signature": "./entities.py/Entity",
                     "initial_value": null
                 }
-            ]
+            ],
+            "file_path": "/some/file/path/entitity.py"
         },
         {
             "name": "Entity",
@@ -37,7 +38,8 @@ pub struct PostContextMap {
                     "datatype_signature": null,
                     "initial_value": null
                 }
-            ]
+            ],
+            "file_path": "/some/file/path/entities.py"
         }
     ]))]
     pub entities: Vec<Entity>,

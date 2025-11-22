@@ -75,7 +75,7 @@ async def read_items(skip: int = 0, limit: int = 10, q: Optional[str] = None) ->
 
 
 @app.get("/items/{item_id}", response_model=Item)
-async def read_item(item_id: int = Path(..., gt=0)):
+async def read_item(item_id: int = 0):
     if item_id not in items_db:
         raise HTTPException(status_code=404, detail="Item not found")
     return items_db[item_id]

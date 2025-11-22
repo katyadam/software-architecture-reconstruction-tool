@@ -10,19 +10,14 @@ use crate::extraction::{
     queries::CALLABLES_QUERY,
 };
 
-pub fn get_callable_header(parameters: &Vec<Parameter>) -> String {
+fn get_callable_header(parameters: &[Parameter]) -> String {
     let params: Vec<String> = parameters.iter().map(|p| p.to_string()).collect();
     let joined = params.join(", ");
-    return format!("({})", joined);
+    format!("({joined})")
 }
 
-pub fn get_signature(namespace: &Namespace, name: &String, parameters: &Vec<Parameter>) -> String {
-    return format!(
-        "{}/{}{}",
-        namespace.get_signature(),
-        name,
-        get_callable_header(parameters)
-    );
+fn get_callable_name_with_params(name: &str, parameters: &[Parameter]) -> String {
+    format!("{}{}", name, get_callable_header(parameters))
 }
 
 pub struct CallablesExtractor;
@@ -44,12 +39,18 @@ impl Extractor<Callable> for CallablesExtractor {
             let mut is_async = false;
             let mut hash = String::new();
             let mut class_name: Option<String> = None;
-            m.captures.into_iter().for_each(|capture| {
+            let mut is_constructor = false;
+            m.captures.iter().for_each(|capture| {
                 let capture_text =
                     &params.code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
                 let value = String::from_utf8_lossy(capture_text).to_string();
                 match query.capture_names()[capture.index as usize] {
-                    "function.name" => name = value,
+                    "function.name" => {
+                        name = value;
+                        if name.starts_with("__init__") {
+                            is_constructor = true;
+                        }
+                    }
                     "function.params" => {
                         parameters.extend(parse_parameters(&value));
                     }
@@ -60,8 +61,6 @@ impl Extractor<Callable> for CallablesExtractor {
                         if value.starts_with("async") {
                             is_async = true;
                         }
-                    }
-                    "function.body" => {
                         let mut hasher = Sha256::new();
                         hasher.update(value.as_bytes());
                         hash = format!("{:x}", hasher.finalize());
@@ -71,10 +70,10 @@ impl Extractor<Callable> for CallablesExtractor {
                 }
             });
 
-            if seen.contains(&name) {
+            if seen.contains(&hash) {
                 continue;
             }
-            seen.insert(name.clone());
+            seen.insert(hash.clone());
 
             let namespace = if let Some(c_name) = class_name {
                 Namespace::Class(c_name)
@@ -82,13 +81,18 @@ impl Extractor<Callable> for CallablesExtractor {
                 Namespace::Module(params.file_name.unwrap_or_default().to_string())
             };
 
+            let name_with_params = get_callable_name_with_params(&name, &parameters);
+
             let new_callable = Callable {
-                signature: get_signature(&namespace, &name, &parameters),
-                namespace: namespace,
-                parameters: parameters,
-                return_type: return_type,
-                is_async: is_async,
-                hash: hash,
+                name: name_with_params.clone(),
+                signature: format!("{}/{}", namespace.get_signature(), name_with_params),
+                namespace,
+                parameters,
+                return_type,
+                is_async,
+                is_constructor,
+                hash,
+                file_path: params.file_name.unwrap_or_default().to_string(),
             };
 
             callables.push(new_callable);

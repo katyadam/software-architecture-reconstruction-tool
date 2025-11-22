@@ -15,6 +15,7 @@ mod tests {
         let sdg = service
             .build(sample_data.0, sample_data.1, configuration)
             .expect("This test doesn't produce error!");
+        println!("{sdg:?}");
         assert!(
             sdg.services.len() == 2,
             "Incorrect number of services, should be 2"
@@ -42,6 +43,7 @@ mod tests {
             vec![
                 Endpoint {
                     function_name: "get_user".to_string(),
+                    function_hash: "some-random-hash".to_string(),
                     parameters: vec![],
                     http_method: HttpMethod::GET,
                     uri: "/users/{id}".to_string(),
@@ -49,6 +51,8 @@ mod tests {
                 },
                 Endpoint {
                     function_name: "create_user".to_string(),
+                    function_hash: "some-random-hash".to_string(),
+
                     parameters: vec![],
                     http_method: HttpMethod::POST,
                     uri: "/users".to_string(),
@@ -56,6 +60,8 @@ mod tests {
                 },
                 Endpoint {
                     function_name: "delete_user".to_string(),
+                    function_hash: "some-random-hash".to_string(),
+
                     parameters: vec![],
                     http_method: HttpMethod::DELETE,
                     uri: "/users/{id}".to_string(),
@@ -65,21 +71,27 @@ mod tests {
             vec![
                 RestCall {
                     function_name: "get_user".to_string(),
-                    function_arguments: vec![],
+                    function_hash: "some-random-hash".to_string(),
+
+                    call_arguments: vec![],
                     http_method: HttpMethod::GET,
                     target_uri: "http://user-service:8000/users/{id}".to_string(),
                     file_path: "crm/admin-user-service/src/api/user_connector.py".to_string(),
                 },
                 RestCall {
                     function_name: "create_user".to_string(),
-                    function_arguments: vec![],
+                    function_hash: "some-random-hash".to_string(),
+
+                    call_arguments: vec![],
                     http_method: HttpMethod::POST,
                     target_uri: "http://user-service:8000/users".to_string(),
                     file_path: "crm/admin-user-service/src/api/user_connector.py".to_string(),
                 },
                 RestCall {
                     function_name: "delete_user".to_string(),
-                    function_arguments: vec![],
+                    function_hash: "some-random-hash".to_string(),
+
+                    call_arguments: vec![],
                     http_method: HttpMethod::DELETE,
                     target_uri: "http://user-service:8000/users/{id}".to_string(),
                     file_path: "crm/admin-user-service/src/api/user_connector.py".to_string(),

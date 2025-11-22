@@ -2,16 +2,16 @@ use models::{Endpoint, RestCall};
 use neo4rs::{BoltList, BoltMap, BoltNode, BoltString, BoltType, DeError};
 use serde::de::Unexpected;
 
-use crate::sdg::model::types::{Connection, Request, Service};
+use crate::sdg::model::{Connection, Request, Service};
 
-impl Into<BoltType> for Service {
-    fn into(self) -> BoltType {
+impl From<Service> for BoltType {
+    fn from(value: Service) -> Self {
         let mut map = BoltMap::new();
 
-        map.put("name".into(), self.name.into());
+        map.put("name".into(), value.name.into());
 
         let serialized_endpoints: BoltType = BoltType::List(BoltList {
-            value: self
+            value: value
                 .endpoints
                 .into_iter()
                 .map(|endpoint| {
@@ -23,7 +23,7 @@ impl Into<BoltType> for Service {
         map.put("endpoints".into(), serialized_endpoints);
 
         let converted_urls: BoltType = BoltType::List(BoltList {
-            value: self
+            value: value
                 .urls
                 .into_iter()
                 .map(|url| BoltType::String(BoltString::new(&url)))
@@ -57,6 +57,7 @@ impl TryFrom<BoltNode> for Service {
                     )
                     .unwrap_or(Endpoint {
                         uri: "Bad Deserialization!".to_string(),
+                        function_hash: "Bad Deserialization!".to_string(),
                         file_path: "Bad Deserialization!".to_string(),
                         function_name: "Bad Deserialization!".to_string(),
                         http_method: models::HttpMethod::DELETE,
@@ -102,13 +103,13 @@ impl TryFrom<BoltNode> for Service {
     }
 }
 
-impl Into<BoltType> for Connection {
-    fn into(self) -> BoltType {
+impl From<Connection> for BoltType {
+    fn from(value: Connection) -> Self {
         let mut map = BoltMap::new();
-        map.put("source_id".into(), self.source_id.into());
-        map.put("target_id".into(), self.target_id.into());
+        map.put("source_id".into(), value.source_id.into());
+        map.put("target_id".into(), value.target_id.into());
         let serialized_requests: BoltType = BoltType::List(BoltList {
-            value: self
+            value: value
                 .requests
                 .into_iter()
                 .map(|restcall| {
@@ -126,7 +127,7 @@ impl TryFrom<BoltMap> for Connection {
     type Error = DeError;
 
     fn try_from(node: BoltMap) -> Result<Self, Self::Error> {
-        let source_id = match node.get("source_id") {
+        let source_id = match node.get("source") {
             Ok(BoltType::String(s)) => s.value,
             Ok(BoltType::Null(_)) => {
                 return Err(DeError::Other("Source is NULL!".to_string()));
@@ -134,7 +135,7 @@ impl TryFrom<BoltMap> for Connection {
             _ => return Err(DeError::NoSuchProperty),
         };
 
-        let target_id = match node.get("target_id") {
+        let target_id = match node.get("target") {
             Ok(BoltType::String(s)) => s.value,
             Ok(BoltType::Null(_)) => {
                 return Err(DeError::Other("Target is NULL!".to_string()));
@@ -160,6 +161,9 @@ impl TryFrom<BoltMap> for Connection {
                     }),
                 })
                 .collect::<Result<Vec<Request>, DeError>>()?,
+            Err(e) => {
+                return Err(DeError::Other(e.to_string()));
+            }
             _ => {
                 return Err(DeError::Other(
                     "Requests argument not present in Connection".to_string(),
@@ -175,16 +179,16 @@ impl TryFrom<BoltMap> for Connection {
     }
 }
 
-impl Into<BoltType> for Request {
-    fn into(self) -> BoltType {
+impl From<Request> for BoltType {
+    fn from(value: Request) -> Self {
         let mut map = BoltMap::new();
-        let endpoint_json = serde_json::to_string(&self.endpoint).unwrap();
+        let endpoint_json = serde_json::to_string(&value.endpoint).unwrap();
         map.put(
             "endpoint".into(),
             BoltType::String(BoltString::new(&endpoint_json)),
         );
 
-        let restcall_json = serde_json::to_string(&self.restcall).unwrap();
+        let restcall_json = serde_json::to_string(&value.restcall).unwrap();
         map.put(
             "restcall".into(),
             BoltType::String(BoltString::new(&restcall_json)),
@@ -203,6 +207,7 @@ impl TryFrom<BoltMap> for Request {
             )
             .unwrap_or(Endpoint {
                 file_path: "Bad Deserialization!".to_string(),
+                function_hash: "Bad Deserialization!".to_string(),
                 function_name: "Bad Deserialization!".to_string(),
                 http_method: models::HttpMethod::DELETE,
                 parameters: vec![],
@@ -221,8 +226,9 @@ impl TryFrom<BoltMap> for Request {
             .unwrap_or(RestCall {
                 file_path: "Bad Deserialization!".to_string(),
                 function_name: "Bad Deserialization!".to_string(),
+                function_hash: "Bad Deserialization!".to_string(),
                 http_method: models::HttpMethod::DELETE,
-                function_arguments: vec![],
+                call_arguments: vec![],
                 target_uri: "Bad Deserialization!".to_string(),
             })),
             _ => Err(DeError::InvalidType {

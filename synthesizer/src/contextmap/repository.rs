@@ -58,10 +58,10 @@ impl ContextMapRepository for ContextMapRepositoryImpl {
                 if let BoltType::Node(node) = bolt_entity {
                     match Entity::try_from(node) {
                         Ok(entity) => context_map.entities.push(entity),
-                        Err(e) => warn!("Failed to deserialize Entity: {:?}", e),
+                        Err(e) => warn!("Failed to deserialize Entity: {e:?}"),
                     }
                 } else {
-                    warn!("Unexpected BoltType for entity: {:?}", bolt_entity);
+                    warn!("Unexpected BoltType for entity: {bolt_entity:?}");
                 }
             }
 
@@ -69,10 +69,10 @@ impl ContextMapRepository for ContextMapRepositoryImpl {
                 if let BoltType::Map(map) = bolt_dep {
                     match Dependency::try_from(map) {
                         Ok(dep) => context_map.dependencies.push(dep),
-                        Err(e) => warn!("Failed to deserialize Dependency: {:?}", e),
+                        Err(e) => warn!("Failed to deserialize Dependency: {e:?}"),
                     }
                 } else {
-                    warn!("Unexpected BoltType for dependency: {:?}", bolt_dep);
+                    warn!("Unexpected BoltType for dependency: {bolt_dep:?}");
                 }
             }
         }

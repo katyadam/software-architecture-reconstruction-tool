@@ -21,7 +21,7 @@ impl Extractor<Import> for ImportsExtractor {
             let mut orig_name = String::new();
             let mut name_alias = String::new();
             let mut codeword = String::new();
-            m.captures.into_iter().for_each(|capture| {
+            m.captures.iter().for_each(|capture| {
                 let capture_text =
                     &params.code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
                 let value = String::from_utf8_lossy(capture_text).to_string();
@@ -34,7 +34,7 @@ impl Extractor<Import> for ImportsExtractor {
                     "aliased_import.module" => {
                         let aliased_module_import: Vec<&str> =
                             value.split(" as ").map(str::trim).collect();
-                        orig_module = aliased_module_import.get(0).unwrap().to_string();
+                        orig_module = aliased_module_import.first().unwrap().to_string();
                         module_alias = aliased_module_import.get(1).unwrap().to_string();
                         codeword = module_alias.clone();
                     }
@@ -49,7 +49,7 @@ impl Extractor<Import> for ImportsExtractor {
                     }
                     "from_aliased_import.names" => {
                         let aliased_name: Vec<&str> = value.split(" as ").map(str::trim).collect();
-                        orig_name = aliased_name.get(0).unwrap().to_string();
+                        orig_name = aliased_name.first().unwrap().to_string();
                         name_alias = aliased_name.get(1).unwrap().to_string();
                         codeword = name_alias.clone();
                     }

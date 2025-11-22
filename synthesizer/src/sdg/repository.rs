@@ -7,14 +7,14 @@ use uuid::Uuid;
 use crate::{
     errors::database::DatabaseError,
     sdg::{
-        model::types::{Connection, SDG, Service},
+        model::{Connection, Sdg, Service},
         queries::{CREATE_SDG, DELETE_SDG, GET_SDG},
     },
 };
 
 pub trait SdgRepository {
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<SDG, DatabaseError>;
-    async fn save(&self, sdg: &SDG, codebase_uuid: Uuid) -> Result<(), DatabaseError>;
+    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Sdg, DatabaseError>;
+    async fn save(&self, sdg: &Sdg, codebase_uuid: Uuid) -> Result<(), DatabaseError>;
     async fn delete(&self, codebase_uuid: Uuid) -> Result<(), DatabaseError>;
 }
 
@@ -29,13 +29,13 @@ impl SdgRepositoryImpl {
 }
 
 impl SdgRepository for SdgRepositoryImpl {
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<SDG, DatabaseError> {
+    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Sdg, DatabaseError> {
         let mut result = self
             .graph_handle
             .execute(query(GET_SDG).param("codebase_uuid", codebase_uuid.to_string()))
             .await?;
 
-        let mut sdg = SDG {
+        let mut sdg = Sdg {
             services: Vec::new(),
             connections: Vec::new(),
         };
@@ -47,29 +47,26 @@ impl SdgRepository for SdgRepositoryImpl {
             for bolt_service in services_bolt_type {
                 if let BoltType::Node(node) = bolt_service {
                     match Service::try_from(node) {
-                        Ok(entity) => sdg.services.push(entity),
-                        Err(e) => warn!("Failed to deserialize Entity: {:?}", e),
+                        Ok(service) => sdg.services.push(service),
+                        Err(e) => warn!("Failed to deserialize Service: {e:?}"),
                     }
                 } else {
-                    warn!("Unexpected BoltType for entity: {:?}", bolt_service);
+                    warn!("Unexpected BoltType for service: {bolt_service:?}");
                 }
             }
 
             for bolt_dep in connections_bolt_type {
                 if let BoltType::Map(map) = bolt_dep {
-                    match Connection::try_from(map) {
-                        Ok(dep) => sdg.connections.push(dep),
-                        Err(e) => warn!("Failed to deserialize Connection: {:?}", e),
-                    }
+                    if let Ok(dep) = Connection::try_from(map) { sdg.connections.push(dep) }
                 } else {
-                    warn!("Unexpected BoltType for connection: {:?}", bolt_dep);
+                    warn!("Unexpected BoltType for connection: {bolt_dep:?}");
                 }
             }
         }
         Ok(sdg)
     }
 
-    async fn save(&self, sdg: &SDG, codebase_uuid: Uuid) -> Result<(), DatabaseError> {
+    async fn save(&self, sdg: &Sdg, codebase_uuid: Uuid) -> Result<(), DatabaseError> {
         self.graph_handle
             .run(
                 query(CREATE_SDG)

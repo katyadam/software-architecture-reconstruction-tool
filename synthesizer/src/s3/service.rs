@@ -6,6 +6,10 @@ use crate::{
         service::{ContextMapService, ContextMapServiceImpl},
     },
     errors::s3::{S3ClientError, S3ServiceError},
+    imcg::{
+        dto::PostIMCG,
+        service::{ImcgService, ImcgServiceImpl},
+    },
     s3::{
         client::S3Client,
         dto::PostViews,
@@ -22,6 +26,7 @@ pub struct S3Service {
     s3_client: S3Client,
     context_map_service: Arc<ContextMapServiceImpl>,
     sdg_service: Arc<SdgServiceImpl>,
+    imcg_service: Arc<ImcgServiceImpl>,
 }
 
 impl S3Service {
@@ -29,21 +34,23 @@ impl S3Service {
         s3_client: S3Client,
         context_map_service: Arc<ContextMapServiceImpl>,
         sdg_service: Arc<SdgServiceImpl>,
+        imcg_service: Arc<ImcgServiceImpl>,
     ) -> Self {
         Self {
             s3_client,
             context_map_service,
             sdg_service,
+            imcg_service,
         }
     }
 
     pub async fn save_views(&self, dto: PostViews) -> Result<(), S3ServiceError> {
         let loaded_cm_elements = self.load_context_map_elements(&dto.base_dir_path).await?;
         let loaded_sdg_elements = self.load_sdg_elements(&dto.base_dir_path).await?;
-        // let loaded_imcg_elements = self.load_imcg_elements(&dto.base_dir_path).await?;
+        let loaded_imcg_elements = self.load_imcg_elements(&dto.base_dir_path).await?;
         self.context_map_service
             .save(PostContextMap {
-                codebase_uuid: dto.codebase_uuid.clone(),
+                codebase_uuid: dto.codebase_uuid,
                 entities: loaded_cm_elements.entities,
             })
             .await?;
@@ -56,8 +63,13 @@ impl S3Service {
             })
             .await?;
 
-        // TODO: Implement IMCG creation
-
+        self.imcg_service
+            .save(PostIMCG {
+                codebase_uuid: dto.codebase_uuid,
+                callables: loaded_imcg_elements.callables,
+                call_statements: loaded_imcg_elements.calls,
+            })
+            .await?;
         Ok(())
     }
 
@@ -86,7 +98,7 @@ impl S3Service {
         &self,
         base_dir_path: &str,
     ) -> Result<S3ContextMapCodeElements, S3ServiceError> {
-        let index_path = format!("{}/cm/index.json", base_dir_path);
+        let index_path = format!("{base_dir_path}/cm/index.json");
         self.load_and_merge_chunks::<S3ContextMapCodeElements, _, S3ContextMapCodeElements>(
             &index_path,
             |chunks| {
@@ -104,7 +116,7 @@ impl S3Service {
         &self,
         base_dir_path: &str,
     ) -> Result<S3SdgCodeElements, S3ServiceError> {
-        let index_path = format!("{}/sdg/index.json", base_dir_path);
+        let index_path = format!("{base_dir_path}/sdg/index.json");
         self.load_and_merge_chunks::<S3SdgCodeElements, _, S3SdgCodeElements>(
             &index_path,
             |chunks| {
@@ -123,12 +135,11 @@ impl S3Service {
         .await
     }
 
-    #[allow(dead_code)]
     pub async fn load_imcg_elements(
         &self,
         base_dir_path: &str,
     ) -> Result<S3ImcgCodeElements, S3ServiceError> {
-        let index_path = format!("{}/imcg/index.json", base_dir_path);
+        let index_path = format!("{base_dir_path}/imcg/index.json");
         self.load_and_merge_chunks::<S3ImcgCodeElements, _, S3ImcgCodeElements>(
             &index_path,
             |chunks| {

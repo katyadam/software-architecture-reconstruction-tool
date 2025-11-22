@@ -7,7 +7,7 @@ use crate::{
     errors::api::ApiError,
     sdg::{
         dto::{GetSDGErrorReponse, PostSDG, PostSDGErrorResponse},
-        model::types::SDG,
+        model::Sdg,
         service::{SdgService, SdgServiceImpl},
     },
 };
@@ -16,7 +16,7 @@ use crate::{
         post,
         path = "/sdgs",
         responses(
-            (status = 201, description = "SDG successfully created & saved", body = SDG),
+            (status = 201, description = "SDG successfully created & saved", body = Sdg),
             (status = 202, description = "SDG successfully created, saving failed", body = PostSDGErrorResponse),
         ),
     )]
@@ -38,7 +38,7 @@ pub async fn create_sdg(
             ("codebase_uuid", Path, description = "Codebase UUID of the SDG to get", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
         ),
         responses(
-            (status = 200, description = "SDG successfully retrieved", body = SDG),
+            (status = 200, description = "SDG successfully retrieved", body = Sdg),
             (status = 400, description = "SDG cannot be retrieved", body = GetSDGErrorReponse),
         ),
     )]

@@ -19,15 +19,15 @@ pub struct Field {
     pub datatype_signature: Option<String>,
 }
 
-impl Into<BoltType> for Entity {
-    fn into(self) -> BoltType {
+impl From<Entity> for BoltType {
+    fn from(value: Entity) -> Self {
         let mut map = BoltMap::new();
-        map.put("name".into(), self.name.into());
-        map.put("signature".into(), self.signature.into());
-        map.put("file_path".into(), self.file_path.into());
+        map.put("name".into(), value.name.into());
+        map.put("signature".into(), value.signature.into());
+        map.put("file_path".into(), value.file_path.into());
 
         let superclasses_list: BoltType = BoltType::List(BoltList {
-            value: self
+            value: value
                 .superclasses
                 .into_iter()
                 .map(|superclass| superclass.into())
@@ -37,7 +37,7 @@ impl Into<BoltType> for Entity {
         map.put("superclasses".into(), superclasses_list);
 
         let fields_list: BoltType = BoltType::List(BoltList {
-            value: self
+            value: value
                 .fields
                 .into_iter()
                 .map(|field| {
@@ -113,9 +113,9 @@ impl TryFrom<BoltNode> for Entity {
             _ => return Err(DeError::NoSuchProperty),
         };
         Ok(Entity {
-            signature: signature,
-            name: name,
-            superclasses: superclasses,
+            signature,
+            name,
+            superclasses,
             fields,
             file_path,
         })

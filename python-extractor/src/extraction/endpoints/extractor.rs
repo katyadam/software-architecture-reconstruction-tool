@@ -1,7 +1,8 @@
-use crate::extraction::common::extract_param_names;
+use crate::extraction::callables::parser::parse_parameters;
 use crate::extraction::extractor::{ExtractParams, Extractor};
 use crate::extraction::queries::ENDPOINTS_QUERY;
 use models::{Endpoint, HttpMethod};
+use sha2::{Digest, Sha256};
 use tree_sitter::StreamingIterator;
 use tree_sitter::{Query, QueryCursor};
 
@@ -18,9 +19,10 @@ impl Extractor<Endpoint> for EndpointsExtractor {
             let mut function_name = String::new();
             let mut http_method = String::new();
             let mut uri = String::new();
-            let mut arguments = vec![];
+            let mut parameters = vec![];
+            let mut function_hash = String::new();
 
-            m.captures.into_iter().for_each(|capture| {
+            m.captures.iter().for_each(|capture| {
                 let capture_text =
                     &params.code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
                 let value = String::from_utf8_lossy(capture_text).to_string();
@@ -29,17 +31,23 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                     "http.method" => http_method = value,
                     "http.uri" => uri = value.trim_matches('"').to_string(),
                     "function.params" => {
-                        let param_names = extract_param_names(capture.node, &params.code);
-                        arguments.extend(param_names);
+                        let p = parse_parameters(&value);
+                        parameters.extend(p);
+                    }
+                    "function" => {
+                        let mut hasher = Sha256::new();
+                        hasher.update(value.as_bytes());
+                        function_hash = format!("{:x}", hasher.finalize());
                     }
                     _ => {}
                 }
             });
 
             endpoints.push(Endpoint {
-                function_name: function_name,
+                function_name,
+                function_hash,
                 http_method: http_method.parse().unwrap_or(HttpMethod::GET),
-                parameters: arguments,
+                parameters,
                 uri,
                 file_path: params.file_name.unwrap_or_default().to_string(),
             });

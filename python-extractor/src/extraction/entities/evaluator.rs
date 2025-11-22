@@ -4,8 +4,8 @@ use models::{Entity, Import};
 
 pub fn create_field_datatype_signature(
     file_path: &str,
-    module_path: &String,
-    datatype: &String,
+    module_path: &str,
+    datatype: &str,
 ) -> String {
     let mut path = PathBuf::from(file_path);
     path.pop();
@@ -23,9 +23,9 @@ pub fn create_field_datatype_signature(
     format!("{}/{}", path.display(), datatype)
 }
 
-pub fn evaluate_entity_fields(imports: &Vec<Import>, entities: &mut Vec<Entity>, file_path: &str) {
+pub fn evaluate_entity_fields(imports: &[Import], entities: &mut Vec<Entity>, file_path: &str) {
     let imports_map = get_imports_map(imports);
-    let entities_map = get_entities_map(&entities);
+    let entities_map = get_entities_map(entities);
     for entity in entities {
         for field in &mut entity.fields {
             if let Some(ref datatype) = field.datatype {
@@ -46,16 +46,16 @@ pub fn evaluate_entity_fields(imports: &Vec<Import>, entities: &mut Vec<Entity>,
     }
 }
 
-pub fn get_imports_map(imports: &Vec<Import>) -> HashMap<String, &Import> {
+pub fn get_imports_map(imports: &[Import]) -> HashMap<String, &Import> {
     imports
-        .into_iter()
+        .iter()
         .map(|import| (import.codeword.clone(), import))
         .collect()
 }
 
-pub fn get_entities_map(entities: &Vec<Entity>) -> HashMap<String, Entity> {
+pub fn get_entities_map(entities: &[Entity]) -> HashMap<String, Entity> {
     entities
-        .into_iter()
+        .iter()
         .map(|entity| (entity.name.clone(), entity.clone()))
         .collect()
 }

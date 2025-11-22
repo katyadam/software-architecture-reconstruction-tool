@@ -23,7 +23,7 @@ impl S3Client {
     ) -> Result<(), S3ClientError> {
         self.save_chunk(
             &S3ContextMapCodeElements::new(entities),
-            &format!("{}/cm", path),
+            &format!("{path}/cm"),
         )
         .await
     }
@@ -36,7 +36,7 @@ impl S3Client {
     ) -> Result<(), S3ClientError> {
         self.save_chunk(
             &S3SdgCodeElements::new(endpoints, restcalls),
-            &format!("{}/sdg", path),
+            &format!("{path}/sdg"),
         )
         .await
     }
@@ -49,7 +49,7 @@ impl S3Client {
     ) -> Result<(), S3ClientError> {
         self.save_chunk(
             &S3ImcgCodeElements::new(callables, calls),
-            &format!("{}/imcg", path),
+            &format!("{path}/imcg"),
         )
         .await
     }
@@ -75,7 +75,7 @@ impl S3Client {
         chunk_dir_path: &str,
         full_chunk_path: &str,
     ) -> Result<(), S3ClientError> {
-        let index_path = format!("{}/index.json", chunk_dir_path);
+        let index_path = format!("{chunk_dir_path}/index.json");
 
         if !self.bucket.object_exists(&index_path).await? {
             self.bucket.put_object(&index_path, b"[]").await?;
@@ -83,7 +83,7 @@ impl S3Client {
 
         let index_data = self.bucket.get_object(&index_path).await?;
 
-        let mut index = serde_json::from_slice::<Vec<String>>(&index_data.bytes())?;
+        let mut index = serde_json::from_slice::<Vec<String>>(index_data.bytes())?;
         index.push(full_chunk_path.to_string());
 
         let index_data = serde_json::to_vec(&index)?;

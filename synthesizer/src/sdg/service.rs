@@ -6,14 +6,14 @@ use crate::{
     sdg::{
         builder::{SdgBuilder, SdgBuilderImpl},
         dto::PostSDG,
-        model::types::SDG,
+        model::Sdg,
         repository::{SdgRepository, SdgRepositoryImpl},
     },
 };
 
 pub trait SdgService {
-    async fn save(&self, sdg_payload: PostSDG) -> Result<SDG, ServiceError>;
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<SDG, ServiceError>;
+    async fn save(&self, sdg_payload: PostSDG) -> Result<Sdg, ServiceError>;
+    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Sdg, ServiceError>;
     async fn delete(&self, codebase_uuid: Uuid) -> Result<(), ServiceError>;
 }
 
@@ -38,7 +38,7 @@ impl SdgServiceImpl {
 }
 
 impl SdgService for SdgServiceImpl {
-    async fn save(&self, sdg_payload: PostSDG) -> Result<SDG, ServiceError> {
+    async fn save(&self, sdg_payload: PostSDG) -> Result<Sdg, ServiceError> {
         let configuration = self
             .manager_connector
             .get_codebase_configuration(sdg_payload.codebase_uuid)
@@ -57,7 +57,7 @@ impl SdgService for SdgServiceImpl {
         Ok(sdg)
     }
 
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<SDG, ServiceError> {
+    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Sdg, ServiceError> {
         let sdg = self.repository.get_single(codebase_uuid).await?;
         Ok(sdg)
     }

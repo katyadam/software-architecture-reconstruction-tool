@@ -1,24 +1,12 @@
-use models::Entity;
 use neo4rs::{BoltMap, BoltType, DeError};
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
-#[derive(ToSchema, Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct ContextMap {
-    pub entities: Vec<Entity>,
-    pub dependencies: Vec<Dependency>,
-}
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema, PartialEq, Eq)]
-pub struct Dependency {
-    pub source_id: String,
-    pub target_id: String,
-}
+use crate::contextmap::model::Dependency;
 
-impl Into<BoltType> for Dependency {
-    fn into(self) -> BoltType {
+impl From<Dependency> for BoltType {
+    fn from(value: Dependency) -> Self {
         let mut map = BoltMap::new();
-        map.put("source_id".into(), self.source_id.into());
-        map.put("target_id".into(), self.target_id.into());
+        map.put("source_id".into(), value.source_id.into());
+        map.put("target_id".into(), value.target_id.into());
         BoltType::Map(map)
     }
 }
@@ -44,8 +32,8 @@ impl TryFrom<BoltMap> for Dependency {
         };
 
         Ok(Dependency {
-            source_id: source_id,
-            target_id: target_id,
+            source_id,
+            target_id,
         })
     }
 }

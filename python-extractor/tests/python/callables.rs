@@ -10,6 +10,13 @@ use python_extractor::{
 
 use crate::python::utils::get_tree;
 
+fn print_hashes(calls: &Vec<Callable>) {
+    calls.iter().for_each(|c| {
+        let h = &c.hash;
+        println!("{h:?}");
+    });
+}
+
 #[test]
 fn simple_test() {
     let filename = "./examples/python/callgraph/simple.py";
@@ -19,28 +26,26 @@ fn simple_test() {
         CallablesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
     let expected = vec![
         Callable {
+            name: s!("A()"),
             signature: s!("module:./examples/python/callgraph/simple.py/A()"),
             namespace: Namespace::Module(s!("./examples/python/callgraph/simple.py")),
-            parameters: vec![Parameter {
-                name: s!(""),
-                datatype: None,
-                initial_value: None,
-            }],
+            parameters: vec![],
             return_type: None,
             is_async: false,
-            hash: s!("d74ff0ee8da3b9806b18c877dbf29bbde50b5bd8e4dad7a3a725000feb82e8f1"),
+            is_constructor: false,
+            hash: s!("d9df9ce075e17ae930f1a91628d1d74d5c21fc1c257ebf225d207620d6e6bc66"),
+            file_path: s!("./examples/python/callgraph/simple.py"),
         },
         Callable {
+            name: s!("B()"),
             signature: s!("module:./examples/python/callgraph/simple.py/B()"),
             namespace: Namespace::Module(s!("./examples/python/callgraph/simple.py")),
-            parameters: vec![Parameter {
-                name: s!(""),
-                datatype: None,
-                initial_value: None,
-            }],
+            parameters: vec![],
             return_type: None,
             is_async: false,
-            hash: s!("b9ee44d39137ad72fb72086d588215dc00a601ffc9c606f705230b76bb43a501"),
+            is_constructor: false,
+            hash: s!("5380b70e23765bad5354b9ebe00d02ff832d744cebd97bffaa2dd2158a24d4fd"),
+            file_path: s!("./examples/python/callgraph/simple.py"),
         },
     ];
 
@@ -54,8 +59,10 @@ fn nested_test() {
     let tree = get_tree(&code);
     let callables =
         CallablesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
+
     let expected = vec![
         Callable {
+            name: s!("A(func)"),
             signature: s!("module:./examples/python/callgraph/nested.py/A(func)"),
             namespace: Namespace::Module(s!("./examples/python/callgraph/nested.py")),
             parameters: vec![Parameter {
@@ -65,9 +72,12 @@ fn nested_test() {
             }],
             return_type: None,
             is_async: false,
-            hash: s!("0105467f2befa106a0483ca9846392a422c7ccb70cdaf93f57d6ba942c4a6b06"),
+            is_constructor: false,
+            hash: s!("650fec183ca7b316f2eea955199ded5434c4c0e2519855e71ec4ebc25c52a727"),
+            file_path: s!("./examples/python/callgraph/nested.py"),
         },
         Callable {
+            name: s!("B(func)"),
             signature: s!("module:./examples/python/callgraph/nested.py/B(func)"),
             namespace: Namespace::Module(s!("./examples/python/callgraph/nested.py")),
             parameters: vec![Parameter {
@@ -77,31 +87,31 @@ fn nested_test() {
             }],
             return_type: None,
             is_async: false,
-            hash: s!("dfae5a6e06f1ca7eab19bf799456712be278ff21ff66c640fcc49e1cc3a8d52a"),
+            is_constructor: false,
+            hash: s!("cc712a7d1633c1d66e5b6c092582f40391e2fa9f24fedcb2ec8bbf1f366e84c0"),
+            file_path: s!("./examples/python/callgraph/nested.py"),
         },
         Callable {
+            name: s!("C()"),
             signature: s!("module:./examples/python/callgraph/nested.py/C()"),
             namespace: Namespace::Module(s!("./examples/python/callgraph/nested.py")),
-            parameters: vec![Parameter {
-                name: s!(""),
-                datatype: None,
-                initial_value: None,
-            }],
+            parameters: vec![],
             return_type: None,
             is_async: false,
-            hash: s!("540334dc3979994b09946ffd275c1060a1de79575a84af03c8950cdca9d19bcb"),
+            is_constructor: false,
+            hash: s!("9f978d4dd5fba836729017fe06d71e96a2a8ec3e4a4aacc8bbd06ab9d5a62935"),
+            file_path: s!("./examples/python/callgraph/nested.py"),
         },
         Callable {
+            name: s!("D()"),
             signature: s!("module:./examples/python/callgraph/nested.py/D()"),
             namespace: Namespace::Module(s!("./examples/python/callgraph/nested.py")),
-            parameters: vec![Parameter {
-                name: s!(""),
-                datatype: None,
-                initial_value: None,
-            }],
+            parameters: vec![],
             return_type: None,
             is_async: false,
-            hash: s!("2a93b3636ca0ff3b3009419fd1918de34c39985afdd44a06d100fe06f9bbf2fc"),
+            is_constructor: false,
+            hash: s!("745cbe2ba4c4ec3bb0ce4671266169404aadc272d08171daf73fe0648d923159"),
+            file_path: s!("./examples/python/callgraph/nested.py"),
         },
     ];
 
@@ -115,8 +125,10 @@ fn classes_test() {
     let tree = get_tree(&code);
     let callables =
         CallablesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
+
     let expected = vec![
         Callable {
+            name: s!("__init__(self, a:int, b:int)"),
             signature: s!("class:Divider/__init__(self, a:int, b:int)"),
             namespace: Namespace::Class(s!("Divider")),
             parameters: vec![
@@ -138,9 +150,12 @@ fn classes_test() {
             ],
             return_type: None,
             is_async: false,
-            hash: s!("112eaad45fe3a03aa8d62a93b7e059d7af8a0c63a105fa292666ea46bbe555f1"),
+            is_constructor: true,
+            hash: s!("c80beec77d695a28bc7e6d631bec5b41344f851a8bc2ebdae2c5ada96cfeb0f8"),
+            file_path: s!("./examples/python/callgraph/classes.py"),
         },
         Callable {
+            name: s!("divide(self)"),
             signature: s!("class:Divider/divide(self)"),
             namespace: Namespace::Class(s!("Divider")),
             parameters: vec![Parameter {
@@ -150,9 +165,12 @@ fn classes_test() {
             }],
             return_type: Some(s!("float")),
             is_async: false,
-            hash: s!("9effd4ed97bd589bbe40b7bfc75aa851617dd39b94519b9c2cecbd23c1b0b2f2"),
+            is_constructor: false,
+            hash: s!("30372f7a99122dc570c1067673de63bdaa1771f42ede99fb45fa3b2f9f1f7dff"),
+            file_path: s!("./examples/python/callgraph/classes.py"),
         },
         Callable {
+            name: s!("dividable(self)"),
             signature: s!("class:Divider/dividable(self)"),
             namespace: Namespace::Class(s!("Divider")),
             parameters: vec![Parameter {
@@ -162,9 +180,12 @@ fn classes_test() {
             }],
             return_type: Some(s!("bool")),
             is_async: false,
-            hash: s!("f0c5f05ef4e51d6fcf5966c194309b7ae2f087ec45e8eac2f9492656cd1ff08e"),
+            is_constructor: false,
+            hash: s!("15e4e25540b3cf1685ffa5be42b9abc0826887109692cca4df61641f3338feef"),
+            file_path: s!("./examples/python/callgraph/classes.py"),
         },
         Callable {
+            name: s!("sum(a:int, b:int)"),
             signature: s!("module:./examples/python/callgraph/classes.py/sum(a:int, b:int)"),
             namespace: Namespace::Module(s!("./examples/python/callgraph/classes.py")),
             parameters: vec![
@@ -181,7 +202,9 @@ fn classes_test() {
             ],
             return_type: Some(s!("int")),
             is_async: false,
-            hash: s!("e148c439e5e3717869a9931caccd290594743bff8ff5b314ffb3b89a6b43b005"),
+            is_constructor: false,
+            hash: s!("0c826868c65d7c2163c167ce67a44f69f3df6284e3f43e43781a20cc2811fed3"),
+            file_path: s!("./examples/python/callgraph/classes.py"),
         },
     ];
 
@@ -195,8 +218,10 @@ fn classes_imports_test() {
     let tree = get_tree(&code);
     let callables =
         CallablesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
+
     let expected = vec![
         Callable {
+            name: s!("__init__(self, a:int, b:int)"),
             signature: s!("class:Math/__init__(self, a:int, b:int)"),
             namespace: Namespace::Class(s!("Math")),
             parameters: vec![
@@ -218,9 +243,12 @@ fn classes_imports_test() {
             ],
             return_type: None,
             is_async: false,
-            hash: s!("112eaad45fe3a03aa8d62a93b7e059d7af8a0c63a105fa292666ea46bbe555f1"),
+            is_constructor: true,
+            hash: s!("c80beec77d695a28bc7e6d631bec5b41344f851a8bc2ebdae2c5ada96cfeb0f8"),
+            file_path: s!("./examples/python/callgraph/classes-imports.py"),
         },
         Callable {
+            name: s!("divide(self)"),
             signature: s!("class:Math/divide(self)"),
             namespace: Namespace::Class(s!("Math")),
             parameters: vec![Parameter {
@@ -230,9 +258,12 @@ fn classes_imports_test() {
             }],
             return_type: None,
             is_async: false,
-            hash: s!("3051f8e5edfaa306f5bce5b837bdb31bff1ee85083d0b9ec883a4426bd038827"),
+            is_constructor: false,
+            hash: s!("c8d75a476ca34490e210d69d820334e34f1d6b7ba3e072349fab722550bf0f02"),
+            file_path: s!("./examples/python/callgraph/classes-imports.py"),
         },
         Callable {
+            name: s!("sum(self)"),
             signature: s!("class:Math/sum(self)"),
             namespace: Namespace::Class(s!("Math")),
             parameters: vec![Parameter {
@@ -242,9 +273,12 @@ fn classes_imports_test() {
             }],
             return_type: None,
             is_async: false,
-            hash: s!("1f67e43697d4c9cb1d37345ef1ecc13d787c39e4ba41c0c9c7c3ca6553a8aef6"),
+            is_constructor: false,
+            hash: s!("e3281ab38386c5755a1cdc5868b282d087b75a346aebc95d3f9f602bc463ee07"),
+            file_path: s!("./examples/python/callgraph/classes-imports.py"),
         },
         Callable {
+            name: s!("product(self)"),
             signature: s!("class:Math/product(self)"),
             namespace: Namespace::Class(s!("Math")),
             parameters: vec![Parameter {
@@ -254,7 +288,33 @@ fn classes_imports_test() {
             }],
             return_type: None,
             is_async: false,
-            hash: s!("e980235a22a2fb8369a5aadd7ff30ac9b0abc177c1e2a79bc9f1274c5c39c708"),
+            is_constructor: false,
+            hash: s!("0a9198d819b5cf2e24494807db9cc7baf9ce8355f7e16b4a53e2c97634abf16a"),
+            file_path: s!("./examples/python/callgraph/classes-imports.py"),
+        },
+        Callable {
+            name: s!("product(a:int, b:int)"),
+            signature: s!(
+                "module:./examples/python/callgraph/classes-imports.py/product(a:int, b:int)"
+            ),
+            namespace: Namespace::Module(s!("./examples/python/callgraph/classes-imports.py")),
+            parameters: vec![
+                Parameter {
+                    name: s!("a"),
+                    datatype: Some(s!("int")),
+                    initial_value: None,
+                },
+                Parameter {
+                    name: s!("b"),
+                    datatype: Some(s!("int")),
+                    initial_value: None,
+                },
+            ],
+            return_type: Some(s!("int")),
+            is_async: false,
+            is_constructor: false,
+            hash: s!("797e6ea6f7b3cba53e2a766831836ec6e973ba26a96d2c5ac11a10db3db92044"),
+            file_path: s!("./examples/python/callgraph/classes-imports.py"),
         },
     ];
 
