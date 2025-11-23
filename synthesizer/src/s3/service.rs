@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+    connectors::manager_connector::ManagerConnector,
     contextmap::{
         dto::PostContextMap,
         service::{ContextMapService, ContextMapServiceImpl},
@@ -24,6 +25,7 @@ use futures::stream::{self, StreamExt};
 
 pub struct S3Service {
     s3_client: S3Client,
+    manager_connector: ManagerConnector,
     context_map_service: Arc<ContextMapServiceImpl>,
     sdg_service: Arc<SdgServiceImpl>,
     imcg_service: Arc<ImcgServiceImpl>,
@@ -32,12 +34,14 @@ pub struct S3Service {
 impl S3Service {
     pub fn new(
         s3_client: S3Client,
+        manager_connector: ManagerConnector,
         context_map_service: Arc<ContextMapServiceImpl>,
         sdg_service: Arc<SdgServiceImpl>,
         imcg_service: Arc<ImcgServiceImpl>,
     ) -> Self {
         Self {
             s3_client,
+            manager_connector,
             context_map_service,
             sdg_service,
             imcg_service,
@@ -73,6 +77,11 @@ impl S3Service {
                 call_statements: loaded_imcg_elements.calls,
             })
             .await?;
+
+        self.manager_connector
+            .confirm_processed_commit(&dto.identifier.commit_hash)
+            .await?;
+
         Ok(())
     }
 
