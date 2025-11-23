@@ -58,6 +58,7 @@ mod schema;
         commit::controller::create_commit,
         commit::controller::get_commit,
         commit::controller::delete_commit,
+        commit::controller::patch_commit_processed,
     ),
     components(schemas(ProjectResponse, ApiError, CodebaseResponse, CommitResponse))
 )]
