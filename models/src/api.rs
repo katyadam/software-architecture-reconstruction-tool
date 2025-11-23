@@ -1,3 +1,7 @@
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use uuid::Uuid;
+
 use crate::{CallStatement, Callable, Endpoint, Entity, Import, RestCall};
 
 #[derive(Debug)]
@@ -28,4 +32,10 @@ impl CodeElementsAggregate {
             call_statements,
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ProcessFilesIdentifier {
+    pub codebase_uuid: Uuid,
+    pub commit_hash: String,
 }

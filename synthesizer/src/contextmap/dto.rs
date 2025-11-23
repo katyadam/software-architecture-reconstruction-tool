@@ -10,6 +10,9 @@ pub struct PostContextMap {
     #[schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
     pub codebase_uuid: Uuid,
 
+    #[schema(example = "abc123def4567890abcdef1234567890abcdef12")]
+    pub commit_hash: String,
+
     #[schema(example = json!([
         {
             "name": "Class",

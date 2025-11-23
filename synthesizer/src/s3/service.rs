@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+    connectors::manager_connector::ManagerConnector,
     contextmap::{
         dto::PostContextMap,
         service::{ContextMapService, ContextMapServiceImpl},
@@ -24,6 +25,7 @@ use futures::stream::{self, StreamExt};
 
 pub struct S3Service {
     s3_client: S3Client,
+    manager_connector: ManagerConnector,
     context_map_service: Arc<ContextMapServiceImpl>,
     sdg_service: Arc<SdgServiceImpl>,
     imcg_service: Arc<ImcgServiceImpl>,
@@ -32,12 +34,14 @@ pub struct S3Service {
 impl S3Service {
     pub fn new(
         s3_client: S3Client,
+        manager_connector: ManagerConnector,
         context_map_service: Arc<ContextMapServiceImpl>,
         sdg_service: Arc<SdgServiceImpl>,
         imcg_service: Arc<ImcgServiceImpl>,
     ) -> Self {
         Self {
             s3_client,
+            manager_connector,
             context_map_service,
             sdg_service,
             imcg_service,
@@ -50,14 +54,16 @@ impl S3Service {
         let loaded_imcg_elements = self.load_imcg_elements(&dto.base_dir_path).await?;
         self.context_map_service
             .save(PostContextMap {
-                codebase_uuid: dto.codebase_uuid,
+                codebase_uuid: dto.identifier.codebase_uuid,
+                commit_hash: dto.identifier.commit_hash.clone(),
                 entities: loaded_cm_elements.entities,
             })
             .await?;
 
         self.sdg_service
             .save(PostSDG {
-                codebase_uuid: dto.codebase_uuid,
+                codebase_uuid: dto.identifier.codebase_uuid,
+                commit_hash: dto.identifier.commit_hash.clone(),
                 endpoints: loaded_sdg_elements.endpoints,
                 restcalls: loaded_sdg_elements.restcalls,
             })
@@ -65,11 +71,17 @@ impl S3Service {
 
         self.imcg_service
             .save(PostIMCG {
-                codebase_uuid: dto.codebase_uuid,
+                codebase_uuid: dto.identifier.codebase_uuid,
+                commit_hash: dto.identifier.commit_hash.clone(),
                 callables: loaded_imcg_elements.callables,
                 call_statements: loaded_imcg_elements.calls,
             })
             .await?;
+
+        self.manager_connector
+            .confirm_processed_commit(&dto.identifier.commit_hash)
+            .await?;
+
         Ok(())
     }
 

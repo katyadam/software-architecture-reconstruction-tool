@@ -20,4 +20,10 @@ impl ManagerConnector {
             .get_json::<ConfigurationDto>(format!("/codebases/{codebase_uuid}/conf").as_str())
             .await
     }
+
+    pub async fn confirm_processed_commit(&self, commit_hash: &str) -> Result<(), HttpClientError> {
+        self.http_client
+            .patch(format!("/commits/{commit_hash}/processed").as_str())
+            .await
+    }
 }

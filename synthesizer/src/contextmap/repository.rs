@@ -17,15 +17,18 @@ pub trait ContextMapRepository {
     fn get_single(
         &self,
         codebase_uuid: Uuid,
+        commit_hash: &str,
     ) -> impl std::future::Future<Output = Result<ContextMap, DatabaseError>> + Send;
     fn save(
         &self,
         context_map: &ContextMap,
         codebase_uuid: Uuid,
+        commit_hash: &str,
     ) -> impl std::future::Future<Output = Result<(), DatabaseError>> + Send;
     fn delete(
         &self,
         codebase_uuid: Uuid,
+        commit_hash: &str,
     ) -> impl std::future::Future<Output = Result<(), DatabaseError>> + Send;
 }
 
@@ -40,10 +43,18 @@ impl ContextMapRepositoryImpl {
 }
 
 impl ContextMapRepository for ContextMapRepositoryImpl {
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<ContextMap, DatabaseError> {
+    async fn get_single(
+        &self,
+        codebase_uuid: Uuid,
+        commit_hash: &str,
+    ) -> Result<ContextMap, DatabaseError> {
         let mut result = self
             .graph_handle
-            .execute(query(GET_CONTEXT_MAP).param("codebase_uuid", codebase_uuid.to_string()))
+            .execute(
+                query(GET_CONTEXT_MAP)
+                    .param("codebase_uuid", codebase_uuid.to_string())
+                    .param("commit_hash", commit_hash.to_string()),
+            )
             .await?;
         let mut context_map = ContextMap {
             entities: Vec::new(),
@@ -83,21 +94,27 @@ impl ContextMapRepository for ContextMapRepositoryImpl {
         &self,
         context_map: &ContextMap,
         codebase_uuid: Uuid,
+        commit_hash: &str,
     ) -> Result<(), DatabaseError> {
         self.graph_handle
             .run(
                 query(CREATE_CONTEXT_MAP)
                     .param("entities", context_map.entities.clone())
                     .param("dependencies", context_map.dependencies.clone())
-                    .param("codebase_uuid", codebase_uuid.to_string()),
+                    .param("codebase_uuid", codebase_uuid.to_string())
+                    .param("commit_hash", commit_hash.to_string()),
             )
             .await?;
         Ok(())
     }
 
-    async fn delete(&self, codebase_uuid: Uuid) -> Result<(), DatabaseError> {
+    async fn delete(&self, codebase_uuid: Uuid, commit_hash: &str) -> Result<(), DatabaseError> {
         self.graph_handle
-            .run(query(DELETE_CONTEXT_MAP).param("codebase_uuid", codebase_uuid.to_string()))
+            .run(
+                query(DELETE_CONTEXT_MAP)
+                    .param("codebase_uuid", codebase_uuid.to_string())
+                    .param("commit_hash", commit_hash.to_string()),
+            )
             .await?;
         Ok(())
     }

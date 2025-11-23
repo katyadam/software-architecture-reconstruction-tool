@@ -1,3 +1,4 @@
+use models::api::ProcessFilesIdentifier;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -27,6 +28,6 @@ impl PostFileRecord {
 
 #[derive(Serialize)]
 pub struct ViewsDto<'a> {
-    pub codebase_uuid: Uuid,
+    pub identifier: ProcessFilesIdentifier,
     pub base_dir_path: &'a str,
 }

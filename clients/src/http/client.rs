@@ -56,7 +56,6 @@ impl HttpClient {
         Ok(resp_json)
     }
 
-    #[allow(dead_code)]
     pub async fn get_json<R>(&self, endpoint: &str) -> Result<R, HttpClientError>
     where
         R: DeserializeOwned + 'static,
@@ -84,5 +83,17 @@ impl HttpClient {
 
         let resp_json: R = serde_json::from_slice(&bytes)?;
         Ok(resp_json)
+    }
+
+    pub async fn patch(&self, endpoint: &str) -> Result<(), HttpClientError> {
+        let url = format!("{}{}", self.base_url.trim_end_matches('/'), endpoint);
+
+        self.client
+            .patch(url)
+            .insert_header(("Accept", "application/json"))
+            .send()
+            .await?;
+
+        Ok(())
     }
 }

@@ -1,3 +1,4 @@
+use clients::http::error::HttpClientError;
 use s3::error::S3Error;
 use thiserror::Error;
 
@@ -64,6 +65,22 @@ impl From<S3ClientError> for S3ServiceError {
         match err {
             S3ClientError::Serde(err) => S3ServiceError::DeserializationError(err),
             S3ClientError::S3(err) => S3ServiceError::InternalError(err),
+        }
+    }
+}
+
+impl From<HttpClientError> for S3ServiceError {
+    fn from(err: HttpClientError) -> Self {
+        match err {
+            HttpClientError::Serde(error) => {
+                S3ServiceError::DeserializationError(error.to_string())
+            }
+            HttpClientError::HttpRequest(send_request_error) => {
+                S3ServiceError::InternalError(send_request_error.to_string())
+            }
+            HttpClientError::Payload(payload_error) => {
+                S3ServiceError::InternalError(payload_error.to_string())
+            }
         }
     }
 }

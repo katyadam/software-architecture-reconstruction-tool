@@ -19,8 +19,12 @@ use crate::{
 
 pub trait ImcgService {
     async fn save(&self, imcg_payload: PostIMCG) -> Result<Imcg, ServiceError>;
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Imcg, ServiceError>;
-    async fn delete(&self, codebase_uuid: Uuid) -> Result<(), ServiceError>;
+    async fn get_single(
+        &self,
+        codebase_uuid: Uuid,
+        commit_hash: &str,
+    ) -> Result<Imcg, ServiceError>;
+    async fn delete(&self, codebase_uuid: Uuid, commit_hash: &str) -> Result<(), ServiceError>;
 }
 
 pub struct ImcgServiceImpl {
@@ -54,7 +58,7 @@ impl ImcgService for ImcgServiceImpl {
             .await?;
         let sdg: Sdg = self
             .sdg_service
-            .get_single(imcg_payload.codebase_uuid)
+            .get_single(imcg_payload.codebase_uuid, &imcg_payload.commit_hash)
             .await?;
         let imcg: Imcg = self.builder.build(
             imcg_payload.callables,
@@ -66,19 +70,26 @@ impl ImcgService for ImcgServiceImpl {
         )?;
 
         self.repository
-            .save(&imcg, imcg_payload.codebase_uuid)
+            .save(&imcg, imcg_payload.codebase_uuid, &imcg_payload.commit_hash)
             .await?;
 
         Ok(imcg)
     }
 
-    async fn get_single(&self, codebase_uuid: Uuid) -> Result<Imcg, ServiceError> {
-        let imcg = self.repository.get_single(codebase_uuid).await?;
+    async fn get_single(
+        &self,
+        codebase_uuid: Uuid,
+        commit_hash: &str,
+    ) -> Result<Imcg, ServiceError> {
+        let imcg = self
+            .repository
+            .get_single(codebase_uuid, commit_hash)
+            .await?;
         Ok(imcg)
     }
 
-    async fn delete(&self, codebase_uuid: Uuid) -> Result<(), ServiceError> {
-        self.repository.delete(codebase_uuid).await?;
+    async fn delete(&self, codebase_uuid: Uuid, commit_hash: &str) -> Result<(), ServiceError> {
+        self.repository.delete(codebase_uuid, commit_hash).await?;
         Ok(())
     }
 }

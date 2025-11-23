@@ -1,6 +1,6 @@
 use actix_multipart::Multipart;
 use actix_web::{Responder, Result, put, web};
-use uuid::Uuid;
+use models::api::ProcessFilesIdentifier;
 
 use crate::{
     api::{
@@ -12,7 +12,7 @@ use crate::{
 
 #[utoipa::path(
     put,
-    path = "/process-files/{codebase_uuid}",
+    path = "/process-files/{codebase_uuid}/{commit_hash}",
     request_body(
         content = MultipleFileUploadSchema,
         content_type = "multipart/form-data"
@@ -22,15 +22,15 @@ use crate::{
         (status = 400, description = "Invalid file or request")
     )
 )]
-#[put("/{codebase_uuid}")]
+#[put("/{codebase_uuid}/{commit_hash}")]
 pub async fn process_files(
     extractor_service: web::Data<ExtractorServiceImpl>,
     mut payload: Multipart,
-    codebase_uuid_path: web::Path<Uuid>,
+    process_files_identifier_path: web::Path<ProcessFilesIdentifier>,
 ) -> Result<impl Responder, ApiError> {
-    let codebase_uuid = codebase_uuid_path.into_inner();
+    let process_files_identifier = process_files_identifier_path.into_inner();
 
     extractor_service
-        .process_files(&mut payload, codebase_uuid)
+        .process_files(&mut payload, process_files_identifier)
         .await
 }

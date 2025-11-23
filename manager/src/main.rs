@@ -12,6 +12,11 @@ use crate::{
         repository::PgCodebaseRepository,
         service::{CodebaseService, CodebaseServiceImpl},
     },
+    commit::{
+        dto::CommitResponse,
+        repository::PgCommitRepository,
+        service::{CommitService, CommitServiceImpl},
+    },
     configuration::{
         repository::PgConfigurationRepository,
         service::{ConfigurationService, ConfigurationServiceImpl},
@@ -29,6 +34,7 @@ use crate::{
 };
 
 mod codebase;
+mod commit;
 mod configuration;
 mod errors;
 mod files;
@@ -49,8 +55,12 @@ mod schema;
         configuration::controller::create_configuration,
         configuration::controller::get_configuration,
         configuration::controller::delete_configuration,
+        commit::controller::create_commit,
+        commit::controller::get_commit,
+        commit::controller::delete_commit,
+        commit::controller::patch_commit_processed,
     ),
-    components(schemas(ProjectResponse, ApiError, CodebaseResponse))
+    components(schemas(ProjectResponse, ApiError, CodebaseResponse, CommitResponse))
 )]
 struct ApiDoc;
 
@@ -75,6 +85,7 @@ async fn main() -> std::io::Result<()> {
         let file_records_repo = PgFileRecordsRepository::new(pool.clone());
         let configuration_repo = PgConfigurationRepository::new(pool.clone());
         let codebase_repo = PgCodebaseRepository::new(pool.clone());
+        let commit_repo = PgCommitRepository::new(pool.clone());
 
         let project_service: Box<dyn ProjectService> =
             Box::new(ProjectServiceImpl::new(Box::new(project_repo)));
@@ -87,6 +98,9 @@ async fn main() -> std::io::Result<()> {
 
         let configuration_service: Box<dyn ConfigurationService> =
             Box::new(ConfigurationServiceImpl::new(Box::new(configuration_repo)));
+
+        let commit_service: Box<dyn CommitService> =
+            Box::new(CommitServiceImpl::new(Box::new(commit_repo)));
 
         App::new()
             .wrap(Logger::default())
@@ -109,6 +123,11 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/configurations")
                     .app_data(web::Data::new(configuration_service))
                     .configure(configuration::configure),
+            )
+            .service(
+                web::scope("/commits")
+                    .app_data(web::Data::new(commit_service))
+                    .configure(commit::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")
