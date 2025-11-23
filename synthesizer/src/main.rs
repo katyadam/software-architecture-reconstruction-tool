@@ -107,6 +107,7 @@ async fn main() -> std::io::Result<()> {
         // Clone Arcs to pass them where needed
         let s3_service = Arc::new(S3Service::new(
             get_s3_client(),
+            ManagerConnector::new(HttpClient::new(manager_url.to_owned(), Client::default())),
             Arc::clone(&cm_service),
             Arc::clone(&sdg_service),
             Arc::clone(&imcg_service),
