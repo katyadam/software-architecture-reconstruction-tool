@@ -12,4 +12,5 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(controller::create_commit);
     cfg.service(controller::get_commit);
     cfg.service(controller::delete_commit);
+    cfg.service(controller::patch_commit_processed);
 }

@@ -57,9 +57,6 @@ pub async fn get_commit(
 #[utoipa::path(
     patch,
     path = "/commits/{commit_hash}/processed",
-    params(
-        ("commit_hash" = String, Path, description = "Hash of the commit to mark as processed")
-    ),
     responses(
         (status = 204, description = "Commit successfully marked as processed"),
         (status = 404, description = "Commit not found", body = ApiError),
