@@ -10,6 +10,7 @@ pub trait CommitService {
     fn get_single(&self, hash_to_find: String) -> Result<Commit, ServiceError>;
     fn create(&self, new_commit: NewCommit) -> Result<Commit, ServiceError>;
     fn delete(&self, hash_to_delete: String) -> Result<(), ServiceError>;
+    fn commit_processed(&self, hash_to_set_processed: String) -> Result<(), ServiceError>;
 }
 
 pub struct CommitServiceImpl {
@@ -35,6 +36,11 @@ impl CommitService for CommitServiceImpl {
 
     fn delete(&self, hash_to_delete: String) -> Result<(), ServiceError> {
         self.repository.delete(hash_to_delete)?;
+        Ok(())
+    }
+
+    fn commit_processed(&self, hash_to_set_processed: String) -> Result<(), ServiceError> {
+        self.repository.commit_processed(hash_to_set_processed)?;
         Ok(())
     }
 }

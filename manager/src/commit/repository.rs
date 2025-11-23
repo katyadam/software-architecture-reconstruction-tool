@@ -15,6 +15,7 @@ pub trait CommitRepository {
     fn get_single(&self, hash_to_find: String) -> Result<Commit, DatabaseError>;
     fn save(&self, new_commit: NewCommit) -> Result<Commit, DatabaseError>;
     fn delete(&self, hash_to_delete: String) -> Result<(), DatabaseError>;
+    fn commit_processed(&self, hash_to_set_processed: String) -> Result<(), DatabaseError>;
 }
 
 #[derive(Clone)]
@@ -69,6 +70,16 @@ impl CommitRepository for PgCommitRepository {
 
             delete(commits.filter(commit_hash.eq(hash_to_delete))).execute(conn)
         })?;
+
+        Ok(())
+    }
+
+    fn commit_processed(&self, hash_to_set_processed: String) -> Result<(), DatabaseError> {
+        let mut conn = self.pg_pool.get()?;
+
+        diesel::update(commits.filter(commit_hash.eq(hash_to_set_processed)))
+            .set(processed.eq(true))
+            .execute(conn.deref_mut())?;
 
         Ok(())
     }

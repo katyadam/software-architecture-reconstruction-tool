@@ -17,6 +17,7 @@ diesel::table! {
         commit_message -> Text,
         codebase_uuid -> Uuid,
         created_at -> Timestamptz,
+        processed -> Bool,
     }
 }
 

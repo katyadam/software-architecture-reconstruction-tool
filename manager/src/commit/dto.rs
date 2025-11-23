@@ -18,4 +18,5 @@ pub struct CommitResponse {
     pub commit_message: String,
     pub codebase_uuid: Uuid,
     pub created_at: String,
+    pub processed: bool,
 }

@@ -12,6 +12,7 @@ pub struct Commit {
     pub commit_message: String,
     pub codebase_uuid: Uuid,
     pub created_at: DateTime<Utc>,
+    pub processed: bool,
 }
 
 #[derive(Debug, Insertable)]
@@ -21,6 +22,7 @@ pub struct NewCommit {
     pub commit_message: String,
     pub codebase_uuid: Uuid,
     pub created_at: DateTime<Utc>,
+    pub processed: bool,
 }
 
 impl Commit {
@@ -30,6 +32,7 @@ impl Commit {
             commit_message: self.commit_message.clone(),
             codebase_uuid: self.codebase_uuid,
             created_at: self.created_at.to_rfc3339(),
+            processed: self.processed,
         }
     }
 }

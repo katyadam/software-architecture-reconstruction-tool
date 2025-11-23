@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, delete, get, post, web};
+use actix_web::{HttpResponse, Responder, delete, get, patch, post, web};
 use chrono::Utc;
 
 use crate::{
@@ -28,6 +28,7 @@ pub async fn create_commit(
         commit_message: dto.commit_message.clone(),
         codebase_uuid: dto.codebase_uuid,
         created_at: Utc::now(),
+        processed: false,
     };
     let commit = commit_service.create(new_commit)?; // ? converts DatabaseError -> ApiError
 
@@ -51,6 +52,28 @@ pub async fn get_commit(
     let commit = commit_service.get_single(commit_hash)?;
 
     Ok(HttpResponse::Ok().json(commit.to_response()))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/commits/{commit_hash}/processed",
+    params(
+        ("commit_hash" = String, Path, description = "Hash of the commit to mark as processed")
+    ),
+    responses(
+        (status = 204, description = "Commit successfully marked as processed"),
+        (status = 404, description = "Commit not found", body = ApiError),
+    ),
+)]
+#[patch("/{commit_hash}/processed")]
+pub async fn patch_commit_processed(
+    commit_service: web::Data<Box<dyn CommitService>>,
+    commit_hash_path: web::Path<String>,
+) -> Result<impl Responder, ApiError> {
+    let commit_hash = commit_hash_path.into_inner();
+    commit_service.commit_processed(commit_hash)?;
+
+    Ok(HttpResponse::NoContent())
 }
 
 #[utoipa::path(
