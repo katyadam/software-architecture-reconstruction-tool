@@ -1,5 +1,4 @@
 use clients::http::{client::HttpClient, error::HttpClientError};
-use uuid::Uuid;
 
 use crate::connectors::dto::ConfigurationDto;
 
@@ -12,12 +11,12 @@ impl ManagerConnector {
         Self { http_client }
     }
 
-    pub async fn get_codebase_configuration(
+    pub async fn get_commit_configuration(
         &self,
-        codebase_uuid: Uuid,
+        commit_hash: &str,
     ) -> Result<ConfigurationDto, HttpClientError> {
         self.http_client
-            .get_json::<ConfigurationDto>(format!("/codebases/{codebase_uuid}/conf").as_str())
+            .get_json::<ConfigurationDto>(format!("/commits/{commit_hash}/conf").as_str())
             .await
     }
 

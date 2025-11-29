@@ -54,7 +54,7 @@ impl ImcgService for ImcgServiceImpl {
     async fn save(&self, imcg_payload: PostIMCG) -> Result<Imcg, ServiceError> {
         let codebase_configuration = self
             .manager_connector
-            .get_codebase_configuration(imcg_payload.codebase_uuid)
+            .get_commit_configuration(&imcg_payload.commit_hash)
             .await?;
         let sdg: Sdg = self
             .sdg_service

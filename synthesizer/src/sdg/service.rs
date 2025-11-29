@@ -42,7 +42,7 @@ impl SdgService for SdgServiceImpl {
     async fn save(&self, sdg_payload: PostSDG) -> Result<Sdg, ServiceError> {
         let configuration = self
             .manager_connector
-            .get_codebase_configuration(sdg_payload.codebase_uuid)
+            .get_commit_configuration(&sdg_payload.commit_hash)
             .await?;
 
         let sdg = self.builder.build(
