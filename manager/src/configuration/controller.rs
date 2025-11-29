@@ -26,7 +26,6 @@ pub async fn create_configuration(
 ) -> Result<impl Responder, ApiError> {
     let new_conf = NewDbConfiguration {
         configuration_uuid: Uuid::new_v4(),
-        project_uuid: dto.project_uuid,
         configuration_data: serde_json::json!(dto.configuration_data),
         created_at: Utc::now(),
     };

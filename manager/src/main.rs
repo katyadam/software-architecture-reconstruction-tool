@@ -18,6 +18,7 @@ use crate::{
         service::{CommitService, CommitServiceImpl},
     },
     configuration::{
+        dto::ConfigurationResponse,
         repository::PgConfigurationRepository,
         service::{ConfigurationService, ConfigurationServiceImpl},
     },
@@ -50,7 +51,6 @@ mod schema;
         codebase::controller::create_codebase,
         codebase::controller::get_codebase,
         codebase::controller::delete_codebase,
-        codebase::controller::get_codebase_configuration,
         files::controller::add_record,
         configuration::controller::create_configuration,
         configuration::controller::get_configuration,
@@ -59,8 +59,15 @@ mod schema;
         commit::controller::get_commit,
         commit::controller::delete_commit,
         commit::controller::patch_commit_processed,
+        commit::controller::get_commit_configuration,
     ),
-    components(schemas(ProjectResponse, ApiError, CodebaseResponse, CommitResponse))
+    components(schemas(
+        ProjectResponse,
+        ApiError,
+        CodebaseResponse,
+        CommitResponse,
+        ConfigurationResponse
+    ))
 )]
 struct ApiDoc;
 

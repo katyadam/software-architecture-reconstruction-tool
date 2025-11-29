@@ -13,7 +13,6 @@ use crate::errors::model::ModelError;
 #[diesel(table_name = crate::schema::configurations)]
 pub struct DbConfiguration {
     pub configuration_uuid: Uuid,
-    pub project_uuid: Uuid,
     pub configuration_data: Value,
     pub created_at: DateTime<Utc>,
 }
@@ -22,7 +21,6 @@ pub struct DbConfiguration {
 #[diesel(table_name = crate::schema::configurations)]
 pub struct NewDbConfiguration {
     pub configuration_uuid: Uuid,
-    pub project_uuid: Uuid,
     pub configuration_data: Value,
     pub created_at: DateTime<Utc>,
 }
@@ -34,7 +32,6 @@ impl DbConfiguration {
 
         Ok(ConfigurationResponse {
             configuration_uuid: self.configuration_uuid,
-            project_uuid: self.project_uuid,
             configuration_data,
             created_at: self.created_at.to_rfc3339(),
         })

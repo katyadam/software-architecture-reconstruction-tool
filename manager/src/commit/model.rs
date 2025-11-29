@@ -11,6 +11,7 @@ pub struct Commit {
     pub commit_hash: String,
     pub commit_message: String,
     pub codebase_uuid: Uuid,
+    pub configuration_uuid: Uuid,
     pub created_at: DateTime<Utc>,
     pub processed: bool,
 }
@@ -21,6 +22,7 @@ pub struct NewCommit {
     pub commit_hash: String,
     pub commit_message: String,
     pub codebase_uuid: Uuid,
+    pub configuration_uuid: Uuid,
     pub created_at: DateTime<Utc>,
     pub processed: bool,
 }
@@ -31,6 +33,7 @@ impl Commit {
             commit_hash: self.commit_hash.clone(),
             commit_message: self.commit_message.clone(),
             codebase_uuid: self.codebase_uuid,
+            configuration_uuid: self.configuration_uuid,
             created_at: self.created_at.to_rfc3339(),
             processed: self.processed,
         }

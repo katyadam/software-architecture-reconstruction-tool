@@ -7,6 +7,7 @@ use crate::{
         model::NewCommit,
         service::CommitService,
     },
+    configuration::{dto::ConfigurationResponse, model::DbConfiguration},
     errors::api::ApiError,
 };
 
@@ -29,6 +30,7 @@ pub async fn create_commit(
         codebase_uuid: dto.codebase_uuid,
         created_at: Utc::now(),
         processed: false,
+        configuration_uuid: dto.configuration_uuid,
     };
     let commit = commit_service.create(new_commit)?; // ? converts DatabaseError -> ApiError
 
@@ -90,4 +92,23 @@ pub async fn delete_commit(
     commit_service.delete(commit_hash)?;
 
     Ok(HttpResponse::NoContent())
+}
+
+#[utoipa::path(
+        get,
+        path = "/commits/{commit_hash}/conf",
+        responses(
+            (status = 200, description = "Commit Configuration found", body = ConfigurationResponse),
+            (status = 404, description = "Commit Configuration not found", body = ApiError),
+        ),
+    )]
+#[get("/{commit_hash}/conf")]
+pub async fn get_commit_configuration(
+    commit_service: web::Data<Box<dyn CommitService>>,
+    commit_hash_path: web::Path<String>,
+) -> Result<impl Responder, ApiError> {
+    let commit_hash = commit_hash_path.into_inner();
+    let configuration: DbConfiguration = commit_service.get_commit_configuration(&commit_hash)?;
+
+    Ok(HttpResponse::Ok().json(configuration.to_response().unwrap()))
 }

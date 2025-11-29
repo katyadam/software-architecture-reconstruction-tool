@@ -3,6 +3,7 @@ use crate::{
         model::{Commit, NewCommit},
         repository::CommitRepository,
     },
+    configuration::model::DbConfiguration,
     errors::service::ServiceError,
 };
 
@@ -11,6 +12,7 @@ pub trait CommitService {
     fn create(&self, new_commit: NewCommit) -> Result<Commit, ServiceError>;
     fn delete(&self, hash_to_delete: String) -> Result<(), ServiceError>;
     fn commit_processed(&self, hash_to_set_processed: String) -> Result<(), ServiceError>;
+    fn get_commit_configuration(&self, commit_hash: &str) -> Result<DbConfiguration, ServiceError>;
 }
 
 pub struct CommitServiceImpl {
@@ -42,5 +44,10 @@ impl CommitService for CommitServiceImpl {
     fn commit_processed(&self, hash_to_set_processed: String) -> Result<(), ServiceError> {
         self.repository.commit_processed(hash_to_set_processed)?;
         Ok(())
+    }
+
+    fn get_commit_configuration(&self, commit_hash: &str) -> Result<DbConfiguration, ServiceError> {
+        let codebase_configuration = self.repository.get_commit_configuration(commit_hash)?;
+        Ok(codebase_configuration)
     }
 }
