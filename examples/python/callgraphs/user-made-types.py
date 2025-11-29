@@ -4,7 +4,8 @@ class A():
 
 
 class B(A):
-    pass
+    def do(self, a: int):
+        return a + 7
 
 
 def foo(x: A):
