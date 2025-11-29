@@ -8,7 +8,6 @@ use crate::{
         model::NewCodebase,
         service::CodebaseService,
     },
-    configuration::model::DbConfiguration,
     errors::api::ApiError,
 };
 
@@ -29,7 +28,6 @@ pub async fn create_codebase(
         codebase_uuid: Uuid::new_v4(),
         branch: dto.branch.clone(),
         project_uuid: dto.project_uuid,
-        configuration_uuid: dto.configuration_uuid,
         created_at: Utc::now(),
     };
     let codebase = codebase_service.create(new_codebase)?; // ? converts DatabaseError -> ApiError
@@ -54,26 +52,6 @@ pub async fn get_codebase(
     let codebase = codebase_service.get_single(codebase_uuid)?;
 
     Ok(HttpResponse::Ok().json(codebase.to_response()))
-}
-
-#[utoipa::path(
-        get,
-        path = "/codebases/{codebase_uuid}/conf",
-        responses(
-            (status = 200, description = "Codebase Configuration found", body = CodebaseResponse),
-            (status = 404, description = "Codebase Configuration not found", body = ApiError),
-        ),
-    )]
-#[get("/{codebase_uuid}/conf")]
-pub async fn get_codebase_configuration(
-    codebase_service: web::Data<Box<dyn CodebaseService>>,
-    codebase_uuid_path: web::Path<Uuid>,
-) -> Result<impl Responder, ApiError> {
-    let codebase_uuid = codebase_uuid_path.into_inner();
-    let configuration: DbConfiguration =
-        codebase_service.get_codebase_configuration(codebase_uuid)?;
-
-    Ok(HttpResponse::Ok().json(configuration.to_response().unwrap()))
 }
 
 #[utoipa::path(

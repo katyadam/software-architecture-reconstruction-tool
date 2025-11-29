@@ -50,7 +50,6 @@ mod schema;
         codebase::controller::create_codebase,
         codebase::controller::get_codebase,
         codebase::controller::delete_codebase,
-        codebase::controller::get_codebase_configuration,
         files::controller::add_record,
         configuration::controller::create_configuration,
         configuration::controller::get_configuration,

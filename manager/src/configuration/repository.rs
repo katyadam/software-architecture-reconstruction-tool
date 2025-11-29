@@ -1,5 +1,4 @@
 use crate::configuration::model::{DbConfiguration, NewDbConfiguration};
-use crate::project::model::Project;
 use crate::schema;
 use std::ops::DerefMut;
 
@@ -10,7 +9,6 @@ use uuid::Uuid;
 
 use crate::errors::database::DatabaseError;
 use crate::schema::configurations::dsl::*;
-use crate::schema::projects::dsl::*;
 
 pub trait ConfigurationRepository {
     fn get_single(&self, uuid_to_find: Uuid) -> Result<DbConfiguration, DatabaseError>;
@@ -48,11 +46,6 @@ impl ConfigurationRepository for PgConfigurationRepository {
         let mut conn = self.pg_pool.get()?;
 
         let configuration = conn.deref_mut().transaction(|conn| {
-            projects
-                .find(new_configuration.project_uuid)
-                .select(Project::as_select())
-                .first(conn)?;
-
             diesel::insert_into(schema::configurations::table)
                 .values(new_configuration)
                 .returning(DbConfiguration::as_returning())
