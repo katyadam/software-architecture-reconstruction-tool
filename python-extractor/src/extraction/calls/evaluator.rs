@@ -10,7 +10,12 @@ pub fn evaluate_invocations(
     for call in calls {
         if let Some(pos) = call.function_name.rfind('.') {
             let invoked_object = &call.function_name[..pos];
-            call.invoked_on = find_invoked_type(invoked_object, assignments_map);
+            call.invoked_on = find_invoked_type(
+                invoked_object,
+                &call.enclosing_function_name,
+                &call.enclosing_class_name,
+                assignments_map,
+            );
         }
         let scope = match &call.enclosing_function_name {
             Some(fname) => Scope::Function(fname.clone()),

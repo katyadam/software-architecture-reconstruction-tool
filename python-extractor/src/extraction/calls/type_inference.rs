@@ -44,12 +44,20 @@ fn resolve_type(
 /// Finds the data type of an object used in a function invocation.
 pub(in crate::extraction) fn find_invoked_type(
     invoked_object: &str,
+    enclosing_function_name: &Option<String>,
+    enclosing_class_name: &Option<String>,
     assignments_map: &HashMap<AssignmentKey, Assignment>,
 ) -> Option<String> {
     // Find assignments that assign to invoked object variable
     let assignments = assignments_map
         .iter()
-        .filter(|(key, _)| key.variable_name == invoked_object)
+        .filter(|(key, _)| {
+            key.variable_name == invoked_object
+                && Scope::from_enclosings(
+                    enclosing_function_name.clone(),
+                    enclosing_class_name.clone(),
+                ) == key.scope
+        })
         .collect::<Vec<(&AssignmentKey, &Assignment)>>();
 
     // Prefer explicit assignment variable type first
@@ -70,6 +78,7 @@ pub(in crate::extraction) fn find_invoked_type(
                 .find(|param| param.name == assignment.value)
                 .and_then(|param| param.datatype),
             Scope::Global => None,
+            Scope::Class(_) => None,
         })
         .next()
 }
