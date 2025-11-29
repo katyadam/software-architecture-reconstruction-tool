@@ -10,6 +10,8 @@ pub struct PostCommit {
     pub commit_message: String,
     #[schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
     pub codebase_uuid: Uuid,
+    #[schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")]
+    pub configuration_uuid: Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -17,6 +19,7 @@ pub struct CommitResponse {
     pub commit_hash: String,
     pub commit_message: String,
     pub codebase_uuid: Uuid,
+    pub configuration_uuid: Uuid,
     pub created_at: String,
     pub processed: bool,
 }

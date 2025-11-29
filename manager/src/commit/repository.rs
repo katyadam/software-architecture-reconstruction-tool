@@ -6,16 +6,22 @@ use diesel::{QueryDsl, RunQueryDsl, SelectableHelper, delete};
 
 use crate::codebase::model::Codebase;
 use crate::commit::model::{Commit, NewCommit};
+use crate::configuration::model::DbConfiguration;
 use crate::errors::database::DatabaseError;
 use crate::schema;
 use crate::schema::codebases::dsl::*;
 use crate::schema::commits::dsl::*;
+use crate::schema::configurations::dsl::*;
 
 pub trait CommitRepository {
     fn get_single(&self, hash_to_find: String) -> Result<Commit, DatabaseError>;
     fn save(&self, new_commit: NewCommit) -> Result<Commit, DatabaseError>;
     fn delete(&self, hash_to_delete: String) -> Result<(), DatabaseError>;
     fn commit_processed(&self, hash_to_set_processed: String) -> Result<(), DatabaseError>;
+    fn get_commit_configuration(
+        &self,
+        commit_hash_for_configuration: &str,
+    ) -> Result<DbConfiguration, DatabaseError>;
 }
 
 #[derive(Clone)]
@@ -50,6 +56,11 @@ impl CommitRepository for PgCommitRepository {
                 .select(Codebase::as_select())
                 .first(conn)?;
 
+            configurations
+                .find(new_commit.configuration_uuid)
+                .select(DbConfiguration::as_select())
+                .first(conn)?;
+
             diesel::insert_into(schema::commits::table)
                 .values(new_commit)
                 .returning(Commit::as_returning())
@@ -82,5 +93,26 @@ impl CommitRepository for PgCommitRepository {
             .execute(conn.deref_mut())?;
 
         Ok(())
+    }
+
+    fn get_commit_configuration(
+        &self,
+        commit_hash_for_configuration: &str,
+    ) -> Result<DbConfiguration, DatabaseError> {
+        let mut conn = self.pg_pool.get()?;
+
+        let configuration = conn.deref_mut().transaction(|conn| {
+            let commit = commits
+                .find(commit_hash_for_configuration)
+                .select(Commit::as_select())
+                .first(conn)?;
+
+            configurations
+                .find(commit.configuration_uuid)
+                .select(DbConfiguration::as_select())
+                .first(conn)
+        })?;
+
+        Ok(configuration)
     }
 }
