@@ -13,16 +13,3 @@ def foo(x: A):
 
 def foo(x: B):
     x.do(5)
-
-
-a = A()
-foo(a)
-
-typed_a: A = B()
-foo(typed_a)
-
-b = B()
-foo(b)
-
-typed_b: B = B()
-foo(typed_b)

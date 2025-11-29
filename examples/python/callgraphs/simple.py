@@ -9,12 +9,12 @@ def bar(a):
 
 def typed_foo(x: int):
     y = x
-    bar(y)
+    typed_bar(y)
 
 
 def typed_foo(x: float):
     y = x
-    bar(y)
+    typed_bar(y)
 
 
 def typed_bar(a: int):
