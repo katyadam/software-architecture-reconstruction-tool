@@ -2352,6 +2352,7 @@ dependencies = [
  "neo4rs",
  "serde",
  "serde_json",
+ "thiserror 2.0.17",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",

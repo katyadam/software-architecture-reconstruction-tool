@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use models::CodeElementsAggregate;
+use models::{CodeElementsAggregate, api::ExtractionError};
 use tokio::task;
 use tree_sitter::Parser;
 
@@ -15,13 +15,16 @@ use crate::extraction::{
     restcalls::{evaluator::evaluate_restcalls, extractor::RestcallsExtractor},
 };
 
-pub async fn parse(code: &str, file_name: &str) -> CodeElementsAggregate {
+pub async fn parse(code: &str, file_name: &str) -> Result<CodeElementsAggregate, ExtractionError> {
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_python::LANGUAGE.into())
-        .expect("Error loading Python grammar");
+        .map_err(|_| ExtractionError::Process("Error loading Python Grammar".to_string()))?;
 
-    let tree = parser.parse(code, None).expect("Error parsing code");
+    let tree = parser
+        .parse(code, None)
+        .ok_or(ExtractionError::Process("Error parsing code".to_string()))?;
+
     let owned_code = code.to_owned();
     let owned_file_name = file_name.to_owned();
 
@@ -92,25 +95,39 @@ pub async fn parse(code: &str, file_name: &str) -> CodeElementsAggregate {
         move || CallsExtractor.extract(ExtractParams::new(&Arc::clone(&tree), &Arc::clone(&code)))
     });
 
-    let assignments_map = assignments_handle.await.unwrap();
-    let imports = imports_handle.await.unwrap();
-    let endpoints = endpoints_handle.await.unwrap();
-    let mut restcalls = restcalls_handle.await.unwrap();
-    let mut entities = entities_handle.await.unwrap();
-    let callables = callables_handle.await.unwrap();
-    let mut call_statements = calls_handle.await.unwrap();
+    let assignments_map = assignments_handle
+        .await
+        .map_err(|_| ExtractionError::Process("Assignments parsing failed".to_string()))?;
+    let imports = imports_handle
+        .await
+        .map_err(|_| ExtractionError::Process("Imports parsing failed".to_string()))?;
+    let endpoints = endpoints_handle
+        .await
+        .map_err(|_| ExtractionError::Process("Endpoints parsing failed".to_string()))?;
+    let mut restcalls = restcalls_handle
+        .await
+        .map_err(|_| ExtractionError::Process("REST calls parsing failed".to_string()))?;
+    let mut entities = entities_handle
+        .await
+        .map_err(|_| ExtractionError::Process("Entities parsing failed".to_string()))?;
+    let callables = callables_handle
+        .await
+        .map_err(|_| ExtractionError::Process("Callables parsing failed".to_string()))?;
+    let mut call_statements = calls_handle
+        .await
+        .map_err(|_| ExtractionError::Process("Call Statements parsing failed".to_string()))?;
 
     // MAYBE: Evaluate together with extraction?
     evaluate_restcalls(&mut restcalls, &assignments_map);
     evaluate_entity_fields(&imports, &mut entities, file_name);
     evaluate_invocations(&mut call_statements, &assignments_map);
 
-    CodeElementsAggregate::new(
+    Ok(CodeElementsAggregate::new(
         imports,
         entities,
         endpoints,
         restcalls,
         callables,
         call_statements,
-    )
+    ))
 }
