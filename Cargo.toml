@@ -1,5 +1,7 @@
 [workspace]
-members = [ "clients",
+members = [
+    "clients",
+    "extractor-runtime",
     "manager",
     "models",
     "python-extractor",
