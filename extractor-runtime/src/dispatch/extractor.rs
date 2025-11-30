@@ -1,8 +1,6 @@
 use async_trait::async_trait;
-use models::CodeElementsAggregate;
+use models::{CodeElementsAggregate, api::ExtractionError};
 use python_extractor::extraction::parse::parse;
-
-use crate::error::ExtractionError;
 
 #[async_trait]
 pub trait Extractor: Send + Sync {
@@ -28,7 +26,7 @@ impl Extractor for PythonTreesitterExtractor {
         text: &str,
         file_path: &str,
     ) -> Result<CodeElementsAggregate, ExtractionError> {
-        let result = parse(text, file_path).await;
+        let result = parse(text, file_path).await?;
 
         Ok(result)
     }

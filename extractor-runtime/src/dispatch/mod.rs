@@ -1,9 +1,6 @@
-use models::CodeElementsAggregate;
+use models::{CodeElementsAggregate, api::ExtractionError};
 
-use crate::{
-    dispatch::extractor::{Extractor, PythonTreesitterExtractor},
-    error::ExtractionError,
-};
+use crate::dispatch::extractor::{Extractor, PythonTreesitterExtractor};
 
 mod extractor;
 
