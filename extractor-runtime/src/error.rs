@@ -1,6 +1,7 @@
 use actix_web::{HttpResponse, ResponseError};
 use awc::error::{PayloadError, SendRequestError};
 use clients::http::error::HttpClientError;
+use models::api::ExtractionError;
 use s3::error::S3Error;
 use serde::Serialize;
 use thiserror::Error;
@@ -81,18 +82,6 @@ impl From<S3ClientError> for ApiError {
             S3ClientError::S3(s) => ApiError::InternalServerError(s.to_string()),
         }
     }
-}
-
-#[derive(Debug, Error)]
-pub enum ExtractionError {
-    #[error("Deserialization error: {0}")]
-    Serde(#[from] serde_json::Error),
-
-    #[error("Process ended with error: {0}")]
-    Process(String),
-
-    #[error("Extractor for file: {0} not found")]
-    ExtractorNotFound(String),
 }
 
 impl From<ExtractionError> for ApiError {
