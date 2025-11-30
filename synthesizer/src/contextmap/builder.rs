@@ -49,7 +49,7 @@ impl ContextMapBuilderImpl {
         service_descs: &[ServiceDescription],
     ) -> Vec<AssignedEntity> {
         entities
-            .into_iter()
+            .iter()
             .map(|entity| {
                 let service_desc =
                     assign_service_description_to_file(&entity.file_path, service_descs);

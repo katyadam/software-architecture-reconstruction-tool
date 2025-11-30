@@ -98,10 +98,11 @@ fn get_function_params(function_decl: &str) -> Vec<Parameter> {
 }
 
 fn can_access_constructor(invoked_object: &str, assignment_key: &AssignmentKey) -> bool {
-    if let Scope::Function(fn_header) = &assignment_key.scope {
-        if invoked_object.starts_with("self.") && fn_header.starts_with("__init__(") {
-            return true;
-        }
+    if let Scope::Function(fn_header) = &assignment_key.scope
+        && invoked_object.starts_with("self.")
+        && fn_header.starts_with("__init__(")
+    {
+        return true;
     }
     false
 }
