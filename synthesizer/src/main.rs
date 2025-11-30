@@ -97,7 +97,7 @@ async fn main() -> std::io::Result<()> {
     let imcg_graph = setup_imcg_db().await;
 
     HttpServer::new(move || {
-        let cm_service = Arc::new(get_cm_service(cm_graph.clone()));
+        let cm_service = Arc::new(get_cm_service(cm_graph.clone(), &manager_url));
         let sdg_service = Arc::new(get_sdg_service(sdg_graph.clone(), &manager_url));
         let imcg_service = Arc::new(get_imcg_service(
             imcg_graph.clone(),
@@ -144,11 +144,12 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-fn get_cm_service(graph: Arc<Graph>) -> ContextMapServiceImpl {
+fn get_cm_service(graph: Arc<Graph>, manager_url: &str) -> ContextMapServiceImpl {
     let cm_repository = ContextMapRepositoryImpl::new(graph);
     let cm_builder = ContextMapBuilderImpl::new();
-
-    ContextMapServiceImpl::new(cm_repository, cm_builder)
+    let manager_connector =
+        ManagerConnector::new(HttpClient::new(manager_url.to_owned(), Client::default()));
+    ContextMapServiceImpl::new(cm_repository, cm_builder, manager_connector)
 }
 
 fn get_sdg_service(graph: Arc<Graph>, manager_url: &str) -> SdgServiceImpl {

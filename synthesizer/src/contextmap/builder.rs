@@ -1,22 +1,32 @@
 use std::collections::HashMap;
 
 use crate::{
-    contextmap::model::{ContextMap, Dependency},
+    contextmap::model::{AssignedEntity, ContextMap, Dependency},
     errors::builder::BuilderError,
+    utils::assign_service_description_to_file,
 };
 
-use models::Entity;
+use models::{Entity, configuration::ServiceDescription};
 pub trait ContextMapBuilder {
-    fn build(&self, entities: &[Entity]) -> Result<ContextMap, BuilderError>;
+    fn build(
+        &self,
+        entities: &[Entity],
+        service_descs: &[ServiceDescription],
+    ) -> Result<ContextMap, BuilderError>;
 }
 
 pub struct ContextMapBuilderImpl {}
 
 impl ContextMapBuilder for ContextMapBuilderImpl {
-    fn build(&self, entities: &[Entity]) -> Result<ContextMap, BuilderError> {
+    fn build(
+        &self,
+        entities: &[Entity],
+        service_descs: &[ServiceDescription],
+    ) -> Result<ContextMap, BuilderError> {
         let collected_dependencies = Self::connect_entities(entities);
+        let assigned_entities = self.get_assigned_entities(entities, service_descs);
         Ok(ContextMap {
-            entities: entities.to_vec(),
+            entities: assigned_entities,
             dependencies: collected_dependencies,
         })
     }
@@ -31,6 +41,21 @@ impl Default for ContextMapBuilderImpl {
 impl ContextMapBuilderImpl {
     pub fn new() -> Self {
         Self {}
+    }
+
+    fn get_assigned_entities(
+        &self,
+        entities: &[Entity],
+        service_descs: &[ServiceDescription],
+    ) -> Vec<AssignedEntity> {
+        entities
+            .iter()
+            .map(|entity| {
+                let service_desc =
+                    assign_service_description_to_file(&entity.file_path, service_descs);
+                AssignedEntity::new(entity.clone(), service_desc.name)
+            })
+            .collect()
     }
 
     fn connect_entities(entities: &[Entity]) -> Vec<Dependency> {

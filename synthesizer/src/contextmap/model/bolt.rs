@@ -1,6 +1,49 @@
-use neo4rs::{BoltMap, BoltType, DeError};
+use std::collections::HashMap;
 
-use crate::contextmap::model::Dependency;
+use log::error;
+use models::Entity;
+use neo4rs::{BoltMap, BoltNode, BoltType, DeError};
+
+use crate::contextmap::model::{AssignedEntity, Dependency};
+
+impl From<AssignedEntity> for BoltType {
+    fn from(value: AssignedEntity) -> Self {
+        let mut map = match BoltType::from(value.entity) {
+            BoltType::Map(m) => m,
+            _ => {
+                error!("Expected BoltType::Map in From<AssignedEntity> for BoltType");
+                BoltMap {
+                    value: HashMap::new(),
+                }
+            }
+        };
+
+        map.put("service_name".into(), value.service_name.into());
+
+        BoltType::Map(map)
+    }
+}
+
+impl TryFrom<BoltNode> for AssignedEntity {
+    type Error = DeError; // or a custom error type
+
+    fn try_from(node: BoltNode) -> Result<Self, Self::Error> {
+        let service_name = match node.get("service_name") {
+            Ok(BoltType::String(s)) => s.value,
+            Ok(BoltType::Null(_)) => {
+                return Err(DeError::Other("Service Name is NULL!".to_string()));
+            }
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
+        let entity = Entity::try_from(node)?;
+
+        Ok(AssignedEntity {
+            entity,
+            service_name,
+        })
+    }
+}
 
 impl From<Dependency> for BoltType {
     fn from(value: Dependency) -> Self {
@@ -11,10 +54,10 @@ impl From<Dependency> for BoltType {
     }
 }
 
-impl TryFrom<BoltMap> for Dependency {
+impl TryFrom<BoltNode> for Dependency {
     type Error = DeError;
 
-    fn try_from(node: BoltMap) -> Result<Self, Self::Error> {
+    fn try_from(node: BoltNode) -> Result<Self, Self::Error> {
         let source_id = match node.get("source") {
             Ok(BoltType::String(s)) => s.value,
             Ok(BoltType::Null(_)) => {
