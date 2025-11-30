@@ -49,14 +49,17 @@ pub(in crate::extraction) fn find_invoked_type(
     assignments_map: &HashMap<AssignmentKey, Assignment>,
 ) -> Option<String> {
     // Find assignments that assign to invoked object variable
+    // Take only those, where the variable_name in assignment is the invoked_object
+    // and are either inside the same function or in constructor
     let assignments = assignments_map
         .iter()
         .filter(|(key, _)| {
             key.variable_name == invoked_object
-                && Scope::from_enclosings(
+                && (Scope::from_enclosings(
                     enclosing_function_name.clone(),
                     enclosing_class_name.clone(),
                 ) == key.scope
+                    || can_access_constructor(invoked_object, key))
         })
         .collect::<Vec<(&AssignmentKey, &Assignment)>>();
 
@@ -92,4 +95,13 @@ fn get_function_params(function_decl: &str) -> Vec<Parameter> {
         .unwrap_or_default();
 
     parse_parameters(params_str)
+}
+
+fn can_access_constructor(invoked_object: &str, assignment_key: &AssignmentKey) -> bool {
+    if let Scope::Function(fn_header) = &assignment_key.scope {
+        if invoked_object.starts_with("self.") && fn_header.starts_with("__init__(") {
+            return true;
+        }
+    }
+    false
 }
