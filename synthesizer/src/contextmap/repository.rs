@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
 use log::warn;
-use models::Entity;
 use neo4rs::{BoltType, Graph, query};
 use uuid::Uuid;
 
 use crate::{
     contextmap::{
-        model::{ContextMap, Dependency},
+        model::{AssignedEntity, ContextMap, Dependency},
         queries::{CREATE_CONTEXT_MAP, DELETE_CONTEXT_MAP, GET_CONTEXT_MAP},
     },
     errors::database::DatabaseError,
@@ -67,7 +66,7 @@ impl ContextMapRepository for ContextMapRepositoryImpl {
 
             for bolt_entity in entities_bolt_type {
                 if let BoltType::Node(node) = bolt_entity {
-                    match Entity::try_from(node) {
+                    match AssignedEntity::try_from(node) {
                         Ok(entity) => context_map.entities.push(entity),
                         Err(e) => warn!("Failed to deserialize Entity: {e:?}"),
                     }
@@ -77,8 +76,8 @@ impl ContextMapRepository for ContextMapRepositoryImpl {
             }
 
             for bolt_dep in dependencies_bolt_type {
-                if let BoltType::Map(map) = bolt_dep {
-                    match Dependency::try_from(map) {
+                if let BoltType::Node(node) = bolt_dep {
+                    match Dependency::try_from(node) {
                         Ok(dep) => context_map.dependencies.push(dep),
                         Err(e) => warn!("Failed to deserialize Dependency: {e:?}"),
                     }
