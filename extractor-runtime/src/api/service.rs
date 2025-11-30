@@ -4,7 +4,6 @@ use awc::body::BoxBody;
 use futures_util::StreamExt as _;
 use log::info;
 use models::api::ProcessFilesIdentifier;
-use python_extractor::extraction::parse::parse;
 use uuid::Uuid;
 
 use crate::{
@@ -15,6 +14,7 @@ use crate::{
         },
         dto::PostFileRecord,
     },
+    dispatch::dispatch,
     error::ApiError,
 };
 
@@ -85,7 +85,8 @@ impl ExtractorRuntimeService for ExtractorRuntimeServiceImpl {
         let mut any_file_processed: bool = false;
 
         while let Some(field) = payload.next().await {
-            let field = field.map_err(|_| ApiError::BadRequest)?;
+            let field = field
+                .map_err(|_| ApiError::BadRequest("Could not get Payload Field".to_string()))?;
 
             let file_name_opt = field
                 .content_disposition()
@@ -121,7 +122,8 @@ impl ExtractorRuntimeService for ExtractorRuntimeServiceImpl {
         // Collect file data into a single Vec<u8>
         let mut file_bytes = Vec::new();
         while let Some(chunk) = field.next().await {
-            let data = chunk.map_err(|_| ApiError::BadRequest)?;
+            let data = chunk
+                .map_err(|_| ApiError::BadRequest("Cannot get file data from chunk".to_string()))?;
             file_bytes.extend_from_slice(&data);
         }
         info!("Uploaded file size: {} bytes", file_bytes.len());
@@ -129,10 +131,9 @@ impl ExtractorRuntimeService for ExtractorRuntimeServiceImpl {
         let file_size: i64 = file_bytes.len() as i64;
         // Convert to string (assuming UTF-8 text)
         let text = std::str::from_utf8(&file_bytes)
-            .map_err(|_| ApiError::InternalServerError)
-            .unwrap();
+            .map_err(|_| ApiError::InternalServerError("From UTF-8 failed".to_string()))?;
 
-        let code_elements_aggregate = parse(text, file_name).await;
+        let code_elements_aggregate = dispatch(text, file_name).await?;
         self.s3_connector
             .store_code_elements(code_elements_aggregate, base_dir_path)
             .await?;

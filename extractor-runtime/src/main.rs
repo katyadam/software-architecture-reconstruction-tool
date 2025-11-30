@@ -22,6 +22,7 @@ use utoipa_swagger_ui::SwaggerUi;
 mod api;
 mod bucket;
 mod client;
+mod dispatch;
 mod error;
 
 #[derive(OpenApi)]
