@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -38,4 +39,16 @@ impl CodeElementsAggregate {
 pub struct ProcessFilesIdentifier {
     pub codebase_uuid: Uuid,
     pub commit_hash: String,
+}
+
+#[derive(Debug, Error)]
+pub enum ExtractionError {
+    #[error("Deserialization error: {0}")]
+    Serde(#[from] serde_json::Error),
+
+    #[error("Process ended with error: {0}")]
+    Process(String),
+
+    #[error("Extractor for file: {0} not found")]
+    ExtractorNotFound(String),
 }

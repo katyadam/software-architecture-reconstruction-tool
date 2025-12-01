@@ -7,7 +7,7 @@ use crate::{
             synthesizer_connector::SynthesizerConnector,
         },
         dto::MultipleFileUploadSchema,
-        service::ExtractorServiceImpl,
+        service::ExtractorRuntimeServiceImpl,
     },
     bucket::get_bucket,
     client::s3::client::S3Client,
@@ -22,8 +22,8 @@ use utoipa_swagger_ui::SwaggerUi;
 mod api;
 mod bucket;
 mod client;
+mod dispatch;
 mod error;
-mod utils;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -69,8 +69,11 @@ async fn main() -> std::io::Result<()> {
             ManagerConnector::new(HttpClient::new(manager_url, Client::default()));
         let s3_connector = S3Connector::new(s3_client);
 
-        let extractor_service =
-            ExtractorServiceImpl::new(manager_connector, synthesizer_connector, s3_connector);
+        let extractor_service = ExtractorRuntimeServiceImpl::new(
+            manager_connector,
+            synthesizer_connector,
+            s3_connector,
+        );
         App::new()
             .wrap(Logger::default())
             .wrap(

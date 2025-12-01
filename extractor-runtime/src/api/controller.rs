@@ -5,7 +5,7 @@ use models::api::ProcessFilesIdentifier;
 use crate::{
     api::{
         dto::MultipleFileUploadSchema,
-        service::{ExtractorService, ExtractorServiceImpl},
+        service::{ExtractorRuntimeService, ExtractorRuntimeServiceImpl},
     },
     error::ApiError,
 };
@@ -24,7 +24,7 @@ use crate::{
 )]
 #[put("/{codebase_uuid}/{commit_hash}")]
 pub async fn process_files(
-    extractor_service: web::Data<ExtractorServiceImpl>,
+    extractor_service: web::Data<ExtractorRuntimeServiceImpl>,
     mut payload: Multipart,
     process_files_identifier_path: web::Path<ProcessFilesIdentifier>,
 ) -> Result<impl Responder, ApiError> {
