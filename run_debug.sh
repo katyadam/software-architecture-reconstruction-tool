@@ -11,8 +11,8 @@ RUST_LOG=debug cargo watch -x run &
 cd ..
 
 # Start python-extractor project
-echo "=== Starting python-extractor project ==="
-cd python-extractor
+echo "=== Starting extractor-runtime project ==="
+cd extractor-runtime
 RUST_LOG=debug cargo watch -x run &
 cd ..
 

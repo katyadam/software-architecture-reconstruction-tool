@@ -2837,30 +2837,14 @@ dependencies = [
 name = "python-extractor"
 version = "0.1.0"
 dependencies = [
- "actix-cors",
- "actix-multipart",
- "actix-web",
- "awc",
- "chrono",
- "clients",
- "dotenvy",
- "env_logger",
- "futures-util",
  "log",
  "models",
  "once_cell",
  "regex",
- "rust-s3",
- "serde",
- "serde_json",
  "sha2",
- "thiserror 2.0.17",
  "tokio",
  "tree-sitter",
  "tree-sitter-python",
- "utoipa",
- "utoipa-swagger-ui",
- "uuid",
 ]
 
 [[package]]
