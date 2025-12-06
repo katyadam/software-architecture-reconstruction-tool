@@ -1,3 +1,10 @@
+# 0.2.0
+
+- Seperated runtime for python-extractor
+- Added Commit as a primary metadata for saved set of views
+- Fixed invoked on to also compare Scopes of methods
+- Inter-Service Context Map
+
 # 0.1.0
 
 - Context Map creation, storing and retrieving
