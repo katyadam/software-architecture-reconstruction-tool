@@ -19,23 +19,15 @@ class Item(BaseModel):
 
 @app.post("/items/", response_model=Item)
 async def create_item(item: ItemCreate):
-    new_id = len(items_db) + 1
-    new_item = Item(id=new_id, **item.dict())
-    items_db[new_id] = new_item
-    f()
-    return new_item
+    a: B = B()
+    a.do(5)
 
 
-def f():
-    b: int = 4
-    a = b
-    bar(a)
-    pass
+class A():
+    def do(self, x: int):
+        return x + 5
 
 
-def bar(x: int):
-    return x + 1
-
-
-def bar(x: float):
-    return x + 1
+class B(A):
+    def do(self, y: int):
+        return y + 7
