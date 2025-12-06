@@ -2,6 +2,7 @@
 members = [
     "clients",
     "extractor-runtime",
+    "java-extractor",
     "manager",
     "models",
     "python-extractor",
