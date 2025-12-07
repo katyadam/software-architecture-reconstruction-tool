@@ -1,0 +1,64 @@
+use tree_sitter::{Query, Tree};
+
+use std::collections::HashSet;
+
+use crate::extraction::{
+    entities::parser::{parse_field_declarations, parse_formal_parameters},
+    extractor::Extractor,
+    queries::ENTITIES_QUERY,
+};
+use models::{Entity, Field};
+use tree_sitter::{QueryCursor, StreamingIterator};
+
+pub struct EntitiesExtractor;
+
+impl Extractor<Entity> for EntitiesExtractor {
+    fn extract(&self, code: &str, tree: &Tree, file_name: &str) -> Vec<Entity> {
+        let query = Query::new(&tree_sitter_java::LANGUAGE.into(), ENTITIES_QUERY).unwrap();
+        let mut query_cursor = QueryCursor::new();
+        let mut matches = query_cursor.matches(&query, tree.root_node(), code.as_bytes());
+        let mut entities: Vec<Entity> = vec![];
+        let mut seen: HashSet<String> = HashSet::new();
+        while let Some(m) = matches.next() {
+            let mut entity_name = String::new();
+            let mut superclasses: Vec<String> = vec![];
+            let mut fields: Vec<Field> = vec![];
+            let mut record_fields: Vec<Field> = vec![];
+
+            for capture in m.captures {
+                let capture_text =
+                    &code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
+                let value = String::from_utf8_lossy(capture_text).to_string();
+                match query.capture_names()[capture.index as usize] {
+                    "entity.name" => entity_name = value,
+                    "entity.superclass" => superclasses.push(value),
+                    "entity.body" => {
+                        fields = parse_field_declarations(capture.node, &code);
+                    }
+                    "entity.recordparams" => {
+                        record_fields = parse_formal_parameters(capture.node, &code);
+                    }
+                    _ => {}
+                }
+            }
+
+            if seen.contains(&entity_name) {
+                continue;
+            }
+            seen.insert(entity_name.clone());
+
+            fields.append(&mut record_fields);
+            let new_entity = Entity {
+                name: entity_name.clone(),
+                superclasses,
+                fields: fields,
+                signature: format!("{}/{}", file_name.to_string(), entity_name),
+                file_path: file_name.to_string(),
+            };
+
+            entities.push(new_entity);
+        }
+
+        entities
+    }
+}
