@@ -1,4 +1,5 @@
 pub const ENTITIES_QUERY: &str = r#"
+(package_declaration (_) @package)
 (class_declaration
 	name: 
     	(identifier) @entity.name
@@ -44,4 +45,8 @@ pub const ENTITIES_QUERY: &str = r#"
             )
         ) @entity.body
 ) @record
+"#;
+
+pub const IMPORTS_QUERY: &str = r#"
+
 "#;

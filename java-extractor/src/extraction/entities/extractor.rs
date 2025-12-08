@@ -24,6 +24,7 @@ impl Extractor<Entity> for EntitiesExtractor {
             let mut superclasses: Vec<String> = vec![];
             let mut fields: Vec<Field> = vec![];
             let mut record_fields: Vec<Field> = vec![];
+            let mut package: Option<String> = None;
 
             for capture in m.captures {
                 let capture_text =
@@ -38,11 +39,12 @@ impl Extractor<Entity> for EntitiesExtractor {
                     "entity.recordparams" => {
                         record_fields = parse_formal_parameters(capture.node, &code);
                     }
+                    "package" => package = Some(value),
                     _ => {}
                 }
             }
 
-            if seen.contains(&entity_name) {
+            if seen.contains(&entity_name) || entity_name.is_empty() {
                 continue;
             }
             seen.insert(entity_name.clone());
@@ -52,7 +54,7 @@ impl Extractor<Entity> for EntitiesExtractor {
                 name: entity_name.clone(),
                 superclasses,
                 fields: fields,
-                signature: format!("{}/{}", file_name.to_string(), entity_name),
+                signature: format!("{}.{}", package.clone().unwrap_or_default(), entity_name),
                 file_path: file_name.to_string(),
             };
 
