@@ -3,7 +3,7 @@ pub const ENTITIES_QUERY: &str = r#"
 (class_declaration
 	name: 
     	(identifier) @entity.name
-    superclass: (_ (type_identifier) @entity.superclass)
+    superclass: (_ (type_identifier) @entity.superclass)?
 	body: 
     	(class_body 
     		(field_declaration

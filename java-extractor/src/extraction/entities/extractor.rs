@@ -19,12 +19,13 @@ impl Extractor<Entity> for EntitiesExtractor {
         let mut matches = query_cursor.matches(&query, tree.root_node(), code.as_bytes());
         let mut entities: Vec<Entity> = vec![];
         let mut seen: HashSet<String> = HashSet::new();
+        let mut package: Option<String> = None;
+
         while let Some(m) = matches.next() {
             let mut entity_name = String::new();
             let mut superclasses: Vec<String> = vec![];
             let mut fields: Vec<Field> = vec![];
             let mut record_fields: Vec<Field> = vec![];
-            let mut package: Option<String> = None;
 
             for capture in m.captures {
                 let capture_text =
@@ -39,7 +40,9 @@ impl Extractor<Entity> for EntitiesExtractor {
                     "entity.recordparams" => {
                         record_fields = parse_formal_parameters(capture.node, &code);
                     }
-                    "package" => package = Some(value),
+                    "package" => {
+                        package = Some(value);
+                    }
                     _ => {}
                 }
             }
