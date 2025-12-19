@@ -7,6 +7,7 @@ use tree_sitter::Parser;
 use crate::extraction::{entities::extractor::EntitiesExtractor, extractor::Extractor};
 pub mod entities;
 pub mod extractor;
+pub mod imports;
 mod queries;
 
 pub async fn extract(

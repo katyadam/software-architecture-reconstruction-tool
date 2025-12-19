@@ -35,10 +35,10 @@ impl Extractor<Entity> for EntitiesExtractor {
                     "entity.name" => entity_name = value,
                     "entity.superclass" => superclasses.push(value),
                     "entity.body" => {
-                        fields = parse_field_declarations(capture.node, &code);
+                        fields = parse_field_declarations(capture.node, code);
                     }
                     "entity.recordparams" => {
-                        record_fields = parse_formal_parameters(capture.node, &code);
+                        record_fields = parse_formal_parameters(capture.node, code);
                     }
                     "package" => {
                         package = Some(value);
@@ -56,7 +56,7 @@ impl Extractor<Entity> for EntitiesExtractor {
             let new_entity = Entity {
                 name: entity_name.clone(),
                 superclasses,
-                fields: fields,
+                fields,
                 signature: format!("{}.{}", package.clone().unwrap_or_default(), entity_name),
                 file_path: file_name.to_string(),
             };

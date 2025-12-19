@@ -5,15 +5,11 @@ pub fn parse_formal_parameters(params_node: Node, code: &str) -> Vec<Field> {
     let mut fields = Vec::new();
 
     for i in 0..params_node.named_child_count() {
-        if let Some(child) = params_node.named_child(i) {
-            match child.kind() {
-                "formal_parameter" => {
-                    if let Some(field) = parse_formal_parameter(child, code) {
-                        fields.push(field);
-                    }
-                }
-                _ => {}
-            }
+        if let Some(child) = params_node.named_child(i)
+            && child.kind() == "formal_parameter"
+            && let Some(field) = parse_formal_parameter(child, code)
+        {
+            fields.push(field);
         }
     }
 
@@ -46,15 +42,11 @@ pub fn parse_field_declarations(fields_node: Node, code: &str) -> Vec<Field> {
     let mut fields = Vec::new();
 
     for i in 0..fields_node.named_child_count() {
-        if let Some(child) = fields_node.named_child(i) {
-            match child.kind() {
-                "field_declaration" => {
-                    if let Some(field) = parse_field_declaration(child, code) {
-                        fields.push(field);
-                    }
-                }
-                _ => {}
-            }
+        if let Some(child) = fields_node.named_child(i)
+            && child.kind() == "field_declaration"
+            && let Some(field) = parse_field_declaration(child, code)
+        {
+            fields.push(field);
         }
     }
 
