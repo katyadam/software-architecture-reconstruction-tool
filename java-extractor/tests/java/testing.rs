@@ -1,13 +1,7 @@
+use java_extractor::extraction::{entities::extractor::EntitiesExtractor, extractor::Extractor};
 use models::{Entity, Field};
 
-use crate::{
-    extraction::{
-        entities::{self, extractor::EntitiesExtractor},
-        extractor::Extractor,
-    },
-    s, strs,
-    utils::{get_tree, load_file},
-};
+use crate::java::utils::{get_tree, load_file};
 
 #[test]
 fn base_test_record() {

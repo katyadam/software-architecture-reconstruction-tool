@@ -1,11 +1,12 @@
+use once_cell::sync::Lazy;
+use tree_sitter::{Language, Parser, Tree};
+
 use std::fs;
 
 #[allow(dead_code)]
 pub fn load_file(filename: &str) -> Result<String, std::io::Error> {
     fs::read_to_string(filename)
 }
-use once_cell::sync::Lazy;
-use tree_sitter::{Language, Parser, Tree};
 
 // Lazily-initialized variable, prevents initializing language over and over again, which results in better performance.
 static PYTHON_LANGUAGE: Lazy<Language> = Lazy::new(|| tree_sitter_java::LANGUAGE.into());

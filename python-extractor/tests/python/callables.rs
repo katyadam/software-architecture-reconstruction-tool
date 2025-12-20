@@ -5,10 +5,9 @@ use python_extractor::{
         extractor::{ExtractParams, Extractor},
     },
     s,
-    utils::load_file,
 };
 
-use crate::python::utils::get_tree;
+use crate::python::utils::{get_tree, load_file};
 
 #[test]
 fn simple_test() {

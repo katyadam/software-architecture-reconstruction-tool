@@ -1,13 +1,10 @@
 use models::Import;
-use python_extractor::{
-    extraction::{
-        extractor::{ExtractParams, Extractor},
-        imports::extractor::ImportsExtractor,
-    },
-    utils::load_file,
+use python_extractor::extraction::{
+    extractor::{ExtractParams, Extractor},
+    imports::extractor::ImportsExtractor,
 };
 
-use crate::python::utils::get_tree;
+use crate::python::utils::{get_tree, load_file};
 
 #[test]
 fn abstract_imports() {

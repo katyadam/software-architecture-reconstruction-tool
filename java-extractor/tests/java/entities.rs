@@ -1,10 +1,10 @@
-use models::{Entity, Field};
-
-use crate::{
+use java_extractor::{
     extraction::{entities::extractor::EntitiesExtractor, extractor::Extractor},
     s, strs,
-    utils::{get_tree, load_file},
 };
+use models::{Entity, Field};
+
+use crate::java::utils::{get_tree, load_file};
 
 #[test]
 fn base_test_class() {

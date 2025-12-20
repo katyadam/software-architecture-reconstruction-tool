@@ -1,9 +1,10 @@
+use java_extractor::{
+    extraction::{extractor::Extractor, imports::extractor::ImportsExtractor},
+    s,
+};
 use models::Import;
 
-use crate::{
-    extraction::{extractor::Extractor, imports::extractor::ImportsExtractor},
-    utils::{get_tree, load_file},
-};
+use crate::java::utils::{get_tree, load_file};
 
 #[test]
 fn all_types_of_imports_test() {
