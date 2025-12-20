@@ -48,5 +48,8 @@ pub const ENTITIES_QUERY: &str = r#"
 "#;
 
 pub const IMPORTS_QUERY: &str = r#"
-
+(import_declaration
+	(scoped_identifier) @import.scoped
+    (asterisk)? @import.asterisk
+)
 "#;
