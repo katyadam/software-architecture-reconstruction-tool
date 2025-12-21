@@ -5,9 +5,11 @@ use tokio::task;
 use tree_sitter::Parser;
 
 use crate::extraction::{entities::extractor::EntitiesExtractor, extractor::Extractor};
+pub mod endpoints;
 pub mod entities;
 pub mod extractor;
 pub mod imports;
+mod parser;
 mod queries;
 
 pub async fn extract(

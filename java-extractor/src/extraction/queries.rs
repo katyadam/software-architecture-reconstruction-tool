@@ -53,3 +53,23 @@ pub const IMPORTS_QUERY: &str = r#"
     (asterisk)? @import.asterisk
 )
 "#;
+
+pub const ENDPOINTS_QUERY: &str = r#"
+(method_declaration
+	(modifiers 
+    	[
+          (annotation) @annotation
+          (marker_annotation) @annotation
+        ]
+    )
+    type: (_) @return_type
+    name: (_) @callable_name
+    parameters: (_) @callable_params
+) @callable
+
+(class_declaration
+	(modifiers
+		(annotation) @class_annotation
+	)
+)
+"#;
