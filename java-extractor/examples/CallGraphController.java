@@ -21,6 +21,11 @@ public class CallGraphController {
     @Inject
     CallGraphInputService callGraphInputService;
 
+    @SomeRandomAnnotation
+    public void dontCountThisMethod() {
+        return;
+    }
+
     @GET
     @Path("/project/{projectId}")
     @Produces(MediaType.APPLICATION_JSON)

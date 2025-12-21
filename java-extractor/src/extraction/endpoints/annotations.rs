@@ -1,4 +1,5 @@
 use models::{Endpoint, HttpMethod};
+use tree_sitter::Node;
 
 static HTTP_METHOD_PREFIXES: &[(&str, HttpMethod)] = &[
     ("@GetMapping", HttpMethod::GET),
@@ -23,7 +24,16 @@ const URI_PATH_ANNOTATIONS: &[&str] = &[
     "@PatchMapping",
 ];
 
-pub fn apply_annotations(endpoint: &mut Endpoint, annotations: Vec<String>) {
+pub fn are_annotations_specifying_endpoint(annotations: &[String]) -> bool {
+    annotations.iter().any(|annot| {
+        URI_PATH_ANNOTATIONS.iter().any(|a| annot.starts_with(a))
+            || HTTP_METHOD_PREFIXES
+                .iter()
+                .any(|(a, _)| annot.starts_with(a))
+    })
+}
+
+pub fn apply_annotations(endpoint: &mut Endpoint, annotations: &[String]) {
     for annot in annotations {
         // 1. HTTP method
         if let Some(method) = http_method_from_annotation(&annot) {
@@ -67,4 +77,19 @@ pub fn extract_uri(annot: &str) -> Option<String> {
     }
 
     None
+}
+
+pub fn get_annotations_from_modifiers(modifiers_node: Node, code: &str) -> Vec<String> {
+    let mut annotations = Vec::new();
+
+    let mut cursor = modifiers_node.walk();
+    for child in modifiers_node.children(&mut cursor) {
+        if child.kind() == "annotation" || child.kind() == "marker_annotation" {
+            let capture_text = &code.as_bytes()[child.start_byte()..child.end_byte()];
+            let value = String::from_utf8_lossy(capture_text).to_string();
+            annotations.push(value);
+        }
+    }
+
+    annotations
 }

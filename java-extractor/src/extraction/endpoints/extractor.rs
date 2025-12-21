@@ -2,7 +2,10 @@ use sha2::{Digest, Sha256};
 use tree_sitter::{Query, Tree};
 
 use crate::extraction::{
-    endpoints::annotations::{apply_annotations, extract_uri},
+    endpoints::annotations::{
+        apply_annotations, are_annotations_specifying_endpoint, extract_uri,
+        get_annotations_from_modifiers,
+    },
     extractor::Extractor,
     parser::{normalize_whitespace, parse_callable_params},
     queries::ENDPOINTS_QUERY,
@@ -34,7 +37,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                     "return_type" => return_type = Some(value),
                     "callable_name" => callable_name = Some(value),
                     "callable_params" => stringified_params = Some(value),
-                    "annotation" => annotations.push(value),
+                    "modifiers" => annotations = get_annotations_from_modifiers(capture.node, code),
                     "callable" => {
                         let mut hasher = Sha256::new();
                         hasher.update(value.as_bytes());
@@ -43,7 +46,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                     _ => (),
                 }
             }
-            if function_hash.is_none() {
+            if function_hash.is_none() || !are_annotations_specifying_endpoint(&annotations) {
                 continue;
             }
             let normalized_stringified_params =
@@ -60,11 +63,9 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                 uri: "".to_string(),
                 file_path: file_name.to_string(),
             };
-
-            apply_annotations(&mut endpoint, annotations);
+            apply_annotations(&mut endpoint, &annotations);
             endpoints.push(endpoint);
         }
-        println!("{shared_uri:?}");
         prepend_shared_uri(&mut endpoints, &shared_uri.unwrap_or_default());
         endpoints
     }

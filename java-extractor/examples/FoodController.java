@@ -29,6 +29,11 @@ public class FoodController {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FoodController.class);
 
+    @SomeRandomAnnotation
+    public void dontCountThisMethod() {
+        return;
+    }
+
     @GetMapping(path = "/welcome")
     public String home() {
         return "Welcome to [ Food Service ] !";
