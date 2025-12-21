@@ -2,7 +2,10 @@ use sha2::{Digest, Sha256};
 use tree_sitter::{Query, Tree};
 
 use crate::extraction::{
-    extractor::Extractor, parser::parse_callable_params, queries::ENDPOINTS_QUERY,
+    endpoints::annotations::{apply_annotations, extract_uri},
+    extractor::Extractor,
+    parser::{normalize_whitespace, parse_callable_params},
+    queries::ENDPOINTS_QUERY,
 };
 use models::{Endpoint, HttpMethod};
 use tree_sitter::{QueryCursor, StreamingIterator};
@@ -27,7 +30,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                     &code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
                 let value = String::from_utf8_lossy(capture_text).to_string();
                 match query.capture_names()[capture.index as usize] {
-                    "class_annotation" => shared_uri = Some(value),
+                    "class_annotation" => shared_uri = extract_uri(&value),
                     "return_type" => return_type = Some(value),
                     "callable_name" => callable_name = Some(value),
                     "callable_params" => stringified_params = Some(value),
@@ -40,20 +43,35 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                     _ => (),
                 }
             }
+            if function_hash.is_none() {
+                continue;
+            }
+            let normalized_stringified_params =
+                normalize_whitespace(&stringified_params.unwrap_or_default());
 
-            endpoints.push(Endpoint {
+            let mut endpoint = Endpoint {
                 function_name: return_type.unwrap_or_default()
                     + " "
                     + &callable_name.unwrap_or_default()
-                    + &stringified_params.clone().unwrap_or_default(),
-                parameters: parse_callable_params(&stringified_params.unwrap_or_default()),
+                    + &normalized_stringified_params.clone(),
+                parameters: parse_callable_params(&normalized_stringified_params),
                 function_hash: function_hash.unwrap_or_default(),
                 http_method: HttpMethod::GET,
                 uri: "".to_string(),
                 file_path: file_name.to_string(),
-            });
-        }
+            };
 
+            apply_annotations(&mut endpoint, annotations);
+            endpoints.push(endpoint);
+        }
+        println!("{shared_uri:?}");
+        prepend_shared_uri(&mut endpoints, &shared_uri.unwrap_or_default());
         endpoints
     }
+}
+
+fn prepend_shared_uri(endpoints: &mut [Endpoint], shared_uri: &str) {
+    endpoints
+        .iter_mut()
+        .for_each(|e| e.uri = format!("{}{}", shared_uri, e.uri));
 }

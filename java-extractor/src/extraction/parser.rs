@@ -81,3 +81,12 @@ fn split_top_level_commas(input: &str) -> Vec<String> {
 
     result
 }
+
+pub fn normalize_whitespace(input: &str) -> String {
+    input
+        .replace('\n', " ")
+        .replace('\r', " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
