@@ -1,3 +1,4 @@
+mod endpoints;
 mod entities;
 mod imports;
 mod testing;
