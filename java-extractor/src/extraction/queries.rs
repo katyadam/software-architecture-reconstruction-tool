@@ -56,7 +56,7 @@ pub const IMPORTS_QUERY: &str = r#"
 
 pub const ENDPOINTS_QUERY: &str = r#"
 (method_declaration
-	(modifiers) @modifiers
+	(modifiers [(annotation) (marker_annotation)]) @modifiers
     type: (_) @return_type
     name: (_) @callable_name
     parameters: (_) @callable_params
