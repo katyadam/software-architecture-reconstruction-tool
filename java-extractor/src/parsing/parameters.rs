@@ -1,5 +1,5 @@
 use models::Parameter;
-// (@RequestBody FoodOrder addFoodOrder, @RequestHeader HttpHeaders headers)
+
 pub fn parse_callable_params(params_string: &str) -> Vec<Parameter> {
     let params_string = strip_outer_parentheses(params_string);
 

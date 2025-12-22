@@ -9,8 +9,8 @@ pub mod endpoints;
 pub mod entities;
 pub mod extractor;
 pub mod imports;
-mod parser;
 mod queries;
+pub mod restcalls;
 
 pub async fn extract(
     code: &str,

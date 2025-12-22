@@ -1,14 +1,16 @@
 use sha2::{Digest, Sha256};
 use tree_sitter::{Query, Tree};
 
-use crate::extraction::{
-    endpoints::annotations::{
-        apply_annotations, are_annotations_specifying_endpoint, extract_uri,
-        get_annotations_from_modifiers,
+use crate::{
+    extraction::{
+        endpoints::annotations::{
+            apply_annotations, are_annotations_specifying_endpoint, extract_uri,
+            get_annotations_from_modifiers,
+        },
+        extractor::Extractor,
+        queries::ENDPOINTS_QUERY,
     },
-    extractor::Extractor,
-    parser::{normalize_whitespace, parse_callable_params},
-    queries::ENDPOINTS_QUERY,
+    parsing::parameters::{normalize_whitespace, parse_callable_params},
 };
 use models::{Endpoint, HttpMethod};
 use tree_sitter::{QueryCursor, StreamingIterator};

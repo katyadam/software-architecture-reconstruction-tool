@@ -68,3 +68,11 @@ pub const ENDPOINTS_QUERY: &str = r#"
 	)
 )
 "#;
+
+pub const RESTCALLS_QUERY: &str = r#"
+(method_invocation
+	object: (_)? @invoked_on
+    name: (_) @invoked_callable_name
+    arguments: (_) @arguments
+) @invoke
+"#;
