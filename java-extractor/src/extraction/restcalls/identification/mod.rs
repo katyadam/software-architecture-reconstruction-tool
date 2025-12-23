@@ -12,7 +12,7 @@ const HTTP_METHODS: &[&str] = &["get", "post", "delete", "put", "patch"];
 // TODO: For that there is a need to do Type Inference for the invoked object as well as Data Flow Analysis
 // to get the right uri that is being called
 pub fn get_identification_strategy<'a>(
-    invoked_on: Option<String>,
+    _invoked_on: Option<String>,
     callable_name: &'a str,
     call_args: &'a [Argument],
 ) -> Option<impl Strategy<'a>> {
