@@ -76,3 +76,17 @@ pub const RESTCALLS_QUERY: &str = r#"
     arguments: (_) @arguments
 ) @invoke
 "#;
+
+pub const CALLABLES_QUERY: &str = r#"
+[
+(method_declaration
+	name: (_)? @method_name
+	type: (_)? @method_type
+    parameters: (_) @method_params
+) @method
+(constructor_declaration
+	name: (_)? @contructor_name
+    parameters: (_) @contructor_params
+) @constructor
+]
+"#;
