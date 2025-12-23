@@ -1,4 +1,4 @@
-use models::{HttpMethod, RestCall};
+use models::RestCall;
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 
 use crate::{
@@ -6,7 +6,8 @@ use crate::{
         extractor::Extractor,
         queries::RESTCALLS_QUERY,
         restcalls::{
-            enclosing_lookup::get_enclosing_function_signature_and_hash, identifier::is_restcall,
+            enclosing_lookup::get_enclosing_function_signature_and_hash,
+            identifier::{identify_http_method, is_restcall},
         },
     },
     parsing::arguments::parse_call_arguments,
@@ -41,16 +42,24 @@ impl Extractor<RestCall> for RestCallsExtractor {
                 (invoke_node, arguments_node, callable_name)
             {
                 let call_args = parse_call_arguments(args_node, code);
-                if !is_restcall(callable_name, call_args) {
+
+                let http_method = match identify_http_method(&callable_name, &call_args) {
+                    Some(method) => method,
+                    None => continue,
+                };
+
+                if !is_restcall(invoked_on, callable_name, &call_args) {
                     continue;
                 }
+
                 let (function_name, function_hash) =
                     get_enclosing_function_signature_and_hash(inv_node, code);
+
                 restcalls.push(RestCall {
                     function_name: function_name,
                     function_hash: function_hash,
                     call_arguments: parse_call_arguments(args_node, code),
-                    http_method: HttpMethod::GET,
+                    http_method: http_method,
                     target_uri: "".to_string(),
                     file_path: file_name.to_string(),
                 });
