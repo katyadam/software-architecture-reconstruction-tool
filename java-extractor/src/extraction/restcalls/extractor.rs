@@ -7,7 +7,7 @@ use crate::{
         queries::RESTCALLS_QUERY,
         restcalls::{
             enclosing_lookup::get_enclosing_function_signature_and_hash,
-            identifier::{identify_http_method, is_restcall},
+            identification::{get_identification_strategy, strategy::Strategy},
         },
     },
     parsing::arguments::parse_call_arguments,
@@ -42,16 +42,20 @@ impl Extractor<RestCall> for RestCallsExtractor {
                 (invoke_node, arguments_node, callable_name)
             {
                 let call_args = parse_call_arguments(args_node, code);
-
-                let http_method = match identify_http_method(&callable_name, &call_args) {
+                let strategy =
+                    match get_identification_strategy(invoked_on, &callable_name, &call_args) {
+                        Some(strategy) => strategy,
+                        None => continue,
+                    };
+                let http_method = match strategy.identify_http_method() {
                     Some(method) => method,
                     None => continue,
                 };
 
-                if !is_restcall(invoked_on, callable_name, &call_args) {
-                    continue;
-                }
-
+                let target_uri = match strategy.identify_target_uri() {
+                    Some(uri) => uri,
+                    None => continue,
+                };
                 let (function_name, function_hash) =
                     get_enclosing_function_signature_and_hash(inv_node, code);
 
@@ -60,7 +64,7 @@ impl Extractor<RestCall> for RestCallsExtractor {
                     function_hash: function_hash,
                     call_arguments: parse_call_arguments(args_node, code),
                     http_method: http_method,
-                    target_uri: "".to_string(),
+                    target_uri,
                     file_path: file_name.to_string(),
                 });
             }
