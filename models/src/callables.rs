@@ -39,6 +39,12 @@ impl Namespace {
     }
 }
 
+impl Default for Namespace {
+    fn default() -> Self {
+        Namespace::Module("None".to_string())
+    }
+}
+
 #[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct Callable {
     pub name: String,
