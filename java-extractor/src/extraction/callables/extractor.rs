@@ -10,7 +10,7 @@ use crate::{
     parsing::parameters::{normalize_whitespace, parse_callable_params},
 };
 
-pub struct CallablesExtractor {}
+pub struct CallablesExtractor;
 
 impl Extractor<Callable> for CallablesExtractor {
     fn extract(&self, code: &str, tree: &tree_sitter::Tree, file_name: &str) -> Vec<Callable> {
@@ -31,21 +31,17 @@ impl Extractor<Callable> for CallablesExtractor {
                     &code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
                 let value = String::from_utf8_lossy(capture_text).to_string();
                 match query.capture_names()[capture.index as usize] {
-                    "method_name" => name = Some(value),
-                    "method_type" => return_type = Some(value),
-                    "method_params" => params_string = Some(value),
-                    "constructor_name" => name = Some(value),
-                    "constructor_params" => params_string = Some(value),
-                    "method" | "constructor" => {
-                        if value == "constructor" {
-                            is_constructor = true;
-                        }
+                    "callable_name" => name = Some(value),
+                    "callable_type" => return_type = Some(value),
+                    "callable_params" => params_string = Some(value),
+                    "callable" => {
                         let enclosing_element_name = get_enclosing_element_name(capture.node, code);
                         namespace = Some(Namespace::Class(enclosing_element_name));
                         let mut hasher = Sha256::new();
                         hasher.update(value.as_bytes());
                         hash = Some(format!("{:x}", hasher.finalize()));
                     }
+                    "type_constructor" => is_constructor = true,
                     _ => (),
                 }
             }
@@ -57,15 +53,15 @@ impl Extractor<Callable> for CallablesExtractor {
                 + " "
                 + &name.unwrap_or_default()
                 + &normalized_stringified_params.clone();
-
+            let callable_name = callable_name.trim();
             callables.push(Callable {
-                name: callable_name.clone(),
+                name: callable_name.to_string(),
                 signature: format!(
                     "{}/{}",
-                    namespace.unwrap_or_default().get_signature(),
+                    namespace.clone().unwrap_or_default().get_signature(),
                     callable_name
                 ),
-                namespace: models::Namespace::Class("".to_string()),
+                namespace: namespace.unwrap_or_default(),
                 parameters: parse_callable_params(&normalized_stringified_params),
                 return_type,
                 is_async: false,

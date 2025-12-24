@@ -79,14 +79,15 @@ pub const RESTCALLS_QUERY: &str = r#"
 
 pub const CALLABLES_QUERY: &str = r#"
 [
-(method_declaration
-	name: (_)? @method_name
-	type: (_)? @method_type
-    parameters: (_) @method_params
-) @method
-(constructor_declaration
-	name: (_)? @contructor_name
-    parameters: (_) @contructor_params
-) @constructor
-]
+  (method_declaration
+    type: (_)? @callable_type
+    name: (_) @callable_name
+    parameters: (_) @callable_params
+  ) @type_method
+
+  (constructor_declaration
+    name: (_) @callable_name
+    parameters: (_) @callable_params
+  ) @type_constructor
+] @callable
 "#;
