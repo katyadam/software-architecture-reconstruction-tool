@@ -1,5 +1,4 @@
 use models::{Argument, CallStatement};
-use sha2::{Digest, Sha256};
 use tree_sitter::{Query, QueryCursor, StreamingIterator, Tree};
 
 use crate::{
