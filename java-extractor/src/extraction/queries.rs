@@ -79,15 +79,33 @@ pub const RESTCALLS_QUERY: &str = r#"
 
 pub const CALLABLES_QUERY: &str = r#"
 [
-  (method_declaration
+    (method_declaration
     type: (_)? @callable_type
     name: (_) @callable_name
     parameters: (_) @callable_params
-  ) @type_method
+    ) @type_method
 
-  (constructor_declaration
+    (constructor_declaration
     name: (_) @callable_name
     parameters: (_) @callable_params
-  ) @type_constructor
+    ) @type_constructor
 ] @callable
+"#;
+
+pub const CALL_STATEMENTS_QUERY: &str = r#"
+[
+    (object_creation_expression
+        type: (_) @invoked_on
+        arguments: (_) @args
+    )
+    (explicit_constructor_invocation
+        constructor: (_) @explicit_constructor_call
+        arguments: (_) @args
+    )
+    (method_invocation
+        object: (_)? @invoked_on
+        name: (_) @name
+        arguments: (_) @args
+    )
+] @call
 "#;

@@ -1,5 +1,4 @@
 use sha2::{Digest, Sha256};
-use tree_sitter::{Query, Tree};
 
 use crate::{
     extraction::{
@@ -13,7 +12,7 @@ use crate::{
     parsing::parameters::{normalize_whitespace, parse_callable_params},
 };
 use models::{Endpoint, HttpMethod};
-use tree_sitter::{QueryCursor, StreamingIterator};
+use tree_sitter::{Query, QueryCursor, StreamingIterator, Tree};
 
 pub struct EndpointsExtractor;
 impl Extractor<Endpoint> for EndpointsExtractor {

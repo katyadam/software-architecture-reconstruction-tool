@@ -122,6 +122,7 @@ impl Extractor<CallStatement> for CallsExtractor {
                 enclosing_class_name,
                 enclosing_function_hash,
                 is_self_invoke: function_name.starts_with("self"),
+                is_super_invoke: false,
                 invoked_on: None,
             };
 
