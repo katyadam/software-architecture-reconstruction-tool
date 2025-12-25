@@ -111,6 +111,7 @@ mod tests {
                 "326415f3a09d55a0c9bf890ffdaeb12ae7b41cb3653e974f4296e110f343d2b2".to_string(),
             ),
             is_self_invoke: false,
+            is_super_invoke: false,
             invoked_on: None,
         }]
     }
