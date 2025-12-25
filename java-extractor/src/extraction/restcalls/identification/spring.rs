@@ -26,16 +26,13 @@ impl<'a> Strategy<'a> for SpringStrategy<'_> {
             self.callable_name.to_ascii_lowercase().contains(*m)
                 || http_method_in_call_arguments(self.call_args, m)
         }) {
-            return HttpMethod::from_str(*found).ok();
+            return HttpMethod::from_str(found).ok();
         }
 
         None
     }
 
     fn identify_target_uri(&self) -> Option<String> {
-        match self.call_args.get(0) {
-            Some(uri) => Some(uri.value.clone()),
-            None => None,
-        }
+        self.call_args.first().map(|uri| uri.value.clone())
     }
 }

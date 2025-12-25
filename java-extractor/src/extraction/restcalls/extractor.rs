@@ -60,10 +60,10 @@ impl Extractor<RestCall> for RestCallsExtractor {
                     get_enclosing_function_signature_and_hash(inv_node, code);
 
                 restcalls.push(RestCall {
-                    function_name: function_name,
-                    function_hash: function_hash,
+                    function_name,
+                    function_hash,
                     call_arguments: parse_call_arguments(args_node, code),
-                    http_method: http_method,
+                    http_method,
                     target_uri,
                     file_path: file_name.to_string(),
                 });

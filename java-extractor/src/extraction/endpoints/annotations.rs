@@ -36,15 +36,15 @@ pub fn are_annotations_specifying_endpoint(annotations: &[String]) -> bool {
 pub fn apply_annotations(endpoint: &mut Endpoint, annotations: &[String]) {
     for annot in annotations {
         // 1. HTTP method
-        if let Some(method) = http_method_from_annotation(&annot) {
+        if let Some(method) = http_method_from_annotation(annot) {
             endpoint.http_method = method;
         }
 
         // 2. URI path
-        if URI_PATH_ANNOTATIONS.iter().any(|a| annot.starts_with(a)) {
-            if let Some(uri) = extract_uri(&annot) {
-                endpoint.uri = uri;
-            }
+        if URI_PATH_ANNOTATIONS.iter().any(|a| annot.starts_with(a))
+            && let Some(uri) = extract_uri(annot)
+        {
+            endpoint.uri = uri;
         }
     }
 }
