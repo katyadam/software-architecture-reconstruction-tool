@@ -1,5 +1,5 @@
 use java_extractor::{
-    extraction::{calls::extraction::CallStatementsExtractor, extractor::Extractor},
+    extraction::{calls::extractor::CallStatementsExtractor, extractor::Extractor},
     s,
 };
 use models::{Argument, CallStatement};

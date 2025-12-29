@@ -5,8 +5,10 @@ use tokio::task;
 use tree_sitter::Parser;
 
 use crate::extraction::{entities::extractor::EntitiesExtractor, extractor::Extractor};
+pub mod assignments;
 pub mod callables;
 pub mod calls;
+mod enclosing_lookup;
 pub mod endpoints;
 pub mod entities;
 pub mod extractor;

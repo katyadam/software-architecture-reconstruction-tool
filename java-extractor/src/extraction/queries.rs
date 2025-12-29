@@ -109,3 +109,28 @@ pub const CALL_STATEMENTS_QUERY: &str = r#"
     )
 ] @call
 "#;
+
+pub const ASSINGMENTS_QUERY: &str = r#"
+[
+  (local_variable_declaration
+	type: (_) @type
+    declarator: (_ 
+    	name: (_) @name 
+        value: (_)? @value
+    )
+  ) @assignment
+  
+  (field_declaration
+  	type: (_) @type
+    declarator: (_ 
+    	name: (_) @name 
+        value: (_)? @value
+    )
+  ) @assignment
+  
+  (assignment_expression
+  	left: (_) @name
+    right: (_) @value
+  ) @assignment
+]
+"#;
