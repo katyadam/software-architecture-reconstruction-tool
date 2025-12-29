@@ -3,7 +3,7 @@ use tree_sitter::{Query, QueryCursor, StreamingIterator, Tree};
 
 use crate::{
     extraction::{
-        calls::enclosing_lookup::{
+        enclosing_lookup::{
             get_enclosing_node_by_kind, get_field_string_from_node, get_hashed_node_value,
         },
         extractor::Extractor,
