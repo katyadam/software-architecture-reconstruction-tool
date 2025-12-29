@@ -5,7 +5,7 @@ members = [
     "java-extractor",
     "manager",
     "models",
-    "python-extractor", "statix",
+    "python-extractor",
     "synthesizer",
 ]
 resolver = "3"
