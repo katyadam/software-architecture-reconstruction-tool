@@ -57,19 +57,20 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
                 }
                 _ => {}
             }
+            if let Some(variable_name) = &variable_name {
+                let new_assignment = Assignment {
+                    variable_name: variable_name.clone(),
+                    variable_type: variable_type.clone().unwrap_or("any".to_owned()),
+                    value: variable_value.clone().unwrap_or_default(),
+                };
 
-            let new_assignment = Assignment {
-                variable_name: variable_name.clone().unwrap_or_default(),
-                variable_type: variable_type.clone().unwrap_or_default(),
-                value: variable_value.clone().unwrap_or_default(),
-            };
+                let assignment_key = AssignmentKey {
+                    scope: scope.clone().unwrap_or(Scope::Global),
+                    variable_name: variable_name.clone(),
+                };
 
-            let assignment_key = AssignmentKey {
-                scope: scope.clone().unwrap_or(Scope::Global),
-                variable_name: variable_name.clone().unwrap_or_default(),
-            };
-
-            assignments_map.insert(assignment_key, new_assignment);
+                assignments_map.insert(assignment_key, new_assignment);
+            }
         });
         if let (Some(name), Some(params)) = (function_name, params_string) {
             let functions_params_assignments =

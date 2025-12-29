@@ -118,7 +118,7 @@ pub const ASSINGMENTS_QUERY: &str = r#"
     	name: (_) @name 
         value: (_)? @value
     )
-  ) @assignment
+  )
   
   (field_declaration
   	type: (_) @type
@@ -126,11 +126,11 @@ pub const ASSINGMENTS_QUERY: &str = r#"
     	name: (_) @name 
         value: (_)? @value
     )
-  ) @assignment
+  )
   
   (assignment_expression
   	left: (_) @name
     right: (_) @value
-  ) @assignment
-]
+  )
+] @assignment
 "#;
