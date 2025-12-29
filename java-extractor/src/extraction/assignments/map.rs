@@ -68,8 +68,7 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
                     scope: scope.clone().unwrap_or(Scope::Global),
                     variable_name: variable_name.clone(),
                 };
-
-                assignments_map.insert(assignment_key, new_assignment);
+                upsert(&mut assignments_map, assignment_key, new_assignment);
             }
         });
         if let (Some(name), Some(params)) = (function_name, params_string) {
@@ -103,4 +102,31 @@ fn create_assignments_from_function_params(
             assignments.push((assignment_key, new_assignment));
         });
     assignments
+}
+
+// If there are multiple assignments to the same variable,
+// we want to overaproximate the resulting assignment.
+// For example, int a; and a = 2; will result to single assignment of
+// variable "a" with datatype "int" and value "2"
+fn upsert(
+    assignments_map: &mut HashMap<AssignmentKey, Assignment>,
+    key: AssignmentKey,
+    for_upsert: Assignment,
+) {
+    if assignments_map.contains_key(&key) {
+        let mut current = assignments_map
+            .get(&key)
+            .expect("Should not fail, contains checked before")
+            .to_owned();
+
+        if current.value == "" {
+            current.value = for_upsert.value;
+        }
+        if current.variable_type == "any" {
+            current.variable_type = for_upsert.variable_type;
+        }
+        assignments_map.insert(key, current);
+    } else {
+        assignments_map.insert(key, for_upsert);
+    }
 }
