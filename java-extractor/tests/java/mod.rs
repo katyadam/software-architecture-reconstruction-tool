@@ -1,3 +1,4 @@
+mod assignments;
 mod callables;
 mod calls;
 mod endpoints;
