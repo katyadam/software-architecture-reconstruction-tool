@@ -1,5 +1,9 @@
 use java_extractor::{
-    extraction::{entities::extractor::EntitiesExtractor, extractor::Extractor},
+    extraction::{
+        entities::{evaluator::evaluate_entity_fields, extractor::EntitiesExtractor},
+        extractor::Extractor,
+        imports::extractor::ImportsExtractor,
+    },
     s, strs,
 };
 use models::{Entity, Field};
@@ -153,6 +157,44 @@ fn base_test_record() {
         ],
         signature: s!("com.java.test.AllFieldRecord"),
         file_path: s!("./examples/AllFieldRecord.java"),
+    }];
+
+    assert_eq!(entities, expected);
+}
+
+#[test]
+fn test_evaluation() {
+    let filename = s!("./examples/entities/ClassB.java");
+    let code = load_file(&filename).unwrap();
+    let tree = get_tree(&code);
+    let mut entities = EntitiesExtractor.extract(&code, &tree, &filename);
+    let imports = ImportsExtractor.extract(&code, &tree, &filename);
+    evaluate_entity_fields(&imports, &mut entities);
+    let expected = vec![Entity {
+        name: s!("ClassB"),
+        superclasses: vec![],
+        fields: vec![
+            Field {
+                name: s!("classC1"),
+                datatype: Some(s!("ClassC")),
+                initial_value: None,
+                datatype_signature: Some(s!("com.example.other.ClassC")),
+            },
+            Field {
+                name: s!("classC2"),
+                datatype: Some(s!("com.example.another.ClassC")),
+                initial_value: None,
+                datatype_signature: Some(s!("com.example.another.ClassC")),
+            },
+            Field {
+                name: s!("classWildcard"),
+                datatype: Some(s!("WildCardClass")),
+                initial_value: None,
+                datatype_signature: None,
+            },
+        ],
+        signature: s!("com.example.main.ClassB"),
+        file_path: s!("./examples/entities/ClassB.java"),
     }];
 
     assert_eq!(entities, expected);

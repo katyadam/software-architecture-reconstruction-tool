@@ -17,6 +17,7 @@ fn get(file_path: &str) -> Result<Box<dyn Extractor>, ExtractionError> {
         .and_then(|e| e.to_str())
         .ok_or_else(|| ExtractionError::ExtractorNotFound(file_path.into()))?;
 
+    // Would be great to use Singleton. Currently, for each file a new extractor is always created which is not optimal.
     match ext {
         "py" => Ok(Box::new(PythonTreesitterExtractor::new())),
         _ => Err(ExtractionError::ExtractorNotFound(ext.into())),
