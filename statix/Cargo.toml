@@ -1,0 +1,11 @@
+[package]
+name = "statix"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tree-sitter = "0.25.7"
+thiserror = "2.0.17"
+once_cell = "1.21.3"
+tree-sitter-java = "0.23.5"
+models = { path = "../models" }
