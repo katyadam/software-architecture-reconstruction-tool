@@ -1,5 +1,9 @@
 use java_extractor::{
-    extraction::{calls::extractor::CallStatementsExtractor, extractor::Extractor},
+    extraction::{
+        assignments::map::get_assignments_map,
+        calls::{evaluator::evaluate_invocations, extractor::CallStatementsExtractor},
+        extractor::Extractor,
+    },
     s,
 };
 use models::{Argument, CallStatement};
@@ -299,6 +303,142 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+        },
+    ];
+
+    assert_eq!(calls, expected);
+}
+
+#[test]
+fn test_call_statements_evaluation_with_method_overloading() {
+    let filename = s!("./examples/MethodOverloading.java");
+    let code = load_file(&filename).unwrap();
+    let tree = get_tree(&code);
+    let mut calls = CallStatementsExtractor.extract(&code, &tree, &filename);
+    let assignments_map = get_assignments_map(&tree, &code);
+    evaluate_invocations(&mut calls, &assignments_map);
+
+    let expected = [
+        CallStatement {
+            function_name: s!("add(a, b)"),
+            arguments: vec![
+                Argument {
+                    assigned_variable: s!(""),
+                    value: s!("a"),
+                    datatype: s!("int"),
+                },
+                Argument {
+                    assigned_variable: s!(""),
+                    value: s!("b"),
+                    datatype: s!("int"),
+                },
+            ],
+            enclosing_function_name: Some(s!("demo()")),
+            enclosing_class_name: Some(s!("Calculator")),
+            enclosing_function_hash: Some(s!(
+                "afb2375ed8e435c50ba143b3f60cca2f9526bf937ed8354fe01e0ff3891bf584"
+            )),
+            is_self_invoke: false,
+            is_super_invoke: false,
+            invoked_on: None,
+        },
+        CallStatement {
+            function_name: s!("add(2.5, 3.5)"),
+            arguments: vec![
+                Argument {
+                    assigned_variable: s!(""),
+                    value: s!("2.5"),
+                    datatype: s!("double"),
+                },
+                Argument {
+                    assigned_variable: s!(""),
+                    value: s!("3.5"),
+                    datatype: s!("double"),
+                },
+            ],
+            enclosing_function_name: Some(s!("demo()")),
+            enclosing_class_name: Some(s!("Calculator")),
+            enclosing_function_hash: Some(s!(
+                "afb2375ed8e435c50ba143b3f60cca2f9526bf937ed8354fe01e0ff3891bf584"
+            )),
+            is_self_invoke: false,
+            is_super_invoke: false,
+            invoked_on: None,
+        },
+        CallStatement {
+            function_name: s!("add(1, 2, 3)"),
+            arguments: vec![
+                Argument {
+                    assigned_variable: s!(""),
+                    value: s!("1"),
+                    datatype: s!("int"),
+                },
+                Argument {
+                    assigned_variable: s!(""),
+                    value: s!("2"),
+                    datatype: s!("int"),
+                },
+                Argument {
+                    assigned_variable: s!(""),
+                    value: s!("3"),
+                    datatype: s!("int"),
+                },
+            ],
+            enclosing_function_name: Some(s!("demo()")),
+            enclosing_class_name: Some(s!("Calculator")),
+            enclosing_function_hash: Some(s!(
+                "afb2375ed8e435c50ba143b3f60cca2f9526bf937ed8354fe01e0ff3891bf584"
+            )),
+            is_self_invoke: false,
+            is_super_invoke: false,
+            invoked_on: None,
+        },
+        CallStatement {
+            function_name: s!("add(\"Hello, \", \"World!\")"),
+            arguments: vec![
+                Argument {
+                    assigned_variable: s!(""),
+                    value: s!("\"Hello, \""),
+                    datatype: s!("String"),
+                },
+                Argument {
+                    assigned_variable: s!(""),
+                    value: s!("\"World!\""),
+                    datatype: s!("String"),
+                },
+            ],
+            enclosing_function_name: Some(s!("demo()")),
+            enclosing_class_name: Some(s!("Calculator")),
+            enclosing_function_hash: Some(s!(
+                "afb2375ed8e435c50ba143b3f60cca2f9526bf937ed8354fe01e0ff3891bf584"
+            )),
+            is_self_invoke: false,
+            is_super_invoke: false,
+            invoked_on: None,
+        },
+        CallStatement {
+            function_name: s!("Calculator()"),
+            arguments: vec![],
+            enclosing_function_name: Some(s!("main(String[] args)")),
+            enclosing_class_name: Some(s!("Calculator")),
+            enclosing_function_hash: Some(s!(
+                "dc4cfa52419a1cb27b7c7527ad886b20066eaaebf475beceb1e93aebc3490bf4"
+            )),
+            is_self_invoke: false,
+            is_super_invoke: false,
+            invoked_on: None,
+        },
+        CallStatement {
+            function_name: s!("calculator.demo()"),
+            arguments: vec![],
+            enclosing_function_name: Some(s!("main(String[] args)")),
+            enclosing_class_name: Some(s!("Calculator")),
+            enclosing_function_hash: Some(s!(
+                "dc4cfa52419a1cb27b7c7527ad886b20066eaaebf475beceb1e93aebc3490bf4"
+            )),
+            is_self_invoke: false,
+            is_super_invoke: false,
+            invoked_on: Some(s!("Calculator")),
         },
     ];
 
