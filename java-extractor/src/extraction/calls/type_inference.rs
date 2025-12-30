@@ -75,15 +75,13 @@ pub(in crate::extraction) fn find_invoked_type(
 ) -> Option<String> {
     // Find assignments that assign to invoked object variable
     // Take only those, where the variable_name in assignment is the invoked_object
-    // and are either inside the same function or in constructor
+    // and are either inside the same function or inside the same class (entity).
     let assignments = assignments_map
         .iter()
         .filter(|(key, _)| {
             key.variable_name == invoked_object
-                && (Scope::from_enclosings(
-                    enclosing_function_name.clone(),
-                    enclosing_class_name.clone(),
-                ) == key.scope)
+                && (Scope::from_enclosing_function(enclosing_function_name.clone()) == key.scope
+                    || Scope::from_enclosing_class(enclosing_class_name.clone()) == key.scope)
         })
         .collect::<Vec<(&AssignmentKey, &Assignment)>>();
 

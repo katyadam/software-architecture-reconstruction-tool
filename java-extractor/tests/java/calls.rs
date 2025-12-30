@@ -422,7 +422,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
             enclosing_function_name: Some(s!("main(String[] args)")),
             enclosing_class_name: Some(s!("Calculator")),
             enclosing_function_hash: Some(s!(
-                "dc4cfa52419a1cb27b7c7527ad886b20066eaaebf475beceb1e93aebc3490bf4"
+                "a3f16cbfdcabd227e01b1f9a919c07f0bc040419f61fd5077c7d2ed1b5169752"
             )),
             is_self_invoke: false,
             is_super_invoke: false,
@@ -434,11 +434,46 @@ fn test_call_statements_evaluation_with_method_overloading() {
             enclosing_function_name: Some(s!("main(String[] args)")),
             enclosing_class_name: Some(s!("Calculator")),
             enclosing_function_hash: Some(s!(
-                "dc4cfa52419a1cb27b7c7527ad886b20066eaaebf475beceb1e93aebc3490bf4"
+                "a3f16cbfdcabd227e01b1f9a919c07f0bc040419f61fd5077c7d2ed1b5169752"
             )),
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: Some(s!("Calculator")),
+        },
+        CallStatement {
+            function_name: s!(
+                "restTemplate.exchange( order_service_url + \"/api/v1/orderservice/order\", HttpMethod.PUT, requestEntity, Response.class)"
+            ),
+            arguments: vec![
+                Argument {
+                    assigned_variable: s!(""),
+                    value: s!("order_service_url + \"/api/v1/orderservice/order\""),
+                    datatype: s!("any"),
+                },
+                Argument {
+                    assigned_variable: s!(""),
+                    value: s!("HttpMethod.PUT"),
+                    datatype: s!("any"),
+                },
+                Argument {
+                    assigned_variable: s!(""),
+                    value: s!("requestEntity"),
+                    datatype: s!("any"),
+                },
+                Argument {
+                    assigned_variable: s!(""),
+                    value: s!("Response.class"),
+                    datatype: s!("any"),
+                },
+            ],
+            enclosing_function_name: Some(s!("main(String[] args)")),
+            enclosing_class_name: Some(s!("Calculator")),
+            enclosing_function_hash: Some(s!(
+                "a3f16cbfdcabd227e01b1f9a919c07f0bc040419f61fd5077c7d2ed1b5169752"
+            )),
+            is_self_invoke: false,
+            is_super_invoke: false,
+            invoked_on: Some(s!("RestTemplate")),
         },
     ];
 

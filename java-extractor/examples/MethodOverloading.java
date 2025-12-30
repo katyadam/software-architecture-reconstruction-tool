@@ -2,6 +2,9 @@ package com.example.overloading;
 
 public class Calculator {
 
+    @Autowired
+    private RestTemplate restTemplate;
+
     public int add(int a, int b) {
         return a + b;
     }
@@ -30,5 +33,10 @@ public class Calculator {
     public static void main(String[] args) {
         Calculator calculator = new Calculator();
         calculator.demo();
+        ResponseEntity<Response> re = restTemplate.exchange(
+                order_service_url + "/api/v1/orderservice/order",
+                HttpMethod.PUT,
+                requestEntity,
+                Response.class);
     }
 }

@@ -24,6 +24,18 @@ impl Scope {
             (Some(function), Some(_)) => Scope::Function(function),
         }
     }
+
+    pub fn from_enclosing_function(enclosing_function: Option<String>) -> Scope {
+        enclosing_function
+            .map(|func| Scope::Function(func))
+            .unwrap_or(Scope::Global)
+    }
+
+    pub fn from_enclosing_class(enclosing_class: Option<String>) -> Scope {
+        enclosing_class
+            .map(|klass| Scope::Class(klass))
+            .unwrap_or(Scope::Global)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

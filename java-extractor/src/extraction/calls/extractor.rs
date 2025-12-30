@@ -9,7 +9,7 @@ use crate::{
         extractor::Extractor,
         queries::CALL_STATEMENTS_QUERY,
     },
-    parsing::arguments::parse_call_arguments,
+    parsing::{arguments::parse_call_arguments, parameters::normalize_whitespace},
 };
 
 pub struct CallStatementsExtractor;
@@ -100,7 +100,8 @@ impl Extractor<CallStatement> for CallStatementsExtractor {
             let joined_trimmed_name = joined_name.trim_matches('.');
 
             calls.push(CallStatement {
-                function_name: joined_trimmed_name.to_string() + &args_string,
+                function_name: joined_trimmed_name.to_string()
+                    + &normalize_whitespace(&args_string),
                 arguments,
                 enclosing_function_name,
                 enclosing_class_name,
