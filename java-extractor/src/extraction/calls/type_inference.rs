@@ -3,26 +3,34 @@ use std::collections::HashMap;
 
 use crate::parsing::parameters::parse_callable_params;
 
+/// Inferring starts by trying to approximate value's type.
+/// Then we look at assignments within the same function.
+/// Then we look at assignments within the same class (entity).
+/// Then we look at global assignments.
 pub(in crate::extraction) fn infer_argument_type(
     arg: &mut Argument,
-    arg_enclosing_scope: &Scope,
+    enclosing_function_name: &Option<String>,
+    enclosing_class_name: &Option<String>,
     assignments_map: &HashMap<AssignmentKey, Assignment>,
 ) {
     if let Some(approximated_datatype) = approximate_type_for_value(&arg.value) {
         arg.datatype = approximated_datatype;
         return;
     }
-    // Try resolving in local scope
-    if let Some(found_type) = resolve_type(&arg.value, arg_enclosing_scope, assignments_map) {
+
+    let function_scope = Scope::from_enclosing_function(enclosing_function_name.clone());
+    if let Some(found_type) = resolve_type(&arg.value, &function_scope, assignments_map) {
         arg.datatype = found_type;
         return;
     }
 
-    // Try resolving in global scope if local didn't find anything
-    if arg.datatype == "any"
-        && matches!(arg_enclosing_scope, Scope::Function(_))
-        && let Some(found_type) = resolve_type(&arg.value, &Scope::Global, assignments_map)
-    {
+    let class_scope = Scope::from_enclosing_class(enclosing_class_name.clone());
+    if let Some(found_type) = resolve_type(&arg.value, &class_scope, assignments_map) {
+        arg.datatype = found_type;
+        return;
+    }
+
+    if let Some(found_type) = resolve_type(&arg.value, &Scope::Global, assignments_map) {
         arg.datatype = found_type;
     }
 }
@@ -59,11 +67,19 @@ fn classify_numeric(value: &str) -> Option<String> {
 }
 
 fn classify_string(value: &str) -> Option<String> {
-    if value.starts_with("\"") && value.ends_with("\"") {
-        Some("String".to_string())
-    } else {
-        None
+    let v = value.trim();
+
+    // String literal
+    if v.starts_with('"') && v.ends_with('"') {
+        return Some("String".to_string());
     }
+
+    // String concatenation
+    if v.contains('+') && v.contains('"') {
+        return Some("String".to_string());
+    }
+
+    None
 }
 
 /// Finds the data type of an object used in a function invocation.

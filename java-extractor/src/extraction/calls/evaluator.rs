@@ -2,7 +2,7 @@ use crate::{
     extraction::calls::type_inference::{find_invoked_type, infer_argument_type},
     parsing::calls::extract_invoked_object,
 };
-use models::{Assignment, AssignmentKey, CallStatement, Scope};
+use models::{Assignment, AssignmentKey, CallStatement};
 use std::collections::HashMap;
 
 /// Evaluates invocations and determines on what type each function is called.
@@ -19,13 +19,14 @@ pub fn evaluate_invocations(
                 assignments_map,
             );
         }
-        let scope = match &call.enclosing_function_name {
-            Some(fname) => Scope::Function(fname.clone()),
-            None => Scope::Global,
-        };
 
         for arg in &mut call.arguments {
-            infer_argument_type(arg, &scope, assignments_map);
+            infer_argument_type(
+                arg,
+                &call.enclosing_function_name,
+                &call.enclosing_class_name,
+                assignments_map,
+            );
         }
     }
 }

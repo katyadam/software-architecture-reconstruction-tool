@@ -448,7 +448,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("order_service_url + \"/api/v1/orderservice/order\""),
-                    datatype: s!("any"),
+                    datatype: s!("String"),
                 },
                 Argument {
                     assigned_variable: s!(""),

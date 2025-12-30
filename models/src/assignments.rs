@@ -20,8 +20,7 @@ impl Scope {
         match (enclosing_function, enclosing_class) {
             (None, None) => Scope::Global,
             (None, Some(class)) => Scope::Class(class),
-            (Some(function), None) => Scope::Function(function),
-            (Some(function), Some(_)) => Scope::Function(function),
+            (Some(function), _) => Scope::Function(function),
         }
     }
 
