@@ -1,38 +1,52 @@
 use std::str::FromStr;
 
-use models::{Argument, HttpMethod};
+use models::{Argument, CallStatement, HttpMethod, RestCall};
 
-use crate::extraction::restcalls::identification::{
-    HTTP_METHODS, strategy::Strategy, utils::http_method_in_call_arguments,
-};
+use crate::extraction::restcalls::identification::{HTTP_METHODS, strategy::Strategy};
 
-pub struct SpringStrategy<'a> {
-    callable_name: &'a str,
-    call_args: &'a [Argument],
-}
+pub struct SpringStrategy {}
 
-impl<'a> SpringStrategy<'a> {
-    pub fn new(callable_name: &'a str, call_args: &'a [Argument]) -> Self {
-        Self {
-            callable_name,
-            call_args,
-        }
+impl SpringStrategy {
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
-impl<'a> Strategy<'a> for SpringStrategy<'_> {
-    fn identify_http_method(&self) -> Option<HttpMethod> {
-        if let Some(found) = HTTP_METHODS.iter().find(|m| {
-            self.callable_name.to_ascii_lowercase().contains(*m)
-                || http_method_in_call_arguments(self.call_args, m)
-        }) {
-            return HttpMethod::from_str(found).ok();
-        }
+impl SpringStrategy {
+    fn identify_http_method(&self, call_args: &[Argument]) -> Option<HttpMethod> {
+        let arg = call_args.get(1)?;
 
-        None
+        HTTP_METHODS
+            .iter()
+            .find(|m| {
+                arg.value.to_ascii_lowercase().contains(*m)
+                    || arg.datatype.to_ascii_lowercase().contains(*m)
+            })
+            .and_then(|m| HttpMethod::from_str(m).ok())
     }
 
-    fn identify_target_uri(&self) -> Option<String> {
-        self.call_args.first().map(|uri| uri.value.clone())
+    fn identify_target_uri(&self, call_args: &[Argument]) -> Option<String> {
+        call_args.first().map(|uri| uri.value.clone())
+    }
+}
+
+impl Strategy for SpringStrategy {
+    fn identify_restcall(&self, call: &CallStatement, file_path: &str) -> Option<RestCall> {
+        let http_method = self.identify_http_method(&call.arguments)?;
+        let target_uri = self.identify_target_uri(&call.arguments)?;
+
+        let invoked_on = call.invoked_on.clone()?;
+        if invoked_on != "RestTemplate" {
+            return None;
+        }
+
+        Some(RestCall {
+            function_name: call.enclosing_function_name.clone().unwrap_or_default(),
+            function_hash: call.enclosing_function_hash.clone().unwrap_or_default(),
+            call_arguments: call.arguments.clone(),
+            http_method,
+            target_uri,
+            file_path: file_path.to_string(),
+        })
     }
 }

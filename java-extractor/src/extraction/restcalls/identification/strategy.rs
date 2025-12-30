@@ -1,6 +1,9 @@
-use models::HttpMethod;
+use models::{CallStatement, RestCall};
 
-pub trait Strategy<'a> {
-    fn identify_http_method(&self) -> Option<HttpMethod>;
-    fn identify_target_uri(&self) -> Option<String>;
+pub trait Strategy {
+    fn identify_restcall(
+        &self,
+        call_statement: &CallStatement,
+        file_path: &str,
+    ) -> Option<RestCall>;
 }

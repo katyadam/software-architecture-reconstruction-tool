@@ -1,5 +1,13 @@
 use java_extractor::{
-    extraction::{extractor::Extractor, restcalls::extractor::RestCallsExtractor},
+    extraction::{
+        assignments::map::get_assignments_map,
+        calls::{evaluator::evaluate_invocations, extractor::CallStatementsExtractor},
+        extractor::Extractor,
+        restcalls::{
+            identification::spring::SpringStrategy,
+            selection::{selector::Selector, spring::SpringSelector},
+        },
+    },
     s,
 };
 use models::{Argument, HttpMethod, RestCall};
@@ -11,8 +19,13 @@ fn test_spring_restcalls_without_dfa() {
     let filename = s!("./examples/CancelServiceImpl.java");
     let code = load_file(&filename).unwrap();
     let tree = get_tree(&code);
-    let restcalls = RestCallsExtractor.extract(&code, &tree, &filename);
+    let mut calls = CallStatementsExtractor.extract(&code, &tree, &filename);
+    let assignments_map = get_assignments_map(&tree, &code);
+    evaluate_invocations(&mut calls, &assignments_map);
 
+    let restcalls =
+        SpringSelector::new(SpringStrategy::new()).select_restcall_statements(&calls, &filename);
+    println!("{restcalls:?}");
     let expected = vec![
         RestCall {
             function_name: s!("sendEmail(NotifyInfo notifyInfo, HttpHeaders headers)"),
@@ -23,7 +36,7 @@ fn test_spring_restcalls_without_dfa() {
                     value: s!(
                         "notification_service_url + \"/api/v1/notifyservice/notification/order_cancel_success\""
                     ),
-                    datatype: s!("any"),
+                    datatype: s!("String"),
                 },
                 Argument {
                     assigned_variable: s!(""),
@@ -33,7 +46,7 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("any"),
+                    datatype: s!("HttpEntity"),
                 },
                 Argument {
                     assigned_variable: s!(""),
@@ -54,7 +67,7 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("order_service_url + \"/api/v1/orderservice/order\""),
-                    datatype: s!("any"),
+                    datatype: s!("String"),
                 },
                 Argument {
                     assigned_variable: s!(""),
@@ -64,7 +77,7 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("any"),
+                    datatype: s!("HttpEntity"),
                 },
                 Argument {
                     assigned_variable: s!(""),
@@ -83,7 +96,7 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("order_other_service_url + \"/api/v1/orderOtherService/orderOther\""),
-                    datatype: s!("any"),
+                    datatype: s!("String"),
                 },
                 Argument {
                     assigned_variable: s!(""),
@@ -93,7 +106,7 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("any"),
+                    datatype: s!("HttpEntity"),
                 },
                 Argument {
                     assigned_variable: s!(""),
@@ -114,7 +127,7 @@ fn test_spring_restcalls_without_dfa() {
                     value: s!(
                         "inside_payment_service_url + \"/api/v1/inside_pay_service/inside_payment/drawback/\" + userId + \"/\" + money"
                     ),
-                    datatype: s!("any"),
+                    datatype: s!("String"),
                 },
                 Argument {
                     assigned_variable: s!(""),
@@ -124,7 +137,7 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("any"),
+                    datatype: s!("HttpEntity"),
                 },
                 Argument {
                     assigned_variable: s!(""),
@@ -145,7 +158,7 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("user_service_url + \"/api/v1/userservice/users/id/\" + orderId"),
-                    datatype: s!("any"),
+                    datatype: s!("String"),
                 },
                 Argument {
                     assigned_variable: s!(""),
@@ -155,7 +168,7 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("any"),
+                    datatype: s!("HttpEntity"),
                 },
                 Argument {
                     assigned_variable: s!(""),
@@ -176,7 +189,7 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("order_service_url + \"/api/v1/orderservice/order/\" + orderId"),
-                    datatype: s!("any"),
+                    datatype: s!("String"),
                 },
                 Argument {
                     assigned_variable: s!(""),
@@ -186,7 +199,7 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("any"),
+                    datatype: s!("HttpEntity"),
                 },
                 Argument {
                     assigned_variable: s!(""),
@@ -209,7 +222,7 @@ fn test_spring_restcalls_without_dfa() {
                     value: s!(
                         "order_other_service_url + \"/api/v1/orderOtherService/orderOther/\" + orderId"
                     ),
-                    datatype: s!("any"),
+                    datatype: s!("String"),
                 },
                 Argument {
                     assigned_variable: s!(""),
@@ -219,7 +232,7 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("any"),
+                    datatype: s!("HttpEntity"),
                 },
                 Argument {
                     assigned_variable: s!(""),
