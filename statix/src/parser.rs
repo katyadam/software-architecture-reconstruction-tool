@@ -5,6 +5,18 @@ use crate::{
     error::ParseError,
 };
 
+pub fn find_method_nodes(root: Node) -> Vec<Node> {
+    let mut methods = Vec::new();
+    let mut cursor = root.walk();
+    for child in root.named_children(&mut cursor) {
+        if child.kind() == "method_declaration" {
+            methods.push(child);
+        }
+        methods.extend(find_method_nodes(child));
+    }
+    methods
+}
+
 pub fn parse_method(node: Node, code: &str) -> Result<MethodAst, ParseError> {
     let name = node
         .child_by_field_name("name")

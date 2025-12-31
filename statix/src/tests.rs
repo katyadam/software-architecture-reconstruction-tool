@@ -1,7 +1,11 @@
+use std::collections::HashMap;
+
 use tree_sitter::Node;
 
 use crate::{
-    parser::parse_method,
+    ast::MethodAst,
+    parser::{find_method_nodes, parse_method},
+    symbolic::eval_method,
     util::{get_tree, load_file},
 };
 
@@ -14,23 +18,11 @@ fn testing() {
     let tree = get_tree(&code);
     let root_node = tree.root_node();
     let method_nodes = find_method_nodes(root_node);
-
+    let mut methods_map: HashMap<String, MethodAst> = HashMap::new();
     for method_node in method_nodes {
         let method_ast = parse_method(method_node, &code).unwrap();
-        println!("Parsed method: {:#?}", method_ast);
+        methods_map.insert(method_ast.name.clone(), method_ast.clone());
     }
-}
-
-fn find_method_nodes(root: Node) -> Vec<Node> {
-    let mut methods = Vec::new();
-    let mut cursor = root.walk();
-
-    for child in root.named_children(&mut cursor) {
-        if child.kind() == "method_declaration" {
-            methods.push(child);
-        }
-        methods.extend(find_method_nodes(child));
-    }
-
-    methods
+    let res_env = eval_method("drawbackMoney", &methods_map);
+    println!("{res_env:#?}");
 }
