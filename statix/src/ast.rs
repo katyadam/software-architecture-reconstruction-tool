@@ -23,8 +23,20 @@ pub enum Stmt {
 }
 
 #[derive(Clone, Debug)]
+pub struct Parameter {
+    pub name: String,
+    pub datatype: String,
+}
+
+impl Parameter {
+    pub fn new(name: String, datatype: String) -> Self {
+        Self { name, datatype }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct MethodAst {
     pub header: String,
-    pub params: Vec<String>,
+    pub params: Vec<Parameter>,
     pub body: Vec<Stmt>,
 }

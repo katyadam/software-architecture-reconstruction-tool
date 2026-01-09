@@ -1,7 +1,7 @@
 use tree_sitter::Node;
 
 use crate::{
-    ast::{Expr, MethodAst, Stmt},
+    ast::{Expr, MethodAst, Parameter, Stmt},
     error::ParseError,
 };
 
@@ -51,18 +51,25 @@ pub fn parse_method(node: Node, code: &str) -> Result<MethodAst, ParseError> {
     })
 }
 
-fn parse_parameters(node: Node, source: &str) -> Result<Vec<String>, ParseError> {
+fn parse_parameters(node: Node, source: &str) -> Result<Vec<Parameter>, ParseError> {
     node.named_children(&mut node.walk())
         .filter(|n| n.kind() == "formal_parameter")
         .map(|param| {
-            let name_node = param
+            let name = param
                 .child_by_field_name("name")
-                .ok_or(ParseError::FieldNotFound("parameter name".to_string()))?;
-            let name_text = name_node
+                .ok_or(ParseError::FieldNotFound("parameter name".to_string()))?
                 .utf8_text(source.as_bytes())
                 .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
                 .to_string();
-            Ok(name_text)
+
+            let datatype = param
+                .child_by_field_name("type")
+                .ok_or(ParseError::FieldNotFound("parameter name".to_string()))?
+                .utf8_text(source.as_bytes())
+                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
+                .to_string();
+
+            Ok(Parameter::new(name, datatype))
         })
         .collect()
 }

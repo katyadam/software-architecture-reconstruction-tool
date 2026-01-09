@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::{
     ast::{Expr, MethodAst, Stmt},
     error::EvalError,
+    method_match::find_closest_method,
 };
 
 #[derive(Debug, Clone)]
@@ -26,8 +27,8 @@ impl SymVal {
     }
 }
 
-type VarName = String;
-type VarType = String;
+pub type VarName = String;
+pub type VarType = String;
 type Env = HashMap<VarName, (VarType, SymVal)>;
 
 fn update_env(env: &mut Env, name: &VarName, new_val: SymVal) -> Result<(), EvalError> {
@@ -47,6 +48,10 @@ pub fn eval_method(
 ) -> Result<Env, EvalError> {
     let mut env: Env = HashMap::new();
     let method = methods.get(method_name).expect("method should be in map");
+
+    for param in method.params.iter() {
+        env.insert(param.name.clone(), (param.datatype.clone(), SymVal::Empty));
+    }
     for stmt in &method.body {
         eval_stmt(stmt, &mut env, &methods)?;
     }
@@ -85,9 +90,12 @@ fn eval_expr(
 ) -> Result<(VarType, SymVal), EvalError> {
     match expr {
         Expr::Literal(lit) => Ok(("String".to_string(), SymVal::Literal(lit.clone()))),
-        Expr::Var(name) => env.get(name).cloned().ok_or(EvalError::NonSenseEvaluation(
-            "variable not found in environment".to_string(),
-        )),
+        Expr::Var(name) => env
+            .get(name)
+            .cloned()
+            .ok_or(EvalError::NonSenseEvaluation(format!(
+                "variable not found in environment {name}"
+            ))),
         Expr::Concat(l, r) => {
             let (left_type, left) = eval_expr(l, env, methods)?;
             let (right_type, right) = eval_expr(r, env, methods)?;
@@ -98,8 +106,16 @@ fn eval_expr(
             ))
         }
         Expr::Call { name, args } => {
-            if let Some(method) = methods.get(name) {
-                inline_method(method, args, env, methods)
+            let param_types: Vec<VarType> = args
+                .iter()
+                .map(|p| eval_expr(p, env, methods).map(|(t, _v)| t))
+                .collect::<Result<Vec<VarType>, EvalError>>()?;
+            let closest = find_closest_method(methods, &name, &param_types);
+            println!("{closest:?}");
+            if let Some(method) = closest
+                && let Some(method_ast) = methods.get(&method)
+            {
+                inline_method(method_ast, args, env, methods)
             } else {
                 Ok(("void".to_string(), SymVal::Empty))
             }
@@ -113,12 +129,12 @@ fn inline_method(
     args: &[Expr],
     caller_env: &mut Env,
     methods: &HashMap<String, MethodAst>,
-) -> Result<(String, SymVal), EvalError> {
+) -> Result<(VarType, SymVal), EvalError> {
     let mut local_env = Env::new();
 
     for (param, arg) in method.params.iter().zip(args) {
         let evaluated_param = eval_expr(arg, caller_env, methods)?;
-        local_env.insert(param.clone(), evaluated_param);
+        local_env.insert(param.name.clone(), evaluated_param);
     }
 
     for stmt in &method.body {
