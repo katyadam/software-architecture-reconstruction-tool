@@ -18,6 +18,13 @@ pub fn find_method_nodes(root: Node) -> Vec<Node> {
 }
 
 pub fn parse_method(node: Node, code: &str) -> Result<MethodAst, ParseError> {
+    let return_type = node
+        .child_by_field_name("type")
+        .ok_or(ParseError::FieldNotFound("tyoe".to_string()))?
+        .utf8_text(code.as_bytes())
+        .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
+        .to_string();
+
     let name = node
         .child_by_field_name("name")
         .ok_or(ParseError::FieldNotFound("name".to_string()))?
@@ -28,14 +35,20 @@ pub fn parse_method(node: Node, code: &str) -> Result<MethodAst, ParseError> {
     let params_node = node
         .child_by_field_name("parameters")
         .ok_or(ParseError::FieldNotFound("parameters".to_string()))?;
+
     let params = parse_parameters(params_node, code)?;
+    let params_types = parse_parameters_to_datatypes(params_node, code)?;
 
     let body_node = node
         .child_by_field_name("body")
         .ok_or(ParseError::FieldNotFound("body".to_string()))?;
-    let body = parse_block(body_node, code)?;
 
-    Ok(MethodAst { name, params, body })
+    let body = parse_block(body_node, code)?;
+    Ok(MethodAst {
+        header: return_type + " " + &name + &format!("({})", params_types.join(",")),
+        params,
+        body,
+    })
 }
 
 fn parse_parameters(node: Node, source: &str) -> Result<Vec<String>, ParseError> {
@@ -50,6 +63,22 @@ fn parse_parameters(node: Node, source: &str) -> Result<Vec<String>, ParseError>
                 .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
                 .to_string();
             Ok(name_text)
+        })
+        .collect()
+}
+
+fn parse_parameters_to_datatypes(node: Node, source: &str) -> Result<Vec<String>, ParseError> {
+    node.named_children(&mut node.walk())
+        .filter(|n| n.kind() == "formal_parameter")
+        .map(|param| {
+            let type_node = param
+                .child_by_field_name("type")
+                .ok_or(ParseError::FieldNotFound("parameter type".to_string()))?;
+            let type_text = type_node
+                .utf8_text(source.as_bytes())
+                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
+                .to_string();
+            Ok(type_text)
         })
         .collect()
 }
@@ -70,15 +99,51 @@ fn parse_stmt(node: Node, source: &str) -> Result<Stmt, ParseError> {
             Ok(Stmt::Return(expr))
         }
 
+        "expression_statement" => {
+            let child_node = node.child(0).ok_or(ParseError::UnsupportedNode(
+                "expression_statement should have some child".to_string(),
+            ))?;
+
+            match child_node.kind() {
+                "assignment_expression" => {
+                    let name_node =
+                        child_node
+                            .child_by_field_name("left")
+                            .ok_or(ParseError::FieldNotFound(
+                                "assignment_expression -> left".to_string(),
+                            ))?;
+                    let name = source[name_node.start_byte()..name_node.end_byte()].to_string();
+
+                    let value_node = child_node.child_by_field_name("right").ok_or(
+                        ParseError::FieldNotFound("assignment_expression -> right".to_string()),
+                    )?;
+
+                    let value = parse_expr(value_node, source)?;
+
+                    Ok(Stmt::Assignment { name, value })
+                }
+                _ => Ok(Stmt::Empty),
+            }
+        }
         "local_variable_declaration" => {
             let declarator = node
                 .child_by_field_name("declarator")
                 .or_else(|| node.named_child(0))
                 .ok_or(ParseError::FieldNotFound("variable declarator".to_string()))?;
 
+            let datatype = node
+                .child_by_field_name("type")
+                .ok_or(ParseError::FieldNotFound(
+                    "variable declaration datatype".to_string(),
+                ))?
+                .utf8_text(source.as_bytes())
+                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
+                .to_string();
+
             let name_node = declarator
                 .child_by_field_name("name")
                 .ok_or(ParseError::FieldNotFound("variable name".to_string()))?;
+
             let name = name_node
                 .utf8_text(source.as_bytes())
                 .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
@@ -90,8 +155,9 @@ fn parse_stmt(node: Node, source: &str) -> Result<Stmt, ParseError> {
                 None
             };
 
-            Ok(Stmt::Assign {
+            Ok(Stmt::Declaration {
                 name,
+                datatype,
                 value: value.ok_or(ParseError::FieldNotFound("variable value".to_string()))?,
             })
         }
@@ -103,6 +169,13 @@ fn parse_stmt(node: Node, source: &str) -> Result<Stmt, ParseError> {
 fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
     match node.kind() {
         "string_literal" => {
+            let text = node
+                .utf8_text(source.as_bytes())
+                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?;
+            Ok(Expr::Literal(strip_quotes(text)))
+        }
+
+        "decimal_integer_literal" => {
             let text = node
                 .utf8_text(source.as_bytes())
                 .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?;
