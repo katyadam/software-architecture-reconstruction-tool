@@ -30,6 +30,17 @@ type VarName = String;
 type VarType = String;
 type Env = HashMap<VarName, (VarType, SymVal)>;
 
+fn update_env(env: &mut Env, name: &VarName, new_val: SymVal) -> Result<(), EvalError> {
+    if let Some((_type, old_val)) = env.get_mut(name) {
+        *old_val = new_val;
+        Ok(())
+    } else {
+        Err(EvalError::NonSenseEvaluation(
+            "variable that should be updated by assignment, was not declared before".to_string(),
+        ))
+    }
+}
+
 pub fn eval_method(
     method_name: &str,
     methods: &HashMap<String, MethodAst>,
@@ -57,7 +68,11 @@ fn eval_stmt(
             let evaluated = eval_expr(value, env, methods)?;
             env.insert(name.to_string(), (datatype.to_string(), evaluated.1));
         }
-        _ => {}
+        Stmt::Assignment { name, value } => {
+            let evaluated = eval_expr(value, env, methods)?;
+            update_env(env, name, evaluated.1)?;
+        }
+        _ => (),
     };
 
     Ok(())
