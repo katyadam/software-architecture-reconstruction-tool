@@ -9,14 +9,22 @@ pub enum Expr {
 
 #[derive(Clone, Debug)]
 pub enum Stmt {
-    Assign { name: String, value: Expr },
+    Declaration {
+        name: String,
+        datatype: String,
+        value: Expr,
+    },
+    Assignment {
+        name: String,
+        value: Expr,
+    },
     Return(Expr),
     Empty,
 }
 
 #[derive(Clone, Debug)]
 pub struct MethodAst {
-    pub name: String,
+    pub header: String,
     pub params: Vec<String>,
     pub body: Vec<Stmt>,
 }

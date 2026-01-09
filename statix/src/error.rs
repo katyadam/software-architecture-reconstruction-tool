@@ -14,3 +14,9 @@ pub enum ParseError {
     #[error("operator: {0} is not supported in the tree-sitter concrete syntax tree")]
     UnsupportedOperator(String),
 }
+
+#[derive(Error, Debug)]
+pub enum EvalError {
+    #[error("evaluation stumbled upon nonsense: {0}")]
+    NonSenseEvaluation(String),
+}
