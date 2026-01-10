@@ -3,7 +3,8 @@ public class CancelServiceImpl implements CancelService {
     private RestTemplate restTemplate;
 
     private String getServiceUrl(String serviceName) {
-        return "http://" + serviceName;
+        String a = "aa";
+        return "http://" + serviceName + " " + a;
     }
 
     private String decideServiceUrl(String serviceName, boolean isOverSsl) {

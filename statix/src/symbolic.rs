@@ -6,32 +6,11 @@ use crate::{
     method_match::find_closest_method,
 };
 
-#[derive(Debug, Clone)]
-pub enum SymVal {
-    Literal(String),
-    Var(String),
-    Concat(Vec<SymVal>),
-    Empty,
-}
-
-impl SymVal {
-    pub fn new_concat(parts: Vec<SymVal>) -> SymVal {
-        let mut flat = Vec::new();
-        for p in parts {
-            match p {
-                SymVal::Concat(inner) => flat.extend(inner),
-                other => flat.push(other),
-            }
-        }
-        SymVal::Concat(flat)
-    }
-}
-
 pub type VarName = String;
 pub type VarType = String;
-type Env = HashMap<VarName, (VarType, SymVal)>;
+type Env = HashMap<VarName, (VarType, Expr)>;
 
-fn update_env(env: &mut Env, name: &VarName, new_val: SymVal) -> Result<(), EvalError> {
+fn update_env(env: &mut Env, name: &VarName, new_val: Expr) -> Result<(), EvalError> {
     if let Some((_type, old_val)) = env.get_mut(name) {
         *old_val = new_val;
         Ok(())
@@ -50,7 +29,7 @@ pub fn eval_method(
     let method = methods.get(method_name).expect("method should be in map");
 
     for param in method.params.iter() {
-        env.insert(param.name.clone(), (param.datatype.clone(), SymVal::Empty));
+        env.insert(param.name.clone(), (param.datatype.clone(), Expr::Empty));
     }
     for stmt in &method.body {
         eval_stmt(stmt, &mut env, &methods)?;
@@ -87,9 +66,9 @@ fn eval_expr(
     expr: &Expr,
     env: &mut Env,
     methods: &HashMap<String, MethodAst>,
-) -> Result<(VarType, SymVal), EvalError> {
+) -> Result<(VarType, Expr), EvalError> {
     match expr {
-        Expr::Literal(lit) => Ok(("String".to_string(), SymVal::Literal(lit.clone()))),
+        Expr::Literal(lit) => Ok(("String".to_string(), Expr::Literal(lit.clone()))),
         Expr::Var(name) => env
             .get(name)
             .cloned()
@@ -100,9 +79,17 @@ fn eval_expr(
             let (left_type, left) = eval_expr(l, env, methods)?;
             let (right_type, right) = eval_expr(r, env, methods)?;
 
+            let concat_datatype = decide_concat_datatype(&left_type, &right_type);
+
+            if concat_datatype == "String" {
+                if let (Expr::Literal(ls), Expr::Literal(rs)) = (&left, &right) {
+                    return Ok((concat_datatype, Expr::Literal(format!("{}{}", ls, rs))));
+                }
+            }
+
             Ok((
-                decide_concat_datatype(&left_type, &right_type),
-                SymVal::new_concat(vec![left, right]),
+                concat_datatype,
+                Expr::Concat(Box::new(left), Box::new(right)),
             ))
         }
         Expr::Call { name, args } => {
@@ -116,10 +103,10 @@ fn eval_expr(
             {
                 inline_method(method_ast, args, env, methods)
             } else {
-                Ok(("void".to_string(), SymVal::Empty))
+                Ok(("void".to_string(), Expr::Empty))
             }
         }
-        Expr::Empty => Ok(("void".to_string(), SymVal::Empty)),
+        Expr::Empty => Ok(("void".to_string(), Expr::Empty)),
     }
 }
 
@@ -128,7 +115,7 @@ fn inline_method(
     args: &[Expr],
     caller_env: &mut Env,
     methods: &HashMap<String, MethodAst>,
-) -> Result<(VarType, SymVal), EvalError> {
+) -> Result<(VarType, Expr), EvalError> {
     let mut local_env = Env::new();
 
     for (param, arg) in method.params.iter().zip(args) {
@@ -153,7 +140,7 @@ fn inline_method(
         }
     }
 
-    Ok(("void".to_string(), SymVal::Empty))
+    Ok(("void".to_string(), Expr::Empty))
 }
 
 fn decide_concat_datatype(left: &str, right: &str) -> String {
