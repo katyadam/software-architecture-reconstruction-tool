@@ -169,12 +169,57 @@ fn parse_stmt(node: Node, source: &str) -> Result<Stmt, ParseError> {
             })
         }
 
+        "if_statement" => {
+            let condition_node =
+                node.child_by_field_name("condition")
+                    .ok_or(ParseError::FieldNotFound(
+                        "if statement should have condition".to_string(),
+                    ))?;
+            let condition = parse_expr(condition_node, source)?;
+
+            let then_branch_node =
+                node.child_by_field_name("consequence")
+                    .ok_or(ParseError::FieldNotFound(
+                        "if statement should have then block".to_string(),
+                    ))?;
+            let then_branch = parse_stmt_or_block(then_branch_node, source)?;
+
+            let else_branch: Option<Vec<Stmt>> =
+                if let Some(n) = node.child_by_field_name("alternative") {
+                    let else_statements = parse_stmt_or_block(n, source)?;
+                    Some(else_statements)
+                } else {
+                    None
+                };
+
+            Ok(Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            })
+        }
+
         _ => Ok(Stmt::Empty),
+    }
+}
+
+fn parse_stmt_or_block(node: Node, source: &str) -> Result<Vec<Stmt>, ParseError> {
+    if node.kind() == "block" {
+        parse_block(node, source)
+    } else {
+        Ok(vec![parse_stmt(node, source)?])
     }
 }
 
 fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
     match node.kind() {
+        "parenthesized_expression" => {
+            let inner_node = node.named_child(0).ok_or(ParseError::FieldNotFound(
+                "parenthesized expression content".to_string(),
+            ))?;
+            parse_expr(inner_node, source)
+        }
+
         "string_literal" => {
             let text = node
                 .utf8_text(source.as_bytes())

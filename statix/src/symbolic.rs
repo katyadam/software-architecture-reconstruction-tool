@@ -111,7 +111,6 @@ fn eval_expr(
                 .map(|p| eval_expr(p, env, methods).map(|(t, _v)| t))
                 .collect::<Result<Vec<VarType>, EvalError>>()?;
             let closest = find_closest_method(methods, &name, &param_types);
-            println!("{closest:?}");
             if let Some(method) = closest
                 && let Some(method_ast) = methods.get(&method)
             {
