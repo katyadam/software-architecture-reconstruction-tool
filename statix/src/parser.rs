@@ -214,6 +214,8 @@ fn parse_stmt_or_block(node: Node, source: &str) -> Result<Vec<Stmt>, ParseError
 
 fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
     match node.kind() {
+        "true" => Ok(Expr::Literal("true".to_string())),
+        "false" => Ok(Expr::Literal("false".to_string())),
         "parenthesized_expression" => {
             let inner_node = node.named_child(0).ok_or(ParseError::FieldNotFound(
                 "parenthesized expression content".to_string(),

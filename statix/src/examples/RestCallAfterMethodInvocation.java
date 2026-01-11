@@ -14,6 +14,12 @@ public class CancelServiceImpl implements CancelService {
             return "http://" + serviceName;
     }
 
+    void tryDecide() {
+        boolean overSsl = true;
+        String res = decideServiceUrl("service" + overSsl, overSsl);
+        return res;
+    }
+
     public boolean drawbackMoney(String money, String userId, HttpHeaders headers) {
         CancelServiceImpl.LOGGER.info("[drawbackMoney][Draw Back Money]");
 

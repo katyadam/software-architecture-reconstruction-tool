@@ -127,7 +127,6 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
                     .env
                     .insert(param.name.clone(), (param.datatype.clone(), val));
             }
-
             let result = local_evaluator.visit_statements(&method_ast.body)?;
 
             Ok((
@@ -141,11 +140,22 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
 
     fn visit_ite(
         &mut self,
-        _cond: &Expr,
+        cond: &Expr,
         then: &Expr,
-        _els: &Expr,
+        els: &Expr,
     ) -> Result<Self::Out, Self::Error> {
-        Ok(("any".to_owned(), then.clone()))
+        match cond {
+            Expr::Literal(lit) => {
+                if lit == "true" {
+                    Ok(("any".to_owned(), then.clone()))
+                } else if lit == "false" {
+                    Ok(("any".to_owned(), els.clone()))
+                } else {
+                    Ok(("any".to_owned(), then.clone()))
+                }
+            }
+            _ => Ok(("any".to_owned(), then.clone())),
+        }
     }
 
     fn visit_statements(&mut self, stmts: &[Stmt]) -> Result<Option<Expr>, EvalError> {
