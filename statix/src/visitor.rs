@@ -6,13 +6,14 @@ use crate::{
 pub trait Visitor {
     type Out;
     type Error;
+    // Join operation
+    fn join(&mut self, cond: &Expr, then: &Expr, els: &Expr) -> Result<Self::Out, Self::Error>;
+
     // Expression visits
     fn visit_expr(&mut self, expr: &Expr) -> Result<Self::Out, Self::Error>;
     fn visit_literal(&mut self, lit: &str) -> Result<Self::Out, Self::Error>;
     fn visit_var(&mut self, name: &str) -> Result<Self::Out, Self::Error>;
     fn visit_concat(&mut self, left: &Expr, right: &Expr) -> Result<Self::Out, Self::Error>;
-    fn visit_ite(&mut self, cond: &Expr, then: &Expr, els: &Expr)
-    -> Result<Self::Out, Self::Error>;
     fn visit_call(&mut self, name: &str, args: &[Expr]) -> Result<Self::Out, Self::Error>;
 
     // Statement visits

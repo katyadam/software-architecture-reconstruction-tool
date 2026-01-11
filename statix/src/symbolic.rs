@@ -58,6 +58,31 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
 
     type Error = EvalError;
 
+    fn join(&mut self, cond: &Expr, then: &Expr, els: &Expr) -> Result<Self::Out, Self::Error> {
+        match cond {
+            Expr::Literal(lit) => {
+                if lit == "true" {
+                    Ok(("any".to_owned(), then.clone()))
+                } else if lit == "false" {
+                    Ok(("any".to_owned(), els.clone()))
+                } else {
+                    Ok((
+                        "any".to_owned(),
+                        Expr::Joined {
+                            vals: vec![then.clone(), els.clone()],
+                        },
+                    ))
+                }
+            }
+            _ => Ok((
+                "any".to_owned(),
+                Expr::Joined {
+                    vals: vec![then.clone(), els.clone()],
+                },
+            )),
+        }
+    }
+
     fn visit_expr(&mut self, expr: &Expr) -> Result<Self::Out, Self::Error> {
         match expr {
             Expr::Literal(lit) => self.visit_literal(lit),
@@ -65,11 +90,7 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             Expr::Concat(left, right) => self.visit_concat(left, right),
             Expr::Call { name, args } => self.visit_call(name, args),
             Expr::Empty => Ok(("void".to_string(), Expr::Empty)),
-            Expr::ITE {
-                cond,
-                then_val,
-                else_val,
-            } => self.visit_ite(cond, then_val, else_val),
+            Expr::Joined { vals } => Ok(("any".to_string(), Expr::Joined { vals: vals.clone() })),
         }
     }
 
@@ -135,26 +156,6 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             ))
         } else {
             Ok(("void".to_string(), Expr::Empty))
-        }
-    }
-
-    fn visit_ite(
-        &mut self,
-        cond: &Expr,
-        then: &Expr,
-        els: &Expr,
-    ) -> Result<Self::Out, Self::Error> {
-        match cond {
-            Expr::Literal(lit) => {
-                if lit == "true" {
-                    Ok(("any".to_owned(), then.clone()))
-                } else if lit == "false" {
-                    Ok(("any".to_owned(), els.clone()))
-                } else {
-                    Ok(("any".to_owned(), then.clone()))
-                }
-            }
-            _ => Ok(("any".to_owned(), then.clone())),
         }
     }
 
@@ -231,22 +232,19 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             let (_, e_val) = else_evaluator.env.get(&key).unwrap();
 
             if t_val != e_val {
-                let merged = Expr::ITE {
-                    cond: Box::new(sym_cond.clone()),
-                    then_val: Box::new(t_val.clone()),
-                    else_val: Box::new(e_val.clone()),
-                };
-                self.env.get_mut(&key).unwrap().1 = merged;
+                let (_, evaluated_ite) = self.join(&sym_cond, t_val, e_val)?;
+                self.env.get_mut(&key).unwrap().1 = evaluated_ite;
             }
         }
 
         // 5. JOIN Return Values: If branches return, the IF block returns symbolically
         if then_ret.is_some() || else_ret.is_some() {
-            return Ok(Some(Expr::ITE {
-                cond: Box::new(sym_cond),
-                then_val: Box::new(then_ret.unwrap_or(Expr::Empty)),
-                else_val: Box::new(else_ret.unwrap_or(Expr::Empty)),
-            }));
+            let (_, evaluated_ite) = self.join(
+                &sym_cond,
+                &then_ret.unwrap_or(Expr::Empty),
+                &else_ret.unwrap_or(Expr::Empty),
+            )?;
+            return Ok(Some(evaluated_ite));
         }
 
         Ok(None)

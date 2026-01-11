@@ -14,9 +14,18 @@ public class CancelServiceImpl implements CancelService {
             return "http://" + serviceName;
     }
 
+    private String decideServiceUrl(String serviceName) {
+        if (1 == 1)
+            return "https://" + serviceName;
+        else
+            return "http://" + serviceName;
+    }
+
+
     void tryDecide() {
         boolean overSsl = true;
-        String res = decideServiceUrl("service" + overSsl, overSsl);
+        String res = decideServiceUrl("service", overSsl);
+        String joinedRes = decideServiceUrl("service");
         return res;
     }
 

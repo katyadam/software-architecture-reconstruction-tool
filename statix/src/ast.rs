@@ -3,16 +3,9 @@ pub enum Expr {
     Literal(String),
     Var(String),
     Concat(Box<Expr>, Box<Expr>),
-    Call {
-        name: String,
-        args: Vec<Expr>,
-    },
+    Call { name: String, args: Vec<Expr> },
     Empty,
-    ITE {
-        cond: Box<Expr>,
-        then_val: Box<Expr>,
-        else_val: Box<Expr>,
-    },
+    Joined { vals: Vec<Expr> },
 }
 
 #[derive(Clone, Debug)]
