@@ -133,6 +133,10 @@ fn inline_method(
                 let evaluated_expr = eval_expr(value, &mut local_env, methods)?;
                 local_env.insert(name.clone(), (datatype.to_string(), evaluated_expr.1));
             }
+            Stmt::Assignment { name, value } => {
+                let evaluated_expr = eval_expr(value, &mut local_env, methods)?;
+                update_env(&mut local_env, name, evaluated_expr.1)?;
+            }
             Stmt::Return(expr) => {
                 return eval_expr(expr, &mut local_env, methods);
             }
