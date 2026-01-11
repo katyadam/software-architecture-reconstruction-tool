@@ -45,6 +45,7 @@ pub fn parse_method(node: Node, code: &str) -> Result<MethodAst, ParseError> {
 
     let body = parse_block(body_node, code)?;
     Ok(MethodAst {
+        return_type: return_type.clone(),
         header: return_type + " " + &name + &format!("({})", params_types.join(",")),
         params,
         body,
@@ -164,7 +165,7 @@ fn parse_stmt(node: Node, source: &str) -> Result<Stmt, ParseError> {
 
             Ok(Stmt::Declaration {
                 name,
-                datatype,
+                dtype: datatype,
                 value: value.ok_or(ParseError::FieldNotFound("variable value".to_string()))?,
             })
         }

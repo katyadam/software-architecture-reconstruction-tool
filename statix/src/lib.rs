@@ -6,3 +6,4 @@ pub mod symbolic;
 pub mod method_match;
 mod tests;
 pub mod util;
+pub mod visitor;
