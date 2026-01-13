@@ -9,7 +9,15 @@ pub fn find_closest_method(
 ) -> Option<String> {
     let mut highest: usize = 0;
     let mut winner: Option<String> = None;
+    let mangled_name = mangle_header(name);
     for (header, _) in methods {
+        // Prefer match by using name mangling
+        if let (Some(m_our), Some(m_to_cmp)) = (&mangled_name, &mangle_header(header)) {
+            if m_our == m_to_cmp {
+                return Some(header.clone());
+            }
+        }
+        // Fallback to match by highest matched params and matching name
         if let Some((cur_name, cur_params)) = parse_method_header_manual(&header) {
             if cur_name != name {
                 continue;
@@ -27,6 +35,14 @@ pub fn find_closest_method(
     }
 
     winner
+}
+
+fn mangle_header(header: &str) -> Option<String> {
+    if let Some((name, params)) = parse_method_header_manual(header) {
+        return Some(name + "(" + &params.join(",") + ")");
+    }
+
+    None
 }
 
 fn parse_method_header_manual(header: &str) -> Option<(String, Vec<VarType>)> {
