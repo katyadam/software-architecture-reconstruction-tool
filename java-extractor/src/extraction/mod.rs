@@ -1,10 +1,19 @@
-use std::sync::Arc;
-
 use models::{CodeElementsAggregate, api::ExtractionError};
-use tokio::task;
 use tree_sitter::Parser;
 
-use crate::extraction::{entities::extractor::EntitiesExtractor, extractor::Extractor};
+use crate::extraction::{
+    assignments::map::get_assignments_map,
+    callables::extractor::CallablesExtractor,
+    calls::{evaluator::evaluate_invocations, extractor::CallStatementsExtractor},
+    endpoints::extractor::EndpointsExtractor,
+    entities::{evaluator::evaluate_entity_fields, extractor::EntitiesExtractor},
+    extractor::Extractor,
+    imports::extractor::ImportsExtractor,
+    restcalls::{
+        identification::spring::SpringStrategy,
+        selection::{selector::Selector, spring::SpringSelector},
+    },
+};
 pub mod assignments;
 pub mod callables;
 pub mod calls;
@@ -23,36 +32,53 @@ pub async fn extract(
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_java::LANGUAGE.into())
-        .map_err(|_| ExtractionError::Process("Error loading Java Grammar".to_string()))?;
+        .map_err(|_| ExtractionError::Process("Error loading Python grammar".into()))?;
 
-    let tree = parser.parse(code, None).ok_or(ExtractionError::Process(
-        "Error parsing code into Concrete Syntax Tree (CST)".to_string(),
-    ))?;
+    let tree = parser
+        .parse(code, None)
+        .ok_or_else(|| ExtractionError::Process("Error parsing code".into()))?;
 
-    let owned_code = code.to_owned();
-    let owned_file_name = file_name.to_owned();
+    let mut assignments = None;
+    let mut imports = None;
+    let mut endpoints = None;
+    let mut entities = None;
+    let mut callables = None;
+    let mut calls = None;
 
-    let tree_arc = Arc::new(tree);
-    let code_arc = Arc::new(owned_code);
-    let file_name_arc = Arc::new(owned_file_name);
-
-    let entities_handle = task::spawn_blocking({
-        let tree = Arc::clone(&tree_arc);
-        let code = Arc::clone(&code_arc);
-        let file_name = Arc::clone(&file_name_arc);
-        move || EntitiesExtractor.extract(&code, &tree, &file_name)
+    rayon::scope(|s| {
+        s.spawn(|_| assignments = Some(get_assignments_map(&tree, code)));
+        s.spawn(|_| imports = Some(ImportsExtractor.extract(code, &tree, file_name)));
+        s.spawn(|_| endpoints = Some(EndpointsExtractor.extract(code, &tree, file_name)));
+        s.spawn(|_| entities = Some(EntitiesExtractor.extract(code, &tree, file_name)));
+        s.spawn(|_| callables = Some(CallablesExtractor.extract(code, &tree, file_name)));
+        s.spawn(|_| calls = Some(CallStatementsExtractor.extract(code, &tree, file_name)));
     });
 
-    let mut entities = entities_handle
-        .await
-        .map_err(|_| ExtractionError::Process("Entities parsing failed".to_string()))?;
+    let assignments = assignments
+        .ok_or_else(|| ExtractionError::Process("Assignments extraction failed".into()))?;
+
+    let imports =
+        imports.ok_or_else(|| ExtractionError::Process("Imports extraction failed".into()))?;
+
+    let endpoints =
+        endpoints.ok_or_else(|| ExtractionError::Process("Endpoints extraction failed".into()))?;
+
+    let mut entities =
+        entities.ok_or_else(|| ExtractionError::Process("Entities extraction failed".into()))?;
+
+    let callables =
+        callables.ok_or_else(|| ExtractionError::Process("Callables extraction failed".into()))?;
+
+    let mut calls =
+        calls.ok_or_else(|| ExtractionError::Process("Calls extraction failed".into()))?;
+
+    // Post-processing / evaluation
+    evaluate_entity_fields(&imports, &mut entities);
+    evaluate_invocations(&mut calls, &assignments);
+    let restcalls =
+        SpringSelector::new(SpringStrategy::new()).select_restcall_statements(&calls, &file_name);
 
     Ok(CodeElementsAggregate::new(
-        vec![],
-        entities,
-        vec![],
-        vec![],
-        vec![],
-        vec![],
+        imports, entities, endpoints, restcalls, callables, calls,
     ))
 }

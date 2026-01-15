@@ -2093,6 +2093,7 @@ dependencies = [
  "log",
  "models",
  "once_cell",
+ "rayon",
  "regex",
  "sha2",
  "tokio",

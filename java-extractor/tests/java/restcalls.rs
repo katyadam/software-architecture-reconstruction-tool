@@ -25,7 +25,6 @@ fn test_spring_restcalls_without_dfa() {
 
     let restcalls =
         SpringSelector::new(SpringStrategy::new()).select_restcall_statements(&calls, &filename);
-    println!("{restcalls:?}");
     let expected = vec![
         RestCall {
             function_name: s!("sendEmail(NotifyInfo notifyInfo, HttpHeaders headers)"),
