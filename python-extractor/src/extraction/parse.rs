@@ -1,7 +1,4 @@
-use std::sync::Arc;
-
 use models::{CodeElementsAggregate, api::ExtractionError};
-use tokio::task;
 use tree_sitter::Parser;
 
 use crate::extraction::{
@@ -19,115 +16,60 @@ pub async fn parse(code: &str, file_name: &str) -> Result<CodeElementsAggregate,
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_python::LANGUAGE.into())
-        .map_err(|_| ExtractionError::Process("Error loading Python Grammar".to_string()))?;
+        .map_err(|_| ExtractionError::Process("Error loading Python grammar".into()))?;
 
     let tree = parser
         .parse(code, None)
-        .ok_or(ExtractionError::Process("Error parsing code".to_string()))?;
+        .ok_or_else(|| ExtractionError::Process("Error parsing code".into()))?;
 
-    let owned_code = code.to_owned();
-    let owned_file_name = file_name.to_owned();
+    let params = ExtractParams::new(&tree, code).file_name(file_name);
 
-    let tree_arc = Arc::new(tree);
-    let code_arc = Arc::new(owned_code);
-    let file_name_arc = Arc::new(owned_file_name);
+    let mut assignments = None;
+    let mut imports = None;
+    let mut endpoints = None;
+    let mut restcalls = None;
+    let mut entities = None;
+    let mut callables = None;
+    let mut calls = None;
 
-    // Running parsing function in parallel
-    let assignments_handle = task::spawn_blocking({
-        let tree = Arc::clone(&tree_arc);
-        let code = Arc::clone(&code_arc);
-        move || get_assignments_map(&tree, &code)
+    rayon::scope(|s| {
+        s.spawn(|_| assignments = Some(get_assignments_map(&tree, code)));
+        s.spawn(|_| imports = Some(ImportsExtractor.extract(params)));
+        s.spawn(|_| endpoints = Some(EndpointsExtractor.extract(params)));
+        s.spawn(|_| restcalls = Some(RestcallsExtractor.extract(params)));
+        s.spawn(|_| entities = Some(EntitiesExtractor.extract(params)));
+        s.spawn(|_| callables = Some(CallablesExtractor.extract(params)));
+        s.spawn(|_| calls = Some(CallsExtractor.extract(ExtractParams::new(&tree, code))));
     });
 
-    let imports_handle = task::spawn_blocking({
-        let tree = Arc::clone(&tree_arc);
-        let code = Arc::clone(&code_arc);
-        move || ImportsExtractor.extract(ExtractParams::new(&Arc::clone(&tree), &Arc::clone(&code)))
-    });
+    // Convert Options → Results (no unwraps)
+    let assignments = assignments
+        .ok_or_else(|| ExtractionError::Process("Assignments extraction failed".into()))?;
 
-    let endpoints_handle = task::spawn_blocking({
-        let tree = Arc::clone(&tree_arc);
-        let code = Arc::clone(&code_arc);
-        let file_name = Arc::clone(&file_name_arc);
-        move || {
-            EndpointsExtractor.extract(
-                ExtractParams::new(&Arc::clone(&tree), &Arc::clone(&code)).file_name(&file_name),
-            )
-        }
-    });
+    let imports =
+        imports.ok_or_else(|| ExtractionError::Process("Imports extraction failed".into()))?;
 
-    let restcalls_handle = task::spawn_blocking({
-        let tree = Arc::clone(&tree_arc);
-        let code = Arc::clone(&code_arc);
-        let file_name = Arc::clone(&file_name_arc);
-        move || {
-            RestcallsExtractor.extract(
-                ExtractParams::new(&Arc::clone(&tree), &Arc::clone(&code)).file_name(&file_name),
-            )
-        }
-    });
+    let endpoints =
+        endpoints.ok_or_else(|| ExtractionError::Process("Endpoints extraction failed".into()))?;
 
-    let entities_handle = task::spawn_blocking({
-        let tree = Arc::clone(&tree_arc);
-        let code = Arc::clone(&code_arc);
-        let file_name = Arc::clone(&file_name_arc);
-        move || {
-            EntitiesExtractor.extract(
-                ExtractParams::new(&Arc::clone(&tree), &Arc::clone(&code)).file_name(&file_name),
-            )
-        }
-    });
+    let restcalls =
+        restcalls.ok_or_else(|| ExtractionError::Process("REST calls extraction failed".into()))?;
 
-    let callables_handle = task::spawn_blocking({
-        let tree = Arc::clone(&tree_arc);
-        let code = Arc::clone(&code_arc);
-        let file_name = Arc::clone(&file_name_arc);
-        move || {
-            CallablesExtractor.extract(
-                ExtractParams::new(&Arc::clone(&tree), &Arc::clone(&code)).file_name(&file_name),
-            )
-        }
-    });
+    let entities =
+        entities.ok_or_else(|| ExtractionError::Process("Entities extraction failed".into()))?;
 
-    let calls_handle = task::spawn_blocking({
-        let tree = Arc::clone(&tree_arc);
-        let code = Arc::clone(&code_arc);
-        move || CallsExtractor.extract(ExtractParams::new(&Arc::clone(&tree), &Arc::clone(&code)))
-    });
+    let callables =
+        callables.ok_or_else(|| ExtractionError::Process("Callables extraction failed".into()))?;
 
-    let assignments_map = assignments_handle
-        .await
-        .map_err(|_| ExtractionError::Process("Assignments parsing failed".to_string()))?;
-    let imports = imports_handle
-        .await
-        .map_err(|_| ExtractionError::Process("Imports parsing failed".to_string()))?;
-    let endpoints = endpoints_handle
-        .await
-        .map_err(|_| ExtractionError::Process("Endpoints parsing failed".to_string()))?;
-    let mut restcalls = restcalls_handle
-        .await
-        .map_err(|_| ExtractionError::Process("REST calls parsing failed".to_string()))?;
-    let mut entities = entities_handle
-        .await
-        .map_err(|_| ExtractionError::Process("Entities parsing failed".to_string()))?;
-    let callables = callables_handle
-        .await
-        .map_err(|_| ExtractionError::Process("Callables parsing failed".to_string()))?;
-    let mut call_statements = calls_handle
-        .await
-        .map_err(|_| ExtractionError::Process("Call Statements parsing failed".to_string()))?;
+    let calls = calls.ok_or_else(|| ExtractionError::Process("Calls extraction failed".into()))?;
 
-    // MAYBE: Evaluate together with extraction?
-    evaluate_restcalls(&mut restcalls, &assignments_map);
-    evaluate_entity_fields(&imports, &mut entities, file_name);
-    evaluate_invocations(&mut call_statements, &assignments_map);
+    let mut aggregate =
+        CodeElementsAggregate::new(imports, entities, endpoints, restcalls, callables, calls);
 
-    Ok(CodeElementsAggregate::new(
-        imports,
-        entities,
-        endpoints,
-        restcalls,
-        callables,
-        call_statements,
-    ))
+    // Post-processing / evaluation
+    evaluate_restcalls(&mut aggregate.restcalls, &assignments);
+    evaluate_entity_fields(&aggregate.imports, &mut aggregate.entities, file_name);
+    evaluate_invocations(&mut aggregate.call_statements, &assignments);
+
+    Ok(aggregate)
 }
