@@ -1,6 +1,6 @@
 use models::{CallStatement, RestCall};
 
-pub trait Strategy {
+pub trait IdentificationStrategy {
     fn identify_restcall(
         &self,
         call_statement: &CallStatement,

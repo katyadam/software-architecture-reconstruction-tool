@@ -11,7 +11,7 @@ fn should_return_correct_variable_with_value_and_datatype() {
     let tree = get_tree(&code);
 
     let result = symbolic_evaluation(
-        tree,
+        &tree,
         &code,
         "boolean drawbackMoney(String,String,HttpHeaders)",
     )

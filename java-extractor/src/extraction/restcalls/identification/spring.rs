@@ -2,17 +2,19 @@ use std::str::FromStr;
 
 use models::{Argument, CallStatement, HttpMethod, RestCall};
 
-use crate::extraction::restcalls::identification::{HTTP_METHODS, strategy::Strategy};
+use crate::extraction::restcalls::identification::{
+    HTTP_METHODS, strategy::IdentificationStrategy,
+};
 
-pub struct SpringStrategy {}
+pub struct SpringIdentificationStrategy {}
 
-impl SpringStrategy {
+impl SpringIdentificationStrategy {
     pub fn new() -> Self {
         Self {}
     }
 }
 
-impl SpringStrategy {
+impl SpringIdentificationStrategy {
     fn identify_http_method(&self, call_args: &[Argument]) -> Option<HttpMethod> {
         let arg = call_args.get(1)?;
 
@@ -30,7 +32,7 @@ impl SpringStrategy {
     }
 }
 
-impl Strategy for SpringStrategy {
+impl IdentificationStrategy for SpringIdentificationStrategy {
     fn identify_restcall(&self, call: &CallStatement, file_path: &str) -> Option<RestCall> {
         let http_method = self.identify_http_method(&call.arguments)?;
         let target_uri = self.identify_target_uri(&call.arguments)?;

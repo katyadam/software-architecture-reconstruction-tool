@@ -13,4 +13,5 @@ tokio = { version = "1.46.1", features = ["rt-multi-thread", "macros"] }
 log = "0.4.27"
 
 models = { path = "../models" }
+statix = { path = "../statix"}
 rayon = "1.11.0"

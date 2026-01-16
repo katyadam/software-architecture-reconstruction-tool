@@ -4,7 +4,8 @@ use java_extractor::{
         calls::{evaluator::evaluate_invocations, extractor::CallStatementsExtractor},
         extractor::Extractor,
         restcalls::{
-            identification::spring::SpringStrategy,
+            evaluation::spring::SpringEvaluationStrategy,
+            identification::spring::SpringIdentificationStrategy,
             selection::{selector::Selector, spring::SpringSelector},
         },
     },
@@ -23,8 +24,11 @@ fn test_spring_restcalls_without_dfa() {
     let assignments_map = get_assignments_map(&tree, &code);
     evaluate_invocations(&mut calls, &assignments_map);
 
-    let restcalls =
-        SpringSelector::new(SpringStrategy::new()).select_restcall_statements(&calls, &filename);
+    let restcalls = SpringSelector::new(
+        SpringIdentificationStrategy::new(),
+        SpringEvaluationStrategy::new(),
+    )
+    .select_restcall_statements(&calls, &filename);
     let expected = vec![
         RestCall {
             function_name: s!("sendEmail(NotifyInfo notifyInfo, HttpHeaders headers)"),

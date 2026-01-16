@@ -18,13 +18,13 @@ pub mod util;
 pub mod visitor;
 
 pub fn symbolic_evaluation(
-    tree: Tree,
+    tree: &Tree,
     code: &str,
     callable_signature: &str,
 ) -> Result<symbolic::AnalysisResult, error::EvalError> {
     let root_node = tree.root_node();
     let method_nodes = find_method_nodes(root_node);
-    let mut methods_map: HashMap<String, MethodAst> = HashMap::new();
+    let mut methods_map: HashMap<String, MethodAst> = HashMap::new(); // TODO: Split asts creation from evaluation 
     for method_node in method_nodes {
         let method_ast = parse_method(method_node, &code).unwrap();
         methods_map.insert(method_ast.header.clone(), method_ast.clone());

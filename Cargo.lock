@@ -2096,6 +2096,7 @@ dependencies = [
  "rayon",
  "regex",
  "sha2",
+ "statix",
  "tokio",
  "tree-sitter",
  "tree-sitter-java",

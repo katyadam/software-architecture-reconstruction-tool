@@ -10,7 +10,8 @@ use crate::extraction::{
     extractor::Extractor,
     imports::extractor::ImportsExtractor,
     restcalls::{
-        identification::spring::SpringStrategy,
+        evaluation::spring::SpringEvaluationStrategy,
+        identification::spring::SpringIdentificationStrategy,
         selection::{selector::Selector, spring::SpringSelector},
     },
 };
@@ -75,8 +76,11 @@ pub async fn extract(
     // Post-processing / evaluation
     evaluate_entity_fields(&imports, &mut entities);
     evaluate_invocations(&mut calls, &assignments);
-    let restcalls =
-        SpringSelector::new(SpringStrategy::new()).select_restcall_statements(&calls, &file_name);
+    let restcalls = SpringSelector::new(
+        SpringIdentificationStrategy::new(),
+        SpringEvaluationStrategy::new(),
+    )
+    .select_restcall_statements(&calls, &file_name);
 
     Ok(CodeElementsAggregate::new(
         imports, entities, endpoints, restcalls, callables, calls,

@@ -42,7 +42,6 @@ pub async fn parse(code: &str, file_name: &str) -> Result<CodeElementsAggregate,
         s.spawn(|_| calls = Some(CallsExtractor.extract(ExtractParams::new(&tree, code))));
     });
 
-    // Convert Options → Results (no unwraps)
     let assignments = assignments
         .ok_or_else(|| ExtractionError::Process("Assignments extraction failed".into()))?;
 

@@ -1,20 +1,32 @@
 use crate::extraction::restcalls::{
-    identification::{spring::SpringStrategy, strategy::Strategy},
+    evaluation::{spring::SpringEvaluationStrategy, strategy::EvaluationStrategy},
+    identification::{spring::SpringIdentificationStrategy, strategy::IdentificationStrategy},
     selection::selector::Selector,
 };
 
 pub struct SpringSelector {
-    strategy: SpringStrategy,
+    identification_strategy: SpringIdentificationStrategy,
+    evaluation_strategy: SpringEvaluationStrategy,
 }
 
 impl<'a> SpringSelector {
-    pub fn new(strategy: SpringStrategy) -> Self {
-        Self { strategy }
+    pub fn new(
+        identification_strategy: SpringIdentificationStrategy,
+        evaluation_strategy: SpringEvaluationStrategy,
+    ) -> Self {
+        Self {
+            identification_strategy,
+            evaluation_strategy,
+        }
     }
 }
 
 impl<'a> Selector for SpringSelector {
-    fn strategy(&self) -> &dyn Strategy {
-        &self.strategy
+    fn identification_strategy(&self) -> &dyn IdentificationStrategy {
+        &self.identification_strategy
+    }
+
+    fn evaluation_strategy(&self) -> &dyn EvaluationStrategy {
+        &self.evaluation_strategy
     }
 }
