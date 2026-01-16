@@ -1,4 +1,5 @@
 use models::{CallStatement, RestCall};
+use statix::error::EvalError;
 
 use crate::extraction::restcalls::{
     evaluation::strategy::EvaluationStrategy, identification::strategy::IdentificationStrategy,
@@ -13,24 +14,28 @@ pub trait Selector {
             .identify_restcall(call, file_path)
     }
 
-    fn evaluate(&self, restcall: &RestCall) -> Option<RestCall> {
-        self.evaluation_strategy().evaluate_restcall(&restcall)
+    fn evaluate(&self, mut restcall: &mut RestCall) -> Result<(), EvalError> {
+        self.evaluation_strategy().evaluate_restcall(&mut restcall)
     }
 
     fn select_restcall_statements(
         &self,
         call_statements: &[CallStatement],
         file_path: &str,
-    ) -> Vec<RestCall> {
-        call_statements
+    ) -> Result<Vec<RestCall>, EvalError> {
+        Ok(call_statements
             .iter()
-            .filter_map(|call| {
-                if let Some(restcall) = self.identify(call, file_path) {
-                    self.evaluate(&restcall)
+            .map(|call| {
+                if let Some(mut restcall) = self.identify(call, file_path) {
+                    self.evaluate(&mut restcall)?;
+                    Ok(Some(restcall))
                 } else {
-                    None
+                    Ok(None)
                 }
             })
-            .collect()
+            .collect::<Result<Vec<Option<RestCall>>, EvalError>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<RestCall>>())
     }
 }

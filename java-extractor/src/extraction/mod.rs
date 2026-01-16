@@ -1,4 +1,5 @@
 use models::{CodeElementsAggregate, api::ExtractionError};
+use statix::parse_methods;
 use tree_sitter::Parser;
 
 use crate::extraction::{
@@ -76,11 +77,14 @@ pub async fn extract(
     // Post-processing / evaluation
     evaluate_entity_fields(&imports, &mut entities);
     evaluate_invocations(&mut calls, &assignments);
+    let methods_asts = parse_methods(&tree, code);
+
     let restcalls = SpringSelector::new(
         SpringIdentificationStrategy::new(),
-        SpringEvaluationStrategy::new(),
+        SpringEvaluationStrategy::new(methods_asts),
     )
-    .select_restcall_statements(&calls, &file_name);
+    .select_restcall_statements(&calls, &file_name)
+    .map_err(|e| ExtractionError::Process(format!("Restcall evaluation error: {:?}", e)))?;
 
     Ok(CodeElementsAggregate::new(
         imports, entities, endpoints, restcalls, callables, calls,

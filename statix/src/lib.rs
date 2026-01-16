@@ -17,18 +17,21 @@ pub mod method_match;
 pub mod util;
 pub mod visitor;
 
-pub fn symbolic_evaluation(
-    tree: &Tree,
-    code: &str,
-    callable_signature: &str,
-) -> Result<symbolic::AnalysisResult, error::EvalError> {
+pub fn parse_methods(tree: &Tree, code: &str) -> HashMap<String, MethodAst> {
     let root_node = tree.root_node();
     let method_nodes = find_method_nodes(root_node);
-    let mut methods_map: HashMap<String, MethodAst> = HashMap::new(); // TODO: Split asts creation from evaluation 
+    let mut methods_map: HashMap<String, MethodAst> = HashMap::new();
     for method_node in method_nodes {
         let method_ast = parse_method(method_node, &code).unwrap();
         methods_map.insert(method_ast.header.clone(), method_ast.clone());
     }
 
-    SymbolicEvaluator::eval_method(callable_signature, &methods_map)
+    methods_map
+}
+
+pub fn symbolic_evaluation(
+    methods_map: &HashMap<String, MethodAst>,
+    callable_signature: &str,
+) -> Result<symbolic::AnalysisResult, error::EvalError> {
+    SymbolicEvaluator::eval_method(callable_signature, methods_map)
 }

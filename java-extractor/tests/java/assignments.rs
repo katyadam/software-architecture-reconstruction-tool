@@ -11,8 +11,95 @@ fn test_assignment() {
     let code = load_file(&filename).unwrap();
     let tree = get_tree(&code);
     let assignments_map = get_assignments_map(&tree, &code);
-
     let expected_map: HashMap<AssignmentKey, Assignment> = HashMap::from([
+        (
+            AssignmentKey {
+                scope: Scope::Function("void demoAssignments()".into()),
+                variable_name: "pi".into(),
+            },
+            Assignment {
+                variable_name: "pi".into(),
+                variable_type: "double".into(),
+                value: "3.1415".into(),
+            },
+        ),
+        (
+            AssignmentKey {
+                scope: Scope::Function("void demoAssignments()".into()),
+                variable_name: "a".into(),
+            },
+            Assignment {
+                variable_name: "a".into(),
+                variable_type: "int".into(),
+                value: "5".into(),
+            },
+        ),
+        (
+            AssignmentKey {
+                scope: Scope::Function("void demoAssignments()".into()),
+                variable_name: "this.instanceValue".into(),
+            },
+            Assignment {
+                variable_name: "this.instanceValue".into(),
+                variable_type: "any".into(),
+                value: "50".into(),
+            },
+        ),
+        (
+            AssignmentKey {
+                scope: Scope::Function("AllAssignments(String name)".into()),
+                variable_name: "name".into(),
+            },
+            Assignment {
+                variable_name: "name".into(),
+                variable_type: "String".into(),
+                value: "".into(),
+            },
+        ),
+        (
+            AssignmentKey {
+                scope: Scope::Function("void demoAssignments()".into()),
+                variable_name: "small".into(),
+            },
+            Assignment {
+                variable_name: "small".into(),
+                variable_type: "byte".into(),
+                value: "(byte) b".into(),
+            },
+        ),
+        (
+            AssignmentKey {
+                scope: Scope::Function("void main(String[] args)".into()),
+                variable_name: "demo".into(),
+            },
+            Assignment {
+                variable_name: "demo".into(),
+                variable_type: "AssignmentDemo".into(),
+                value: "new AssignmentDemo(\"Test\")".into(),
+            },
+        ),
+        (
+            AssignmentKey {
+                scope: Scope::Function("void demoAssignments()".into()),
+                variable_name: "intPi".into(),
+            },
+            Assignment {
+                variable_name: "intPi".into(),
+                variable_type: "int".into(),
+                value: "(int) pi".into(),
+            },
+        ),
+        (
+            AssignmentKey {
+                scope: Scope::Function("void demoAssignments()".into()),
+                variable_name: "obj2".into(),
+            },
+            Assignment {
+                variable_name: "obj2".into(),
+                variable_type: "AssignmentDemo".into(),
+                value: "obj1".into(),
+            },
+        ),
         (
             AssignmentKey {
                 scope: Scope::Class("AllAssignments".into()),
@@ -26,18 +113,7 @@ fn test_assignment() {
         ),
         (
             AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
-                variable_name: "a".into(),
-            },
-            Assignment {
-                variable_name: "a".into(),
-                variable_type: "int".into(),
-                value: "5".into(),
-            },
-        ),
-        (
-            AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
+                scope: Scope::Function("void demoAssignments()".into()),
                 variable_name: "y".into(),
             },
             Assignment {
@@ -48,7 +124,7 @@ fn test_assignment() {
         ),
         (
             AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
+                scope: Scope::Function("void demoAssignments()".into()),
                 variable_name: "c".into(),
             },
             Assignment {
@@ -59,29 +135,7 @@ fn test_assignment() {
         ),
         (
             AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
-                variable_name: "pi".into(),
-            },
-            Assignment {
-                variable_name: "pi".into(),
-                variable_type: "double".into(),
-                value: "3.1415".into(),
-            },
-        ),
-        (
-            AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
-                variable_name: "intPi".into(),
-            },
-            Assignment {
-                variable_name: "intPi".into(),
-                variable_type: "int".into(),
-                value: "(int) pi".into(),
-            },
-        ),
-        (
-            AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
+                scope: Scope::Function("void demoAssignments()".into()),
                 variable_name: "date".into(),
             },
             Assignment {
@@ -92,18 +146,7 @@ fn test_assignment() {
         ),
         (
             AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
-                variable_name: "this.instanceValue".into(),
-            },
-            Assignment {
-                variable_name: "this.instanceValue".into(),
-                variable_type: "any".into(),
-                value: "50".into(),
-            },
-        ),
-        (
-            AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
+                scope: Scope::Function("void demoAssignments()".into()),
                 variable_name: "d".into(),
             },
             Assignment {
@@ -114,7 +157,7 @@ fn test_assignment() {
         ),
         (
             AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
+                scope: Scope::Function("void demoAssignments()".into()),
                 variable_name: "obj1".into(),
             },
             Assignment {
@@ -125,7 +168,7 @@ fn test_assignment() {
         ),
         (
             AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
+                scope: Scope::Function("void demoAssignments()".into()),
                 variable_name: "AssignmentDemo.staticCount".into(),
             },
             Assignment {
@@ -136,7 +179,7 @@ fn test_assignment() {
         ),
         (
             AssignmentKey {
-                scope: Scope::Function("main(String[] args)".into()),
+                scope: Scope::Function("void main(String[] args)".into()),
                 variable_name: "args".into(),
             },
             Assignment {
@@ -147,18 +190,7 @@ fn test_assignment() {
         ),
         (
             AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
-                variable_name: "small".into(),
-            },
-            Assignment {
-                variable_name: "small".into(),
-                variable_type: "byte".into(),
-                value: "(byte) b".into(),
-            },
-        ),
-        (
-            AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
+                scope: Scope::Function("void demoAssignments()".into()),
                 variable_name: "numbers[1]".into(),
             },
             Assignment {
@@ -169,7 +201,7 @@ fn test_assignment() {
         ),
         (
             AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
+                scope: Scope::Function("void demoAssignments()".into()),
                 variable_name: "b".into(),
             },
             Assignment {
@@ -191,7 +223,7 @@ fn test_assignment() {
         ),
         (
             AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
+                scope: Scope::Function("void demoAssignments()".into()),
                 variable_name: "numbers[0]".into(),
             },
             Assignment {
@@ -213,17 +245,6 @@ fn test_assignment() {
         ),
         (
             AssignmentKey {
-                scope: Scope::Function("main(String[] args)".into()),
-                variable_name: "demo".into(),
-            },
-            Assignment {
-                variable_name: "demo".into(),
-                variable_type: "AssignmentDemo".into(),
-                value: "new AssignmentDemo(\"Test\")".into(),
-            },
-        ),
-        (
-            AssignmentKey {
                 scope: Scope::Class("AllAssignments".into()),
                 variable_name: "numbers".into(),
             },
@@ -235,7 +256,7 @@ fn test_assignment() {
         ),
         (
             AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
+                scope: Scope::Function("void demoAssignments()".into()),
                 variable_name: "big".into(),
             },
             Assignment {
@@ -257,7 +278,7 @@ fn test_assignment() {
         ),
         (
             AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
+                scope: Scope::Function("void demoAssignments()".into()),
                 variable_name: "x".into(),
             },
             Assignment {
@@ -266,29 +287,11 @@ fn test_assignment() {
                 value: "1".into(),
             },
         ),
-        (
-            AssignmentKey {
-                scope: Scope::Function("AllAssignments(String name)".into()),
-                variable_name: "name".into(),
-            },
-            Assignment {
-                variable_name: "name".into(),
-                variable_type: "String".into(),
-                value: "".into(),
-            },
-        ),
-        (
-            AssignmentKey {
-                scope: Scope::Function("demoAssignments()".into()),
-                variable_name: "obj2".into(),
-            },
-            Assignment {
-                variable_name: "obj2".into(),
-                variable_type: "AssignmentDemo".into(),
-                value: "obj1".into(),
-            },
-        ),
     ]);
+
+    assignments_map
+        .iter()
+        .for_each(|(key, val)| println!("{:?}", expected_map.contains_key(key)));
 
     assert_eq!(assignments_map, expected_map);
 }

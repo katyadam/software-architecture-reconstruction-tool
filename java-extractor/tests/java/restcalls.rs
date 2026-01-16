@@ -12,6 +12,7 @@ use java_extractor::{
     s,
 };
 use models::{Argument, HttpMethod, RestCall};
+use statix::parse_methods;
 
 use crate::java::utils::{get_tree, load_file};
 
@@ -24,14 +25,17 @@ fn test_spring_restcalls_without_dfa() {
     let assignments_map = get_assignments_map(&tree, &code);
     evaluate_invocations(&mut calls, &assignments_map);
 
+    let method_asts = parse_methods(&tree, &code);
     let restcalls = SpringSelector::new(
         SpringIdentificationStrategy::new(),
-        SpringEvaluationStrategy::new(),
+        SpringEvaluationStrategy::new(method_asts),
     )
-    .select_restcall_statements(&calls, &filename);
+    .select_restcall_statements(&calls, &filename)
+    .expect("Evaluation should not fail!");
+
     let expected = vec![
         RestCall {
-            function_name: s!("sendEmail(NotifyInfo notifyInfo, HttpHeaders headers)"),
+            function_name: s!("boolean sendEmail(NotifyInfo notifyInfo, HttpHeaders headers)"),
             function_hash: s!("8920b5600d64f9685efc83eb9367d881d398720c7a49e1e34d9b3cfbec57f41f"),
             call_arguments: vec![
                 Argument {
@@ -59,12 +63,12 @@ fn test_spring_restcalls_without_dfa() {
             ],
             http_method: HttpMethod::POST,
             target_uri: s!(
-                "notification_service_url + \"/api/v1/notifyservice/notification/order_cancel_success\""
+                "http://ts-notification-service/api/v1/notifyservice/notification/order_cancel_success"
             ),
             file_path: s!("./examples/CancelServiceImpl.java"),
         },
         RestCall {
-            function_name: s!("cancelFromOrder(Order order, HttpHeaders headers)"),
+            function_name: s!("Response cancelFromOrder(Order order, HttpHeaders headers)"),
             function_hash: s!("3392f659271ac08950632de0cf65ab80aa11a850fc73a2221c82f1f0fe93e590"),
             call_arguments: vec![
                 Argument {
@@ -89,11 +93,11 @@ fn test_spring_restcalls_without_dfa() {
                 },
             ],
             http_method: HttpMethod::PUT,
-            target_uri: s!("order_service_url + \"/api/v1/orderservice/order\""),
+            target_uri: s!("http://ts-order-service/api/v1/orderservice/order"),
             file_path: s!("./examples/CancelServiceImpl.java"),
         },
         RestCall {
-            function_name: s!("cancelFromOtherOrder(Order order, HttpHeaders headers)"),
+            function_name: s!("Response cancelFromOtherOrder(Order order, HttpHeaders headers)"),
             function_hash: s!("480df4f76033d3019d79e96eeb06889f7b573049d611fdd4f78c816625f42443"),
             call_arguments: vec![
                 Argument {
@@ -118,11 +122,13 @@ fn test_spring_restcalls_without_dfa() {
                 },
             ],
             http_method: HttpMethod::PUT,
-            target_uri: s!("order_other_service_url + \"/api/v1/orderOtherService/orderOther\""),
+            target_uri: s!("http://ts-order-other-service/api/v1/orderOtherService/orderOther"),
             file_path: s!("./examples/CancelServiceImpl.java"),
         },
         RestCall {
-            function_name: s!("drawbackMoney(String money, String userId, HttpHeaders headers)"),
+            function_name: s!(
+                "boolean drawbackMoney(String money, String userId, HttpHeaders headers)"
+            ),
             function_hash: s!("8e60c557d0f1850afbe875e5dca5b914188914936c9b08da9b813adf9c84ac5f"),
             call_arguments: vec![
                 Argument {
@@ -150,12 +156,12 @@ fn test_spring_restcalls_without_dfa() {
             ],
             http_method: HttpMethod::GET,
             target_uri: s!(
-                "inside_payment_service_url + \"/api/v1/inside_pay_service/inside_payment/drawback/\" + userId + \"/\" + money"
+                "http://ts-inside-payment-service/api/v1/inside_pay_service/inside_payment/drawback/userId/money"
             ),
             file_path: s!("./examples/CancelServiceImpl.java"),
         },
         RestCall {
-            function_name: s!("getAccount(String orderId, HttpHeaders headers)"),
+            function_name: s!("Response<User> getAccount(String orderId, HttpHeaders headers)"),
             function_hash: s!("b203ff280f41c557f046cb438f62cefe99a0da9d250802448fe7aa6b5b303cb2"),
             call_arguments: vec![
                 Argument {
@@ -182,11 +188,13 @@ fn test_spring_restcalls_without_dfa() {
                 },
             ],
             http_method: HttpMethod::GET,
-            target_uri: s!("user_service_url + \"/api/v1/userservice/users/id/\" + orderId"),
+            target_uri: s!("http://ts-user-service/api/v1/userservice/users/id/orderId"),
             file_path: s!("./examples/CancelServiceImpl.java"),
         },
         RestCall {
-            function_name: s!("getOrderByIdFromOrder(String orderId, HttpHeaders headers)"),
+            function_name: s!(
+                "Response<Order> getOrderByIdFromOrder(String orderId, HttpHeaders headers)"
+            ),
             function_hash: s!("2fedaea877a99656bd0afb28f9523f5d645d84e4987d404199f5d0258615d3de"),
             call_arguments: vec![
                 Argument {
@@ -213,11 +221,13 @@ fn test_spring_restcalls_without_dfa() {
                 },
             ],
             http_method: HttpMethod::GET,
-            target_uri: s!("order_service_url + \"/api/v1/orderservice/order/\" + orderId"),
+            target_uri: s!("http://ts-order-service/api/v1/orderservice/order/orderId"),
             file_path: s!("./examples/CancelServiceImpl.java"),
         },
         RestCall {
-            function_name: s!("getOrderByIdFromOrderOther(String orderId, HttpHeaders headers)"),
+            function_name: s!(
+                "Response<Order> getOrderByIdFromOrderOther(String orderId, HttpHeaders headers)"
+            ),
             function_hash: s!("c55aebff4c961d6985892061493c4456d81bc6a2dca255bb473774d14842092a"),
             call_arguments: vec![
                 Argument {
@@ -247,7 +257,7 @@ fn test_spring_restcalls_without_dfa() {
             ],
             http_method: HttpMethod::GET,
             target_uri: s!(
-                "order_other_service_url + \"/api/v1/orderOtherService/orderOther/\" + orderId"
+                "http://ts-order-other-service/api/v1/orderOtherService/orderOther/orderId"
             ),
             file_path: s!("./examples/CancelServiceImpl.java"),
         },

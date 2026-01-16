@@ -66,12 +66,17 @@ impl Extractor<CallStatement> for CallStatementsExtractor {
                             .find_map(|kind| get_enclosing_node_by_kind(capture.node, kind));
 
                         if let Some(n) = n
-                            && let (Some(fname), Some(params)) = (
+                            && let (possible_ftype, Some(fname), Some(params)) = (
+                                get_field_string_from_node(n, "type", code),
                                 get_field_string_from_node(n, "name", code),
                                 get_field_string_from_node(n, "parameters", code),
                             )
                         {
-                            enclosing_function_name = Some(fname + &params);
+                            if let Some(ftype) = possible_ftype {
+                                enclosing_function_name = Some(ftype + " " + &fname + &params);
+                            } else {
+                                enclosing_function_name = Some(fname + &params);
+                            }
                             enclosing_function_hash = Some(get_hashed_node_value(n, code));
                         }
 

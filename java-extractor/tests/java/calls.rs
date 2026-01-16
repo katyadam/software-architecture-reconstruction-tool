@@ -75,7 +75,7 @@ fn test_all_call_statements() {
         CallStatement {
             function_name: s!("internalMethod()"),
             arguments: vec![],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -87,7 +87,7 @@ fn test_all_call_statements() {
         CallStatement {
             function_name: s!("this.internalMethod()"),
             arguments: vec![],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -99,7 +99,7 @@ fn test_all_call_statements() {
         CallStatement {
             function_name: s!("super.parentMethod()"),
             arguments: vec![],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -111,7 +111,7 @@ fn test_all_call_statements() {
         CallStatement {
             function_name: s!("StaticTarget.staticAction()"),
             arguments: vec![],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -123,7 +123,7 @@ fn test_all_call_statements() {
         CallStatement {
             function_name: s!("internalMethod()"),
             arguments: vec![],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -135,7 +135,7 @@ fn test_all_call_statements() {
         CallStatement {
             function_name: s!("r.run()"),
             arguments: vec![],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -151,7 +151,7 @@ fn test_all_call_statements() {
                 value: s!("\"Method Reference Call\""),
                 datatype: s!("any"),
             }],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -163,7 +163,7 @@ fn test_all_call_statements() {
         CallStatement {
             function_name: s!("listSupplier.get()"),
             arguments: vec![],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -175,7 +175,7 @@ fn test_all_call_statements() {
         CallStatement {
             function_name: s!("this.getClass()"),
             arguments: vec![],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -191,7 +191,7 @@ fn test_all_call_statements() {
                 value: s!("\"internalMethod\""),
                 datatype: s!("any"),
             }],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -207,7 +207,7 @@ fn test_all_call_statements() {
                 value: s!("this"),
                 datatype: s!("any"),
             }],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -219,7 +219,7 @@ fn test_all_call_statements() {
         CallStatement {
             function_name: s!("\"  hello  \".trim()"),
             arguments: vec![],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -231,7 +231,7 @@ fn test_all_call_statements() {
         CallStatement {
             function_name: s!("\"  hello  \".trim().toUpperCase()"),
             arguments: vec![],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -247,7 +247,7 @@ fn test_all_call_statements() {
                 value: s!("\" WORLD\""),
                 datatype: s!("any"),
             }],
-            enclosing_function_name: Some(s!("demonstrateCalls()")),
+            enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "114af928d1c7371e42f5fb79489cdacac208efb2fb8898ebc010db657f63fce9"
@@ -263,7 +263,7 @@ fn test_all_call_statements() {
                 value: s!("\"Internal method executed.\""),
                 datatype: s!("any"),
             }],
-            enclosing_function_name: Some(s!("internalMethod()")),
+            enclosing_function_name: Some(s!("void internalMethod()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
             enclosing_function_hash: Some(s!(
                 "ac5f54dc66b0f87fbebe2203db38eb9e3df24c5ced02f55fd5e86351eb05d7fe"
@@ -279,7 +279,7 @@ fn test_all_call_statements() {
                 value: s!("\"Parent method executed.\""),
                 datatype: s!("any"),
             }],
-            enclosing_function_name: Some(s!("parentMethod()")),
+            enclosing_function_name: Some(s!("void parentMethod()")),
             enclosing_class_name: Some(s!("ParentClass")),
             enclosing_function_hash: Some(s!(
                 "a7f85f945aff0016bd880edddf5f477d66022067c405dbdf14450f5ed96e006c"
@@ -295,7 +295,7 @@ fn test_all_call_statements() {
                 value: s!("\"Static call executed.\""),
                 datatype: s!("any"),
             }],
-            enclosing_function_name: Some(s!("staticAction()")),
+            enclosing_function_name: Some(s!("void staticAction()")),
             enclosing_class_name: Some(s!("StaticTarget")),
             enclosing_function_hash: Some(s!(
                 "f747b5e7fd8dea17cae85afcc25fe948e2934bb53e0bca837104bff594937507"
@@ -333,7 +333,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
                     datatype: s!("int"),
                 },
             ],
-            enclosing_function_name: Some(s!("demo()")),
+            enclosing_function_name: Some(s!("void demo()")),
             enclosing_class_name: Some(s!("Calculator")),
             enclosing_function_hash: Some(s!(
                 "afb2375ed8e435c50ba143b3f60cca2f9526bf937ed8354fe01e0ff3891bf584"
@@ -356,7 +356,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
                     datatype: s!("double"),
                 },
             ],
-            enclosing_function_name: Some(s!("demo()")),
+            enclosing_function_name: Some(s!("void demo()")),
             enclosing_class_name: Some(s!("Calculator")),
             enclosing_function_hash: Some(s!(
                 "afb2375ed8e435c50ba143b3f60cca2f9526bf937ed8354fe01e0ff3891bf584"
@@ -384,7 +384,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
                     datatype: s!("int"),
                 },
             ],
-            enclosing_function_name: Some(s!("demo()")),
+            enclosing_function_name: Some(s!("void demo()")),
             enclosing_class_name: Some(s!("Calculator")),
             enclosing_function_hash: Some(s!(
                 "afb2375ed8e435c50ba143b3f60cca2f9526bf937ed8354fe01e0ff3891bf584"
@@ -407,7 +407,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
                     datatype: s!("String"),
                 },
             ],
-            enclosing_function_name: Some(s!("demo()")),
+            enclosing_function_name: Some(s!("void demo()")),
             enclosing_class_name: Some(s!("Calculator")),
             enclosing_function_hash: Some(s!(
                 "afb2375ed8e435c50ba143b3f60cca2f9526bf937ed8354fe01e0ff3891bf584"
@@ -419,7 +419,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
         CallStatement {
             function_name: s!("Calculator()"),
             arguments: vec![],
-            enclosing_function_name: Some(s!("main(String[] args)")),
+            enclosing_function_name: Some(s!("void main(String[] args)")),
             enclosing_class_name: Some(s!("Calculator")),
             enclosing_function_hash: Some(s!(
                 "a3f16cbfdcabd227e01b1f9a919c07f0bc040419f61fd5077c7d2ed1b5169752"
@@ -431,7 +431,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
         CallStatement {
             function_name: s!("calculator.demo()"),
             arguments: vec![],
-            enclosing_function_name: Some(s!("main(String[] args)")),
+            enclosing_function_name: Some(s!("void main(String[] args)")),
             enclosing_class_name: Some(s!("Calculator")),
             enclosing_function_hash: Some(s!(
                 "a3f16cbfdcabd227e01b1f9a919c07f0bc040419f61fd5077c7d2ed1b5169752"
@@ -466,7 +466,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
                     datatype: s!("any"),
                 },
             ],
-            enclosing_function_name: Some(s!("main(String[] args)")),
+            enclosing_function_name: Some(s!("void main(String[] args)")),
             enclosing_class_name: Some(s!("Calculator")),
             enclosing_function_hash: Some(s!(
                 "a3f16cbfdcabd227e01b1f9a919c07f0bc040419f61fd5077c7d2ed1b5169752"

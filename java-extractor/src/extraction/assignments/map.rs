@@ -22,6 +22,7 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
         let mut variable_type: Option<String> = None;
         let mut scope: Option<Scope> = None;
 
+        let mut function_return_type: Option<String> = None;
         let mut function_name: Option<String> = None;
         let mut params_string: Option<String> = None;
         m.captures.iter().for_each(|capture| {
@@ -37,11 +38,18 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
                         .iter()
                         .find_map(|kind| get_enclosing_node_by_kind(capture.node, kind))
                     {
-                        if let (Some(name), Some(params)) = (
+                        if let (possible_ftype, Some(name), Some(params)) = (
+                            get_field_string_from_node(fn_node, "type", code),
                             get_field_string_from_node(fn_node, "name", code),
                             get_field_string_from_node(fn_node, "parameters", code),
                         ) {
-                            scope = Some(Scope::Function(name.clone() + &params));
+                            if let Some(ftype) = possible_ftype {
+                                scope =
+                                    Some(Scope::Function(ftype.clone() + " " + &name + &params));
+                                function_return_type = Some(ftype);
+                            } else {
+                                scope = Some(Scope::Function(name.clone() + &params));
+                            }
                             function_name = Some(name);
                             params_string = Some(params);
                         }
@@ -73,7 +81,7 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
         });
         if let (Some(name), Some(params)) = (function_name, params_string) {
             let functions_params_assignments =
-                create_assignments_from_function_params(&params, &name);
+                create_assignments_from_function_params(function_return_type, &params, &name);
             assignments_map.extend(functions_params_assignments);
         }
     });
@@ -81,10 +89,16 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
 }
 
 fn create_assignments_from_function_params(
+    function_return_type: Option<String>,
     function_params: &str,
     function_name: &str,
 ) -> Vec<(AssignmentKey, Assignment)> {
-    let scope = Scope::Function(function_name.to_string() + function_params);
+    let scope;
+    if let Some(ftype) = function_return_type {
+        scope = Scope::Function(ftype + " " + function_name + function_params);
+    } else {
+        scope = Scope::Function(function_name.to_string() + function_params);
+    }
     let mut assignments = Vec::new();
     parse_callable_params(function_params)
         .iter()
