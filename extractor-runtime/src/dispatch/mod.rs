@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use log::info;
 use models::{CodeElementsAggregate, api::ExtractionError};
 use once_cell::sync::Lazy;
 
@@ -10,22 +13,33 @@ static PYTHON_TREESITTER_EXTRACTOR: Lazy<PythonTreesitterExtractor> =
 static JAVA_TREESITTER_EXTRACTOR: Lazy<JavaTreeSitterExtractor> =
     Lazy::new(JavaTreeSitterExtractor::new);
 
+static EXTRACTORS: Lazy<HashMap<&'static str, &'static dyn Extractor>> = Lazy::new(|| {
+    HashMap::from([
+        ("py", &*PYTHON_TREESITTER_EXTRACTOR as &dyn Extractor),
+        ("java", &*JAVA_TREESITTER_EXTRACTOR as &dyn Extractor),
+    ])
+});
+
 pub async fn dispatch(
     text: &str,
     file_path: &str,
-) -> Result<CodeElementsAggregate, ExtractionError> {
-    get(file_path)?.extract(text, file_path).await
+) -> Result<Option<CodeElementsAggregate>, ExtractionError> {
+    if let Some(extractor) = extractor_for(file_path) {
+        match extractor.extract(text, file_path).await {
+            Ok(res) => Ok(Some(res)),
+            Err(ExtractionError::SymbolicEvaluation(e)) => {
+                info!("Error occured during Symbolic Evaluation: {}", e);
+                Ok(None)
+            }
+            Err(e) => Err(e),
+        }
+    } else {
+        Ok(None)
+    }
 }
 
-fn get(file_path: &str) -> Result<&'static dyn Extractor, ExtractionError> {
-    let ext = std::path::Path::new(file_path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .ok_or_else(|| ExtractionError::ExtractorNotFound(file_path.into()))?;
+fn extractor_for(file_path: &str) -> Option<&'static dyn Extractor> {
+    let ext = std::path::Path::new(file_path).extension()?.to_str()?;
 
-    match ext {
-        "py" => Ok(&*PYTHON_TREESITTER_EXTRACTOR),
-        "java" => Ok(&*JAVA_TREESITTER_EXTRACTOR),
-        _ => Err(ExtractionError::ExtractorNotFound(ext.into())),
-    }
+    EXTRACTORS.get(ext).copied()
 }

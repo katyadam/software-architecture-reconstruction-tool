@@ -22,6 +22,10 @@ pub struct SymbolicEvaluator<'a> {
     methods: &'a HashMap<String, MethodAst>,
 }
 
+// TODO: Should also take class fields to environment!
+// When trying to access variable that is from class field, then getting EvalError::NonSenseEvaluation(format!("variable: {name} -- not found in environment"))
+// Or getting the same type of error when assigning to a class field variable
+
 impl<'a> SymbolicEvaluator<'a> {
     pub fn new(env: Env, methods: &'a HashMap<String, MethodAst>) -> Self {
         Self { env, methods }
@@ -103,7 +107,7 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             .get(name)
             .cloned()
             .ok_or(EvalError::NonSenseEvaluation(format!(
-                "variable not found in environment {name}"
+                "variable: {name} not found in environment"
             )))
     }
 
@@ -256,9 +260,9 @@ fn update_env(env: &mut Env, name: &str, new_val: Expr) -> Result<(), EvalError>
         *old_val = new_val;
         Ok(())
     } else {
-        Err(EvalError::NonSenseEvaluation(
-            "variable that should be updated by assignment, was not declared before".to_string(),
-        ))
+        Err(EvalError::NonSenseEvaluation(format!(
+            "variable: {name} that should be updated to: {new_val:#?} by assignment, was not declared before -- env: {env:#?}"
+        )))
     }
 }
 

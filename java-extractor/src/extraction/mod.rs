@@ -84,7 +84,9 @@ pub async fn extract(
         SpringEvaluationStrategy::new(methods_asts),
     )
     .select_restcall_statements(&calls, &file_name)
-    .map_err(|e| ExtractionError::Process(format!("Restcall evaluation error: {:?}", e)))?;
+    .map_err(|e| {
+        ExtractionError::SymbolicEvaluation(format!("Restcall evaluation error: {:?}", e))
+    })?;
 
     Ok(CodeElementsAggregate::new(
         imports, entities, endpoints, restcalls, callables, calls,

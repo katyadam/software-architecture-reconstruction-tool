@@ -90,6 +90,7 @@ impl From<ExtractionError> for ApiError {
             ExtractionError::Serde(error) => ApiError::InternalServerError(error.to_string()),
             ExtractionError::Process(s) => ApiError::InternalServerError(s),
             ExtractionError::ExtractorNotFound(s) => ApiError::BadRequest(s),
+            ExtractionError::SymbolicEvaluation(s) => ApiError::InternalServerError(s),
         }
     }
 }

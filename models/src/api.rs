@@ -51,4 +51,7 @@ pub enum ExtractionError {
 
     #[error("Extractor for file: {0} not found")]
     ExtractorNotFound(String),
+
+    #[error("Error occured during symbolic evaluation: {0}")]
+    SymbolicEvaluation(String),
 }

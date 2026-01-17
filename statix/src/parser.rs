@@ -20,7 +20,7 @@ pub fn find_method_nodes(root: Node) -> Vec<Node> {
 pub fn parse_method(node: Node, code: &str) -> Result<MethodAst, ParseError> {
     let return_type = node
         .child_by_field_name("type")
-        .ok_or(ParseError::FieldNotFound("tyoe".to_string()))?
+        .ok_or(ParseError::FieldNotFound("type".to_string()))?
         .utf8_text(code.as_bytes())
         .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
         .to_string();
@@ -39,11 +39,11 @@ pub fn parse_method(node: Node, code: &str) -> Result<MethodAst, ParseError> {
     let params = parse_parameters(params_node, code)?;
     let params_types = parse_parameters_to_datatypes(params_node, code)?;
 
-    let body_node = node
-        .child_by_field_name("body")
-        .ok_or(ParseError::FieldNotFound("body".to_string()))?;
-
-    let body = parse_block(body_node, code)?;
+    let body = if let Some(body_node) = node.child_by_field_name("body") {
+        parse_block(body_node, code)?
+    } else {
+        Vec::new()
+    };
     Ok(MethodAst {
         return_type: return_type.clone(),
         header: return_type + " " + &name + &format!("({})", params_types.join(",")),
@@ -100,10 +100,11 @@ fn parse_block(node: Node, source: &str) -> Result<Vec<Stmt>, ParseError> {
 fn parse_stmt(node: Node, source: &str) -> Result<Stmt, ParseError> {
     match node.kind() {
         "return_statement" => {
-            let expr_node = node
-                .named_child(0)
-                .ok_or(ParseError::FieldNotFound("return expression".to_string()))?;
-            let expr = parse_expr(expr_node, source)?;
+            let expr = if let Some(expr_node) = node.named_child(0) {
+                parse_expr(expr_node, source)?
+            } else {
+                Expr::Empty
+            };
             Ok(Stmt::Return(expr))
         }
 
@@ -158,15 +159,15 @@ fn parse_stmt(node: Node, source: &str) -> Result<Stmt, ParseError> {
                 .to_string();
 
             let value = if let Some(value_node) = declarator.child_by_field_name("value") {
-                Some(parse_expr(value_node, source)?)
+                parse_expr(value_node, source)?
             } else {
-                None
+                Expr::Empty
             };
 
             Ok(Stmt::Declaration {
                 name,
                 dtype: datatype,
-                value: value.ok_or(ParseError::FieldNotFound("variable value".to_string()))?,
+                value: value,
             })
         }
 
