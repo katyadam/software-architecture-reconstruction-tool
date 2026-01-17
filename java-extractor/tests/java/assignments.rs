@@ -289,9 +289,5 @@ fn test_assignment() {
         ),
     ]);
 
-    assignments_map
-        .iter()
-        .for_each(|(key, val)| println!("{:?}", expected_map.contains_key(key)));
-
     assert_eq!(assignments_map, expected_map);
 }

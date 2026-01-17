@@ -25,4 +25,5 @@ async-trait = "0.1.89"
 
 models = { path = "../models" }
 clients = { path = "../clients" }
-python-extractor = { path = "../python-extractor"}
+python-extractor = { path = "../python-extractor"} 
+java-extractor ={ path = "../java-extractor" }

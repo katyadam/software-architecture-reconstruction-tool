@@ -1,6 +1,6 @@
 use models::{CodeElementsAggregate, api::ExtractionError};
 
-use crate::dispatch::extractor::{Extractor, PythonTreesitterExtractor};
+use crate::dispatch::extractor::{Extractor, JavaTreeSitterExtractor, PythonTreesitterExtractor};
 
 mod extractor;
 
@@ -20,6 +20,7 @@ fn get(file_path: &str) -> Result<Box<dyn Extractor>, ExtractionError> {
     // Would be great to use Singleton. Currently, for each file a new extractor is always created which is not optimal.
     match ext {
         "py" => Ok(Box::new(PythonTreesitterExtractor::new())),
+        "java" => Ok(Box::new(JavaTreeSitterExtractor::new())),
         _ => Err(ExtractionError::ExtractorNotFound(ext.into())),
     }
 }

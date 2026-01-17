@@ -1290,6 +1290,7 @@ dependencies = [
  "dotenvy",
  "env_logger",
  "futures-util",
+ "java-extractor",
  "log",
  "models",
  "python-extractor",

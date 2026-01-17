@@ -150,13 +150,3 @@ impl ExtractorRuntimeService for ExtractorRuntimeServiceImpl {
         Ok(())
     }
 }
-
-// fn assign_service_description_to_file(
-//     file_name: &str,
-//     service_descs: Vec<ServiceDescription>,
-// ) -> ServiceDescription {
-//     service_descs
-//         .into_iter()
-//         .find(|sd| file_name.starts_with(&sd.base_dir_path))
-//         .unwrap_or_default()
-// }
