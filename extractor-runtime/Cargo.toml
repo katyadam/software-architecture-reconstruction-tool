@@ -22,6 +22,7 @@ chrono = { version = "0.4", features = ["serde"] }
 rust-s3 = "0.37.0"
 actix-cors = "0.7.1"
 async-trait = "0.1.89"
+once_cell = "1.21.3"
 
 models = { path = "../models" }
 clients = { path = "../clients" }

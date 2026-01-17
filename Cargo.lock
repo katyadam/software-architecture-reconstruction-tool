@@ -1293,6 +1293,7 @@ dependencies = [
  "java-extractor",
  "log",
  "models",
+ "once_cell",
  "python-extractor",
  "rust-s3",
  "serde",

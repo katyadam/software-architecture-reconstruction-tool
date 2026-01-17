@@ -1,8 +1,14 @@
 use models::{CodeElementsAggregate, api::ExtractionError};
+use once_cell::sync::Lazy;
 
 use crate::dispatch::extractor::{Extractor, JavaTreeSitterExtractor, PythonTreesitterExtractor};
 
 mod extractor;
+
+static PYTHON_TREESITTER_EXTRACTOR: Lazy<PythonTreesitterExtractor> =
+    Lazy::new(PythonTreesitterExtractor::new);
+static JAVA_TREESITTER_EXTRACTOR: Lazy<JavaTreeSitterExtractor> =
+    Lazy::new(JavaTreeSitterExtractor::new);
 
 pub async fn dispatch(
     text: &str,
@@ -11,16 +17,15 @@ pub async fn dispatch(
     get(file_path)?.extract(text, file_path).await
 }
 
-fn get(file_path: &str) -> Result<Box<dyn Extractor>, ExtractionError> {
+fn get(file_path: &str) -> Result<&'static dyn Extractor, ExtractionError> {
     let ext = std::path::Path::new(file_path)
         .extension()
         .and_then(|e| e.to_str())
         .ok_or_else(|| ExtractionError::ExtractorNotFound(file_path.into()))?;
 
-    // Would be great to use Singleton. Currently, for each file a new extractor is always created which is not optimal.
     match ext {
-        "py" => Ok(Box::new(PythonTreesitterExtractor::new())),
-        "java" => Ok(Box::new(JavaTreeSitterExtractor::new())),
+        "py" => Ok(&*PYTHON_TREESITTER_EXTRACTOR),
+        "java" => Ok(&*JAVA_TREESITTER_EXTRACTOR),
         _ => Err(ExtractionError::ExtractorNotFound(ext.into())),
     }
 }
