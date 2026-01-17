@@ -1,0 +1,14 @@
+{
+  "service_descriptions": [
+    {
+      "name": "ts-admin-basic-info-service",
+      "urls": ["http://ts-admin-basic-info-service"],
+      "base_dir_path": "subset-train-ticket/ts-admin-basic-info-service"
+    },
+    {
+      "name": "ts-train-service",
+      "urls": ["http://ts-train-service"],
+      "base_dir_path": "subset-train-ticket/ts-train-service"
+    }
+  ]
+}
