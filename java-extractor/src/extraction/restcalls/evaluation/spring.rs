@@ -37,12 +37,8 @@ impl EvaluationStrategy for SpringEvaluationStrategy {
                     part[1..part.len() - 1].to_string()
                 }
                 // Otherwise, treat it as a variable and look it up in the environment
-                else if let Some((_, expr)) = analysis_result.final_env.get(part) {
-                    if let Expr::Literal(s) = expr {
-                        s.clone()
-                    } else {
-                        part.to_string() // Fallback if variable isn't a literal
-                    }
+                else if let Some((_, Expr::Literal(s))) = analysis_result.final_env.get(part) {
+                    s.clone()
                 } else {
                     part.to_string() // Fallback if variable not found
                 }

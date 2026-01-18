@@ -22,7 +22,7 @@ pub fn parse_methods(tree: &Tree, code: &str) -> HashMap<String, MethodAst> {
     let method_nodes = find_method_nodes(root_node);
     let mut methods_map: HashMap<String, MethodAst> = HashMap::new();
     for method_node in method_nodes {
-        let method_ast = parse_method(method_node, &code).unwrap();
+        let method_ast = parse_method(method_node, code).unwrap();
         methods_map.insert(method_ast.header.clone(), method_ast.clone());
     }
 

@@ -117,10 +117,10 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
 
         let concat_datatype = decide_concat_datatype(&left_type, &right_type);
 
-        if concat_datatype == "String" {
-            if let (Expr::Literal(ls), Expr::Literal(rs)) = (&left, &right) {
-                return Ok((concat_datatype, Expr::Literal(format!("{}{}", ls, rs))));
-            }
+        if concat_datatype == "String"
+            && let (Expr::Literal(ls), Expr::Literal(rs)) = (&left, &right)
+        {
+            return Ok((concat_datatype, Expr::Literal(format!("{}{}", ls, rs))));
         }
 
         Ok((

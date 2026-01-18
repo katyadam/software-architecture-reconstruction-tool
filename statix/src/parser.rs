@@ -167,7 +167,7 @@ fn parse_stmt(node: Node, source: &str) -> Result<Stmt, ParseError> {
             Ok(Stmt::Declaration {
                 name,
                 dtype: datatype,
-                value: value,
+                value,
             })
         }
 

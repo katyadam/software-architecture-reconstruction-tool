@@ -6,6 +6,7 @@ use crate::extraction::restcalls::identification::{
     HTTP_METHODS, strategy::IdentificationStrategy,
 };
 
+#[derive(Default)]
 pub struct SpringIdentificationStrategy {}
 
 impl SpringIdentificationStrategy {

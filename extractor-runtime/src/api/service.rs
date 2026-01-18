@@ -92,14 +92,13 @@ impl ExtractorRuntimeService for ExtractorRuntimeServiceImpl {
                 .content_disposition()
                 .and_then(|cd| cd.get_filename().map(|s| s.to_owned()));
 
-            if let Some(file_name) = file_name_opt {
-                if let Err(e) = self
+            if let Some(file_name) = file_name_opt
+                && let Err(e) = self
                     .process_file(&file_name, field, identifier.codebase_uuid, &base_dir_path)
                     .await
-                {
-                    info!("An Error occured during file processing: {e}");
-                    continue;
-                }
+            {
+                info!("An Error occured during file processing: {e}");
+                continue;
             }
             any_file_processed = true;
         }

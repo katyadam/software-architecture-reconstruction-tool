@@ -83,7 +83,7 @@ pub async fn extract(
         SpringIdentificationStrategy::new(),
         SpringEvaluationStrategy::new(methods_asts),
     )
-    .select_restcall_statements(&calls, &file_name)
+    .select_restcall_statements(&calls, file_name)
     .map_err(|e| {
         ExtractionError::SymbolicEvaluation(format!("Restcall evaluation error: {:?}", e))
     })?;

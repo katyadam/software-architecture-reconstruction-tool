@@ -9,7 +9,7 @@ pub struct SpringSelector {
     evaluation_strategy: SpringEvaluationStrategy,
 }
 
-impl<'a> SpringSelector {
+impl SpringSelector {
     pub fn new(
         identification_strategy: SpringIdentificationStrategy,
         evaluation_strategy: SpringEvaluationStrategy,
@@ -21,7 +21,7 @@ impl<'a> SpringSelector {
     }
 }
 
-impl<'a> Selector for SpringSelector {
+impl Selector for SpringSelector {
     fn identification_strategy(&self) -> &dyn IdentificationStrategy {
         &self.identification_strategy
     }

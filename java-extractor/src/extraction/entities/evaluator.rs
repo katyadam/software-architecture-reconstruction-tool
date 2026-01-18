@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use models::{Entity, Import};
 
 pub fn evaluate_entity_fields(imports: &[Import], entities: &mut Vec<Entity>) {
-    let imports_map = get_imports_map(&imports);
+    let imports_map = get_imports_map(imports);
     let entities_map = get_entities_map(entities);
 
     for entity in entities {

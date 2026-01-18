@@ -14,8 +14,8 @@ pub trait Selector {
             .identify_restcall(call, file_path)
     }
 
-    fn evaluate(&self, mut restcall: &mut RestCall) -> Result<(), EvalError> {
-        self.evaluation_strategy().evaluate_restcall(&mut restcall)
+    fn evaluate(&self, restcall: &mut RestCall) -> Result<(), EvalError> {
+        self.evaluation_strategy().evaluate_restcall(restcall)
     }
 
     fn select_restcall_statements(

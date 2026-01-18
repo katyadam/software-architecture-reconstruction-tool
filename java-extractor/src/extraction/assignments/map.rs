@@ -133,7 +133,7 @@ fn upsert(
             .expect("Should not fail, contains checked before")
             .to_owned();
 
-        if current.value == "" {
+        if current.value.is_empty() {
             current.value = for_upsert.value;
         }
         if current.variable_type == "any" {
