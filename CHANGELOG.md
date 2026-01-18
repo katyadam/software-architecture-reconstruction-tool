@@ -1,3 +1,9 @@
+# 0.3.0
+
+- Added Java Extractor - Spring Strategy
+- New crate for various static analyses
+- Using Symbolic Evaluation for Java Extractor
+
 # 0.2.0
 
 - Seperated runtime for python-extractor

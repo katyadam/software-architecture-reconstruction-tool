@@ -5,12 +5,11 @@ use python_extractor::{
         restcalls::{evaluator::evaluate_restcalls, extractor::RestcallsExtractor},
     },
     s,
-    utils::load_file,
 };
 
 use models::{Argument, HttpMethod, RestCall};
 
-use crate::python::utils::get_tree;
+use crate::python::utils::{get_tree, load_file};
 
 #[test]
 fn restcalls_extraction() {

@@ -1,6 +1,6 @@
 use tree_sitter::Tree;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct ExtractParams<'a> {
     pub tree: &'a Tree,
     pub code: &'a str,

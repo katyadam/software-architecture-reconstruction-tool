@@ -10,6 +10,7 @@ pub enum HttpMethod {
     POST,
     PUT,
     DELETE,
+    PATCH,
 }
 
 impl FromStr for HttpMethod {

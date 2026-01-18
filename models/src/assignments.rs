@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Assignment {
     pub variable_name: String,
     pub variable_type: String,
@@ -20,9 +20,18 @@ impl Scope {
         match (enclosing_function, enclosing_class) {
             (None, None) => Scope::Global,
             (None, Some(class)) => Scope::Class(class),
-            (Some(function), None) => Scope::Function(function),
-            (Some(function), Some(_)) => Scope::Function(function),
+            (Some(function), _) => Scope::Function(function),
         }
+    }
+
+    pub fn from_enclosing_function(enclosing_function: Option<String>) -> Scope {
+        enclosing_function
+            .map(Scope::Function)
+            .unwrap_or(Scope::Global)
+    }
+
+    pub fn from_enclosing_class(enclosing_class: Option<String>) -> Scope {
+        enclosing_class.map(Scope::Class).unwrap_or(Scope::Global)
     }
 }
 

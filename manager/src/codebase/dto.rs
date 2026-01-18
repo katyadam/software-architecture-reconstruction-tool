@@ -11,6 +11,7 @@ pub struct PostCodebase {
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct UpdateCodebase {
     #[schema(example = "master")]
     pub new_branch: String,

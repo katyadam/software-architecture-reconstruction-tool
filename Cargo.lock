@@ -828,6 +828,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-deque"
+version = "0.8.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dd111b7b7f7d55b72c0a6ae361660ee5853c9af73f70c3c2ef6858b950e2e51"
+dependencies = [
+ "crossbeam-epoch",
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "crossbeam-epoch"
 version = "0.9.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1280,8 +1290,10 @@ dependencies = [
  "dotenvy",
  "env_logger",
  "futures-util",
+ "java-extractor",
  "log",
  "models",
+ "once_cell",
  "python-extractor",
  "rust-s3",
  "serde",
@@ -2077,6 +2089,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
+name = "java-extractor"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "models",
+ "once_cell",
+ "rayon",
+ "regex",
+ "sha2",
+ "statix",
+ "tokio",
+ "tree-sitter",
+ "tree-sitter-java",
+]
+
+[[package]]
 name = "jiff"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2840,9 +2868,9 @@ dependencies = [
  "log",
  "models",
  "once_cell",
+ "rayon",
  "regex",
  "sha2",
- "tokio",
  "tree-sitter",
  "tree-sitter-python",
 ]
@@ -2940,6 +2968,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
 dependencies = [
  "getrandom 0.3.3",
+]
+
+[[package]]
+name = "rayon"
+version = "1.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "368f01d005bf8fd9b1206fb6fa653e6c4a81ceb1466406b81792d87c5677a58f"
+dependencies = [
+ "either",
+ "rayon-core",
+]
+
+[[package]]
+name = "rayon-core"
+version = "1.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
+dependencies = [
+ "crossbeam-deque",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -3854,6 +3902,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
+name = "statix"
+version = "0.1.0"
+dependencies = [
+ "models",
+ "once_cell",
+ "thiserror 2.0.17",
+ "tree-sitter",
+ "tree-sitter-java",
+]
+
+[[package]]
 name = "streaming-iterator"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4349,6 +4408,16 @@ dependencies = [
  "regex-syntax",
  "serde_json",
  "streaming-iterator",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-java"
+version = "0.23.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0aa6cbcdc8c679b214e616fd3300da67da0e492e066df01bcf5a5921a71e90d6"
+dependencies = [
+ "cc",
  "tree-sitter-language",
 ]
 

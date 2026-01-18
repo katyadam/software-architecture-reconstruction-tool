@@ -1,6 +1,6 @@
 use models::api::ProcessFilesIdentifier;
 use serde::Deserialize;
-use utoipa::{ToSchema, schema};
+use utoipa::ToSchema;
 
 #[derive(Debug, ToSchema, Deserialize)]
 pub struct PostViews {

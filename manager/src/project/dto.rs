@@ -11,6 +11,7 @@ pub struct PostProject {
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[allow(dead_code)]
 pub struct UpdateProject {
     #[schema(example = "windows")]
     pub new_name: String,

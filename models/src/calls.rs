@@ -18,6 +18,7 @@ pub struct CallStatement {
     pub enclosing_class_name: Option<String>,
     pub enclosing_function_hash: Option<String>,
     pub is_self_invoke: bool,
+    pub is_super_invoke: bool,
     pub invoked_on: Option<String>,
 }
 

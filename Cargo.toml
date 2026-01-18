@@ -2,9 +2,10 @@
 members = [
     "clients",
     "extractor-runtime",
+    "java-extractor",
     "manager",
     "models",
-    "python-extractor",
+    "python-extractor", "statix",
     "synthesizer",
 ]
 resolver = "3"

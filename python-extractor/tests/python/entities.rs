@@ -5,12 +5,11 @@ use python_extractor::{
         imports::extractor::ImportsExtractor,
     },
     s, strs,
-    utils::load_file,
 };
 
 use models::{Entity, Field};
 
-use crate::python::utils::get_tree;
+use crate::python::utils::{get_tree, load_file};
 
 #[test]
 fn base_test() {

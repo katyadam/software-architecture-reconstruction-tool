@@ -92,9 +92,13 @@ impl ExtractorRuntimeService for ExtractorRuntimeServiceImpl {
                 .content_disposition()
                 .and_then(|cd| cd.get_filename().map(|s| s.to_owned()));
 
-            if let Some(file_name) = file_name_opt {
-                self.process_file(&file_name, field, identifier.codebase_uuid, &base_dir_path)
-                    .await?;
+            if let Some(file_name) = file_name_opt
+                && let Err(e) = self
+                    .process_file(&file_name, field, identifier.codebase_uuid, &base_dir_path)
+                    .await
+            {
+                info!("An Error occured during file processing: {e}");
+                continue;
             }
             any_file_processed = true;
         }
@@ -133,10 +137,11 @@ impl ExtractorRuntimeService for ExtractorRuntimeServiceImpl {
         let text = std::str::from_utf8(&file_bytes)
             .map_err(|_| ApiError::InternalServerError("From UTF-8 failed".to_string()))?;
 
-        let code_elements_aggregate = dispatch(text, file_name).await?;
-        self.s3_connector
-            .store_code_elements(code_elements_aggregate, base_dir_path)
-            .await?;
+        if let Some(code_elements_aggregate) = dispatch(text, file_name).await? {
+            self.s3_connector
+                .store_code_elements(code_elements_aggregate, base_dir_path)
+                .await?;
+        }
 
         self.manager_connector
             .send_file_record(PostFileRecord::new(
@@ -150,13 +155,3 @@ impl ExtractorRuntimeService for ExtractorRuntimeServiceImpl {
         Ok(())
     }
 }
-
-// fn assign_service_description_to_file(
-//     file_name: &str,
-//     service_descs: Vec<ServiceDescription>,
-// ) -> ServiceDescription {
-//     service_descs
-//         .into_iter()
-//         .find(|sd| file_name.starts_with(&sd.base_dir_path))
-//         .unwrap_or_default()
-// }

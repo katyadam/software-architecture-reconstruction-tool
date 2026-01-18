@@ -31,3 +31,24 @@ impl Extractor for PythonTreesitterExtractor {
         Ok(result)
     }
 }
+
+pub struct JavaTreeSitterExtractor {}
+
+impl JavaTreeSitterExtractor {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+#[async_trait]
+impl Extractor for JavaTreeSitterExtractor {
+    async fn extract(
+        &self,
+        text: &str,
+        file_path: &str,
+    ) -> Result<CodeElementsAggregate, ExtractionError> {
+        let result = java_extractor::extraction::extract(text, file_path).await?;
+
+        Ok(result)
+    }
+}

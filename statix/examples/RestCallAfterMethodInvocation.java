@@ -1,0 +1,50 @@
+public class CancelServiceImpl implements CancelService {
+    @Autowired
+    private RestTemplate restTemplate;
+
+    private String getServiceUrl(String serviceName) {
+        String a = "aa";
+        return "http://" + serviceName + " " + a;
+    }
+
+    private String decideServiceUrl(String serviceName, boolean isOverSsl) {
+        if (isOverSsl)
+            return "https://" + serviceName;
+        else
+            return "http://" + serviceName;
+    }
+
+    private String decideServiceUrl(String serviceName) {
+        if (1 == 1)
+            return "https://" + serviceName;
+        else
+            return "http://" + serviceName;
+    }
+
+
+    void tryDecide() {
+        boolean overSsl = true;
+        String res = decideServiceUrl("service", overSsl);
+        String joinedRes = decideServiceUrl("service");
+        return res;
+    }
+
+    public boolean drawbackMoney(String money, String userId, HttpHeaders headers) {
+        CancelServiceImpl.LOGGER.info("[drawbackMoney][Draw Back Money]");
+
+        HttpHeaders newHeaders = getAuthorizationHeadersFrom(headers);
+        HttpEntity requestEntity = new HttpEntity(newHeaders);
+        String inside_payment_service_url = getServiceUrl("ts-inside-payment-service");
+        int a = 0;
+        a = 5;
+        ResponseEntity<Response> re = restTemplate.exchange(
+                inside_payment_service_url + "/api/v1/inside_pay_service/inside_payment/drawback/" + userId + "/" + money,
+                HttpMethod.GET,
+                requestEntity,
+                Response.class);
+        Response result = re.getBody();
+
+        return result.getStatus() == 1;
+    }
+
+}
