@@ -241,7 +241,6 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             }
         }
 
-        // 5. JOIN Return Values: If branches return, the IF block returns symbolically
         if then_ret.is_some() || else_ret.is_some() {
             let (_, evaluated_ite) = self.join(
                 &sym_cond,
