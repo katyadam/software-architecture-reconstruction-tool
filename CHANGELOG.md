@@ -2,7 +2,9 @@
 
 - Added Java Extractor - Spring Strategy
 - New crate for various static analyses
-- Using Symbolic Evaluation for Java Extractor
+    - Using Symbolic Evaluation for Java Extractor
+- Successful run for train-ticket
+- Improving SDG synthetization precision
 
 # 0.2.0
 
