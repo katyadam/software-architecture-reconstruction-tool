@@ -14,7 +14,7 @@ pub trait Selector {
             .identify_restcall(call, file_path)
     }
 
-    fn evaluate(&self, restcall: &mut RestCall) -> Result<(), EvalError> {
+    fn evaluate(&self, restcall: &RestCall) -> Result<Vec<RestCall>, EvalError> {
         self.evaluation_strategy().evaluate_restcall(restcall)
     }
 
@@ -27,13 +27,13 @@ pub trait Selector {
             .iter()
             .map(|call| {
                 if let Some(mut restcall) = self.identify(call, file_path) {
-                    self.evaluate(&mut restcall)?;
-                    Ok(Some(restcall))
+                    let unwrapped_evaluated_result = self.evaluate(&mut restcall)?;
+                    Ok(unwrapped_evaluated_result)
                 } else {
-                    Ok(None)
+                    Ok(vec![])
                 }
             })
-            .collect::<Result<Vec<Option<RestCall>>, EvalError>>()?
+            .collect::<Result<Vec<Vec<RestCall>>, EvalError>>()?
             .into_iter()
             .flatten()
             .collect::<Vec<RestCall>>())

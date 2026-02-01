@@ -12,3 +12,16 @@ pub struct RestCall {
     pub target_uri: String,
     pub file_path: String,
 }
+
+impl RestCall {
+    pub fn clone_from_target_uri(&self, cloned_target_uri: &str) -> Self {
+        RestCall {
+            function_name: self.function_name.clone(),
+            function_hash: self.function_hash.clone(),
+            call_arguments: self.call_arguments.clone(),
+            http_method: self.http_method.clone(),
+            target_uri: cloned_target_uri.to_owned(),
+            file_path: self.file_path.clone(),
+        }
+    }
+}

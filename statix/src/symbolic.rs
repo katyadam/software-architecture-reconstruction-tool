@@ -11,6 +11,7 @@ pub type VarName = String;
 pub type VarType = String;
 type Env = HashMap<VarName, (VarType, Expr)>;
 
+#[derive(Debug)]
 pub struct AnalysisResult {
     pub return_value: Expr,
     pub final_env: Env,
@@ -29,6 +30,14 @@ pub struct SymbolicEvaluator<'a> {
 impl<'a> SymbolicEvaluator<'a> {
     pub fn new(env: Env, methods: &'a HashMap<String, MethodAst>) -> Self {
         Self { env, methods }
+    }
+
+    fn merge_new_vars(&mut self, branch_evaluator: &Self) {
+        for (key, (dtype, val)) in &branch_evaluator.env {
+            if !self.env.contains_key(key) {
+                self.env.insert(key.clone(), (dtype.clone(), val.clone()));
+            }
+        }
     }
 
     pub fn eval_method(
@@ -240,6 +249,9 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
                 self.env.get_mut(&key).unwrap().1 = evaluated_ite;
             }
         }
+
+        self.merge_new_vars(&then_evaluator);
+        self.merge_new_vars(&else_evaluator);
 
         if then_ret.is_some() || else_ret.is_some() {
             let (_, evaluated_ite) = self.join(
