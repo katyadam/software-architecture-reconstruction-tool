@@ -1,5 +1,7 @@
 use actix_web::{App, HttpServer, Responder, get};
 
+mod schema;
+
 #[get("/health")]
 async fn health() -> impl Responder {
     "OK"
