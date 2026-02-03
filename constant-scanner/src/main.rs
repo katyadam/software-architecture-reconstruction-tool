@@ -1,5 +1,8 @@
 use actix_web::{App, HttpServer, Responder, get};
 
+mod api;
+mod model;
+mod scanner;
 mod schema;
 
 #[get("/health")]
