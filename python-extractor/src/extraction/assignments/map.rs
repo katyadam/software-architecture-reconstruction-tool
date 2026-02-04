@@ -69,7 +69,9 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
                 variable_name: variable_name.clone(),
             };
 
-            assignments_map.insert(assignment_key, new_assignment);
+            if !variable_name.is_empty() {
+                assignments_map.insert(assignment_key, new_assignment);
+            }
         });
         let functions_params_assignments =
             create_assignments_from_function_params(&function_params, &function_name);

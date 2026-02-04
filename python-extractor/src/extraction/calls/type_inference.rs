@@ -32,7 +32,8 @@ fn resolve_type(
     while let Some(assignment) = assignments_map.get(&AssignmentKey {
         scope: scope.clone(),
         variable_name: current.clone(),
-    }) {
+    }) && !assignment.variable_name.is_empty()
+    {
         if !assignment.variable_type.is_empty() {
             return Some(assignment.variable_type.clone());
         }
