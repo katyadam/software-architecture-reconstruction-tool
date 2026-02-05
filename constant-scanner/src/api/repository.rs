@@ -5,70 +5,90 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{QueryDsl, RunQueryDsl, SelectableHelper, delete};
 use uuid::Uuid;
 
-use crate::codebase::model::{Codebase, NewCodebase};
-use crate::errors::database::DatabaseError;
-use crate::project::model::Project;
+use crate::error::DatabaseError;
+use crate::model::{Commit, Constant, NewConstant};
 use crate::schema;
-use crate::schema::codebases::dsl::*;
-use crate::schema::projects::dsl::*;
+use crate::schema::commits::dsl::*;
+use crate::schema::constants::dsl::*;
 
 pub trait ConstantRepository {
-    fn get_all_for_commit(&self, commit_hash: &str) -> Result<Codebase, DatabaseError>;
-    fn save(&self, new_constant: NewCodebase) -> Result<Codebase, DatabaseError>;
+    fn get_single(&self, uuid_to_get: Uuid) -> Result<Constant, DatabaseError>;
+    fn save(&self, new_constant: NewConstant) -> Result<Constant, DatabaseError>;
+    fn save_batch(&self, new_constants: &[NewConstant]) -> Result<Vec<Constant>, DatabaseError>;
     fn delete(&self, uuid_to_delete: Uuid) -> Result<(), DatabaseError>;
 }
 
 #[derive(Clone)]
-pub struct PgCodebaseRepository {
+pub struct PgConstantRepository {
     pg_pool: Pool<ConnectionManager<PgConnection>>,
 }
 
-impl PgCodebaseRepository {
+impl PgConstantRepository {
     pub fn new(pg_pool: Pool<ConnectionManager<PgConnection>>) -> Self {
         Self { pg_pool }
     }
 }
 
-impl CodebaseRepository for PgCodebaseRepository {
-    fn get_single(&self, uuid_to_find: Uuid) -> Result<Codebase, DatabaseError> {
+impl ConstantRepository for PgConstantRepository {
+    fn get_single(&self, uuid_to_get: Uuid) -> Result<Constant, DatabaseError> {
         let mut conn = self.pg_pool.get()?;
 
-        let codebase = codebases
-            .find(uuid_to_find)
-            .select(Codebase::as_select())
+        let constant = constants
+            .find(uuid_to_get)
+            .select(Constant::as_select())
             .first(conn.deref_mut())?;
 
-        Ok(codebase)
+        Ok(constant)
     }
 
-    fn save(&self, new_codebase: NewCodebase) -> Result<Codebase, DatabaseError> {
+    fn save(&self, new_constant: NewConstant) -> Result<Constant, DatabaseError> {
         let mut conn = self.pg_pool.get()?;
 
-        let codebase = conn.deref_mut().transaction(|conn| {
-            projects
-                .find(new_codebase.project_uuid)
-                .select(Project::as_select())
+        let constant = conn.deref_mut().transaction(|conn| {
+            commits
+                .find(new_constant.commit_hash.clone())
+                .select(Commit::as_select())
                 .first(conn)?;
 
-            diesel::insert_into(schema::codebases::table)
-                .values(new_codebase)
-                .returning(Codebase::as_returning())
+            diesel::insert_into(schema::constants::table)
+                .values(new_constant)
+                .returning(Constant::as_returning())
                 .get_result(conn)
         })?;
 
-        Ok(codebase)
+        Ok(constant)
+    }
+
+    fn save_batch(&self, new_constants: &[NewConstant]) -> Result<Vec<Constant>, DatabaseError> {
+        let mut conn = self.pg_pool.get()?;
+
+        let saved_constants = conn.deref_mut().transaction(|conn| {
+            if let Some(first) = new_constants.first() {
+                commits
+                    .find(&first.commit_hash)
+                    .select(Commit::as_select())
+                    .first(conn)?;
+            }
+
+            diesel::insert_into(schema::constants::table)
+                .values(new_constants)
+                .returning(Constant::as_returning())
+                .get_results(conn)
+        })?;
+
+        Ok(saved_constants)
     }
 
     fn delete(&self, uuid_to_delete: Uuid) -> Result<(), DatabaseError> {
         let mut conn = self.pg_pool.get()?;
 
         conn.deref_mut().transaction(|conn| {
-            codebases
+            constants
                 .find(uuid_to_delete)
-                .select(Codebase::as_select())
+                .select(Constant::as_select())
                 .first(conn)?;
 
-            delete(codebases.filter(codebase_uuid.eq(uuid_to_delete))).execute(conn)
+            delete(constants.filter(constant_uuid.eq(uuid_to_delete))).execute(conn)
         })?;
 
         Ok(())
