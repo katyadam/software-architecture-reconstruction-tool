@@ -1,7 +1,7 @@
 use std::env;
 
 use crate::{
-    api::{
+    constant::{
         repository::PgConstantRepository,
         service::{ConstantService, ConstantServiceImpl},
     },
@@ -13,14 +13,20 @@ use r2d2::Pool;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-mod api;
+mod constant;
 mod error;
-mod model;
 mod scanner;
 mod schema;
 
 #[derive(OpenApi)]
-#[openapi(paths(api::controller::save_constants), components(schemas(ApiError)))]
+#[openapi(
+    paths(
+        constant::controller::save_constants,
+        constant::controller::get_constants_by_commit_hash,
+        constant::controller::delete_constants_by_commit_hash
+    ),
+    components(schemas(ApiError))
+)]
 struct ApiDoc;
 
 #[actix_web::main]
@@ -48,7 +54,7 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/constants")
                     .app_data(web::Data::new(constant_service))
-                    .configure(api::configure),
+                    .configure(constant::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

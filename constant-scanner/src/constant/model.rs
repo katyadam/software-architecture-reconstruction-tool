@@ -3,7 +3,7 @@ use diesel::Queryable;
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::api::dto::ConstantResponse;
+use crate::constant::dto::ConstantResponse;
 
 #[derive(Queryable, Insertable, Debug, Selectable)]
 #[diesel(table_name = crate::schema::commits)]

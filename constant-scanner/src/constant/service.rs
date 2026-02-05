@@ -2,19 +2,21 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use crate::{
-    api::{dto::ConstantBatchInput, repository::ConstantRepository},
+    constant::{
+        dto::ConstantBatchInput,
+        model::{Constant, NewConstant},
+        repository::ConstantRepository,
+    },
     error::ServiceError,
-    model::{Constant, NewConstant},
 };
 
 pub trait ConstantService {
-    fn get_single(&self, uuid_to_get: Uuid) -> Result<Constant, ServiceError>;
-    fn create(&self, new_constant: NewConstant) -> Result<Constant, ServiceError>;
+    fn get_by_commit_hash(&self, commit_hash: &str) -> Result<Vec<Constant>, ServiceError>;
     fn create_batch_from_keyvalues(
         &self,
         batch: ConstantBatchInput,
     ) -> Result<Vec<Constant>, ServiceError>;
-    fn delete(&self, uuid_to_delete: Uuid) -> Result<(), ServiceError>;
+    fn delete_by_commit_hash(&self, commit_hash: &str) -> Result<(), ServiceError>;
 }
 
 pub struct ConstantServiceImpl {
@@ -28,9 +30,9 @@ impl ConstantServiceImpl {
 }
 
 impl ConstantService for ConstantServiceImpl {
-    fn get_single(&self, uuid_to_find: Uuid) -> Result<Constant, ServiceError> {
-        let conf = self.repository.get_single(uuid_to_find)?;
-        Ok(conf)
+    fn get_by_commit_hash(&self, commit_hash: &str) -> Result<Vec<Constant>, ServiceError> {
+        let results = self.repository.get_by_commit_hash(commit_hash)?;
+        Ok(results)
     }
 
     fn create_batch_from_keyvalues(
@@ -56,13 +58,8 @@ impl ConstantService for ConstantServiceImpl {
         Ok(created_constants)
     }
 
-    fn create(&self, new_constant: NewConstant) -> Result<Constant, ServiceError> {
-        let created_constant = self.repository.save(new_constant)?;
-        Ok(created_constant)
-    }
-
-    fn delete(&self, uuid_to_delete: Uuid) -> Result<(), ServiceError> {
-        self.repository.delete(uuid_to_delete)?;
+    fn delete_by_commit_hash(&self, commit_hash: &str) -> Result<(), ServiceError> {
+        self.repository.delete_by_commit_hash(commit_hash)?;
         Ok(())
     }
 }
