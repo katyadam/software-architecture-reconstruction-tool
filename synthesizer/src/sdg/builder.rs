@@ -4,6 +4,7 @@ use models::{ConfigurationData, Endpoint, RestCall, configuration::ServiceDescri
 use strsim::levenshtein;
 
 use crate::{
+    connectors::dto::Constant,
     errors::builder::BuilderError,
     sdg::model::{AssignedEndpoint, AssignedRestCall, Connection, Request, Sdg, Service},
     utils::assign_service_description_to_file,
@@ -15,6 +16,7 @@ pub trait SdgBuilder {
         endpoints: Vec<Endpoint>,
         restcalls: Vec<RestCall>,
         configuration: ConfigurationData,
+        constants: &[Constant],
     ) -> Result<Sdg, BuilderError>;
 }
 
@@ -26,6 +28,7 @@ impl SdgBuilder for SdgBuilderImpl {
         endpoints: Vec<Endpoint>,
         restcalls: Vec<RestCall>,
         configuration: ConfigurationData,
+        constants: &[Constant],
     ) -> Result<Sdg, BuilderError> {
         let assigned_endpoints =
             self.get_assigned_endpoints(endpoints, &configuration.service_descriptions);

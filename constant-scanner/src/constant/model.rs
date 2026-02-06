@@ -38,8 +38,6 @@ impl Constant {
             constant_uuid: self.constant_uuid,
             name: self.name.clone(),
             value: self.value.clone(),
-            commit_hash: self.commit_hash.clone(),
-            created_at: self.created_at.to_rfc3339(),
         }
     }
 }

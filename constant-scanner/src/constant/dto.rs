@@ -7,8 +7,6 @@ pub struct ConstantResponse {
     pub constant_uuid: Uuid,
     pub name: String,
     pub value: String,
-    pub commit_hash: String,
-    pub created_at: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

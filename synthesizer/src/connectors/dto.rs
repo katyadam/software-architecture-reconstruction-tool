@@ -10,3 +10,16 @@ pub struct ConfigurationDto {
     pub configuration_data: ConfigurationData,
     pub created_at: DateTime<Utc>,
 }
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct Constant {
+    pub constant_uuid: Uuid,
+    pub name: String,
+    pub value: String,
+}
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct ConstantsDto {
+    pub constants: Vec<Constant>,
+}

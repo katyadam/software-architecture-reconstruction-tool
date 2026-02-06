@@ -1,7 +1,9 @@
 use uuid::Uuid;
 
 use crate::{
-    connectors::manager_connector::ManagerConnector,
+    connectors::{
+        constant_scanner_connector::ConstantScannerConnector, manager_connector::ManagerConnector,
+    },
     errors::service::ServiceError,
     sdg::{
         builder::{SdgBuilder, SdgBuilderImpl},
@@ -22,6 +24,7 @@ pub struct SdgServiceImpl {
     repository: SdgRepositoryImpl,
     builder: SdgBuilderImpl,
     manager_connector: ManagerConnector,
+    constant_scanner_connector: ConstantScannerConnector,
 }
 
 impl SdgServiceImpl {
@@ -29,26 +32,34 @@ impl SdgServiceImpl {
         repository: SdgRepositoryImpl,
         builder: SdgBuilderImpl,
         manager_connector: ManagerConnector,
+        constant_scanner_connector: ConstantScannerConnector,
     ) -> Self {
         Self {
             repository,
             builder,
             manager_connector,
+            constant_scanner_connector: constant_scanner_connector,
         }
     }
 }
 
 impl SdgService for SdgServiceImpl {
     async fn save(&self, sdg_payload: PostSDG) -> Result<Sdg, ServiceError> {
-        let configuration = self
+        let configuration_dto = self
             .manager_connector
             .get_commit_configuration(&sdg_payload.commit_hash)
+            .await?;
+
+        let constants_dto = self
+            .constant_scanner_connector
+            .get_commit_constants(&sdg_payload.commit_hash)
             .await?;
 
         let sdg = self.builder.build(
             sdg_payload.endpoints,
             sdg_payload.restcalls,
-            configuration.configuration_data,
+            configuration_dto.configuration_data,
+            &constants_dto.constants,
         )?;
 
         self.repository

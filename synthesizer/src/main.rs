@@ -12,7 +12,9 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
     bucket::get_bucket,
-    connectors::manager_connector::ManagerConnector,
+    connectors::{
+        constant_scanner_connector::ConstantScannerConnector, manager_connector::ManagerConnector,
+    },
     contextmap::{
         builder::ContextMapBuilderImpl,
         dto::{GetContextMapErrorReponse, PostContextMap},
@@ -91,6 +93,8 @@ async fn main() -> std::io::Result<()> {
 
     let url: String = env::var("EXPOSE_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
     let manager_url: String = env::var("MANAGER_URL").expect("MANAGER_URL must be specified!");
+    let constant_scanner_url: String =
+        env::var("CONSTANT_SCANNER_URL").expect("CONSTANT_SCANNER_URL must be specified!");
 
     let cm_graph = setup_contextmap_db().await;
     let sdg_graph = setup_sdg_db().await;
@@ -98,7 +102,11 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         let cm_service = Arc::new(get_cm_service(cm_graph.clone(), &manager_url));
-        let sdg_service = Arc::new(get_sdg_service(sdg_graph.clone(), &manager_url));
+        let sdg_service = Arc::new(get_sdg_service(
+            sdg_graph.clone(),
+            &manager_url,
+            &constant_scanner_url,
+        ));
         let imcg_service = Arc::new(get_imcg_service(
             imcg_graph.clone(),
             &manager_url,
@@ -152,12 +160,25 @@ fn get_cm_service(graph: Arc<Graph>, manager_url: &str) -> ContextMapServiceImpl
     ContextMapServiceImpl::new(cm_repository, cm_builder, manager_connector)
 }
 
-fn get_sdg_service(graph: Arc<Graph>, manager_url: &str) -> SdgServiceImpl {
+fn get_sdg_service(
+    graph: Arc<Graph>,
+    manager_url: &str,
+    constant_scanner_url: &str,
+) -> SdgServiceImpl {
     let sdg_repository = SdgRepositoryImpl::new(graph);
     let sdg_builder = SdgBuilderImpl::new();
     let manager_connector =
         ManagerConnector::new(HttpClient::new(manager_url.to_owned(), Client::default()));
-    SdgServiceImpl::new(sdg_repository, sdg_builder, manager_connector)
+    let constant_scanner_connector = ConstantScannerConnector::new(HttpClient::new(
+        constant_scanner_url.to_owned(),
+        Client::default(),
+    ));
+    SdgServiceImpl::new(
+        sdg_repository,
+        sdg_builder,
+        manager_connector,
+        constant_scanner_connector,
+    )
 }
 
 fn get_imcg_service(
