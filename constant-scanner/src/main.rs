@@ -37,7 +37,7 @@ async fn main() -> std::io::Result<()> {
     dotenvy::dotenv().ok();
 
     let port: u16 = env::var("PORT")
-        .unwrap_or_else(|_| "8081".to_string())
+        .unwrap_or_else(|_| "8084".to_string())
         .parse()
         .expect("PORT must be a valid u16 number");
 

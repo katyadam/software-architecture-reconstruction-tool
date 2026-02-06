@@ -54,7 +54,7 @@ pub async fn save_constants(
 }
 
 #[utoipa::path(
-        post,
+        delete,
         path = "/constants/{commit_hash}",
         responses(
             (status = 200, description = "Constants successfully deleted"),
