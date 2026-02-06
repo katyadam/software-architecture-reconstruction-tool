@@ -12,7 +12,7 @@ pub struct ConfigurationDto {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Constant {
     pub constant_uuid: Uuid,
     pub name: String,

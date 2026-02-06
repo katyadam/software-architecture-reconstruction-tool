@@ -1,6 +1,7 @@
-use std::{cmp::min, collections::HashMap};
+use std::{borrow::Cow, cmp::min, collections::HashMap};
 
 use models::{ConfigurationData, Endpoint, RestCall, configuration::ServiceDescription};
+use regex::Regex;
 use strsim::levenshtein;
 
 use crate::{
@@ -35,8 +36,10 @@ impl SdgBuilder for SdgBuilderImpl {
         let services = self
             .map_endpoints_to_services(&assigned_endpoints, &configuration.service_descriptions);
 
-        let assigned_restcalls =
+        let mut assigned_restcalls =
             self.get_assigned_restcalls(restcalls, &configuration.service_descriptions);
+        self.substitute_constants_in_restcalls(&mut assigned_restcalls, &constants)?;
+
         let connections = self.create_connections(assigned_endpoints, assigned_restcalls);
         Ok(Sdg {
             services,
@@ -63,21 +66,6 @@ impl SdgBuilderImpl {
                 let service_desc =
                     assign_service_description_to_file(&endpoint.file_path, service_descs);
                 AssignedEndpoint::new(endpoint, service_desc)
-            })
-            .collect()
-    }
-
-    fn get_assigned_restcalls(
-        &self,
-        restcalls: Vec<RestCall>,
-        service_descs: &[ServiceDescription],
-    ) -> Vec<AssignedRestCall> {
-        restcalls
-            .into_iter()
-            .map(|restcall| {
-                let service_desc =
-                    assign_service_description_to_file(&restcall.file_path, service_descs);
-                AssignedRestCall::new(restcall, service_desc)
             })
             .collect()
     }
@@ -114,6 +102,63 @@ impl SdgBuilderImpl {
         }
 
         service_map.into_values().collect()
+    }
+
+    fn get_assigned_restcalls(
+        &self,
+        restcalls: Vec<RestCall>,
+        service_descs: &[ServiceDescription],
+    ) -> Vec<AssignedRestCall> {
+        restcalls
+            .into_iter()
+            .map(|restcall| {
+                let service_desc =
+                    assign_service_description_to_file(&restcall.file_path, service_descs);
+                AssignedRestCall::new(restcall, service_desc)
+            })
+            .collect()
+    }
+
+    fn substitute_constants_in_restcalls(
+        &self,
+        restcalls: &mut [AssignedRestCall],
+        constants: &[Constant],
+    ) -> Result<(), BuilderError> {
+        if constants.is_empty() {
+            return Ok(());
+        }
+
+        let mut sorted_constants = constants.to_vec();
+        sorted_constants.sort_by(|a, b| b.name.len().cmp(&a.name.len()));
+
+        let lookup_table: HashMap<&str, &str> = sorted_constants
+            .iter()
+            .map(|constant| (constant.name.as_str(), constant.value.as_str()))
+            .collect();
+
+        let pattern = sorted_constants
+            .iter()
+            .map(|constant| regex::escape(&constant.name))
+            .collect::<Vec<String>>()
+            .join("|");
+        let re = Regex::new(&pattern)
+            .map_err(|_| BuilderError::Error("Failed to compile constants regex".to_owned()))?;
+
+        for restcall in restcalls {
+            let substituted =
+                re.replace_all(&restcall.data.target_uri, |caps: &regex::Captures| {
+                    if let Some(value) = lookup_table.get(&caps[0]) {
+                        value.to_string()
+                    } else {
+                        caps[0].to_string()
+                    }
+                });
+            if let Cow::Owned(changed_uri) = substituted {
+                restcall.data.target_uri = changed_uri;
+            }
+        }
+
+        Ok(())
     }
 
     fn create_connections(
