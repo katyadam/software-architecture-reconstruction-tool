@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{ast::MethodAst, symbolic::VarType};
+use crate::{ast::CallableAst, symbolic::VarType};
 
-pub fn find_closest_method(
-    methods: &HashMap<String, MethodAst>,
+pub fn find_closest_callable(
+    methods: &HashMap<String, CallableAst>,
     name: &str,
     params: &[VarType],
 ) -> Option<String> {
@@ -18,7 +18,7 @@ pub fn find_closest_method(
             return Some(header.clone());
         }
         // Fallback to match by highest matched params and matching name
-        if let Some((cur_name, cur_params)) = parse_method_header_manual(header) {
+        if let Some((cur_name, cur_params)) = parse_callable_header_manual(header) {
             if cur_name != name {
                 continue;
             }
@@ -38,14 +38,14 @@ pub fn find_closest_method(
 }
 
 fn mangle_header(header: &str) -> Option<String> {
-    if let Some((name, params)) = parse_method_header_manual(header) {
+    if let Some((name, params)) = parse_callable_header_manual(header) {
         return Some(name + "(" + &params.join(",") + ")");
     }
 
     None
 }
 
-fn parse_method_header_manual(header: &str) -> Option<(String, Vec<VarType>)> {
+fn parse_callable_header_manual(header: &str) -> Option<(String, Vec<VarType>)> {
     let open_paren = header.find('(')?;
     let close_paren = header.rfind(')')?;
 

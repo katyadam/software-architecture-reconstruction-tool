@@ -41,7 +41,7 @@ impl Parameter {
 }
 
 #[derive(Clone, Debug)]
-pub struct MethodAst {
+pub struct CallableAst {
     pub return_type: String,
     pub header: String,
     pub params: Vec<Parameter>,

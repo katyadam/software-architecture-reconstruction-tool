@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::{Expr, MethodAst, Stmt},
+    ast::{CallableAst, Expr, Stmt},
+    callable_match::find_closest_callable,
     error::EvalError,
-    method_match::find_closest_method,
     visitor::Visitor,
 };
 
@@ -20,7 +20,7 @@ pub struct AnalysisResult {
 #[derive(Clone)]
 pub struct SymbolicEvaluator<'a> {
     env: Env,
-    methods: &'a HashMap<String, MethodAst>,
+    methods: &'a HashMap<String, CallableAst>,
 }
 
 // TODO: Should also take class fields to environment!
@@ -28,7 +28,7 @@ pub struct SymbolicEvaluator<'a> {
 // Or getting the same type of error when assigning to a class field variable
 
 impl<'a> SymbolicEvaluator<'a> {
-    pub fn new(env: Env, methods: &'a HashMap<String, MethodAst>) -> Self {
+    pub fn new(env: Env, methods: &'a HashMap<String, CallableAst>) -> Self {
         Self { env, methods }
     }
 
@@ -42,7 +42,7 @@ impl<'a> SymbolicEvaluator<'a> {
 
     pub fn eval_method(
         method_name: &str,
-        methods: &'a HashMap<String, MethodAst>,
+        methods: &'a HashMap<String, CallableAst>,
     ) -> Result<AnalysisResult, EvalError> {
         let method = methods.get(method_name).ok_or_else(|| {
             EvalError::NonSenseEvaluation(format!("Method {} not found", method_name))
@@ -147,7 +147,7 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             evaluated_args.push(v);
         }
 
-        let closest = find_closest_method(self.methods, name, &arg_types);
+        let closest = find_closest_callable(self.methods, name, &arg_types);
         if let Some(m_name) = closest
             && let Some(method_ast) = self.methods.get(&m_name)
         {

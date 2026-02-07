@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use models::RestCall;
 use statix::{
-    ast::MethodAst, error::EvalError, method_match::convert_full_header_to_mangled_name,
+    ast::CallableAst, callable_match::convert_full_header_to_mangled_name, error::EvalError,
     symbolic::SymbolicEvaluator,
 };
 
@@ -11,11 +11,11 @@ use crate::extraction::restcalls::evaluation::{
 };
 
 pub struct SpringEvaluationStrategy {
-    method_asts: HashMap<String, MethodAst>,
+    method_asts: HashMap<String, CallableAst>,
 }
 
 impl SpringEvaluationStrategy {
-    pub fn new(method_asts: HashMap<String, MethodAst>) -> Self {
+    pub fn new(method_asts: HashMap<String, CallableAst>) -> Self {
         Self { method_asts }
     }
 }

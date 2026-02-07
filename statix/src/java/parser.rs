@@ -1,7 +1,7 @@
 use tree_sitter::Node;
 
 use crate::{
-    ast::{Expr, MethodAst, Parameter, Stmt},
+    ast::{CallableAst, Expr, Parameter, Stmt},
     error::ParseError,
 };
 
@@ -17,7 +17,7 @@ pub fn find_method_nodes(root: Node) -> Vec<Node> {
     methods
 }
 
-pub fn parse_method(node: Node, code: &str) -> Result<MethodAst, ParseError> {
+pub fn parse_method(node: Node, code: &str) -> Result<CallableAst, ParseError> {
     let return_type = node
         .child_by_field_name("type")
         .ok_or(ParseError::FieldNotFound("type".to_string()))?
@@ -44,7 +44,7 @@ pub fn parse_method(node: Node, code: &str) -> Result<MethodAst, ParseError> {
     } else {
         Vec::new()
     };
-    Ok(MethodAst {
+    Ok(CallableAst {
         return_type: return_type.clone(),
         header: return_type + " " + &name + &format!("({})", params_types.join(",")),
         params,
