@@ -2892,6 +2892,7 @@ dependencies = [
  "rayon",
  "regex",
  "sha2",
+ "statix",
  "tree-sitter",
  "tree-sitter-python",
 ]
