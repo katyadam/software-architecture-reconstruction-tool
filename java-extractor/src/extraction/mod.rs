@@ -1,5 +1,5 @@
 use models::{CodeElementsAggregate, api::ExtractionError};
-use statix::parse_methods;
+use statix::parse_java;
 use tree_sitter::Parser;
 
 use crate::extraction::{
@@ -77,7 +77,7 @@ pub async fn extract(
     // Post-processing / evaluation
     evaluate_entity_fields(&imports, &mut entities);
     evaluate_invocations(&mut calls, &assignments);
-    let methods_asts = parse_methods(&tree, code);
+    let methods_asts = parse_java(&tree, code);
 
     let restcalls = SpringSelector::new(
         SpringIdentificationStrategy::new(),

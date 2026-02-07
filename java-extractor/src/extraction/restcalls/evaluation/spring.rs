@@ -23,7 +23,7 @@ impl SpringEvaluationStrategy {
 impl EvaluationStrategy for SpringEvaluationStrategy {
     fn evaluate_restcall(&self, restcall: &RestCall) -> Result<Vec<RestCall>, EvalError> {
         let mangled_header = convert_full_header_to_mangled_name(&restcall.function_name);
-        let analysis_result = SymbolicEvaluator::eval_method(&mangled_header, &self.method_asts)?;
+        let analysis_result = SymbolicEvaluator::eval_callable(&mangled_header, &self.method_asts)?;
         let mut evaluated_restcalls: Vec<RestCall> = Vec::new();
         let target_uris = generate_target_uris(&restcall.target_uri, &analysis_result);
         for uri in target_uris {

@@ -20,7 +20,7 @@ pub struct AnalysisResult {
 #[derive(Clone)]
 pub struct SymbolicEvaluator<'a> {
     env: Env,
-    methods: &'a HashMap<String, CallableAst>,
+    callables: &'a HashMap<String, CallableAst>,
 }
 
 // TODO: Should also take class fields to environment!
@@ -28,8 +28,8 @@ pub struct SymbolicEvaluator<'a> {
 // Or getting the same type of error when assigning to a class field variable
 
 impl<'a> SymbolicEvaluator<'a> {
-    pub fn new(env: Env, methods: &'a HashMap<String, CallableAst>) -> Self {
-        Self { env, methods }
+    pub fn new(env: Env, callables: &'a HashMap<String, CallableAst>) -> Self {
+        Self { env, callables }
     }
 
     fn merge_new_vars(&mut self, branch_evaluator: &Self) {
@@ -40,24 +40,24 @@ impl<'a> SymbolicEvaluator<'a> {
         }
     }
 
-    pub fn eval_method(
-        method_name: &str,
-        methods: &'a HashMap<String, CallableAst>,
+    pub fn eval_callable(
+        callable_name: &str,
+        callables: &'a HashMap<String, CallableAst>,
     ) -> Result<AnalysisResult, EvalError> {
-        let method = methods.get(method_name).ok_or_else(|| {
-            EvalError::NonSenseEvaluation(format!("Method {} not found", method_name))
+        let callable = callables.get(callable_name).ok_or_else(|| {
+            EvalError::NonSenseEvaluation(format!("Method {} not found", callable_name))
         })?;
 
         let mut env = HashMap::new();
-        for param in &method.params {
+        for param in &callable.params {
             env.insert(
                 param.name.clone(),
                 (param.datatype.clone(), Expr::Var(param.name.clone())),
             );
         }
 
-        let mut evaluator = Self::new(env, methods);
-        let result = evaluator.visit_statements(&method.body)?;
+        let mut evaluator = Self::new(env, callables);
+        let result = evaluator.visit_statements(&callable.body)?;
 
         Ok(AnalysisResult {
             return_value: result.unwrap_or(Expr::Empty),
@@ -147,24 +147,24 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             evaluated_args.push(v);
         }
 
-        let closest = find_closest_callable(self.methods, name, &arg_types);
+        let closest = find_closest_callable(self.callables, name, &arg_types);
         if let Some(m_name) = closest
-            && let Some(method_ast) = self.methods.get(&m_name)
+            && let Some(callable_ast) = self.callables.get(&m_name)
         {
             let mut local_evaluator = SymbolicEvaluator {
                 env: HashMap::new(),
-                methods: self.methods,
+                callables: self.callables,
             };
 
-            for (param, val) in method_ast.params.iter().zip(evaluated_args) {
+            for (param, val) in callable_ast.params.iter().zip(evaluated_args) {
                 local_evaluator
                     .env
                     .insert(param.name.clone(), (param.datatype.clone(), val));
             }
-            let result = local_evaluator.visit_statements(&method_ast.body)?;
+            let result = local_evaluator.visit_statements(&callable_ast.body)?;
 
             Ok((
-                method_ast.return_type.clone(),
+                callable_ast.return_type.clone(),
                 result.unwrap_or(Expr::Empty),
             ))
         } else {
