@@ -34,7 +34,7 @@ pub fn parse_python_function(node: Node, code: &str) -> Result<CallableAst, Pars
             .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
             .to_string()
     } else {
-        "None".to_string()
+        "Any".to_string()
     };
 
     let params_node = node
@@ -42,7 +42,7 @@ pub fn parse_python_function(node: Node, code: &str) -> Result<CallableAst, Pars
         .ok_or(ParseError::FieldNotFound("parameters".to_string()))?;
 
     let params = parse_parameters(params_node, code)?;
-    let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+    let param_types: Vec<String> = params.iter().map(|p| p.datatype.clone()).collect();
 
     let body_node = node
         .child_by_field_name("body")
@@ -57,7 +57,7 @@ pub fn parse_python_function(node: Node, code: &str) -> Result<CallableAst, Pars
 
     Ok(CallableAst {
         return_type: return_type.clone(),
-        header: format!("def {}({}):", name, param_names.join(", ")),
+        header: return_type + " " + &name + &format!("({})", param_types.join(",")),
         params,
         body,
     })
@@ -70,6 +70,7 @@ fn parse_parameters(node: Node, source: &str) -> Result<Vec<Parameter>, ParseErr
     for param in node.named_children(&mut cursor) {
         let name: String;
         let mut datatype = "Any".to_string();
+        let mut default_value = None;
 
         match param.kind() {
             "identifier" => {
@@ -81,9 +82,15 @@ fn parse_parameters(node: Node, source: &str) -> Result<Vec<Parameter>, ParseErr
                 name = name_node.utf8_text(source.as_bytes()).unwrap().to_string();
                 datatype = type_node.utf8_text(source.as_bytes()).unwrap().to_string();
             }
+            "default_parameter" => {
+                let name_node = param.child_by_field_name("name").unwrap();
+                let value_node = param.child_by_field_name("value").unwrap();
+                name = name_node.utf8_text(source.as_bytes()).unwrap().to_string();
+                default_value = Some(value_node.utf8_text(source.as_bytes()).unwrap().to_string());
+            }
             _ => continue,
         }
-        params.push(Parameter::new(name, datatype));
+        params.push(Parameter::new(name, datatype, default_value));
     }
     Ok(params)
 }
@@ -107,7 +114,6 @@ fn parse_block(
 
                     let name = left_node.utf8_text(source.as_bytes()).unwrap().to_string();
                     let value = parse_expr(right_node, source)?;
-
                     if scope_vars.contains(&name) {
                         stmts.push(Stmt::Assignment { name, value });
                     } else {

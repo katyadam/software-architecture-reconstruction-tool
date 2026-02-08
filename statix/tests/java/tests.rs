@@ -1,6 +1,7 @@
 use statix::{
     ast::Expr,
-    parse_methods, symbolic_evaluation,
+    java::matcher::JavaCallableMatcher,
+    parse_java, symbolic_evaluation,
     util::{get_tree, load_file},
 };
 
@@ -9,11 +10,12 @@ fn should_return_correct_variable_with_value_and_datatype() {
     let file_name = "./examples/RestCallAfterMethodInvocation.java".to_string();
     let code = load_file(&file_name).unwrap();
     let tree = get_tree(&code);
-    let methods_map = parse_methods(&tree, &code);
+    let methods_map = parse_java(&tree, &code);
 
     let result = symbolic_evaluation(
         &methods_map,
         "boolean drawbackMoney(String,String,HttpHeaders)",
+        Box::new(JavaCallableMatcher::new()),
     )
     .expect("This test should not fail!");
     assert_eq!(

@@ -70,7 +70,7 @@ fn parse_parameters(node: Node, source: &str) -> Result<Vec<Parameter>, ParseErr
                 .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
                 .to_string();
 
-            Ok(Parameter::new(name, datatype))
+            Ok(Parameter::without_default_value(name, datatype))
         })
         .collect()
 }

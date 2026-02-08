@@ -5,14 +5,15 @@ use tree_sitter::Tree;
 use crate::{
     ast::CallableAst,
     java::parser::{find_method_nodes, parse_method},
+    matcher::CallableMatcher,
     python::parser::{find_function_nodes, parse_python_function},
-    symbolic::SymbolicEvaluator,
+    symbolic::{AnalysisContext, SymbolicEvaluator},
 };
 
 pub mod ast;
-pub mod callable_match;
 pub mod error;
 pub mod java;
+pub mod matcher;
 pub mod python;
 pub mod symbolic;
 pub mod util;
@@ -45,6 +46,8 @@ pub fn parse_python(tree: &Tree, code: &str) -> HashMap<String, CallableAst> {
 pub fn symbolic_evaluation(
     callables_map: &HashMap<String, CallableAst>,
     callable_signature: &str,
+    matcher: Box<dyn CallableMatcher>,
 ) -> Result<symbolic::AnalysisResult, error::EvalError> {
-    SymbolicEvaluator::eval_callable(callable_signature, callables_map)
+    let ctx = AnalysisContext::new(&callables_map, matcher.into());
+    SymbolicEvaluator::eval_callable(callable_signature, &ctx)
 }
