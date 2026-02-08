@@ -50,10 +50,12 @@ impl<'a> SymbolicEvaluator<'a> {
 
         let mut env = HashMap::new();
         for param in &callable.params {
-            env.insert(
-                param.name.clone(),
-                (param.datatype.clone(), Expr::Var(param.name.clone())),
-            );
+            let inserted_expr = if let Some(default_value) = &param.default_value {
+                Expr::Literal(default_value.to_string())
+            } else {
+                Expr::Var(param.name.clone())
+            };
+            env.insert(param.name.clone(), (param.datatype.clone(), inserted_expr));
         }
 
         let mut evaluator = Self::new(env, callables);
