@@ -2,8 +2,10 @@ use std::collections::HashMap;
 
 use models::RestCall;
 use statix::{
-    ast::CallableAst, callable_match::convert_full_header_to_mangled_name, error::EvalError,
-    symbolic::SymbolicEvaluator,
+    ast::CallableAst,
+    error::EvalError,
+    java::matcher::{JavaCallableMatcher, java_convert_full_header_to_mangled_name},
+    symbolic_evaluation,
 };
 
 use crate::extraction::restcalls::evaluation::{
@@ -22,8 +24,12 @@ impl SpringEvaluationStrategy {
 
 impl EvaluationStrategy for SpringEvaluationStrategy {
     fn evaluate_restcall(&self, restcall: &RestCall) -> Result<Vec<RestCall>, EvalError> {
-        let mangled_header = convert_full_header_to_mangled_name(&restcall.function_name);
-        let analysis_result = SymbolicEvaluator::eval_callable(&mangled_header, &self.method_asts)?;
+        let mangled_header = java_convert_full_header_to_mangled_name(&restcall.function_name);
+        let analysis_result = symbolic_evaluation(
+            &self.method_asts,
+            &mangled_header,
+            Box::new(JavaCallableMatcher::new()),
+        )?;
         let mut evaluated_restcalls: Vec<RestCall> = Vec::new();
         let target_uris = generate_target_uris(&restcall.target_uri, &analysis_result);
         for uri in target_uris {
