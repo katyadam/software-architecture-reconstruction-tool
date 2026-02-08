@@ -7,16 +7,23 @@ use tree_sitter::{Node, Query, QueryCursor, StreamingIterator, Tree};
 use crate::extraction::callables::parser::parse_parameters;
 use crate::extraction::queries::ASSINGMENTS_QUERY;
 
-fn find_enclosing_function(mut node: Node, code: &str) -> Option<(String, String)> {
+fn find_enclosing_function(mut node: Node, code: &str) -> Option<(String, String, String)> {
     while let Some(parent) = node.parent() {
         if parent.kind() == "function_definition" {
             let name_node = parent.child_by_field_name("name")?;
             let params_node = parent.child_by_field_name("parameters")?;
-
+            let return_type = parent
+                .child_by_field_name("return_type")
+                .map(|n| &code[n.start_byte()..n.end_byte()])
+                .unwrap_or("Any");
             let name = &code[name_node.start_byte()..name_node.end_byte()];
             let params = &code[params_node.start_byte()..params_node.end_byte()];
 
-            return Some((name.to_string(), params.to_string()));
+            return Some((
+                name.to_string(),
+                params.to_string(),
+                return_type.to_string(),
+            ));
         }
         node = parent;
     }
@@ -35,6 +42,7 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
         let mut variable_type = String::new();
         let mut function_name = String::new();
         let mut function_params = String::new();
+        let mut function_return_type: Option<String> = None;
 
         m.captures.iter().for_each(|capture| {
             let node = capture.node;
@@ -47,16 +55,24 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
                 "value" => variable_value = value,
                 "function.name" => function_name = value,
                 "function.params" => function_params = value,
+                "function.return_type" => function_return_type = Some(value),
                 _ => {}
             }
 
             // After getting assignment fields:
-            let (func_name, func_params) = match find_enclosing_function(node, code) {
-                Some((name, params)) => (Some(name), Some(params)),
-                None => (None, None),
-            };
+            let (func_name, func_params, func_return_type) =
+                match find_enclosing_function(node, code) {
+                    Some((name, params, return_type)) => {
+                        (Some(name), Some(params), Some(return_type))
+                    }
+                    None => (None, None, None),
+                };
 
-            let scope = get_scope(func_name.as_deref(), func_params.as_deref());
+            let scope = get_scope(
+                func_name.as_deref(),
+                func_params.as_deref(),
+                func_return_type.as_deref(),
+            );
 
             let new_assignment = Assignment {
                 variable_name: variable_name.clone(),
@@ -73,27 +89,43 @@ pub fn get_assignments_map(tree: &Tree, code: &str) -> HashMap<AssignmentKey, As
                 assignments_map.insert(assignment_key, new_assignment);
             }
         });
-        let functions_params_assignments =
-            create_assignments_from_function_params(&function_params, &function_name);
+        let functions_params_assignments = create_assignments_from_function_params(
+            &function_params,
+            &function_name,
+            &function_return_type.unwrap_or("Any".to_owned()),
+        );
         assignments_map.extend(functions_params_assignments);
     });
     assignments_map
 }
 
-fn get_scope(function_name: Option<&str>, function_params: Option<&str>) -> Scope {
-    match (function_name, function_params) {
-        (Some(func_name), Some(params)) => Scope::Function(func_name.to_string() + params),
-        (None, None) => Scope::Global,
-        (None, Some(_)) => {
+fn get_scope(
+    function_name: Option<&str>,
+    function_params: Option<&str>,
+    function_return_type: Option<&str>,
+) -> Scope {
+    match (function_name, function_params, function_return_type) {
+        (Some(func_name), Some(params), Some(ret)) => {
+            Scope::Function(func_name.to_string() + params + " -> " + ret)
+        }
+        (Some(func_name), Some(params), None) => {
+            Scope::Function(func_name.to_string() + params + " -> Any")
+        }
+        (None, None, None) => Scope::Global,
+        (None, Some(_), _) => {
             warn!(
                 "Non compatible assignment. The assignment has function params but not function name!"
             );
             Scope::Global
         }
-        (Some(_), None) => {
+        (Some(_), None, _) => {
             warn!(
                 "Non compatible assignment. The assignment has function name but not function params!"
             );
+            Scope::Global
+        }
+        (None, None, Some(_)) => {
+            warn!("Non compatible assignment. The assignment has only return type!");
             Scope::Global
         }
     }
@@ -102,8 +134,13 @@ fn get_scope(function_name: Option<&str>, function_params: Option<&str>) -> Scop
 fn create_assignments_from_function_params(
     function_params: &str,
     function_name: &str,
+    function_return_type: &str,
 ) -> Vec<(AssignmentKey, Assignment)> {
-    let scope = get_scope(Some(function_name), Some(function_params));
+    let scope = get_scope(
+        Some(function_name),
+        Some(function_params),
+        Some(function_return_type),
+    );
     let mut assignments = Vec::new();
     parse_parameters(function_params).iter().for_each(|param| {
         let new_assignment = Assignment {

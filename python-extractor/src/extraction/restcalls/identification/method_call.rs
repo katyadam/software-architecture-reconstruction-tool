@@ -38,6 +38,11 @@ impl IdentificationStrategy for MethodCallIdentificationStrategy {
     ) -> Option<models::RestCall> {
         let http_method = self.identify_http_method(&call_statement.function_name)?;
         let target_uri = self.identify_target_uri(&call_statement.arguments)?;
+        if call_statement.enclosing_function_name.is_none()
+            && call_statement.enclosing_class_name.is_none()
+        {
+            return None;
+        }
         Some(RestCall {
             function_name: call_statement
                 .enclosing_function_name

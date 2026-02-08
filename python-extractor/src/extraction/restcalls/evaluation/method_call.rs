@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use models::RestCall;
 use statix::{
-    ast::CallableAst, callable_match::convert_full_header_to_mangled_name,
-    symbolic::SymbolicEvaluator,
+    ast::CallableAst,
+    python::matcher::{PythonCallableMatcher, python_convert_full_header_to_mangled_name},
+    symbolic_evaluation,
 };
 
 use crate::extraction::restcalls::evaluation::{
@@ -25,9 +26,12 @@ impl EvaluationStrategy for MethodCallEvaluationStrategy {
         &self,
         restcall: &models::RestCall,
     ) -> Result<Vec<models::RestCall>, statix::error::EvalError> {
-        let mangled_header = convert_full_header_to_mangled_name(&restcall.function_name);
-        let analysis_result =
-            SymbolicEvaluator::eval_callable(&mangled_header, &self.function_asts)?;
+        let mangled_header = python_convert_full_header_to_mangled_name(&restcall.function_name);
+        let analysis_result = symbolic_evaluation(
+            &self.function_asts,
+            &mangled_header,
+            Box::new(PythonCallableMatcher::new()),
+        )?;
         let mut evaluated_restcalls: Vec<RestCall> = Vec::new();
         let target_uris = generate_target_uris(&restcall.target_uri, &analysis_result);
         for uri in target_uris {

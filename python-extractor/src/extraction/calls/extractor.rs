@@ -7,51 +7,63 @@ use crate::extraction::{
     queries::CALL_QUERY,
 };
 
+fn get_node_text<'a>(node: Node, code: &'a str) -> &'a str {
+    &code[node.start_byte()..node.end_byte()]
+}
+
 fn find_enclosing_information(
     mut node: Node,
     code: &str,
 ) -> (Option<String>, Option<String>, Option<String>) {
     let mut function_node: Option<Node> = None;
     let mut class_node: Option<Node> = None;
-    let mut function_name: Option<String> = None;
-    let mut class_name: Option<String> = None;
-    let mut enclosing_function_hash: Option<String> = None;
+
     while let Some(parent) = node.parent() {
-        if !(function_node.is_none() || class_node.is_none()) {
+        match parent.kind() {
+            "function_definition" if function_node.is_none() => function_node = Some(parent),
+            "class_definition" if class_node.is_none() => class_node = Some(parent),
+            _ => {}
+        }
+
+        // Optimization: stop if we found both
+        if function_node.is_some() && class_node.is_some() {
             break;
-        }
-        if parent.kind() == "function_definition" && function_node.is_none() {
-            function_node = Some(parent);
-        }
-        if parent.kind() == "class_definition" && class_node.is_none() {
-            class_node = Some(parent);
         }
         node = parent;
     }
-    if let Some(node) = function_node {
-        if let (Some(name_node), Some(params_node)) = (
-            node.child_by_field_name("name"),
-            node.child_by_field_name("parameters"),
-        ) {
-            let name_bytes = &code.as_bytes()[name_node.start_byte()..name_node.end_byte()];
-            let params_bytes = &code.as_bytes()[params_node.start_byte()..params_node.end_byte()];
-            function_name = Some(
-                String::from_utf8_lossy(name_bytes).to_string()
-                    + &String::from_utf8_lossy(params_bytes),
-            );
-        }
-        let function_bytes = &code.as_bytes()[node.start_byte()..node.end_byte()];
+
+    let mut function_name_full = None;
+    let mut function_hash = None;
+
+    if let Some(f_node) = function_node {
+        let name = f_node
+            .child_by_field_name("name")
+            .map(|n| get_node_text(n, code))
+            .unwrap_or("unknown");
+
+        let params = f_node
+            .child_by_field_name("parameters")
+            .map(|n| get_node_text(n, code))
+            .unwrap_or("()");
+
+        let return_type = f_node
+            .child_by_field_name("return_type")
+            .map(|n| get_node_text(n, code))
+            .unwrap_or("Any");
+
+        function_name_full = Some(format!("{}{} -> {}", name, params, return_type));
+
         let mut hasher = Sha256::new();
-        hasher.update(function_bytes);
-        enclosing_function_hash = Some(format!("{:x}", hasher.finalize()));
+        hasher.update(get_node_text(f_node, code).as_bytes());
+        function_hash = Some(format!("{:x}", hasher.finalize()));
     }
 
-    if let Some(name_node) = class_node.and_then(|n| n.child_by_field_name("name")) {
-        let name_bytes = &code.as_bytes()[name_node.start_byte()..name_node.end_byte()];
-        class_name = Some(String::from_utf8_lossy(name_bytes).to_string());
-    }
+    // 3. Process Class Information
+    let class_name = class_node
+        .and_then(|n| n.child_by_field_name("name"))
+        .map(|n| get_node_text(n, code).to_string());
 
-    (function_name, class_name, enclosing_function_hash)
+    (function_name_full, class_name, function_hash)
 }
 
 pub struct CallsExtractor;
@@ -78,7 +90,11 @@ impl Extractor<CallStatement> for CallsExtractor {
                 match query.capture_names()[capture.index as usize] {
                     "call.ident" => function_name = value,
                     "call.args" => {
-                        let trimmed = value.trim_matches(|c| c == '(' || c == ')');
+                        let trimmed = if value.starts_with('(') && value.ends_with(')') {
+                            &value[1..value.len() - 1]
+                        } else {
+                            value.as_str()
+                        };
                         arguments = if trimmed.is_empty() {
                             vec![]
                         } else {
