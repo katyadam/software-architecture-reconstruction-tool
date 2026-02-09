@@ -143,7 +143,7 @@ fn parse_block(
 
 fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
     match node.kind() {
-        "string" => Ok(Expr::Literal(strip_quotes(
+        "string" => Ok(Expr::Literal(clean_python_string(
             node.utf8_text(source.as_bytes()).unwrap(),
         ))),
         "integer" => Ok(Expr::Literal(
@@ -222,6 +222,30 @@ fn parse_if(
     })
 }
 
-fn strip_quotes(s: &str) -> String {
-    s.trim_matches('"').to_string()
+fn clean_python_string(s: &str) -> String {
+    let s = s.trim();
+
+    if let Some(quote_start) = s.find(|c| c == '"' || c == '\'') {
+        let content = &s[quote_start..];
+        return strip_python_quotes(content);
+    }
+
+    s.to_string()
+}
+
+fn strip_python_quotes(s: &str) -> String {
+    if s.starts_with("\"\"\"") && s.ends_with("\"\"\"") && s.len() >= 6 {
+        return s[3..s.len() - 3].to_string();
+    }
+    if s.starts_with("'''") && s.ends_with("'''") && s.len() >= 6 {
+        return s[3..s.len() - 3].to_string();
+    }
+
+    if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')) {
+        if s.len() >= 2 {
+            return s[1..s.len() - 1].to_string();
+        }
+    }
+
+    s.to_string()
 }

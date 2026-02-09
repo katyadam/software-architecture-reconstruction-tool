@@ -24,4 +24,15 @@ impl RestCall {
             file_path: self.file_path.clone(),
         }
     }
+
+    pub fn clone_from_target_uri_helper(&self, cloned_target_uri: &str) -> Self {
+        RestCall {
+            function_name: self.function_name.clone(),
+            function_hash: self.function_hash.clone(),
+            call_arguments: self.call_arguments.clone(),
+            http_method: self.http_method.clone(),
+            target_uri: cloned_target_uri.to_owned(),
+            file_path: self.file_path.clone(),
+        }
+    }
 }

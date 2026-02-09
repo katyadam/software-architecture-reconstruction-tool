@@ -14,7 +14,7 @@ use python_extractor::{
 };
 
 use models::{Argument, HttpMethod, RestCall};
-use statix::parse_python;
+use statix::{parse_python, python::matcher::PythonCallableMatcher};
 use tree_sitter::Tree;
 
 use crate::python::utils::{get_tree, load_file};
@@ -37,7 +37,6 @@ fn restcalls_extraction() {
     let tree = get_tree(&code);
 
     let restcalls = restcalls(&code, &tree, &filename);
-    println!("{restcalls:#?}");
     let expected = vec![
         RestCall {
             function_name: s!(
@@ -412,6 +411,42 @@ fn should_extract_all_types_of_restcall() {
             file_path: s!("./examples/python/restcalls/different_types.py"),
         },
     ];
+
+    assert_eq!(restcalls, expected);
+}
+
+#[test]
+fn should_assign_correct_target_uris_using_symbolic_evaluation() {
+    let filename = "./examples/python/restcalls/url_not_in_call.py";
+    let code = load_file(filename).unwrap();
+    let tree = get_tree(&code);
+    let mut restcalls = restcalls(&code, &tree, &filename);
+    let assignments_map = get_assignments_map(&tree, &code);
+    evaluate_restcalls(&mut restcalls, &assignments_map);
+
+    let expected = vec![RestCall {
+        function_name: s!(
+            "create_item(client, name: str, description, price, in_stock=True) -> str"
+        ),
+        function_hash: s!("ebc264ec787b0fcb8af627995a92933744423203b8fa7a074fb0f20d9691d1eb"),
+        call_arguments: vec![
+            Argument {
+                assigned_variable: s!(""),
+                value: s!("f\"{BASE_URL}/items/\""),
+                datatype: s!("any"),
+            },
+            Argument {
+                assigned_variable: s!("json"),
+                value: s!(
+                    "{\n        \"name\": name,\n        \"description\": description,\n        \"price\": price,\n        \"in_stock\": in_stock\n    }"
+                ),
+                datatype: s!("any"),
+            },
+        ],
+        http_method: HttpMethod::POST,
+        target_uri: s!("http://abrakadabra/items/"),
+        file_path: s!("./examples/python/restcalls/url_not_in_call.py"),
+    }];
 
     assert_eq!(restcalls, expected);
 }
