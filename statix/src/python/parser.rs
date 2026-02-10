@@ -105,23 +105,35 @@ fn parse_block(
 
     for child in node.named_children(&mut cursor) {
         match child.kind() {
-            // Difference between Python and Java is the declarationstyle . For Python we are using Declare-on-Write
+            // Difference between Python and Java is the declaration style. For Python we are using Declare-on-Write
             "expression_statement" => {
                 let inner = child.named_child(0).unwrap();
                 if inner.kind() == "assignment" {
                     let left_node = inner.child_by_field_name("left").unwrap();
-                    let right_node = inner.child_by_field_name("right").unwrap();
-
                     let name = left_node.utf8_text(source.as_bytes()).unwrap().to_string();
-                    let value = parse_expr(right_node, source)?;
-                    if scope_vars.contains(&name) {
-                        stmts.push(Stmt::Assignment { name, value });
+
+                    // This is really weird Python thing:
+                    // a = 5
+                    // a: int
+                    // This means |a| gets 5 and in the next line gets datatype int, but still remains 5
+                    // Tree-sitter takes declaration as assignment without RHS
+                    if let Some(right_node) = inner.child_by_field_name("right") {
+                        let value = parse_expr(right_node, source)?;
+                        if scope_vars.contains(&name) {
+                            stmts.push(Stmt::Assignment { name, value });
+                        } else {
+                            scope_vars.insert(name.clone());
+                            stmts.push(Stmt::Declaration {
+                                name,
+                                dtype: "Any".to_string(),
+                                value,
+                            });
+                        }
                     } else {
-                        scope_vars.insert(name.clone());
                         stmts.push(Stmt::Declaration {
                             name,
                             dtype: "Any".to_string(),
-                            value,
+                            value: Expr::Empty,
                         });
                     }
                 }
