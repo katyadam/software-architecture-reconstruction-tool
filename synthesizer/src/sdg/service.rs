@@ -50,7 +50,7 @@ impl SdgService for SdgServiceImpl {
             .get_commit_configuration(&sdg_payload.commit_hash)
             .await?;
 
-        let constants_dto = self
+        let constants = self
             .constant_scanner_connector
             .get_commit_constants(&sdg_payload.commit_hash)
             .await?;
@@ -59,7 +59,7 @@ impl SdgService for SdgServiceImpl {
             sdg_payload.endpoints,
             sdg_payload.restcalls,
             configuration_dto.configuration_data,
-            &constants_dto.constants,
+            &constants,
         )?;
 
         self.repository

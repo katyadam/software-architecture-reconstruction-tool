@@ -1,6 +1,6 @@
 use clients::http::{client::HttpClient, error::HttpClientError};
 
-use crate::connectors::dto::ConstantsDto;
+use crate::connectors::dto::Constant;
 
 pub struct ConstantScannerConnector {
     http_client: HttpClient,
@@ -14,9 +14,9 @@ impl ConstantScannerConnector {
     pub async fn get_commit_constants(
         &self,
         commit_hash: &str,
-    ) -> Result<ConstantsDto, HttpClientError> {
+    ) -> Result<Vec<Constant>, HttpClientError> {
         self.http_client
-            .get_json::<ConstantsDto>(format!("/constants/{commit_hash}").as_str())
+            .get_json::<Vec<Constant>>(format!("/constants/{commit_hash}").as_str())
             .await
     }
 }

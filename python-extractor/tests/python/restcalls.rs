@@ -14,7 +14,7 @@ use python_extractor::{
 };
 
 use models::{Argument, HttpMethod, RestCall};
-use statix::{parse_python, python::matcher::PythonCallableMatcher};
+use statix::parse_python;
 use tree_sitter::Tree;
 
 use crate::python::utils::{get_tree, load_file};

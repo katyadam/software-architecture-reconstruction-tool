@@ -13,7 +13,7 @@ use crate::{
         get,
         path = "/constants/{commit_hash}",
         responses(
-            (status = 201, description = "Constants successfully loaded", body = Vec<ConstantResponse>),
+            (status = 200, description = "Constants successfully loaded", body = Vec<ConstantResponse>),
             (status = 400, description = "Constants failed to load", body = ApiError),
         ),
     )]
@@ -28,7 +28,7 @@ pub async fn get_constants_by_commit_hash(
         .map(Constant::to_response)
         .collect::<Vec<ConstantResponse>>();
 
-    Ok(HttpResponse::Created().json(constants))
+    Ok(HttpResponse::Ok().json(constants))
 }
 
 #[utoipa::path(
