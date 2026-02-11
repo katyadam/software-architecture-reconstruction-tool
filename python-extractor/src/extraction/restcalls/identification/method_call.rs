@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use models::{Argument, HttpMethod, RestCall};
+use tree_sitter::Node;
 
 use crate::extraction::{
     calls::PythonCallStatement,
@@ -28,6 +29,14 @@ impl MethodCallIdentificationStrategy {
     fn identify_target_uri(&self, call_args: &[Argument]) -> Option<String> {
         call_args.first().map(|uri| clean_python_string(&uri.value))
     }
+
+    // FastAPI uses @app.http_method to denote endpoint, therefore we want to omit thath here
+    fn is_part_of_decorator(&self, call_statement_node: Node) -> bool {
+        if let Some(parent_node) = call_statement_node.parent() {
+            return parent_node.kind() == "decorator";
+        }
+        false
+    }
 }
 
 impl IdentificationStrategy for MethodCallIdentificationStrategy {
@@ -39,6 +48,9 @@ impl IdentificationStrategy for MethodCallIdentificationStrategy {
     ) -> Option<models::RestCall> {
         let http_method = self.identify_http_method(&call.call_statement.function_name)?;
         let target_uri = self.identify_target_uri(&call.call_statement.arguments)?;
+        if self.is_part_of_decorator(call.node) {
+            return None;
+        }
         if call.call_statement.enclosing_function_name.is_none()
             && call.call_statement.enclosing_class_name.is_none()
         {
