@@ -12,8 +12,10 @@ use crate::extraction::queries::ENTITIES_QUERY;
 
 pub struct EntitiesExtractor;
 
-impl Extractor<Entity> for EntitiesExtractor {
-    fn extract(&self, params: ExtractParams) -> Vec<Entity> {
+impl Extractor for EntitiesExtractor {
+    type Item<'a> = Entity;
+
+    fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
         let query = Query::new(&tree_sitter_python::LANGUAGE.into(), ENTITIES_QUERY).unwrap();
 
         let mut query_cursor = QueryCursor::new();

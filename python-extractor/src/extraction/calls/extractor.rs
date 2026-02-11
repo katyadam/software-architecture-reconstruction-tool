@@ -1,8 +1,10 @@
+use log::warn;
 use models::{Argument, CallStatement};
 use sha2::{Digest, Sha256};
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 
 use crate::extraction::{
+    calls::PythonCallStatement,
     extractor::{ExtractParams, Extractor},
     queries::CALL_QUERY,
 };
@@ -68,20 +70,23 @@ fn find_enclosing_information(
 
 pub struct CallsExtractor;
 
-impl Extractor<CallStatement> for CallsExtractor {
-    fn extract(&self, params: ExtractParams) -> Vec<CallStatement> {
+impl Extractor for CallsExtractor {
+    type Item<'a> = PythonCallStatement<'a>;
+
+    fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
         let query = Query::new(&tree_sitter_python::LANGUAGE.into(), CALL_QUERY).unwrap();
 
         let mut query_cursor = QueryCursor::new();
         let mut matches =
             query_cursor.matches(&query, params.tree.root_node(), params.code.as_bytes());
-        let mut call_statements: Vec<CallStatement> = vec![];
+        let mut call_statements: Vec<PythonCallStatement> = vec![];
         while let Some(m) = matches.next() {
             let mut arguments: Vec<Argument> = vec![];
             let mut function_name = String::new();
             let mut enclosing_function_name: Option<String> = None;
             let mut enclosing_class_name: Option<String> = None;
             let mut enclosing_function_hash: Option<String> = None;
+            let mut call_node: Option<Node> = None;
 
             m.captures.iter().for_each(|capture| {
                 let capture_text =
@@ -121,6 +126,7 @@ impl Extractor<CallStatement> for CallsExtractor {
                         };
                     }
                     "call" => {
+                        call_node = Some(capture.node);
                         (
                             enclosing_function_name,
                             enclosing_class_name,
@@ -131,7 +137,7 @@ impl Extractor<CallStatement> for CallsExtractor {
                 }
             });
 
-            let new_call_statement = CallStatement {
+            let call_statement = CallStatement {
                 function_name: function_name.clone(),
                 arguments,
                 enclosing_function_name,
@@ -142,7 +148,14 @@ impl Extractor<CallStatement> for CallsExtractor {
                 invoked_on: None,
             };
 
-            call_statements.push(new_call_statement);
+            if let Some(node) = call_node {
+                call_statements.push(PythonCallStatement {
+                    call_statement,
+                    node,
+                });
+            } else {
+                warn!("Call Statement: {call_statement:#?} does not have Node!");
+            }
         }
 
         call_statements

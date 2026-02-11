@@ -10,8 +10,10 @@ use crate::extraction::{
 
 pub struct RestcallsExtractor;
 
-impl Extractor<RestCall> for RestcallsExtractor {
-    fn extract(&self, params: ExtractParams) -> Vec<RestCall> {
+impl Extractor for RestcallsExtractor {
+    type Item<'a> = RestCall;
+
+    fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
         let query = Query::new(&tree_sitter_python::LANGUAGE.into(), RESTCALLS_QUERY).unwrap();
         let mut query_cursor = QueryCursor::new();
         let matches = query_cursor.matches(&query, params.tree.root_node(), params.code.as_bytes());

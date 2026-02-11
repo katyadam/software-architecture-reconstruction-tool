@@ -8,8 +8,10 @@ use tree_sitter::{Query, QueryCursor};
 
 pub struct EndpointsExtractor;
 
-impl Extractor<Endpoint> for EndpointsExtractor {
-    fn extract(&self, params: ExtractParams) -> Vec<Endpoint> {
+impl Extractor for EndpointsExtractor {
+    type Item<'a> = Endpoint;
+
+    fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
         let query = Query::new(&tree_sitter_python::LANGUAGE.into(), ENDPOINTS_QUERY).unwrap();
 
         let mut query_cursor = QueryCursor::new();

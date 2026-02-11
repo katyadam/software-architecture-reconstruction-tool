@@ -1,11 +1,11 @@
-use models::{CodeElementsAggregate, api::ExtractionError};
+use models::{CallStatement, CodeElementsAggregate, api::ExtractionError};
 use statix::parse_python;
 use tree_sitter::Parser;
 
 use crate::extraction::{
     assignments::map::get_assignments_map,
     callables::extractor::CallablesExtractor,
-    calls::{evaluator::evaluate_invocations, extractor::CallsExtractor},
+    calls::{PythonCallStatement, evaluator::evaluate_invocations, extractor::CallsExtractor},
     endpoints::extractor::EndpointsExtractor,
     entities::{evaluator::evaluate_entity_fields, extractor::EntitiesExtractor},
     extractor::{ExtractParams, Extractor},
@@ -80,7 +80,17 @@ pub async fn parse(code: &str, file_name: &str) -> Result<CodeElementsAggregate,
         ExtractionError::SymbolicEvaluation(format!("Restcall evaluation error: {:?}", e))
     })?;
 
+    let unified_calls = calls
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .collect::<Vec<CallStatement>>();
+
     Ok(CodeElementsAggregate::new(
-        imports, entities, endpoints, restcalls, callables, calls,
+        imports,
+        entities,
+        endpoints,
+        restcalls,
+        callables,
+        unified_calls,
     ))
 }

@@ -2,8 +2,9 @@ use std::str::FromStr;
 
 use models::{Argument, HttpMethod, RestCall};
 
-use crate::extraction::restcalls::identification::{
-    HTTP_METHODS, strategy::IdentificationStrategy,
+use crate::extraction::{
+    calls::PythonCallStatement,
+    restcalls::identification::{HTTP_METHODS, strategy::IdentificationStrategy},
 };
 
 pub struct MethodCallIdentificationStrategy {}
@@ -33,26 +34,28 @@ impl IdentificationStrategy for MethodCallIdentificationStrategy {
     // To recognize REST call we just need the function_name to end with any HTTP method
     fn identify_restcall(
         &self,
-        call_statement: &models::CallStatement,
+        call: &PythonCallStatement,
         file_path: &str,
     ) -> Option<models::RestCall> {
-        let http_method = self.identify_http_method(&call_statement.function_name)?;
-        let target_uri = self.identify_target_uri(&call_statement.arguments)?;
-        if call_statement.enclosing_function_name.is_none()
-            && call_statement.enclosing_class_name.is_none()
+        let http_method = self.identify_http_method(&call.call_statement.function_name)?;
+        let target_uri = self.identify_target_uri(&call.call_statement.arguments)?;
+        if call.call_statement.enclosing_function_name.is_none()
+            && call.call_statement.enclosing_class_name.is_none()
         {
             return None;
         }
         Some(RestCall {
-            function_name: call_statement
+            function_name: call
+                .call_statement
                 .enclosing_function_name
                 .clone()
                 .unwrap_or_default(),
-            function_hash: call_statement
+            function_hash: call
+                .call_statement
                 .enclosing_function_hash
                 .clone()
                 .unwrap_or_default(),
-            call_arguments: call_statement.arguments.clone(),
+            call_arguments: call.call_statement.arguments.clone(),
             http_method,
             target_uri,
             file_path: file_path.to_string(),

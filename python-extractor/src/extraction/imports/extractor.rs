@@ -8,8 +8,10 @@ use crate::extraction::{
 
 pub struct ImportsExtractor;
 
-impl Extractor<Import> for ImportsExtractor {
-    fn extract(&self, params: ExtractParams) -> Vec<Import> {
+impl Extractor for ImportsExtractor {
+    type Item<'a> = Import;
+
+    fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
         let query = Query::new(&tree_sitter_python::LANGUAGE.into(), IMPORTS_QUERY).unwrap();
 
         let mut query_cursor = QueryCursor::new();

@@ -2,7 +2,7 @@ use models::{Argument, CallStatement};
 use python_extractor::{
     extraction::{
         assignments::map::get_assignments_map,
-        calls::{evaluator::evaluate_invocations, extractor::CallsExtractor},
+        calls::{PythonCallStatement, evaluator::evaluate_invocations, extractor::CallsExtractor},
         extractor::{ExtractParams, Extractor},
     },
     s,
@@ -29,8 +29,13 @@ fn simple_test() {
         is_super_invoke: false,
         invoked_on: None,
     }];
-
-    assert_eq!(calls, expected);
+    assert_eq!(
+        calls
+            .into_iter()
+            .map(PythonCallStatement::to_language_agnostic)
+            .collect::<Vec<CallStatement>>(),
+        expected
+    );
 }
 
 #[test]
@@ -99,7 +104,13 @@ fn nested_test() {
         },
     ];
 
-    assert_eq!(calls, expected);
+    assert_eq!(
+        calls
+            .into_iter()
+            .map(PythonCallStatement::to_language_agnostic)
+            .collect::<Vec<CallStatement>>(),
+        expected
+    );
 }
 
 #[test]
@@ -147,7 +158,13 @@ fn classes_test() {
         },
     ];
 
-    assert_eq!(calls, expected);
+    assert_eq!(
+        calls
+            .into_iter()
+            .map(PythonCallStatement::to_language_agnostic)
+            .collect::<Vec<CallStatement>>(),
+        expected
+    );
 }
 
 #[test]
@@ -264,7 +281,13 @@ fn classes_imports_test() {
         },
     ];
 
-    assert_eq!(calls, expected);
+    assert_eq!(
+        calls
+            .into_iter()
+            .map(PythonCallStatement::to_language_agnostic)
+            .collect::<Vec<CallStatement>>(),
+        expected
+    );
 }
 
 #[test]
@@ -423,7 +446,13 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
         },
     ];
 
-    assert_eq!(calls, expected);
+    assert_eq!(
+        calls
+            .into_iter()
+            .map(PythonCallStatement::to_language_agnostic)
+            .collect::<Vec<CallStatement>>(),
+        expected
+    );
 }
 
 #[test]
@@ -521,5 +550,11 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
         },
     ];
 
-    assert_eq!(calls, expected);
+    assert_eq!(
+        calls
+            .into_iter()
+            .map(PythonCallStatement::to_language_agnostic)
+            .collect::<Vec<CallStatement>>(),
+        expected
+    );
 }

@@ -22,8 +22,10 @@ fn get_callable_name_with_params(name: &str, parameters: &[Parameter]) -> String
 
 pub struct CallablesExtractor;
 
-impl Extractor<Callable> for CallablesExtractor {
-    fn extract(&self, params: ExtractParams) -> Vec<Callable> {
+impl Extractor for CallablesExtractor {
+    type Item<'a> = Callable;
+
+    fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
         let query = Query::new(&tree_sitter_python::LANGUAGE.into(), CALLABLES_QUERY).unwrap();
 
         let mut query_cursor = QueryCursor::new();

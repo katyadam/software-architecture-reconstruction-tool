@@ -450,3 +450,15 @@ fn should_assign_correct_target_uris_using_symbolic_evaluation() {
 
     assert_eq!(restcalls, expected);
 }
+
+#[test]
+fn should_not_identify_endpoints_with_restcall_notation() {
+    let filename = "./examples/python/restcalls/endpoints_with_restcall_notation.py";
+    let code = load_file(filename).unwrap();
+    let tree = get_tree(&code);
+    let mut restcalls = restcalls(&code, &tree, &filename);
+    let assignments_map = get_assignments_map(&tree, &code);
+    evaluate_restcalls(&mut restcalls, &assignments_map);
+
+    assert!(restcalls.is_empty());
+}
