@@ -3,7 +3,7 @@ use crate::extraction::{
     extractor::{ExtractParams, Extractor},
 };
 
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::OnceLock};
 
 use models::{Entity, Field};
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
@@ -15,8 +15,17 @@ pub struct EntitiesExtractor;
 impl Extractor for EntitiesExtractor {
     type Item<'a> = Entity;
 
+    fn query(&self) -> &'static Query {
+        static QUERY: OnceLock<Query> = OnceLock::new();
+
+        QUERY.get_or_init(|| {
+            Query::new(&tree_sitter_python::LANGUAGE.into(), ENTITIES_QUERY)
+                .expect("Failed to compile Python Entities Query")
+        })
+    }
+
     fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
-        let query = Query::new(&tree_sitter_python::LANGUAGE.into(), ENTITIES_QUERY).unwrap();
+        let query = self.query();
 
         let mut query_cursor = QueryCursor::new();
         let mut matches =

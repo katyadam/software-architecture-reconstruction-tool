@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::OnceLock};
 
 use models::{Callable, Namespace, Parameter};
 use sha2::{Digest, Sha256};
@@ -25,8 +25,17 @@ pub struct CallablesExtractor;
 impl Extractor for CallablesExtractor {
     type Item<'a> = Callable;
 
+    fn query(&self) -> &'static Query {
+        static QUERY: OnceLock<Query> = OnceLock::new();
+
+        QUERY.get_or_init(|| {
+            Query::new(&tree_sitter_python::LANGUAGE.into(), CALLABLES_QUERY)
+                .expect("Failed to compile Python Callables Query")
+        })
+    }
+
     fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
-        let query = Query::new(&tree_sitter_python::LANGUAGE.into(), CALLABLES_QUERY).unwrap();
+        let query = self.query();
 
         let mut query_cursor = QueryCursor::new();
         let mut matches =

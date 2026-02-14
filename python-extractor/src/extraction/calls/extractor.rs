@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use log::warn;
 use models::{Argument, CallStatement};
 use sha2::{Digest, Sha256};
@@ -73,8 +75,17 @@ pub struct CallsExtractor;
 impl Extractor for CallsExtractor {
     type Item<'a> = PythonCallStatement<'a>;
 
+    fn query(&self) -> &'static Query {
+        static QUERY: OnceLock<Query> = OnceLock::new();
+
+        QUERY.get_or_init(|| {
+            Query::new(&tree_sitter_python::LANGUAGE.into(), CALL_QUERY)
+                .expect("Failed to compile Python Calls Query")
+        })
+    }
+
     fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
-        let query = Query::new(&tree_sitter_python::LANGUAGE.into(), CALL_QUERY).unwrap();
+        let query = self.query();
 
         let mut query_cursor = QueryCursor::new();
         let mut matches =

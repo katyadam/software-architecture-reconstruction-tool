@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use crate::extraction::callables::parser::parse_parameters;
 use crate::extraction::extractor::{ExtractParams, Extractor};
 use crate::extraction::queries::ENDPOINTS_QUERY;
@@ -11,8 +13,17 @@ pub struct EndpointsExtractor;
 impl Extractor for EndpointsExtractor {
     type Item<'a> = Endpoint;
 
+    fn query(&self) -> &'static Query {
+        static QUERY: OnceLock<Query> = OnceLock::new();
+
+        QUERY.get_or_init(|| {
+            Query::new(&tree_sitter_python::LANGUAGE.into(), ENDPOINTS_QUERY)
+                .expect("Failed to compile Python Endpoints Query")
+        })
+    }
+
     fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
-        let query = Query::new(&tree_sitter_python::LANGUAGE.into(), ENDPOINTS_QUERY).unwrap();
+        let query = self.query();
 
         let mut query_cursor = QueryCursor::new();
         let matches = query_cursor.matches(&query, params.tree.root_node(), params.code.as_bytes());
