@@ -1,11 +1,13 @@
 [workspace]
 members = [
     "clients",
+    "constant-scanner",
     "extractor-runtime",
     "java-extractor",
     "manager",
     "models",
-    "python-extractor", "statix",
+    "python-extractor",
+    "statix",
     "synthesizer",
 ]
 resolver = "3"

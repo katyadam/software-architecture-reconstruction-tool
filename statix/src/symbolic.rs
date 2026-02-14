@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    ast::{Expr, MethodAst, Stmt},
+    ast::{CallableAst, Expr, Stmt},
     error::EvalError,
-    method_match::find_closest_method,
+    matcher::CallableMatcher,
     visitor::Visitor,
 };
 
@@ -17,10 +17,23 @@ pub struct AnalysisResult {
     pub final_env: Env,
 }
 
-#[derive(Clone)]
+pub struct AnalysisContext<'a> {
+    pub callables: &'a HashMap<String, CallableAst>,
+    pub matcher: Arc<dyn CallableMatcher>,
+}
+
+impl<'a> AnalysisContext<'a> {
+    pub fn new(
+        callables: &'a HashMap<String, CallableAst>,
+        matcher: Arc<dyn CallableMatcher>,
+    ) -> Self {
+        Self { callables, matcher }
+    }
+}
+
 pub struct SymbolicEvaluator<'a> {
-    env: Env,
-    methods: &'a HashMap<String, MethodAst>,
+    pub env: Env,
+    pub ctx: &'a AnalysisContext<'a>,
 }
 
 // TODO: Should also take class fields to environment!
@@ -28,8 +41,15 @@ pub struct SymbolicEvaluator<'a> {
 // Or getting the same type of error when assigning to a class field variable
 
 impl<'a> SymbolicEvaluator<'a> {
-    pub fn new(env: Env, methods: &'a HashMap<String, MethodAst>) -> Self {
-        Self { env, methods }
+    pub fn new(env: Env, ctx: &'a AnalysisContext<'a>) -> Self {
+        Self { env, ctx }
+    }
+
+    pub fn branch(&self) -> Self {
+        Self {
+            env: self.env.clone(),
+            ctx: self.ctx,
+        }
     }
 
     fn merge_new_vars(&mut self, branch_evaluator: &Self) {
@@ -40,24 +60,26 @@ impl<'a> SymbolicEvaluator<'a> {
         }
     }
 
-    pub fn eval_method(
-        method_name: &str,
-        methods: &'a HashMap<String, MethodAst>,
+    pub fn eval_callable(
+        callable_name: &str,
+        ctx: &'a AnalysisContext<'a>,
     ) -> Result<AnalysisResult, EvalError> {
-        let method = methods.get(method_name).ok_or_else(|| {
-            EvalError::NonSenseEvaluation(format!("Method {} not found", method_name))
+        let callable = ctx.callables.get(callable_name).ok_or_else(|| {
+            EvalError::NonSenseEvaluation(format!("Method {} not found", callable_name))
         })?;
 
         let mut env = HashMap::new();
-        for param in &method.params {
-            env.insert(
-                param.name.clone(),
-                (param.datatype.clone(), Expr::Var(param.name.clone())),
-            );
+        for param in &callable.params {
+            let inserted_expr = if let Some(default_value) = &param.default_value {
+                Expr::Literal(default_value.to_string())
+            } else {
+                Expr::Var(param.name.clone())
+            };
+            env.insert(param.name.clone(), (param.datatype.clone(), inserted_expr));
         }
 
-        let mut evaluator = Self::new(env, methods);
-        let result = evaluator.visit_statements(&method.body)?;
+        let mut evaluator = Self { env, ctx };
+        let result = evaluator.visit_statements(&callable.body)?;
 
         Ok(AnalysisResult {
             return_value: result.unwrap_or(Expr::Empty),
@@ -147,24 +169,27 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             evaluated_args.push(v);
         }
 
-        let closest = find_closest_method(self.methods, name, &arg_types);
+        let closest = self
+            .ctx
+            .matcher
+            .find_closest_callable(self.ctx.callables, name, &arg_types);
         if let Some(m_name) = closest
-            && let Some(method_ast) = self.methods.get(&m_name)
+            && let Some(callable_ast) = self.ctx.callables.get(&m_name)
         {
             let mut local_evaluator = SymbolicEvaluator {
                 env: HashMap::new(),
-                methods: self.methods,
+                ctx: self.ctx,
             };
 
-            for (param, val) in method_ast.params.iter().zip(evaluated_args) {
+            for (param, val) in callable_ast.params.iter().zip(evaluated_args) {
                 local_evaluator
                     .env
                     .insert(param.name.clone(), (param.datatype.clone(), val));
             }
-            let result = local_evaluator.visit_statements(&method_ast.body)?;
+            let result = local_evaluator.visit_statements(&callable_ast.body)?;
 
             Ok((
-                method_ast.return_type.clone(),
+                callable_ast.return_type.clone(),
                 result.unwrap_or(Expr::Empty),
             ))
         } else {
@@ -228,8 +253,8 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
     ) -> Result<Option<Expr>, EvalError> {
         let (_, sym_cond) = self.visit_expr(cond)?;
 
-        let mut then_evaluator = self.clone();
-        let mut else_evaluator = self.clone();
+        let mut then_evaluator = self.branch();
+        let mut else_evaluator = self.branch();
 
         let then_ret = then_evaluator.visit_statements(then_b)?;
 

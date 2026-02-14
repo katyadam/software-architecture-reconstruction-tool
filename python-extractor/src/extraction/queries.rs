@@ -135,7 +135,9 @@ pub const ASSINGMENTS_QUERY: &str = r#"
 (assignment left: (_) @variable type: (_) @type right: (_) @value)
 (function_definition
     name: (identifier) @function.name
-    parameters: (parameters) @function.params)
+    parameters: (parameters) @function.params
+	return_type: (_)? @function.return_type
+)
 "#;
 
 pub const ENTITIES_QUERY: &str = r#"

@@ -1,6 +1,6 @@
 use tree_sitter::{Query, Tree};
 
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::OnceLock};
 
 use crate::extraction::{
     entities::parser::{parse_field_declarations, parse_formal_parameters},
@@ -13,10 +13,19 @@ use tree_sitter::{QueryCursor, StreamingIterator};
 pub struct EntitiesExtractor;
 
 impl Extractor<Entity> for EntitiesExtractor {
+    fn query(&self) -> &'static Query {
+        static QUERY: OnceLock<Query> = OnceLock::new();
+
+        QUERY.get_or_init(|| {
+            Query::new(&tree_sitter_java::LANGUAGE.into(), ENTITIES_QUERY)
+                .expect("Failed to compile Java Entities Query")
+        })
+    }
+
     fn extract(&self, code: &str, tree: &Tree, file_name: &str) -> Vec<Entity> {
-        let query = Query::new(&tree_sitter_java::LANGUAGE.into(), ENTITIES_QUERY).unwrap();
+        let query = self.query();
         let mut query_cursor = QueryCursor::new();
-        let mut matches = query_cursor.matches(&query, tree.root_node(), code.as_bytes());
+        let mut matches = query_cursor.matches(query, tree.root_node(), code.as_bytes());
         let mut entities: Vec<Entity> = vec![];
         let mut seen: HashSet<String> = HashSet::new();
         let mut package: Option<String> = None;

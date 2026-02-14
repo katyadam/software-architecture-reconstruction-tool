@@ -12,7 +12,7 @@ use java_extractor::{
     s,
 };
 use models::{Argument, HttpMethod, RestCall};
-use statix::parse_methods;
+use statix::parse_java;
 
 use crate::java::utils::{get_tree, load_file};
 
@@ -25,7 +25,7 @@ fn test_spring_restcalls_without_dfa() {
     let assignments_map = get_assignments_map(&tree, &code);
     evaluate_invocations(&mut calls, &assignments_map);
 
-    let method_asts = parse_methods(&tree, &code);
+    let method_asts = parse_java(&tree, &code);
     let restcalls = SpringSelector::new(
         SpringIdentificationStrategy::new(),
         SpringEvaluationStrategy::new(method_asts),

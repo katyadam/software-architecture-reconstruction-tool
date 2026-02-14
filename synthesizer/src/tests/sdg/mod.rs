@@ -13,9 +13,8 @@ mod tests {
         let sample_data = sample_data();
         let configuration = sample_configuration();
         let sdg = service
-            .build(sample_data.0, sample_data.1, configuration)
+            .build(sample_data.0, sample_data.1, configuration, &vec![])
             .expect("This test doesn't produce error!");
-        println!("{sdg:?}");
         assert!(
             sdg.services.len() == 2,
             "Incorrect number of services, should be 2"

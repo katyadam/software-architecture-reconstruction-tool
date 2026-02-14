@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use models::Import;
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
 
@@ -6,10 +8,19 @@ use crate::extraction::{extractor::Extractor, queries::IMPORTS_QUERY};
 pub struct ImportsExtractor;
 
 impl Extractor<Import> for ImportsExtractor {
+    fn query(&self) -> &'static Query {
+        static QUERY: OnceLock<Query> = OnceLock::new();
+
+        QUERY.get_or_init(|| {
+            Query::new(&tree_sitter_java::LANGUAGE.into(), IMPORTS_QUERY)
+                .expect("Failed to compile Java Imports Query")
+        })
+    }
+
     fn extract(&self, code: &str, tree: &tree_sitter::Tree, _file_name: &str) -> Vec<Import> {
-        let query = Query::new(&tree_sitter_java::LANGUAGE.into(), IMPORTS_QUERY).unwrap();
+        let query = self.query();
         let mut query_cursor = QueryCursor::new();
-        let mut matches = query_cursor.matches(&query, tree.root_node(), code.as_bytes());
+        let mut matches = query_cursor.matches(query, tree.root_node(), code.as_bytes());
         let mut imports = Vec::new();
         while let Some(m) = matches.next() {
             let mut package = String::new();

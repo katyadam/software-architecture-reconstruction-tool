@@ -10,9 +10,15 @@ echo "Running manager service..."
 RUST_LOG=info cargo watch -x run &
 cd ..
 
-# Start python-extractor project
-echo "=== Starting extractor-runtime project ==="
+# Start extractor-runtime project
+echo "=== Starting extractor runtime project ==="
 cd extractor-runtime
+RUST_LOG=info cargo watch -x run &
+cd ..
+
+# Start extractor-runtime project
+echo "=== Starting constant scanner project ==="
+cd constant-scanner
 RUST_LOG=info cargo watch -x run &
 cd ..
 
@@ -24,5 +30,6 @@ docker compose up -d
 RUST_LOG=info cargo watch -x run &
 cd ..
 
+docker start constant-scanner-db || echo "constant-scanner-db container not found, skipping."
 # Wait for all background processes to finish
 wait

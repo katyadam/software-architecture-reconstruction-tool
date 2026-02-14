@@ -1,4 +1,4 @@
-use tree_sitter::Tree;
+use tree_sitter::{Query, Tree};
 
 #[derive(Debug, Clone, Copy)]
 pub struct ExtractParams<'a> {
@@ -29,6 +29,10 @@ impl<'a> ExtractParams<'a> {
     }
 }
 
-pub trait Extractor<T> {
-    fn extract(&self, params: ExtractParams) -> Vec<T>;
+pub trait Extractor {
+    type Item<'a>;
+
+    fn query(&self) -> &'static Query;
+
+    fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>>;
 }

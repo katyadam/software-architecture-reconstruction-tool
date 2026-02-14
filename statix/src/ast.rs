@@ -32,16 +32,25 @@ pub enum Stmt {
 pub struct Parameter {
     pub name: String,
     pub datatype: String,
+    pub default_value: Option<String>,
 }
 
 impl Parameter {
-    pub fn new(name: String, datatype: String) -> Self {
-        Self { name, datatype }
+    pub fn new(name: String, datatype: String, default_value: Option<String>) -> Self {
+        Self {
+            name,
+            datatype,
+            default_value,
+        }
+    }
+
+    pub fn without_default_value(name: String, datatype: String) -> Self {
+        Self::new(name, datatype, None)
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct MethodAst {
+pub struct CallableAst {
     pub return_type: String,
     pub header: String,
     pub params: Vec<Parameter>,

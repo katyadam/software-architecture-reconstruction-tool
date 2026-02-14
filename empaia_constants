@@ -1,0 +1,18 @@
+interesting calls:
+workbench_service/annot_connector:318 - Concatenating URL with Constant, then using it in REST call
+app_service/mds_client:204 - REST call in function to which the entire target URI is passed
+app_service/mps_client:5 - URL from Class field
+auth_service/ShoutOutService.java:447 - Java REST call in Empaia
+medical_data_service/v3/classes:29 - constant is being assigned into variable and then used in REST call
+
+mds_url=http://medical-data-service:5000
+idms_url=http://id-mapper-service:8000
+jes_url=http://job-execution-service:8000
+aaa_url - mock! - i do not count with mocks for now...
+marketplace_service_url - can be with settings. - http://marketplace-service-mock:8000
+mps_url=http://marketplace-service-mock:8000
+cds_url - can be prepended with "settings." - http://clinical-data-service:8000
+es_url - can be prepended with "settings." - http://examination-service:8000
+js_url - can be prepended with "settings." - http://job-service:8000
+as_url - can be prepended with "settings." - http://annotation-service:8000
+hs_url - can be prepended with "settings." - http://harpy-service:8000

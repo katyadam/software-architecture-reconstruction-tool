@@ -1,51 +1,67 @@
 use std::collections::HashMap;
 
-use crate::{ast::MethodAst, symbolic::VarType};
+use crate::{ast::CallableAst, matcher::CallableMatcher, symbolic::VarType};
 
-pub fn find_closest_method(
-    methods: &HashMap<String, MethodAst>,
-    name: &str,
-    params: &[VarType],
-) -> Option<String> {
-    let mut highest: usize = 0;
-    let mut winner: Option<String> = None;
-    let mangled_name = mangle_header(name);
-    for header in methods.keys() {
-        // Prefer match by using name mangling
-        if let (Some(m_our), Some(m_to_cmp)) = (&mangled_name, &mangle_header(header))
-            && m_our == m_to_cmp
-        {
-            return Some(header.clone());
-        }
-        // Fallback to match by highest matched params and matching name
-        if let Some((cur_name, cur_params)) = parse_method_header_manual(header) {
-            if cur_name != name {
-                continue;
+#[derive(Clone, Default)]
+pub struct JavaCallableMatcher {}
+
+impl JavaCallableMatcher {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl CallableMatcher for JavaCallableMatcher {
+    fn find_closest_callable(
+        &self,
+        callables: &HashMap<String, CallableAst>,
+        name: &str,
+        params: &[VarType],
+    ) -> Option<String> {
+        let mut highest: usize = 0;
+        let mut winner: Option<String> = None;
+        let mangled_name = mangle_header(name);
+        for header in callables.keys() {
+            // Prefer match by using name mangling
+            if let (Some(m_our), Some(m_to_cmp)) = (&mangled_name, &mangle_header(header))
+                && m_our == m_to_cmp
+            {
+                return Some(header.clone());
             }
-            let matched = params
-                .iter()
-                .zip(cur_params.iter())
-                .filter(|(a, b)| a == b)
-                .count();
-            if matched > highest {
-                highest = matched;
-                winner = Some(header.clone());
+            // Fallback to match by highest matched params and matching name
+            if let Some((cur_name, cur_params)) = parse_callable_header_manual(header) {
+                if cur_name != name {
+                    continue;
+                }
+                let matched = params
+                    .iter()
+                    .zip(cur_params.iter())
+                    .filter(|(a, b)| a == b)
+                    .count();
+                if matched > highest {
+                    highest = matched;
+                    winner = Some(header.clone());
+                }
             }
         }
+
+        winner
     }
 
-    winner
+    fn clone_box(&self) -> Box<dyn CallableMatcher> {
+        Box::new(self.clone())
+    }
 }
 
 fn mangle_header(header: &str) -> Option<String> {
-    if let Some((name, params)) = parse_method_header_manual(header) {
+    if let Some((name, params)) = parse_callable_header_manual(header) {
         return Some(name + "(" + &params.join(",") + ")");
     }
 
     None
 }
 
-fn parse_method_header_manual(header: &str) -> Option<(String, Vec<VarType>)> {
+fn parse_callable_header_manual(header: &str) -> Option<(String, Vec<VarType>)> {
     let open_paren = header.find('(')?;
     let close_paren = header.rfind(')')?;
 
@@ -88,7 +104,7 @@ fn parse_method_header_manual(header: &str) -> Option<(String, Vec<VarType>)> {
 }
 
 /// Full header in Java is meant by the whole method header without accessibility specifier and parameters names
-pub fn convert_full_header_to_mangled_name(header: &str) -> String {
+pub fn java_convert_full_header_to_mangled_name(header: &str) -> String {
     let open_paren = header.find('(').expect("Invalid method header");
     let close_paren = header.rfind(')').expect("Invalid method header");
 

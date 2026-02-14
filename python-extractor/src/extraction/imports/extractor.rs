@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use models::Import;
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
 
@@ -8,12 +10,23 @@ use crate::extraction::{
 
 pub struct ImportsExtractor;
 
-impl Extractor<Import> for ImportsExtractor {
-    fn extract(&self, params: ExtractParams) -> Vec<Import> {
-        let query = Query::new(&tree_sitter_python::LANGUAGE.into(), IMPORTS_QUERY).unwrap();
+impl Extractor for ImportsExtractor {
+    type Item<'a> = Import;
+
+    fn query(&self) -> &'static Query {
+        static QUERY: OnceLock<Query> = OnceLock::new();
+
+        QUERY.get_or_init(|| {
+            Query::new(&tree_sitter_python::LANGUAGE.into(), IMPORTS_QUERY)
+                .expect("Failed to compile Python Imports Query")
+        })
+    }
+
+    fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
+        let query = self.query();
 
         let mut query_cursor = QueryCursor::new();
-        let matches = query_cursor.matches(&query, params.tree.root_node(), params.code.as_bytes());
+        let matches = query_cursor.matches(query, params.tree.root_node(), params.code.as_bytes());
         let mut imports: Vec<Import> = vec![];
         matches.for_each(|m| {
             let mut orig_module = String::new();

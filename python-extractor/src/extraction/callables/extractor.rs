@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::OnceLock};
 
 use models::{Callable, Namespace, Parameter};
 use sha2::{Digest, Sha256};
@@ -22,13 +22,24 @@ fn get_callable_name_with_params(name: &str, parameters: &[Parameter]) -> String
 
 pub struct CallablesExtractor;
 
-impl Extractor<Callable> for CallablesExtractor {
-    fn extract(&self, params: ExtractParams) -> Vec<Callable> {
-        let query = Query::new(&tree_sitter_python::LANGUAGE.into(), CALLABLES_QUERY).unwrap();
+impl Extractor for CallablesExtractor {
+    type Item<'a> = Callable;
+
+    fn query(&self) -> &'static Query {
+        static QUERY: OnceLock<Query> = OnceLock::new();
+
+        QUERY.get_or_init(|| {
+            Query::new(&tree_sitter_python::LANGUAGE.into(), CALLABLES_QUERY)
+                .expect("Failed to compile Python Callables Query")
+        })
+    }
+
+    fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
+        let query = self.query();
 
         let mut query_cursor = QueryCursor::new();
         let mut matches =
-            query_cursor.matches(&query, params.tree.root_node(), params.code.as_bytes());
+            query_cursor.matches(query, params.tree.root_node(), params.code.as_bytes());
         let mut callables: Vec<Callable> = vec![];
         let mut seen: HashSet<String> = HashSet::new();
 

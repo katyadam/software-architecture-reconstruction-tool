@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS constants;
+
+DROP TABLE IF EXISTS commits;
+
+DROP EXTENSION IF EXISTS "uuid-ossp";
