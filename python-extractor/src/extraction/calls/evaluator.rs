@@ -2,7 +2,7 @@ use crate::extraction::calls::{
     PythonCallStatement,
     type_inference::{find_invoked_type, infer_argument_type},
 };
-use models::{Assignment, AssignmentKey, CallStatement, Scope};
+use models::{Assignment, AssignmentKey, Scope};
 use std::collections::HashMap;
 
 /// Evaluates invocations and determines on what type each function is called.

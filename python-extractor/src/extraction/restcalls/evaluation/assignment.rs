@@ -68,7 +68,9 @@ pub fn evaluate_target_uri(
     *target_uri = new_uri.into_owned();
 }
 
-pub fn evaluate_restcalls(
+/// Assigns values to parameters or parts of target URI.
+/// The values are taken from local or global assignments.
+pub fn evaluate_local_and_global_assignments(
     restcalls: &mut [RestCall],
     assignments_map: &HashMap<AssignmentKey, Assignment>,
 ) {

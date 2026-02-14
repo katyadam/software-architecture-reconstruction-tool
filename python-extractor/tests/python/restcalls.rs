@@ -4,8 +4,10 @@ use python_extractor::{
         calls::extractor::CallsExtractor,
         extractor::{ExtractParams, Extractor},
         restcalls::{
-            evaluation::method_call::MethodCallEvaluationStrategy,
-            evaluator::evaluate_restcalls,
+            evaluation::{
+                assignment::evaluate_local_and_global_assignments,
+                method_call::MethodCallEvaluationStrategy,
+            },
             identification::method_call::MethodCallIdentificationStrategy,
             selection::{method_call::MethodCallSelector, selector::Selector},
         },
@@ -159,7 +161,7 @@ fn restcalls_evaluation() {
     let tree = get_tree(&code);
     let mut restcalls = restcalls(&code, &tree, &filename);
     let assignments_map = get_assignments_map(&tree, &code);
-    evaluate_restcalls(&mut restcalls, &assignments_map);
+    evaluate_local_and_global_assignments(&mut restcalls, &assignments_map);
     let expected = vec![
         RestCall {
             function_name: s!(
@@ -288,7 +290,7 @@ fn should_extract_all_types_of_restcall() {
     let tree = get_tree(&code);
     let mut restcalls = restcalls(&code, &tree, &filename);
     let assignments_map = get_assignments_map(&tree, &code);
-    evaluate_restcalls(&mut restcalls, &assignments_map);
+    evaluate_local_and_global_assignments(&mut restcalls, &assignments_map);
     let expected = vec![
         RestCall {
             function_name: s!("endpoint_with_withblock_restcall(data: ProxyItemCreate) -> Any"),
@@ -422,7 +424,7 @@ fn should_assign_correct_target_uris_using_symbolic_evaluation() {
     let tree = get_tree(&code);
     let mut restcalls = restcalls(&code, &tree, &filename);
     let assignments_map = get_assignments_map(&tree, &code);
-    evaluate_restcalls(&mut restcalls, &assignments_map);
+    evaluate_local_and_global_assignments(&mut restcalls, &assignments_map);
 
     let expected = vec![RestCall {
         function_name: s!(
@@ -458,7 +460,7 @@ fn should_not_identify_endpoints_with_restcall_notation() {
     let tree = get_tree(&code);
     let mut restcalls = restcalls(&code, &tree, &filename);
     let assignments_map = get_assignments_map(&tree, &code);
-    evaluate_restcalls(&mut restcalls, &assignments_map);
+    evaluate_local_and_global_assignments(&mut restcalls, &assignments_map);
 
     assert!(restcalls.is_empty());
 }

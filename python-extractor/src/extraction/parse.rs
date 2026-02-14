@@ -12,7 +12,6 @@ use crate::extraction::{
     imports::extractor::ImportsExtractor,
     restcalls::{
         evaluation::method_call::MethodCallEvaluationStrategy,
-        extractor::RestcallsExtractor,
         identification::method_call::MethodCallIdentificationStrategy,
         selection::{method_call::MethodCallSelector, selector::Selector},
     },
@@ -33,7 +32,6 @@ pub async fn parse(code: &str, file_name: &str) -> Result<CodeElementsAggregate,
     let mut assignments = None;
     let mut imports = None;
     let mut endpoints = None;
-    let mut restcalls = None;
     let mut entities = None;
     let mut callables = None;
     let mut calls = None;
@@ -42,7 +40,6 @@ pub async fn parse(code: &str, file_name: &str) -> Result<CodeElementsAggregate,
         s.spawn(|_| assignments = Some(get_assignments_map(&tree, code)));
         s.spawn(|_| imports = Some(ImportsExtractor.extract(params)));
         s.spawn(|_| endpoints = Some(EndpointsExtractor.extract(params)));
-        s.spawn(|_| restcalls = Some(RestcallsExtractor.extract(params)));
         s.spawn(|_| entities = Some(EntitiesExtractor.extract(params)));
         s.spawn(|_| callables = Some(CallablesExtractor.extract(params)));
         s.spawn(|_| calls = Some(CallsExtractor.extract(ExtractParams::new(&tree, code))));
