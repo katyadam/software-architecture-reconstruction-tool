@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use models::{Callable, Namespace};
 use sha2::{Digest, Sha256};
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
@@ -13,8 +15,17 @@ use crate::{
 pub struct CallablesExtractor;
 
 impl Extractor<Callable> for CallablesExtractor {
+    fn query(&self) -> &'static Query {
+        static QUERY: OnceLock<Query> = OnceLock::new();
+
+        QUERY.get_or_init(|| {
+            Query::new(&tree_sitter_java::LANGUAGE.into(), CALLABLES_QUERY)
+                .expect("Failed to compile Java Callables Query")
+        })
+    }
+
     fn extract(&self, code: &str, tree: &tree_sitter::Tree, file_name: &str) -> Vec<Callable> {
-        let query = Query::new(&tree_sitter_java::LANGUAGE.into(), CALLABLES_QUERY).unwrap();
+        let query = self.query();
         let mut query_cursor = QueryCursor::new();
         let mut matches = query_cursor.matches(&query, tree.root_node(), code.as_bytes());
         let mut callables = Vec::new();

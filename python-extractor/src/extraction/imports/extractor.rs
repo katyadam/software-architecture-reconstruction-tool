@@ -23,7 +23,7 @@ impl Extractor for ImportsExtractor {
     }
 
     fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
-        let query = Query::new(&tree_sitter_python::LANGUAGE.into(), IMPORTS_QUERY).unwrap();
+        let query = self.query();
 
         let mut query_cursor = QueryCursor::new();
         let matches = query_cursor.matches(&query, params.tree.root_node(), params.code.as_bytes());

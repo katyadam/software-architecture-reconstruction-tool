@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use models::{Argument, CallStatement};
 use tree_sitter::{Query, QueryCursor, StreamingIterator, Tree};
 
@@ -14,8 +16,17 @@ use crate::{
 
 pub struct CallStatementsExtractor;
 impl Extractor<CallStatement> for CallStatementsExtractor {
+    fn query(&self) -> &'static Query {
+        static QUERY: OnceLock<Query> = OnceLock::new();
+
+        QUERY.get_or_init(|| {
+            Query::new(&tree_sitter_java::LANGUAGE.into(), CALL_STATEMENTS_QUERY)
+                .expect("Failed to compile Java Calls Query")
+        })
+    }
+
     fn extract(&self, code: &str, tree: &Tree, _file_name: &str) -> Vec<CallStatement> {
-        let query = Query::new(&tree_sitter_java::LANGUAGE.into(), CALL_STATEMENTS_QUERY).unwrap();
+        let query = self.query();
         let mut query_cursor = QueryCursor::new();
         let mut matches = query_cursor.matches(&query, tree.root_node(), code.as_bytes());
         let mut calls = Vec::new();

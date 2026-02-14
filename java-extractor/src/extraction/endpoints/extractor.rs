@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use sha2::{Digest, Sha256};
 
 use crate::{
@@ -16,8 +18,17 @@ use tree_sitter::{Query, QueryCursor, StreamingIterator, Tree};
 
 pub struct EndpointsExtractor;
 impl Extractor<Endpoint> for EndpointsExtractor {
+    fn query(&self) -> &'static Query {
+        static QUERY: OnceLock<Query> = OnceLock::new();
+
+        QUERY.get_or_init(|| {
+            Query::new(&tree_sitter_java::LANGUAGE.into(), ENDPOINTS_QUERY)
+                .expect("Failed to compile Java Endpoints Query")
+        })
+    }
+
     fn extract(&self, code: &str, tree: &Tree, file_name: &str) -> Vec<Endpoint> {
-        let query = Query::new(&tree_sitter_java::LANGUAGE.into(), ENDPOINTS_QUERY).unwrap();
+        let query = self.query();
         let mut query_cursor = QueryCursor::new();
         let mut matches = query_cursor.matches(&query, tree.root_node(), code.as_bytes());
         let mut endpoints = Vec::new();
