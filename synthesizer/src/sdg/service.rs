@@ -38,7 +38,7 @@ impl SdgServiceImpl {
             repository,
             builder,
             manager_connector,
-            constant_scanner_connector: constant_scanner_connector,
+            constant_scanner_connector,
         }
     }
 }

@@ -29,7 +29,7 @@ impl Extractor for AssignmentsExtractor {
         let query = self.query();
 
         let mut query_cursor = QueryCursor::new();
-        let matches = query_cursor.matches(&query, params.tree.root_node(), params.code.as_bytes());
+        let matches = query_cursor.matches(query, params.tree.root_node(), params.code.as_bytes());
         let mut assignments_map: Vec<(AssignmentKey, Assignment)> = Vec::new();
         matches.for_each(|m| {
             let mut variable_name = String::new();

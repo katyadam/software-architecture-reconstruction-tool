@@ -26,8 +26,8 @@ pub trait Selector {
         Ok(call_statements
             .iter()
             .map(|call| {
-                if let Some(mut restcall) = self.identify(call, file_path) {
-                    let unwrapped_evaluated_result = self.evaluate(&mut restcall)?;
+                if let Some(restcall) = self.identify(call, file_path) {
+                    let unwrapped_evaluated_result = self.evaluate(&restcall)?;
                     Ok(unwrapped_evaluated_result)
                 } else {
                     Ok(vec![])

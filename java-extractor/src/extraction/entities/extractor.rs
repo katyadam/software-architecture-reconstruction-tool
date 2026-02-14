@@ -25,7 +25,7 @@ impl Extractor<Entity> for EntitiesExtractor {
     fn extract(&self, code: &str, tree: &Tree, file_name: &str) -> Vec<Entity> {
         let query = self.query();
         let mut query_cursor = QueryCursor::new();
-        let mut matches = query_cursor.matches(&query, tree.root_node(), code.as_bytes());
+        let mut matches = query_cursor.matches(query, tree.root_node(), code.as_bytes());
         let mut entities: Vec<Entity> = vec![];
         let mut seen: HashSet<String> = HashSet::new();
         let mut package: Option<String> = None;

@@ -237,7 +237,7 @@ fn parse_if(
 fn clean_python_string(s: &str) -> String {
     let s = s.trim();
 
-    if let Some(quote_start) = s.find(|c| c == '"' || c == '\'') {
+    if let Some(quote_start) = s.find(['"', '\'']) {
         let content = &s[quote_start..];
         return strip_python_quotes(content);
     }
@@ -253,10 +253,10 @@ fn strip_python_quotes(s: &str) -> String {
         return s[3..s.len() - 3].to_string();
     }
 
-    if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')) {
-        if s.len() >= 2 {
-            return s[1..s.len() - 1].to_string();
-        }
+    if (s.starts_with('"') && s.ends_with('"'))
+        || (s.starts_with('\'') && s.ends_with('\'')) && s.len() >= 2
+    {
+        return s[1..s.len() - 1].to_string();
     }
 
     s.to_string()

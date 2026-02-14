@@ -48,6 +48,6 @@ pub fn symbolic_evaluation(
     callable_signature: &str,
     matcher: Box<dyn CallableMatcher>,
 ) -> Result<symbolic::AnalysisResult, error::EvalError> {
-    let ctx = AnalysisContext::new(&callables_map, matcher.into());
+    let ctx = AnalysisContext::new(callables_map, matcher.into());
     SymbolicEvaluator::eval_callable(callable_signature, &ctx)
 }

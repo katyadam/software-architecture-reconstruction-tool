@@ -20,7 +20,7 @@ impl Extractor<Import> for ImportsExtractor {
     fn extract(&self, code: &str, tree: &tree_sitter::Tree, _file_name: &str) -> Vec<Import> {
         let query = self.query();
         let mut query_cursor = QueryCursor::new();
-        let mut matches = query_cursor.matches(&query, tree.root_node(), code.as_bytes());
+        let mut matches = query_cursor.matches(query, tree.root_node(), code.as_bytes());
         let mut imports = Vec::new();
         while let Some(m) = matches.next() {
             let mut package = String::new();

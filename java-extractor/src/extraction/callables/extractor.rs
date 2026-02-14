@@ -27,7 +27,7 @@ impl Extractor<Callable> for CallablesExtractor {
     fn extract(&self, code: &str, tree: &tree_sitter::Tree, file_name: &str) -> Vec<Callable> {
         let query = self.query();
         let mut query_cursor = QueryCursor::new();
-        let mut matches = query_cursor.matches(&query, tree.root_node(), code.as_bytes());
+        let mut matches = query_cursor.matches(query, tree.root_node(), code.as_bytes());
         let mut callables = Vec::new();
 
         while let Some(m) = matches.next() {

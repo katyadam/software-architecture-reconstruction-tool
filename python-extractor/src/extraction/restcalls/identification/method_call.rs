@@ -8,6 +8,7 @@ use crate::extraction::{
     restcalls::identification::{HTTP_METHODS, strategy::IdentificationStrategy},
 };
 
+#[derive(Default)]
 pub struct MethodCallIdentificationStrategy {}
 
 impl MethodCallIdentificationStrategy {
@@ -76,12 +77,10 @@ impl IdentificationStrategy for MethodCallIdentificationStrategy {
 }
 
 fn clean_python_string(s: &str) -> String {
-    let quote_start = s.find(|c| c == '"' || c == '\'').unwrap_or(0);
+    let quote_start = s.find(['"', '\'']).unwrap_or(0);
     let content = &s[quote_start..];
 
-    let cleaned = strip_quotes(content);
-
-    cleaned
+    strip_quotes(content)
 }
 
 fn strip_quotes(s: &str) -> String {

@@ -30,7 +30,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
     fn extract(&self, code: &str, tree: &Tree, file_name: &str) -> Vec<Endpoint> {
         let query = self.query();
         let mut query_cursor = QueryCursor::new();
-        let mut matches = query_cursor.matches(&query, tree.root_node(), code.as_bytes());
+        let mut matches = query_cursor.matches(query, tree.root_node(), code.as_bytes());
         let mut endpoints = Vec::new();
         let mut shared_uri: Option<String> = None;
 

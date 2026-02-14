@@ -29,7 +29,7 @@ impl Extractor for EntitiesExtractor {
 
         let mut query_cursor = QueryCursor::new();
         let mut matches =
-            query_cursor.matches(&query, params.tree.root_node(), params.code.as_bytes());
+            query_cursor.matches(query, params.tree.root_node(), params.code.as_bytes());
         let mut entities: Vec<Entity> = vec![];
         let mut seen: HashSet<String> = HashSet::new();
         while let Some(m) = matches.next() {

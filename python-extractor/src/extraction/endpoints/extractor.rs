@@ -26,7 +26,7 @@ impl Extractor for EndpointsExtractor {
         let query = self.query();
 
         let mut query_cursor = QueryCursor::new();
-        let matches = query_cursor.matches(&query, params.tree.root_node(), params.code.as_bytes());
+        let matches = query_cursor.matches(query, params.tree.root_node(), params.code.as_bytes());
         let mut endpoints: Vec<Endpoint> = vec![];
         matches.for_each(|m| {
             let mut function_name = String::new();

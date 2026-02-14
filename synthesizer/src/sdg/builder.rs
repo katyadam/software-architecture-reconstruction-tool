@@ -38,7 +38,7 @@ impl SdgBuilder for SdgBuilderImpl {
 
         let mut assigned_restcalls =
             self.get_assigned_restcalls(restcalls, &configuration.service_descriptions);
-        self.substitute_constants_in_restcalls(&mut assigned_restcalls, &constants)?;
+        self.substitute_constants_in_restcalls(&mut assigned_restcalls, constants)?;
 
         let connections = self.create_connections(assigned_endpoints, assigned_restcalls);
         Ok(Sdg {

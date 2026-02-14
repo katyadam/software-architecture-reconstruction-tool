@@ -89,7 +89,7 @@ impl Extractor for CallsExtractor {
 
         let mut query_cursor = QueryCursor::new();
         let mut matches =
-            query_cursor.matches(&query, params.tree.root_node(), params.code.as_bytes());
+            query_cursor.matches(query, params.tree.root_node(), params.code.as_bytes());
         let mut call_statements: Vec<PythonCallStatement> = vec![];
         while let Some(m) = matches.next() {
             let mut arguments: Vec<Argument> = vec![];

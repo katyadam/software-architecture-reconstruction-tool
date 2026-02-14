@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{ast::CallableAst, matcher::CallableMatcher, symbolic::VarType};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct JavaCallableMatcher {}
 
 impl JavaCallableMatcher {

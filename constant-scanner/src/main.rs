@@ -15,7 +15,6 @@ use utoipa_swagger_ui::SwaggerUi;
 
 mod constant;
 mod error;
-mod scanner;
 mod schema;
 
 #[derive(OpenApi)]
