@@ -30,5 +30,6 @@ docker compose up -d
 RUST_LOG=debug cargo watch -x run &
 cd ..
 
+docker start constant-scanner-db || echo "constant-scanner-db container not found, skipping."
 # Wait for all background processes to finish
 wait
