@@ -6,6 +6,7 @@ pub mod common;
 pub mod configuration;
 pub mod endpoints;
 pub mod entities;
+pub mod enums;
 pub mod imports;
 pub mod restcalls;
 

@@ -4,6 +4,7 @@ pub mod calls;
 pub mod common;
 pub mod endpoints;
 pub mod entities;
+pub mod enums;
 pub mod extractor;
 pub mod imports;
 pub mod parse;
