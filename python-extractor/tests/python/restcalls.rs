@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use python_extractor::{
     extraction::{
         assignments::map::get_assignments_map,
         calls::extractor::CallsExtractor,
+        enums::map::get_enums_map,
         extractor::{ExtractParams, Extractor},
         restcalls::{
             evaluation::{
@@ -15,7 +18,7 @@ use python_extractor::{
     s,
 };
 
-use models::{Argument, HttpMethod, RestCall};
+use models::{Argument, HttpMethod, RestCall, enums::Enum};
 use statix::parse_python;
 use tree_sitter::Tree;
 
@@ -26,7 +29,7 @@ fn restcalls(code: &str, tree: &Tree, file_name: &str) -> Vec<RestCall> {
     let function_asts = parse_python(&tree, &code);
     MethodCallSelector::new(
         MethodCallIdentificationStrategy::new(),
-        MethodCallEvaluationStrategy::new(function_asts),
+        MethodCallEvaluationStrategy::new(function_asts, HashMap::new()),
     )
     .select_restcall_statements(&calls, file_name)
     .expect("This test should not fail!")
@@ -463,4 +466,33 @@ fn should_not_identify_endpoints_with_restcall_notation() {
     evaluate_local_and_global_assignments(&mut restcalls, &assignments_map);
 
     assert!(restcalls.is_empty());
+}
+
+#[test]
+fn should_correctly_generate_multiple_restcalls_with_resolved_enums() {
+    let filename = "./examples/python/restcalls/enum_in_restcall_uri.py";
+    let code = load_file(filename).unwrap();
+    let tree = get_tree(&code);
+    let calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
+    let function_asts = parse_python(&tree, &code);
+    let mut restcalls = MethodCallSelector::new(
+        MethodCallIdentificationStrategy::new(),
+        MethodCallEvaluationStrategy::new(
+            function_asts,
+            get_enums_map(&vec![Enum {
+                name: s!("MappingType"),
+                values: vec![s!("cases"), s!("slides")],
+            }]),
+        ),
+    )
+    .select_restcall_statements(&calls, filename)
+    .expect("This test should not fail!");
+
+    let assignments_map = get_assignments_map(&tree, &code);
+    evaluate_local_and_global_assignments(&mut restcalls, &assignments_map);
+
+    assert!(
+        restcalls.len() == 4,
+        "There should be extracted 4 REST calls from that specific file"
+    );
 }

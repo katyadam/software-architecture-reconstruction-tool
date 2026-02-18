@@ -13,11 +13,18 @@ use crate::extraction::restcalls::evaluation::{
 
 pub struct MethodCallEvaluationStrategy {
     function_asts: HashMap<String, CallableAst>,
+    enums_map: HashMap<String, Vec<String>>,
 }
 
 impl MethodCallEvaluationStrategy {
-    pub fn new(function_asts: HashMap<String, CallableAst>) -> Self {
-        Self { function_asts }
+    pub fn new(
+        function_asts: HashMap<String, CallableAst>,
+        enums_map: HashMap<String, Vec<String>>,
+    ) -> Self {
+        Self {
+            function_asts,
+            enums_map,
+        }
     }
 }
 
@@ -33,7 +40,8 @@ impl EvaluationStrategy for MethodCallEvaluationStrategy {
             Box::new(PythonCallableMatcher::new()),
         )?;
         let mut evaluated_restcalls: Vec<RestCall> = Vec::new();
-        let target_uris = generate_target_uris(&restcall.target_uri, &analysis_result);
+        let target_uris =
+            generate_target_uris(&restcall.target_uri, &analysis_result, &self.enums_map);
         for uri in target_uris {
             evaluated_restcalls.push(restcall.clone_from_target_uri(&uri));
         }
