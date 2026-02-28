@@ -16,11 +16,7 @@ impl Enum {
             .fields
             .iter()
             .filter_map(|field| {
-                if let Some(value) = field.initial_value.clone() {
-                    Some(value.trim_matches('"').to_string())
-                } else {
-                    None
-                }
+                field.initial_value.clone().map(|value| value.trim_matches('"').to_string())
             })
             .collect();
         Self {

@@ -1,5 +1,6 @@
 use models::{Entity, enums::Enum};
 
+#[derive(Default)]
 pub struct EnumIdentificator {}
 
 impl EnumIdentificator {
@@ -11,7 +12,7 @@ impl EnumIdentificator {
         entities
             .iter()
             .filter(|entity| entity.superclasses.contains(&"Enum".to_string()))
-            .map(|entity| Enum::from_entity(&entity))
+            .map(Enum::from_entity)
             .collect()
     }
 }
