@@ -31,7 +31,7 @@ impl MethodCallIdentificationStrategy {
         call_args.first().map(|uri| clean_python_string(&uri.value))
     }
 
-    // FastAPI uses @app.http_method to denote endpoint, therefore we want to omit thath here
+    // FastAPI uses @app.http_method to denote endpoint, therefore we want to omit that here
     fn is_part_of_decorator(&self, call_statement_node: Node) -> bool {
         if let Some(parent_node) = call_statement_node.parent() {
             return parent_node.kind() == "decorator";
