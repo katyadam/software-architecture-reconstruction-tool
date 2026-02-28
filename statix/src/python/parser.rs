@@ -141,6 +141,9 @@ fn parse_block(
             "if_statement" => {
                 stmts.push(parse_if(child, source, scope_vars)?);
             }
+            "try_statement" => {
+                stmts.extend(parse_try(child, source, scope_vars)?);
+            }
             "return_statement" => {
                 let expr = child
                     .named_child(0)
@@ -232,6 +235,23 @@ fn parse_if(
         then_branch,
         else_branch,
     })
+}
+
+fn parse_try(
+    node: Node,
+    source: &str,
+    scope_vars: &mut HashSet<String>,
+) -> Result<Vec<Stmt>, ParseError> {
+    let mut collected_stmts: Vec<Stmt> = Vec::new();
+    let try_block_node = node
+        .child_by_field_name("body")
+        .ok_or(ParseError::FieldNotFound("try block".to_string()))?;
+    collected_stmts.extend(parse_block(try_block_node, source, scope_vars)?);
+
+    if let Some(except_block_node) = node.child_by_field_name("except_clause") {
+        collected_stmts.extend(parse_block(except_block_node, source, scope_vars)?);
+    }
+    Ok(collected_stmts)
 }
 
 fn clean_python_string(s: &str) -> String {

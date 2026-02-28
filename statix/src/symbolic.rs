@@ -198,6 +198,7 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
     }
 
     fn visit_statements(&mut self, stmts: &[Stmt]) -> Result<Option<Expr>, EvalError> {
+        let mut collected_returns = Vec::new();
         for stmt in stmts {
             match stmt {
                 Stmt::Return(e) => {
@@ -210,13 +211,20 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
                     else_branch,
                 } => {
                     if let Some(ret) = self.visit_if(condition, then_branch, else_branch)? {
-                        return Ok(Some(ret));
+                        collected_returns.push(ret);
                     }
                 }
                 _ => self.visit_stmt(stmt)?,
             }
         }
-        Ok(None)
+
+        match collected_returns.len() {
+            0 => Ok(None),
+            1 => Ok(collected_returns.into_iter().next()),
+            _ => Ok(Some(Expr::Joined {
+                vals: collected_returns,
+            })),
+        }
     }
 
     fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), EvalError> {

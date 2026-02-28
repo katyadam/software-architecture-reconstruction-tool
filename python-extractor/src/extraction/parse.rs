@@ -8,6 +8,7 @@ use crate::extraction::{
     calls::{PythonCallStatement, evaluator::evaluate_invocations, extractor::CallsExtractor},
     endpoints::extractor::EndpointsExtractor,
     entities::{evaluator::evaluate_entity_fields, extractor::EntitiesExtractor},
+    enums::{identification::EnumIdentificator, map::get_enums_map},
     extractor::{ExtractParams, Extractor},
     imports::extractor::ImportsExtractor,
     restcalls::{
@@ -67,10 +68,11 @@ pub async fn parse(code: &str, file_name: &str) -> Result<CodeElementsAggregate,
     evaluate_entity_fields(&imports, &mut entities, file_name);
     evaluate_invocations(&mut calls, &assignments);
     let function_asts = parse_python(&tree, code);
+    let enums = EnumIdentificator::identificate_from_entities(&entities);
 
     let restcalls = MethodCallSelector::new(
         MethodCallIdentificationStrategy::new(),
-        MethodCallEvaluationStrategy::new(function_asts),
+        MethodCallEvaluationStrategy::new(function_asts, get_enums_map(&enums)),
     )
     .select_restcall_statements(&calls, file_name)
     .map_err(|e| {
