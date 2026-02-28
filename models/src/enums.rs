@@ -16,7 +16,10 @@ impl Enum {
             .fields
             .iter()
             .filter_map(|field| {
-                field.initial_value.clone().map(|value| value.trim_matches('"').to_string())
+                field
+                    .initial_value
+                    .clone()
+                    .map(|value| value.trim_matches('"').to_string())
             })
             .collect();
         Self {
