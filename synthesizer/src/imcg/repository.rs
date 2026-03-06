@@ -28,13 +28,7 @@ pub trait ImcgRepository {
 }
 
 pub struct ImcgRepositoryImpl {
-    graph_handle: Arc<Graph>,
-}
-
-impl ImcgRepositoryImpl {
-    pub fn new(graph_handle: Arc<Graph>) -> Self {
-        Self { graph_handle }
-    }
+    pub graph_handle: Arc<Graph>,
 }
 
 impl ImcgRepository for ImcgRepositoryImpl {

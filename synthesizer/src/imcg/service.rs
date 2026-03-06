@@ -28,26 +28,10 @@ pub trait ImcgService {
 }
 
 pub struct ImcgServiceImpl {
-    repository: ImcgRepositoryImpl,
-    builder: ImcgBuilderImpl,
-    manager_connector: ManagerConnector,
-    sdg_service: Arc<SdgServiceImpl>,
-}
-
-impl ImcgServiceImpl {
-    pub fn new(
-        repository: ImcgRepositoryImpl,
-        builder: ImcgBuilderImpl,
-        manager_connector: ManagerConnector,
-        sdg_service: Arc<SdgServiceImpl>,
-    ) -> Self {
-        Self {
-            repository,
-            builder,
-            manager_connector,
-            sdg_service,
-        }
-    }
+    pub repository: ImcgRepositoryImpl,
+    pub builder: ImcgBuilderImpl,
+    pub manager_connector: ManagerConnector,
+    pub sdg_service: Arc<SdgServiceImpl>,
 }
 
 impl ImcgService for ImcgServiceImpl {
@@ -61,9 +45,9 @@ impl ImcgService for ImcgServiceImpl {
             .get_single(imcg_payload.codebase_uuid, &imcg_payload.commit_hash)
             .await?;
         let imcg: Imcg = self.builder.build(
-            imcg_payload.callables,
-            imcg_payload.call_statements,
-            codebase_configuration
+            &imcg_payload.callables,
+            &imcg_payload.call_statements,
+            &codebase_configuration
                 .configuration_data
                 .service_descriptions,
             &sdg,

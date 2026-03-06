@@ -31,9 +31,9 @@ impl CallGraphBuilderImpl {
 
     pub fn build(
         self,
-        callables: Vec<ServiceCallable>,
+        callables: &[ServiceCallable],
         callables_map: &HashMap<String, ServiceCallable>,
-        call_statements: Vec<CallStatement>,
+        call_statements: &[CallStatement],
     ) -> Result<CallGraph, BuilderError> {
         let calls: Vec<Call> = call_statements
             .iter()
@@ -50,7 +50,7 @@ impl CallGraphBuilderImpl {
             })
             .collect();
 
-        Ok(CallGraph::new(callables, calls))
+        Ok(CallGraph::new(callables.to_vec(), calls))
     }
 
     fn find_target_id(

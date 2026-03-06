@@ -14,9 +14,9 @@ use crate::{
 pub trait SdgBuilder {
     fn build(
         &self,
-        endpoints: Vec<Endpoint>,
-        restcalls: Vec<RestCall>,
-        configuration: ConfigurationData,
+        endpoints: &[Endpoint],
+        restcalls: &[RestCall],
+        configuration: &ConfigurationData,
         constants: &[Constant],
     ) -> Result<Sdg, BuilderError>;
 }
@@ -26,9 +26,9 @@ pub struct SdgBuilderImpl {}
 impl SdgBuilder for SdgBuilderImpl {
     fn build(
         &self,
-        endpoints: Vec<Endpoint>,
-        restcalls: Vec<RestCall>,
-        configuration: ConfigurationData,
+        endpoints: &[Endpoint],
+        restcalls: &[RestCall],
+        configuration: &ConfigurationData,
         constants: &[Constant],
     ) -> Result<Sdg, BuilderError> {
         let assigned_endpoints =
@@ -57,7 +57,7 @@ impl SdgBuilderImpl {
 
     fn get_assigned_endpoints(
         &self,
-        endpoints: Vec<Endpoint>,
+        endpoints: &[Endpoint],
         service_descs: &[ServiceDescription],
     ) -> Vec<AssignedEndpoint> {
         endpoints
@@ -65,7 +65,7 @@ impl SdgBuilderImpl {
             .map(|endpoint| {
                 let service_desc =
                     assign_service_description_to_file(&endpoint.file_path, service_descs);
-                AssignedEndpoint::new(endpoint, service_desc)
+                AssignedEndpoint::new(endpoint.clone(), service_desc)
             })
             .collect()
     }
@@ -106,7 +106,7 @@ impl SdgBuilderImpl {
 
     fn get_assigned_restcalls(
         &self,
-        restcalls: Vec<RestCall>,
+        restcalls: &[RestCall],
         service_descs: &[ServiceDescription],
     ) -> Vec<AssignedRestCall> {
         restcalls
@@ -114,7 +114,7 @@ impl SdgBuilderImpl {
             .map(|restcall| {
                 let service_desc =
                     assign_service_description_to_file(&restcall.file_path, service_descs);
-                AssignedRestCall::new(restcall, service_desc)
+                AssignedRestCall::new(restcall.clone(), service_desc)
             })
             .collect()
     }

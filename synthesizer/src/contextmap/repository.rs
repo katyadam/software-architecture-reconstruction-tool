@@ -32,13 +32,7 @@ pub trait ContextMapRepository {
 }
 
 pub struct ContextMapRepositoryImpl {
-    graph_handle: Arc<Graph>,
-}
-
-impl ContextMapRepositoryImpl {
-    pub fn new(graph_handle: Arc<Graph>) -> Self {
-        Self { graph_handle }
-    }
+    pub graph_handle: Arc<Graph>,
 }
 
 impl ContextMapRepository for ContextMapRepositoryImpl {

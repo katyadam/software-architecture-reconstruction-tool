@@ -28,13 +28,7 @@ pub trait SdgRepository {
 }
 
 pub struct SdgRepositoryImpl {
-    graph_handle: Arc<Graph>,
-}
-
-impl SdgRepositoryImpl {
-    pub fn new(graph_handle: Arc<Graph>) -> Self {
-        Self { graph_handle }
-    }
+    pub graph_handle: Arc<Graph>,
 }
 
 impl SdgRepository for SdgRepositoryImpl {
