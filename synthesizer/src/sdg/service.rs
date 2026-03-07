@@ -21,26 +21,10 @@ pub trait SdgService {
 }
 
 pub struct SdgServiceImpl {
-    repository: SdgRepositoryImpl,
-    builder: SdgBuilderImpl,
-    manager_connector: ManagerConnector,
-    constant_scanner_connector: ConstantScannerConnector,
-}
-
-impl SdgServiceImpl {
-    pub fn new(
-        repository: SdgRepositoryImpl,
-        builder: SdgBuilderImpl,
-        manager_connector: ManagerConnector,
-        constant_scanner_connector: ConstantScannerConnector,
-    ) -> Self {
-        Self {
-            repository,
-            builder,
-            manager_connector,
-            constant_scanner_connector,
-        }
-    }
+    pub repository: SdgRepositoryImpl,
+    pub builder: SdgBuilderImpl,
+    pub manager_connector: ManagerConnector,
+    pub constant_scanner_connector: ConstantScannerConnector,
 }
 
 impl SdgService for SdgServiceImpl {
@@ -56,9 +40,9 @@ impl SdgService for SdgServiceImpl {
             .await?;
 
         let sdg = self.builder.build(
-            sdg_payload.endpoints,
-            sdg_payload.restcalls,
-            configuration_dto.configuration_data,
+            &sdg_payload.endpoints,
+            &sdg_payload.restcalls,
+            &configuration_dto.configuration_data,
             &constants,
         )?;
 

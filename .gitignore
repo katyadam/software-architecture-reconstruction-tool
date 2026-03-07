@@ -2,4 +2,7 @@ target/
 TODO.md
 data/
 UPDATE_LOG.md
+DESIRED_STATE.md
 dump/
+train-ticket-sar-output/
+empaia-sar-output/

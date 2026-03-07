@@ -22,23 +22,9 @@ pub trait ContextMapService {
 }
 
 pub struct ContextMapServiceImpl {
-    repository: ContextMapRepositoryImpl,
-    builder: ContextMapBuilderImpl,
-    manager_connector: ManagerConnector,
-}
-
-impl ContextMapServiceImpl {
-    pub fn new(
-        repository: ContextMapRepositoryImpl,
-        builder: ContextMapBuilderImpl,
-        manager_connector: ManagerConnector,
-    ) -> Self {
-        Self {
-            repository,
-            builder,
-            manager_connector,
-        }
-    }
+    pub repository: ContextMapRepositoryImpl,
+    pub builder: ContextMapBuilderImpl,
+    pub manager_connector: ManagerConnector,
 }
 
 impl ContextMapService for ContextMapServiceImpl {

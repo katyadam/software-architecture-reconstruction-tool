@@ -153,11 +153,17 @@ async fn main() -> std::io::Result<()> {
 }
 
 fn get_cm_service(graph: Arc<Graph>, manager_url: &str) -> ContextMapServiceImpl {
-    let cm_repository = ContextMapRepositoryImpl::new(graph);
-    let cm_builder = ContextMapBuilderImpl::new();
+    let repository = ContextMapRepositoryImpl {
+        graph_handle: graph,
+    };
+    let builder = ContextMapBuilderImpl::new();
     let manager_connector =
         ManagerConnector::new(HttpClient::new(manager_url.to_owned(), Client::default()));
-    ContextMapServiceImpl::new(cm_repository, cm_builder, manager_connector)
+    ContextMapServiceImpl {
+        repository,
+        builder,
+        manager_connector,
+    }
 }
 
 fn get_sdg_service(
@@ -165,20 +171,22 @@ fn get_sdg_service(
     manager_url: &str,
     constant_scanner_url: &str,
 ) -> SdgServiceImpl {
-    let sdg_repository = SdgRepositoryImpl::new(graph);
-    let sdg_builder = SdgBuilderImpl::new();
+    let repository = SdgRepositoryImpl {
+        graph_handle: graph,
+    };
+    let builder = SdgBuilderImpl::new();
     let manager_connector =
         ManagerConnector::new(HttpClient::new(manager_url.to_owned(), Client::default()));
     let constant_scanner_connector = ConstantScannerConnector::new(HttpClient::new(
         constant_scanner_url.to_owned(),
         Client::default(),
     ));
-    SdgServiceImpl::new(
-        sdg_repository,
-        sdg_builder,
+    SdgServiceImpl {
+        repository,
+        builder,
         manager_connector,
         constant_scanner_connector,
-    )
+    }
 }
 
 fn get_imcg_service(
@@ -186,16 +194,18 @@ fn get_imcg_service(
     manager_url: &str,
     sdg_service: Arc<SdgServiceImpl>,
 ) -> ImcgServiceImpl {
-    let imcg_repository = ImcgRepositoryImpl::new(graph);
-    let imcg_builder = ImcgBuilderImpl::new();
+    let repository = ImcgRepositoryImpl {
+        graph_handle: graph,
+    };
+    let builder = ImcgBuilderImpl::new();
     let manager_connector =
         ManagerConnector::new(HttpClient::new(manager_url.to_owned(), Client::default()));
-    ImcgServiceImpl::new(
-        imcg_repository,
-        imcg_builder,
+    ImcgServiceImpl {
+        repository,
+        builder,
         manager_connector,
         sdg_service,
-    )
+    }
 }
 
 fn get_s3_client() -> S3Client {

@@ -15,9 +15,9 @@ use crate::{
 pub trait ImcgBuilder {
     fn build(
         &self,
-        callables: Vec<Callable>,
-        call_statements: Vec<CallStatement>,
-        service_descs: Vec<ServiceDescription>,
+        callables: &[Callable],
+        call_statements: &[CallStatement],
+        service_descs: &[ServiceDescription],
         sdg: &Sdg,
     ) -> Result<Imcg, BuilderError>;
 }
@@ -31,8 +31,8 @@ impl ImcgBuilderImpl {
 
     fn get_service_callables(
         &self,
-        callables: Vec<Callable>,
-        service_descs: Vec<ServiceDescription>,
+        callables: &[Callable],
+        service_descs: &[ServiceDescription],
     ) -> Vec<ServiceCallable> {
         callables
             .iter()
@@ -84,15 +84,15 @@ impl ImcgBuilderImpl {
 impl ImcgBuilder for ImcgBuilderImpl {
     fn build(
         &self,
-        callables: Vec<Callable>,
-        call_statements: Vec<CallStatement>,
-        service_descs: Vec<ServiceDescription>,
+        callables: &[Callable],
+        call_statements: &[CallStatement],
+        service_descs: &[ServiceDescription],
         sdg: &Sdg,
     ) -> Result<Imcg, BuilderError> {
         let service_callables = self.get_service_callables(callables, service_descs);
         let callables_map = get_callables_map(&service_callables);
         let cg_builder = CallGraphBuilderImpl::new();
-        let intra_cg = cg_builder.build(service_callables, &callables_map, call_statements)?;
+        let intra_cg = cg_builder.build(&service_callables, &callables_map, call_statements)?;
 
         let mut imcg_calls = self.create_imcg_calls(sdg, &callables_map)?;
         let mut merged_calls = intra_cg.calls;

@@ -1,0 +1,101 @@
+{
+    "commit_hash": "364636199f20e97e5b2770829d8944e652027a7b",
+    "constants": [
+        {
+            "name": "mds_url",
+            "value": "http://medical-data-service:5000"
+        },
+        {
+            "name": "idms_url",
+            "value": "http://id-mapper-service:8000"
+        },
+        {
+            "name": "jes_url",
+            "value": "http://job-execution-service:8000"
+        },
+        {
+            "name": "marketplace_service_url",
+            "value": "http://marketplace-service-mock:8000"
+        },
+        {
+            "name": "mps_url",
+            "value": "http://marketplace-service-mock:8000"
+        },
+        {
+            "name": "settings.mps_url",
+            "value": "http://marketplace-service-mock:8000"
+        },
+        {
+            "name": "cds_url",
+            "value": "http://clinical-data-service:8000"
+        },
+        {
+            "name": "es_url",
+            "value": "http://examination-service:8000"
+        },
+        {
+            "name": "js_url",
+            "value": "http://job-service:8000"
+        },
+        {
+            "name": "as_url",
+            "value": "http://annotation-service:8000"
+        },
+        {
+            "name": "settings.annot_url",
+            "value": "http://annotation-service:8000"
+        },
+        {
+            "name": "hs_url",
+            "value": "http://harpy-service:8000"
+        },
+        {
+            "name": "sos_url",
+            "value": "http://shout-out-service"
+        },
+        {
+            "name": "self._mds_url",
+            "value": "http://medical-data-service:5000"
+        },
+        {
+            "name": "self._idms_url",
+            "value": "http://id-mapper-service:8000"
+        },
+        {
+            "name": "self._jes_url",
+            "value": "http://job-execution-service:8000"
+        },
+        {
+            "name": "self._marketplace_service_url",
+            "value": "http://marketplace-service-mock:8000"
+        },
+        {
+            "name": "self._mps_url",
+            "value": "http://marketplace-service-mock:8000"
+        },
+        {
+            "name": "self._cds_url",
+            "value": "http://clinical-data-service:8000"
+        },
+        {
+            "name": "self._es_url",
+            "value": "http://examination-service:8000"
+        },
+        {
+            "name": "self._js_url",
+            "value": "http://job-service:8000"
+        },
+        {
+            "name": "self._as_url",
+            "value": "http://annotation-service:8000"
+        },
+        {
+            "name": "self._hs_url",
+            "value": "http://harpy-service:8000"
+        },
+        {
+            "name": "self._sos_url",
+            "value": "http://shout-out-service"
+        }
+    ]
+}

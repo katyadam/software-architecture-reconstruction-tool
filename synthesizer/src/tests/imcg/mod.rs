@@ -22,9 +22,9 @@ mod tests {
 
         let sdg = sdg_builder
             .build(
-                endpoints,
-                restcalls,
-                ConfigurationData {
+                &endpoints,
+                &restcalls,
+                &ConfigurationData {
                     service_descriptions: service_descs.clone(),
                 },
                 &vec![],
@@ -32,7 +32,7 @@ mod tests {
             .expect("SDG in IMCG tests should be valid and buildable!");
 
         let imcg = imcg_builder
-            .build(callables, call_statements, service_descs, &sdg)
+            .build(&callables, &call_statements, &service_descs, &sdg)
             .expect("IMCG building should pass!");
 
         assert_eq!(imcg.calls.len(), 1, "There should be exactly 1 IMCG call");

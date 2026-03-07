@@ -18,6 +18,17 @@ pub struct Constant {
     pub name: String,
     pub value: String,
 }
+
+impl Constant {
+    pub fn new(constant_uuid: Uuid, name: String, value: String) -> Self {
+        Self {
+            constant_uuid,
+            name,
+            value,
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct ConstantsDto {
