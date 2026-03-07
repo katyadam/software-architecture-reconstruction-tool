@@ -10,8 +10,6 @@ use synthesizer::{
 };
 use uuid::Uuid;
 
-mod crawler;
-
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Local simulation of the extraction process")]
 struct Cli {
