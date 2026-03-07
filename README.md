@@ -37,7 +37,6 @@ The CLI is the preferred lightweight method when you only need to generate SAR v
 ```bash
 git clone https://github.com/katyadam/VOYANTCLAIR.git
 cd VOYANTCLAIR
-
 ```
 
 ### 2. Basic Execution
@@ -58,7 +57,6 @@ To run the benchmark, the target project must be a **sibling directory** to Voya
 ```bash
 # In the parent directory where Voyantclair is located
 git clone https://github.com/FudanSELab/train-ticket
-
 ```
 
 
@@ -69,7 +67,6 @@ cargo run -p cli --release -- \
   -p ../train-ticket \
   -c ./config/configurations/local-train-ticket-config.json \
   -o ./output-directory
-
 ```
 
 
@@ -86,27 +83,53 @@ To access the full suite of features—including metadata storage and Neo4j visu
 
 *Best for testing full-stack capabilities with local code changes.*
 
+0. **Create .env**
+In synthesizer, extractor-runtime, manager and constant-scanner, create .env files from their respective .env.example files.
+
 1. **Start Databases:**
 ```bash
 # Start Neo4J (Architectural Views)
 cd synthesizer && docker compose up -d && cd ..
 
-# Start Postgres (Metadata & Constants)
+# Start Postgres (Constants)
 docker run -d --name constant-scanner-db -e POSTGRES_PASSWORD=password -e POSTGRES_USER=postgres -e POSTGRES_DB=constant-scanner-db -p 5433:5432 postgres
+
+# Run diesel (ORM)
+cd constant-scanner
+cargo install diesel_cli --no-default-features --features postgres
+
+## If you see 'rust-lld: error: unable to find library -lpq' error run:
+dnf install postgresql-devel # or your OS equivalent
+
+diesel setup
+diesel migration run
+
+cd ..
+
+# Start Postgres (Metadata)
 docker run -d --name manager-db -e POSTGRES_PASSWORD=password -e POSTGRES_USER=postgres -e POSTGRES_DB=manager-db -p 5432:5432 postgres
 
+cd manager
+diesel setup
+diesel migration run
+cd ..
 ```
 
 
 2. **Launch Services:**
 ```bash
 ./run_info.sh
-./run_client
-
+./run_client.sh
 ```
 
+3. Create testing metadata:
+- Navigate to: `http://localhost:8081/swagger-ui/#/`
+- Create Project
+- Create Codebase - pass created Project UUID
+- Create Configuration - pass ./config/configurations/train-ticket-config.json, into the `configuration_data` field
+- Create Commit - pass created Codebase UUID and Configuration UUID
 
-3. **Upload Project:** Navigate to `http://localhost:3000/upload.html`, fill in the metadata, and upload the project folder.
+4. **Upload Project:** Navigate to `http://localhost:3000/upload.html`, fill in the metadata, and upload the project folder.
 
 ---
 
@@ -117,7 +140,6 @@ docker run -d --name manager-db -e POSTGRES_PASSWORD=password -e POSTGRES_USER=p
 ```bash
 # In the root directory
 docker compose up -d
-
 ```
 
 #### Service Map & Interfaces
