@@ -15,8 +15,6 @@ use crate::imcg::model::Imcg;
 use crate::sdg::model::Sdg;
 use models::{CodeElementsAggregate, ConfigurationData};
 
-// TODO: Currently, synthesizer module exposes async functions, which is not good!
-
 pub fn direct_cm_build(
     all_code_elements: &CodeElementsAggregate,
     configuration: &ConfigurationData,

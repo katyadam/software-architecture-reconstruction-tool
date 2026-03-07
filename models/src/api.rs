@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{CallStatement, Callable, Endpoint, Entity, Import, RestCall};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CodeElementsAggregate {
     pub imports: Vec<Import>,
     pub entities: Vec<Entity>,
