@@ -1,0 +1,121 @@
+{
+    "service_descriptions": [
+        {
+            "name": "annotation-service",
+            "urls": [
+                "http://annotation-service:8000"
+            ],
+            "base_dir_path": "empaia/annotation-service"
+        },
+        {
+            "name": "app-service",
+            "urls": [
+                "http://app-service:8000"
+            ],
+            "base_dir_path": "empaia/app-service"
+        },
+        {
+            "name": "auth-service",
+            "urls": [
+                "http://auth-service"
+            ],
+            "base_dir_path": "empaia/auth-service"
+        },
+        {
+            "name": "clinical-data-service",
+            "urls": [
+                "http://clinical-data-service:8000"
+            ],
+            "base_dir_path": "empaia/clinical-data-service"
+        },
+        {
+            "name": "event-service",
+            "urls": [
+                "http://event-service"
+            ],
+            "base_dir_path": "empaia/event-service"
+        },
+        {
+            "name": "examination-service",
+            "urls": [
+                "http://examination-service:8000"
+            ],
+            "base_dir_path": "empaia/examination-service"
+        },
+        {
+            "name": "harpy-service",
+            "urls": [
+                "http://harpy-service:8000"
+            ],
+            "base_dir_path": "empaia/harpy-service"
+        },
+        {
+            "name": "id-mapper-service",
+            "urls": [
+                "http://id-mapper-service:8000"
+            ],
+            "base_dir_path": "empaia/id-mapper-service"
+        },
+        {
+            "name": "job-execution-service",
+            "urls": [
+                "http://job-execution-service:8000"
+            ],
+            "base_dir_path": "empaia/job-execution-service"
+        },
+        {
+            "name": "job-service",
+            "urls": [
+                "http://job-service:8000"
+            ],
+            "base_dir_path": "empaia/job-service"
+        },
+        {
+            "name": "loadtus-service",
+            "urls": [
+                "http://localhost:10005"
+            ],
+            "base_dir_path": "empaia/loadtus-service"
+        },
+        {
+            "name": "marketplace-service",
+            "urls": [
+                "http://marketplace-service-mock:8000"
+            ],
+            "base_dir_path": "empaia/marketplace-service"
+        },
+        {
+            "name": "medical-data-service",
+            "urls": [
+                "http://medical-data-service:5000"
+            ],
+            "base_dir_path": "empaia/medical-data-service"
+        },
+        {
+            "name": "models",
+            "urls": [],
+            "base_dir_path": "empaia/models"
+        },
+        {
+            "name": "shout-out-service",
+            "urls": [
+                "http://shout-out-service"
+            ],
+            "base_dir_path": "empaia/shout-out-service"
+        },
+        {
+            "name": "workbench-service",
+            "urls": [
+                "http://workbench-service:8000"
+            ],
+            "base_dir_path": "empaia/workbench-service"
+        },
+        {
+            "name": "wsi-service",
+            "urls": [
+                "http://wsi-service:8000"
+            ],
+            "base_dir_path": "empaia/wsi-service"
+        }
+    ]
+}
