@@ -1,3 +1,10 @@
+# 0.5.0
+- CLI mode
+- Enum Extraction
+
+# 0.4.0
+- Added Constant Scanner
+
 # 0.3.0
 
 - Added Java Extractor - Spring Strategy
