@@ -29,4 +29,8 @@ impl AssignedEntity {
 pub struct Dependency {
     pub source_id: String,
     pub target_id: String,
+    pub source_multiplier: String,
+    pub target_multiplier: String,
+    pub source_ms: String,
+    pub target_ms: String,
 }

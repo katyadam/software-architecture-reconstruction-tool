@@ -38,7 +38,7 @@ pub fn direct_sdg_build(
         .build(
             &all_code_elements.endpoints,
             &all_code_elements.restcalls,
-            &configuration,
+            configuration,
             constants,
         )
         .unwrap_or_else(|e| panic!("SDG build failed: {e}"))

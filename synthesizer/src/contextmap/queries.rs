@@ -16,13 +16,26 @@ UNWIND dependencies AS dep
 MATCH (src:Entity {id: dep.source_id, codebase_uuid: $codebase_uuid, commit_hash: $commit_hash})
 MATCH (tgt:Entity {id: dep.target_id, codebase_uuid: $codebase_uuid, commit_hash: $commit_hash})
 MERGE (src)-[r:DEPENDS_ON {codebase_uuid: $codebase_uuid, commit_hash: $commit_hash}]->(tgt)
+SET r.source_multiplier = dep.source_multiplier
+SET r.target_multiplier = dep.target_multiplier
+SET r.source_ms = dep.source_ms
+SET r.target_ms = dep.target_ms
 "#;
 
 pub const GET_CONTEXT_MAP: &str = r#"
 MATCH (e:Entity {codebase_uuid: $codebase_uuid, commit_hash: $commit_hash})
 OPTIONAL MATCH (e)-[r:DEPENDS_ON]->(target:Entity)
 WHERE target.codebase_uuid = $codebase_uuid AND target.commit_hash = $commit_hash
-WITH collect(DISTINCT e) AS all_entities, collect(DISTINCT {source: e.id, target: target.id}) AS all_dependencies
+WITH 
+    collect(DISTINCT e) AS all_entities,
+    collect(DISTINCT {
+        source: e.id,
+        target: target.id,
+        source_multiplier: e.source_multiplier,
+        target_multiplier: e.target_multiplier,
+        source_ms: e.source_md,
+        target_ms: e.target_ms
+    }) AS all_dependencies
 RETURN all_entities, all_dependencies
 "#;
 

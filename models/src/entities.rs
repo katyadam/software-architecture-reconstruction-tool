@@ -17,6 +17,7 @@ pub struct Field {
     pub datatype: Option<String>,
     pub initial_value: Option<String>,
     pub datatype_signature: Option<String>,
+    pub is_collection: bool,
 }
 
 impl From<Entity> for BoltType {
@@ -94,6 +95,7 @@ impl TryFrom<BoltNode> for Entity {
                         datatype: None,
                         initial_value: None,
                         datatype_signature: None,
+                        is_collection: false,
                     })),
                     _ => Err(DeError::InvalidType {
                         received: Unexpected::Other("Non BoltString type").into(),
