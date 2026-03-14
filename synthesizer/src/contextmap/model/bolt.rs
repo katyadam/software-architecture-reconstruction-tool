@@ -50,6 +50,8 @@ impl From<Dependency> for BoltType {
         let mut map = BoltMap::new();
         map.put("source_id".into(), value.source_id.into());
         map.put("target_id".into(), value.target_id.into());
+        map.put("source_multiplier".into(), value.source_multiplier.into());
+        map.put("target_multiplier".into(), value.target_multiplier.into());
         BoltType::Map(map)
     }
 }
@@ -74,9 +76,27 @@ impl TryFrom<BoltNode> for Dependency {
             _ => return Err(DeError::NoSuchProperty),
         };
 
+        let source_multiplier = match node.get("source_multiplier") {
+            Ok(BoltType::String(s)) => s.value,
+            Ok(BoltType::Null(_)) => {
+                return Err(DeError::Other("Source Multiplier is NULL!".to_string()));
+            }
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
+        let target_multiplier = match node.get("target_multiplier") {
+            Ok(BoltType::String(s)) => s.value,
+            Ok(BoltType::Null(_)) => {
+                return Err(DeError::Other("Target Multiplier is NULL!".to_string()));
+            }
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
         Ok(Dependency {
             source_id,
             target_id,
+            source_multiplier,
+            target_multiplier,
         })
     }
 }
