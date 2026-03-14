@@ -52,6 +52,8 @@ impl From<Dependency> for BoltType {
         map.put("target_id".into(), value.target_id.into());
         map.put("source_multiplier".into(), value.source_multiplier.into());
         map.put("target_multiplier".into(), value.target_multiplier.into());
+        map.put("source_ms".into(), value.source_ms.into());
+        map.put("target_ms".into(), value.target_ms.into());
         BoltType::Map(map)
     }
 }
@@ -92,11 +94,29 @@ impl TryFrom<BoltNode> for Dependency {
             _ => return Err(DeError::NoSuchProperty),
         };
 
+        let source_ms = match node.get("source_ms") {
+            Ok(BoltType::String(s)) => s.value,
+            Ok(BoltType::Null(_)) => {
+                return Err(DeError::Other("Source Microservice is NULL!".to_string()));
+            }
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
+        let target_ms = match node.get("target_ms") {
+            Ok(BoltType::String(s)) => s.value,
+            Ok(BoltType::Null(_)) => {
+                return Err(DeError::Other("Target Microservice is NULL!".to_string()));
+            }
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
         Ok(Dependency {
             source_id,
             target_id,
             source_multiplier,
             target_multiplier,
+            source_ms,
+            target_ms,
         })
     }
 }

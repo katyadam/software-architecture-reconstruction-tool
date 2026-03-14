@@ -191,9 +191,10 @@ fn should_identificate_field_datatype_collections() {
     let filename = "./examples/python/entities_collections.py";
     let code = load_file(filename).unwrap();
     let tree = get_tree(&code);
-    let entities =
+    let mut entities =
         EntitiesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
-
+    let imports = ImportsExtractor.extract(ExtractParams::new(&tree, &code));
+    evaluate_entity_fields(&imports, &mut entities, &filename);
     let expected = vec![
         Entity {
             name: s!("Email"),
@@ -225,14 +226,14 @@ fn should_identificate_field_datatype_collections() {
                     name: s!("emails"),
                     datatype: Some(s!("List[Email]")),
                     initial_value: None,
-                    datatype_signature: None,
+                    datatype_signature: Some(s!("./examples/python/entities_collections.py/Email")),
                     is_collection: true,
                 },
                 Field {
                     name: s!("emails2"),
                     datatype: Some(s!("list[Email]")),
                     initial_value: None,
-                    datatype_signature: None,
+                    datatype_signature: Some(s!("./examples/python/entities_collections.py/Email")),
                     is_collection: true,
                 },
             ],
