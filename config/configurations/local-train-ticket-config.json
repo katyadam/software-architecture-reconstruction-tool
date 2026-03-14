@@ -71,6 +71,11 @@
       "base_dir_path": "../train-ticket/ts-cancel-service"
     },
     {
+      "name": "ts-common",
+      "urls": [],
+      "base_dir_path": "../train-ticket/ts-common"
+    },
+    {
       "name": "ts-config-service",
       "urls": [
         "http://ts-config-service"
