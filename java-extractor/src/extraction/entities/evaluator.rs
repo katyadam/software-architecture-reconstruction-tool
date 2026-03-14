@@ -52,11 +52,10 @@ pub fn extract_java_inner_type(datatype: &str) -> &str {
 
     // 1. Handle Arrays (e.g., "User[]" or "int[][]")
     // We strip all trailing brackets to get the base type
-    if d.ends_with(']') {
-        if let Some(first_bracket) = d.find('[') {
-            return extract_java_inner_type(&d[..first_bracket].trim());
+    if d.ends_with(']')
+        && let Some(first_bracket) = d.find('[') {
+            return extract_java_inner_type(d[..first_bracket].trim());
         }
-    }
 
     // 2. Handle Generics (e.g., "List<User>" or "Map<String, User>")
     if d.contains('<') && d.ends_with('>') {
@@ -67,7 +66,7 @@ pub fn extract_java_inner_type(datatype: &str) -> &str {
         // If it's a Map or Multi-generic, we usually want the last type (the Value)
         if inner.contains(',') {
             let parts: Vec<&str> = inner.split(',').collect();
-            let last_part = parts.last().unwrap_or(&inner).trim();
+            let last_part = parts.last().unwrap_or(inner).trim();
             return extract_java_inner_type(last_part);
         }
 

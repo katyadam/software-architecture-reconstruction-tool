@@ -24,6 +24,12 @@ impl CallGraph {
 
 pub struct CallGraphBuilderImpl {}
 
+impl Default for CallGraphBuilderImpl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CallGraphBuilderImpl {
     pub fn new() -> Self {
         Self {}
@@ -42,7 +48,7 @@ impl CallGraphBuilderImpl {
                 let source = callables_map.get(function_hash);
                 match source {
                     Some(src) => {
-                        let target_id = Self::find_target_id(stmt, &callables, &src.service_name)?;
+                        let target_id = Self::find_target_id(stmt, callables, &src.service_name)?;
                         Some(Call::new(src.callable.signature.clone(), target_id, None))
                     }
                     None => None,

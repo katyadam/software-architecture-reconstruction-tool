@@ -24,6 +24,12 @@ pub trait ImcgBuilder {
 
 pub struct ImcgBuilderImpl {}
 
+impl Default for ImcgBuilderImpl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ImcgBuilderImpl {
     pub fn new() -> Self {
         Self {}
@@ -38,7 +44,7 @@ impl ImcgBuilderImpl {
             .iter()
             .map(|callable| {
                 let service_desc =
-                    assign_service_description_to_file(&callable.file_path, &service_descs);
+                    assign_service_description_to_file(&callable.file_path, service_descs);
                 ServiceCallable::new(callable.to_owned(), service_desc.name)
             })
             .collect()

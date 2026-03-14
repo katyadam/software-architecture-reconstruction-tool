@@ -86,7 +86,7 @@ pub fn is_collection_type(datatype: &str) -> bool {
     ];
 
     // Check if it's a simple keyword match: "list"
-    if collection_keywords.iter().any(|&k| d == k) {
+    if collection_keywords.contains(&d) {
         return true;
     }
 

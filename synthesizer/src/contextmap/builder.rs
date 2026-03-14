@@ -81,8 +81,8 @@ impl ContextMapBuilderImpl {
 
             for field in &entity.fields {
                 // If we resolved a signature, check if it points to a known Entity
-                if let Some(target_sig) = &field.datatype_signature {
-                    if ms_names.contains_key(target_sig) {
+                if let Some(target_sig) = &field.datatype_signature
+                    && ms_names.contains_key(target_sig) {
                         let key = (entity.signature.clone(), target_sig.clone());
                         let target_ms = ms_names.get(target_sig).cloned().unwrap_or_default();
 
@@ -101,7 +101,6 @@ impl ContextMapBuilderImpl {
                             })
                             .or_insert((current_mult, (current_ms.clone(), target_ms)));
                     }
-                }
             }
         }
 

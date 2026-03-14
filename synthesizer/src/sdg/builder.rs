@@ -48,6 +48,12 @@ impl SdgBuilder for SdgBuilderImpl {
     }
 }
 
+impl Default for SdgBuilderImpl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SdgBuilderImpl {
     pub fn new() -> Self {
         Self {}
@@ -61,7 +67,7 @@ impl SdgBuilderImpl {
         service_descs: &[ServiceDescription],
     ) -> Vec<AssignedEndpoint> {
         endpoints
-            .into_iter()
+            .iter()
             .map(|endpoint| {
                 let service_desc =
                     assign_service_description_to_file(&endpoint.file_path, service_descs);
@@ -110,7 +116,7 @@ impl SdgBuilderImpl {
         service_descs: &[ServiceDescription],
     ) -> Vec<AssignedRestCall> {
         restcalls
-            .into_iter()
+            .iter()
             .map(|restcall| {
                 let service_desc =
                     assign_service_description_to_file(&restcall.file_path, service_descs);
