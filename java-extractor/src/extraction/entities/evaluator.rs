@@ -53,9 +53,10 @@ pub fn extract_java_inner_type(datatype: &str) -> &str {
     // 1. Handle Arrays (e.g., "User[]" or "int[][]")
     // We strip all trailing brackets to get the base type
     if d.ends_with(']')
-        && let Some(first_bracket) = d.find('[') {
-            return extract_java_inner_type(d[..first_bracket].trim());
-        }
+        && let Some(first_bracket) = d.find('[')
+    {
+        return extract_java_inner_type(d[..first_bracket].trim());
+    }
 
     // 2. Handle Generics (e.g., "List<User>" or "Map<String, User>")
     if d.contains('<') && d.ends_with('>') {

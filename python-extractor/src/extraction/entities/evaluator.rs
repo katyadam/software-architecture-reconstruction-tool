@@ -67,20 +67,21 @@ pub fn extract_inner_type(datatype: &str) -> &str {
 
     // Check if it's a generic type: Name[Inner]
     if let Some(start_index) = d.find('[')
-        && let Some(end_index) = d.rfind(']') {
-            let inner = &d[start_index + 1..end_index].trim();
+        && let Some(end_index) = d.rfind(']')
+    {
+        let inner = &d[start_index + 1..end_index].trim();
 
-            // Handle multiple arguments like Dict[str, User]
-            // We usually care about the custom Entity, which is likely the last part
-            if inner.contains(',') {
-                let parts: Vec<&str> = inner.split(',').collect();
-                let last_part = parts.last().unwrap_or(inner).trim();
-                // Recursively unwrap in case of list[Dict[str, User]]
-                return extract_inner_type(last_part);
-            }
-
-            // Recursively unwrap in case of Optional[list[User]]
-            return extract_inner_type(inner);
+        // Handle multiple arguments like Dict[str, User]
+        // We usually care about the custom Entity, which is likely the last part
+        if inner.contains(',') {
+            let parts: Vec<&str> = inner.split(',').collect();
+            let last_part = parts.last().unwrap_or(inner).trim();
+            // Recursively unwrap in case of list[Dict[str, User]]
+            return extract_inner_type(last_part);
         }
+
+        // Recursively unwrap in case of Optional[list[User]]
+        return extract_inner_type(inner);
+    }
     d
 }

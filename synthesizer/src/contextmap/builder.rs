@@ -82,25 +82,26 @@ impl ContextMapBuilderImpl {
             for field in &entity.fields {
                 // If we resolved a signature, check if it points to a known Entity
                 if let Some(target_sig) = &field.datatype_signature
-                    && ms_names.contains_key(target_sig) {
-                        let key = (entity.signature.clone(), target_sig.clone());
-                        let target_ms = ms_names.get(target_sig).cloned().unwrap_or_default();
+                    && ms_names.contains_key(target_sig)
+                {
+                    let key = (entity.signature.clone(), target_sig.clone());
+                    let target_ms = ms_names.get(target_sig).cloned().unwrap_or_default();
 
-                        // Determine multiplicity: if it's a collection, it's -1 (0..*)
-                        let current_mult = if field.is_collection { -1 } else { 1 };
+                    // Determine multiplicity: if it's a collection, it's -1 (0..*)
+                    let current_mult = if field.is_collection { -1 } else { 1 };
 
-                        mults
-                            .entry(key)
-                            .and_modify(|(count, _)| {
-                                // If it's already a collection or we just found a collection, keep it -1
-                                if *count != -1 && current_mult != -1 {
-                                    *count += 1;
-                                } else if current_mult == -1 {
-                                    *count = -1;
-                                }
-                            })
-                            .or_insert((current_mult, (current_ms.clone(), target_ms)));
-                    }
+                    mults
+                        .entry(key)
+                        .and_modify(|(count, _)| {
+                            // If it's already a collection or we just found a collection, keep it -1
+                            if *count != -1 && current_mult != -1 {
+                                *count += 1;
+                            } else if current_mult == -1 {
+                                *count = -1;
+                            }
+                        })
+                        .or_insert((current_mult, (current_ms.clone(), target_ms)));
+                }
             }
         }
 
