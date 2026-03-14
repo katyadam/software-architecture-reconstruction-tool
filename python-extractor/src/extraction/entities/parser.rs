@@ -33,14 +33,18 @@ pub fn parse_field(field_string: &str) -> Option<Field> {
             datatype: None,
             initial_value: None,
             datatype_signature: None,
+            is_collection: false,
         }),
         2 => {
             if field_string.contains(":") {
+                let datatype = field_split[1].trim().to_string();
+                let is_collection = is_collection_type(&datatype);
                 Some(Field {
                     name: field_split[0].trim().to_string(),
-                    datatype: Some(field_split[1].trim().to_string()),
+                    datatype: Some(datatype),
                     initial_value: None,
                     datatype_signature: None,
+                    is_collection,
                 })
             } else if field_string.contains("=") {
                 Some(Field {
@@ -48,17 +52,51 @@ pub fn parse_field(field_string: &str) -> Option<Field> {
                     datatype: None,
                     initial_value: Some(field_split[1].trim().to_string()),
                     datatype_signature: None,
+                    is_collection: false,
                 })
             } else {
                 None
             }
         }
-        3 => Some(Field {
-            name: field_split[0].trim().to_string(),
-            datatype: Some(field_split[1].trim().to_string()),
-            initial_value: Some(field_split[0].trim().to_string()),
-            datatype_signature: None,
-        }),
+        3 => {
+            let datatype = field_split[1].trim().to_string();
+            let is_collection = is_collection_type(&datatype);
+            Some(Field {
+                name: field_split[0].trim().to_string(),
+                datatype: Some(datatype),
+                initial_value: Some(field_split[0].trim().to_string()),
+                datatype_signature: None,
+                is_collection,
+            })
+        }
         _ => None,
     }
+}
+
+pub fn is_collection_type(datatype: &str) -> bool {
+    let d = datatype.trim();
+    if d.is_empty() {
+        return false;
+    }
+
+    // Define the valid "roots" for collection types
+    let collection_keywords = [
+        "list", "dict", "set", "tuple", "deque", "sequence", "mapping", "iterable", "List", "Dict",
+        "Set", "Tuple", "Deque", "Sequence", "Mapping", "Iterable",
+    ];
+
+    // Check if it's a simple keyword match: "list"
+    if collection_keywords.iter().any(|&k| d == k) {
+        return true;
+    }
+
+    // Check if it's a generic match: "list[int]"
+    // We ensure it starts with a keyword AND contains the opening bracket
+    for key in collection_keywords {
+        if d.starts_with(key) && d.contains('[') && d.ends_with(']') {
+            return true;
+        }
+    }
+
+    false
 }
