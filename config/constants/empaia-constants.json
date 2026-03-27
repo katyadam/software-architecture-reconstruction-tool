@@ -54,6 +54,10 @@
             "value": "http://shout-out-service"
         },
         {
+            "name": "this.sosUrl",
+            "value": "http://shout-out-service"
+        },
+        {
             "name": "self._mds_url",
             "value": "http://medical-data-service:5000"
         },
