@@ -7,7 +7,7 @@ use python_extractor::{
     s,
 };
 
-use crate::python::utils::{get_tree, load_file};
+use crate::python::utils::{get_tree, load_file, parse_file};
 
 #[test]
 fn simple_test() {
@@ -311,4 +311,82 @@ fn classes_imports_test() {
     ];
 
     assert_eq!(callables, expected);
+}
+
+/// Verifies that typed parameters (`x: int`) are extracted with their datatype,
+/// and that untyped parameters have `datatype: None`.
+#[test]
+fn typed_parameters_test() {
+    let filename = "./examples/python/callgraph/simple_with_types.py";
+    let (code, tree) = parse_file(filename);
+    let callables =
+        CallablesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
+
+    assert_eq!(callables.len(), 2, "expected 2 callables (A and B)");
+
+    let a = callables.iter().find(|c| c.name.starts_with("A(")).expect("callable A not found");
+    assert_eq!(a.parameters.len(), 2);
+    assert_eq!(a.parameters[0].name, s!("x"));
+    assert_eq!(a.parameters[0].datatype, Some(s!("int")));
+    assert_eq!(a.parameters[1].name, s!("y"));
+    assert_eq!(a.parameters[1].datatype, Some(s!("int")));
+    assert!(!a.is_async);
+    assert!(!a.is_constructor);
+
+    let b = callables.iter().find(|c| c.name.starts_with("B(")).expect("callable B not found");
+    assert_eq!(b.parameters.len(), 1);
+    assert_eq!(b.parameters[0].name, s!("a"));
+    assert_eq!(b.parameters[0].datatype, Some(s!("int")));
+    assert!(!b.is_async);
+}
+
+/// Verifies that the `is_async` flag is correctly extracted for both `async def` and
+/// regular `def` functions in a complex real-world file with nested control flow.
+#[test]
+fn async_functions_test() {
+    let filename = "./examples/python/callgraph/cycle.py";
+    let (code, tree) = parse_file(filename);
+    let callables =
+        CallablesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
+
+    let async_names: Vec<&str> = callables
+        .iter()
+        .filter(|c| c.is_async)
+        .map(|c| c.name.as_str())
+        .collect();
+    let sync_names: Vec<&str> = callables
+        .iter()
+        .filter(|c| !c.is_async)
+        .map(|c| c.name.as_str())
+        .collect();
+
+    // All `async def` functions must be detected as async
+    for expected in &[
+        "schedule_ready_jobs()",
+        "_fetch_jobs(statuses)",
+        "_send_ready_jobs_to_jes(jobs)",
+        "_update_state_for_jobs_not_in_ready_state(jobs)",
+        "_update_job_status(job_id, status, error_message)",
+        "_get_execution(job_id)",
+        "_fetch_raw_token(job)",
+        "_create_execution_request_raw(job, access_token, timeout=-1)",
+    ] {
+        assert!(
+            async_names.iter().any(|n| n.starts_with(expected)),
+            "expected async callable starting with '{expected}', got: {async_names:?}"
+        );
+    }
+
+    // Regular `def` functions must NOT be marked async
+    for expected in &[
+        "_http_exception_log(e)",
+        "_log_exception_info(e, additional_message)",
+        "_jobs_ready(jobs)",
+        "_jobs_not_ready(jobs)",
+    ] {
+        assert!(
+            sync_names.iter().any(|n| n.starts_with(expected)),
+            "expected sync callable starting with '{expected}', got: {sync_names:?}"
+        );
+    }
 }

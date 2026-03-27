@@ -8,7 +8,7 @@ use python_extractor::{
     s,
 };
 
-use crate::python::utils::{get_tree, load_file};
+use crate::python::utils::{get_tree, load_file, parse_file};
 
 #[test]
 fn simple_test() {
@@ -556,5 +556,48 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
             .map(PythonCallStatement::to_language_agnostic)
             .collect::<Vec<CallStatement>>(),
         expected
+    );
+}
+
+/// Verifies that type inference resolves argument datatypes from typed function parameters.
+/// `B(a: int)` calls `A(a, c)` where `a` is typed and `c` is an untyped local assignment.
+/// After evaluation, `a` must carry `datatype: "int"` and `c` must carry `datatype: "any"`.
+#[test]
+fn typed_params_infer_argument_datatypes_test() {
+    let filename = "./examples/python/callgraph/simple_with_types.py";
+    let (code, tree) = parse_file(filename);
+    let mut calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
+    let assignments_map = get_assignments_map(&tree, &code);
+    evaluate_invocations(&mut calls, &assignments_map);
+
+    let agnostic: Vec<CallStatement> = calls
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .collect();
+
+    // B calls A — that is the only call statement in this file
+    assert_eq!(agnostic.len(), 1, "expected exactly one call statement");
+    let call = &agnostic[0];
+    assert_eq!(call.function_name, s!("A"));
+    assert_eq!(
+        call.enclosing_function_name.as_deref(),
+        Some("B(a: int) -> Any"),
+        "call should be inside B"
+    );
+
+    // argument `a` has type annotation `int` on B's parameter → should be resolved
+    let arg_a = call.arguments.iter().find(|a| a.value == "a").expect("argument a not found");
+    assert_eq!(
+        arg_a.datatype,
+        s!("int"),
+        "typed parameter `a: int` should produce datatype 'int'"
+    );
+
+    // argument `c` is a plain literal assignment (`c = 5`) — no type info available
+    let arg_c = call.arguments.iter().find(|a| a.value == "c").expect("argument c not found");
+    assert_eq!(
+        arg_c.datatype,
+        s!("any"),
+        "untyped local variable `c` should produce datatype 'any'"
     );
 }

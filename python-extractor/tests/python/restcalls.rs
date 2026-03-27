@@ -22,7 +22,7 @@ use models::{Argument, HttpMethod, RestCall, enums::Enum};
 use statix::parse_python;
 use tree_sitter::Tree;
 
-use crate::python::utils::{get_tree, load_file};
+use crate::python::utils::{get_tree, load_file, parse_file};
 
 fn restcalls(code: &str, tree: &Tree, file_name: &str) -> Vec<RestCall> {
     let calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
@@ -491,8 +491,91 @@ fn should_correctly_generate_multiple_restcalls_with_resolved_enums() {
     let assignments_map = get_assignments_map(&tree, &code);
     evaluate_local_and_global_assignments(&mut restcalls, &assignments_map);
 
+    assert_eq!(restcalls.len(), 4, "expected 4 REST calls (2 enum values × 2 functions)");
+
+    // `idms_url` is imported (not an assignment), so it stays unresolved in the URI.
+    // Each enum value must appear exactly once per function.
+    let get_calls: Vec<&RestCall> = restcalls
+        .iter()
+        .filter(|r| r.http_method == HttpMethod::GET)
+        .collect();
+    let put_calls: Vec<&RestCall> = restcalls
+        .iter()
+        .filter(|r| r.http_method == HttpMethod::PUT)
+        .collect();
+
+    assert_eq!(get_calls.len(), 2, "fetch_mapping uses GET — expect one call per enum value");
+    assert_eq!(put_calls.len(), 2, "fetch_mappings uses PUT — expect one call per enum value");
+
+    // Both enum values must appear in GET call URIs (fetch_mapping)
+    let get_uris: Vec<&str> = get_calls.iter().map(|r| r.target_uri.as_str()).collect();
     assert!(
-        restcalls.len() == 4,
-        "There should be extracted 4 REST calls from that specific file"
+        get_uris.iter().any(|u| u.contains("/cases/")),
+        "GET calls should include a URI with /cases/, got: {get_uris:?}"
     );
+    assert!(
+        get_uris.iter().any(|u| u.contains("/slides/")),
+        "GET calls should include a URI with /slides/, got: {get_uris:?}"
+    );
+
+    // Both enum values must appear in PUT call URIs (fetch_mappings)
+    let put_uris: Vec<&str> = put_calls.iter().map(|r| r.target_uri.as_str()).collect();
+    assert!(
+        put_uris.iter().any(|u| u.contains("/cases/")),
+        "PUT calls should include a URI with /cases/, got: {put_uris:?}"
+    );
+    assert!(
+        put_uris.iter().any(|u| u.contains("/slides/")),
+        "PUT calls should include a URI with /slides/, got: {put_uris:?}"
+    );
+
+    // fetch_mapping targets an individual resource; fetch_mappings targets a query endpoint
+    assert!(
+        get_uris.iter().all(|u| u.contains("/empaia/") && !u.ends_with("/query")),
+        "fetch_mapping URIs should contain '/empaia/' and not end with '/query', got: {get_uris:?}"
+    );
+    assert!(
+        put_uris.iter().all(|u| u.ends_with("/query")),
+        "fetch_mappings URIs should end with '/query', got: {put_uris:?}"
+    );
+}
+
+/// Verifies REST call extraction from a complex real-world async file (`cycle.py`).
+/// The file uses variable-assigned f-string URLs, deeply nested control flow, and
+/// multiple HTTP methods (GET, PUT, POST). Symbolic evaluation must resolve the
+/// local `url` variables correctly for each function.
+#[test]
+fn should_extract_rest_calls_from_complex_async_file() {
+    let filename = "./examples/python/callgraph/cycle.py";
+    let (code, tree) = parse_file(filename);
+    let mut restcalls = restcalls(&code, &tree, filename);
+    let assignments_map = get_assignments_map(&tree, &code);
+    evaluate_local_and_global_assignments(&mut restcalls, &assignments_map);
+
+    // Expected REST calls by function name prefix and HTTP method
+    let cases: &[(&str, HttpMethod, &str)] = &[
+        ("_fetch_jobs", HttpMethod::PUT, "/v1/jobs/query"),
+        ("_update_job_status", HttpMethod::PUT, "/v1/jobs/"),
+        ("_get_execution", HttpMethod::GET, "/v1/executions/"),
+        ("_fetch_raw_token", HttpMethod::GET, "/v1/jobs/"),
+        ("_create_execution_request_raw", HttpMethod::POST, "/v1/executions"),
+    ];
+
+    for (fn_prefix, expected_method, uri_fragment) in cases {
+        let matching: Vec<&RestCall> = restcalls
+            .iter()
+            .filter(|r| r.function_name.starts_with(fn_prefix) && r.http_method == *expected_method)
+            .collect();
+        assert!(
+            !matching.is_empty(),
+            "expected a {:?} REST call in function '{fn_prefix}', got none. All calls: {:#?}",
+            expected_method,
+            restcalls.iter().map(|r| (&r.function_name, &r.http_method, &r.target_uri)).collect::<Vec<_>>()
+        );
+        assert!(
+            matching.iter().any(|r| r.target_uri.contains(uri_fragment)),
+            "expected URI containing '{uri_fragment}' in '{fn_prefix}', got: {:?}",
+            matching.iter().map(|r| &r.target_uri).collect::<Vec<_>>()
+        );
+    }
 }
