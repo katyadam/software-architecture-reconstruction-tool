@@ -223,10 +223,15 @@ fn parse_if(
 
     let mut else_branch = None;
     if let Some(alt_node) = node.child_by_field_name("alternative") {
-        if alt_node.kind() == "if_statement" {
+        if alt_node.kind() == "if_statement" || alt_node.kind() == "elif_clause" {
+            // elif_clause has the same condition/consequence fields as if_statement
             else_branch = Some(vec![parse_if(alt_node, source, scope_vars)?]);
         } else {
-            else_branch = Some(parse_block(alt_node, source, scope_vars)?);
+            // else_clause: actual statements are in its `body` field, not on the node itself
+            let body_node = alt_node
+                .child_by_field_name("body")
+                .ok_or(ParseError::FieldNotFound("else body".to_string()))?;
+            else_branch = Some(parse_block(body_node, source, scope_vars)?);
         }
     }
 
