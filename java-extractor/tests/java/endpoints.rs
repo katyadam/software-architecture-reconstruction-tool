@@ -4,7 +4,7 @@ use java_extractor::{
 };
 use models::{Endpoint, HttpMethod, Parameter};
 
-use crate::java::utils::{get_tree, load_file};
+use crate::java::utils::{get_tree, load_file, parse_file};
 
 #[test]
 fn test_spring_endpoints() {
@@ -288,4 +288,34 @@ fn test_jaxrs_endpoints() {
     ];
 
     assert_eq!(endpoints, expected);
+}
+
+#[test]
+fn test_endpoint_edge_cases() {
+    let filename = s!("./examples/EndpointEdgeCases.java");
+    let (code, tree) = parse_file(&filename);
+    let endpoints = EndpointsExtractor.extract(&code, &tree, &filename);
+
+    assert_eq!(endpoints.len(), 3, "Expected 3 endpoints: PATCH, GET (nested path), GET (default from @RequestMapping)");
+
+    // Edge case 1: @PatchMapping produces a PATCH endpoint
+    let patch_endpoints: Vec<&Endpoint> = endpoints.iter().filter(|e| e.http_method == HttpMethod::PATCH).collect();
+    assert_eq!(patch_endpoints.len(), 1, "Expected exactly 1 PATCH endpoint");
+    assert!(patch_endpoints[0].function_name.contains("partialUpdate"));
+    assert_eq!(patch_endpoints[0].uri, s!("/api/v1/products/{id}"));
+
+    // Edge case 2: Multi-level nested path with two path variables
+    let review_endpoint = endpoints.iter().find(|e| e.function_name.contains("getProductReview")).unwrap();
+    assert_eq!(review_endpoint.http_method, HttpMethod::GET);
+    assert_eq!(review_endpoint.uri, s!("/api/v1/products/{productId}/reviews/{reviewId}"));
+
+    // Edge case 3: @RequestMapping without method attribute defaults to GET
+    // Documents that bare @RequestMapping carries no HTTP method information.
+    let search_endpoint = endpoints.iter().find(|e| e.function_name.contains("search")).unwrap();
+    assert_eq!(
+        search_endpoint.http_method,
+        HttpMethod::GET,
+        "@RequestMapping without method= defaults to GET"
+    );
+    assert_eq!(search_endpoint.uri, s!("/api/v1/products/search"));
 }

@@ -8,7 +8,7 @@ use java_extractor::{
 };
 use models::{Entity, Field};
 
-use crate::java::utils::{get_tree, load_file};
+use crate::java::utils::{get_tree, load_file, parse_file};
 
 #[test]
 fn base_test_class() {
@@ -217,6 +217,48 @@ fn test_evaluation() {
         ],
         signature: s!("com.example.main.ClassB"),
         file_path: s!("./examples/entities/ClassB.java"),
+    }];
+
+    assert_eq!(entities, expected);
+}
+
+#[test]
+fn test_entity_with_interface_implementation() {
+    let filename = s!("./examples/UserAccount.java");
+    let (code, tree) = parse_file(&filename);
+    let entities = EntitiesExtractor.extract(&code, &tree, &filename);
+
+    let expected = vec![Entity {
+        name: s!("UserAccount"),
+        // NOTE: The entities query only captures `extends` (superclass: field in tree-sitter),
+        // not `implements`. So `implements Identifiable` is NOT captured here.
+        superclasses: vec![],
+        fields: vec![
+            Field {
+                name: s!("id"),
+                datatype: Some(s!("String")),
+                initial_value: None,
+                datatype_signature: None,
+                is_collection: false,
+            },
+            Field {
+                name: s!("username"),
+                datatype: Some(s!("String")),
+                initial_value: None,
+                datatype_signature: None,
+                is_collection: false,
+            },
+            Field {
+                name: s!("active"),
+                datatype: Some(s!("boolean")),
+                initial_value: None,
+                datatype_signature: None,
+                is_collection: false,
+            },
+        ],
+        // No package declaration in file: the extractor prepends an empty package with a dot separator
+        signature: s!(".UserAccount"),
+        file_path: s!("./examples/UserAccount.java"),
     }];
 
     assert_eq!(entities, expected);
