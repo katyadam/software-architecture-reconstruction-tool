@@ -96,9 +96,9 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
     fn join(&mut self, cond: &Expr, then: &Expr, els: &Expr) -> Result<Self::Out, Self::Error> {
         match cond {
             Expr::Literal(lit) => {
-                if lit == "true" {
+                if lit == "true" || lit == "True" {
                     Ok(("any".to_owned(), then.clone()))
-                } else if lit == "false" {
+                } else if lit == "false" || lit == "False" {
                     Ok(("any".to_owned(), els.clone()))
                 } else {
                     Ok((
