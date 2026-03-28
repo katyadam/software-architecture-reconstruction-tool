@@ -491,7 +491,11 @@ fn should_correctly_generate_multiple_restcalls_with_resolved_enums() {
     let assignments_map = get_assignments_map(&tree, &code);
     evaluate_local_and_global_assignments(&mut restcalls, &assignments_map);
 
-    assert_eq!(restcalls.len(), 4, "expected 4 REST calls (2 enum values × 2 functions)");
+    assert_eq!(
+        restcalls.len(),
+        4,
+        "expected 4 REST calls (2 enum values × 2 functions)"
+    );
 
     // `idms_url` is imported (not an assignment), so it stays unresolved in the URI.
     // Each enum value must appear exactly once per function.
@@ -504,8 +508,16 @@ fn should_correctly_generate_multiple_restcalls_with_resolved_enums() {
         .filter(|r| r.http_method == HttpMethod::PUT)
         .collect();
 
-    assert_eq!(get_calls.len(), 2, "fetch_mapping uses GET — expect one call per enum value");
-    assert_eq!(put_calls.len(), 2, "fetch_mappings uses PUT — expect one call per enum value");
+    assert_eq!(
+        get_calls.len(),
+        2,
+        "fetch_mapping uses GET — expect one call per enum value"
+    );
+    assert_eq!(
+        put_calls.len(),
+        2,
+        "fetch_mappings uses PUT — expect one call per enum value"
+    );
 
     // Both enum values must appear in GET call URIs (fetch_mapping)
     let get_uris: Vec<&str> = get_calls.iter().map(|r| r.target_uri.as_str()).collect();
@@ -531,7 +543,9 @@ fn should_correctly_generate_multiple_restcalls_with_resolved_enums() {
 
     // fetch_mapping targets an individual resource; fetch_mappings targets a query endpoint
     assert!(
-        get_uris.iter().all(|u| u.contains("/empaia/") && !u.ends_with("/query")),
+        get_uris
+            .iter()
+            .all(|u| u.contains("/empaia/") && !u.ends_with("/query")),
         "fetch_mapping URIs should contain '/empaia/' and not end with '/query', got: {get_uris:?}"
     );
     assert!(
@@ -558,7 +572,11 @@ fn should_extract_rest_calls_from_complex_async_file() {
         ("_update_job_status", HttpMethod::PUT, "/v1/jobs/"),
         ("_get_execution", HttpMethod::GET, "/v1/executions/"),
         ("_fetch_raw_token", HttpMethod::GET, "/v1/jobs/"),
-        ("_create_execution_request_raw", HttpMethod::POST, "/v1/executions"),
+        (
+            "_create_execution_request_raw",
+            HttpMethod::POST,
+            "/v1/executions",
+        ),
     ];
 
     for (fn_prefix, expected_method, uri_fragment) in cases {
@@ -570,7 +588,10 @@ fn should_extract_rest_calls_from_complex_async_file() {
             !matching.is_empty(),
             "expected a {:?} REST call in function '{fn_prefix}', got none. All calls: {:#?}",
             expected_method,
-            restcalls.iter().map(|r| (&r.function_name, &r.http_method, &r.target_uri)).collect::<Vec<_>>()
+            restcalls
+                .iter()
+                .map(|r| (&r.function_name, &r.http_method, &r.target_uri))
+                .collect::<Vec<_>>()
         );
         assert!(
             matching.iter().any(|r| r.target_uri.contains(uri_fragment)),
@@ -578,4 +599,76 @@ fn should_extract_rest_calls_from_complex_async_file() {
             matching.iter().map(|r| &r.target_uri).collect::<Vec<_>>()
         );
     }
+}
+
+#[test]
+fn test_restcall_edge_cases() {
+    let filename = "./examples/python/restcalls/rest_call_edge_cases.py";
+    let (code, tree) = parse_file(filename);
+    let mut calls = restcalls(&code, &tree, filename);
+    let assignments_map = get_assignments_map(&tree, &code);
+    evaluate_local_and_global_assignments(&mut calls, &assignments_map);
+
+    assert_eq!(
+        calls.len(),
+        4,
+        "Expected 4 REST calls: 1 PATCH + 2 GET (sync) + 1 GET (item)"
+    );
+
+    // Edge case 1: PATCH method — present in HTTP_METHODS but not previously tested
+    let patch_calls: Vec<&RestCall> = calls
+        .iter()
+        .filter(|r| r.http_method == HttpMethod::PATCH)
+        .collect();
+    assert_eq!(patch_calls.len(), 1, "Expected exactly 1 PATCH call");
+    assert!(patch_calls[0].function_name.contains("update_user_partial"));
+    assert!(
+        patch_calls[0].target_uri.contains("ts-user-service"),
+        "PATCH URI should resolve BASE_URL"
+    );
+    assert!(patch_calls[0].target_uri.contains("/api/v1/users/"));
+
+    // Edge case 2: Two REST calls in one function — both must be extracted
+    let sync_calls: Vec<&RestCall> = calls
+        .iter()
+        .filter(|r| r.function_name.contains("sync_user_and_order"))
+        .collect();
+    assert_eq!(
+        sync_calls.len(),
+        2,
+        "Both GET calls inside sync_user_and_order must be extracted"
+    );
+    assert!(
+        sync_calls
+            .iter()
+            .any(|r| r.target_uri.contains("ts-user-service"))
+    );
+    assert!(
+        sync_calls
+            .iter()
+            .any(|r| r.target_uri.contains("ts-order-service"))
+    );
+
+    // Edge case 3: F-string with multiple path parameters — both must appear in resolved URI
+    let item_calls: Vec<&RestCall> = calls
+        .iter()
+        .filter(|r| r.function_name.contains("get_order_item"))
+        .collect();
+    assert_eq!(item_calls.len(), 1);
+    assert!(
+        item_calls[0].target_uri.contains("order_id"),
+        "order_id path param must appear in URI"
+    );
+    assert!(
+        item_calls[0].target_uri.contains("item_id"),
+        "item_id path param must appear in URI"
+    );
+    assert!(
+        item_calls[0].target_uri.contains("/orders/"),
+        "URI must contain /orders/ segment"
+    );
+    assert!(
+        item_calls[0].target_uri.contains("/items/"),
+        "URI must contain /items/ segment"
+    );
 }

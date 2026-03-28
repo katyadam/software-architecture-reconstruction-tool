@@ -6,7 +6,7 @@ use python_extractor::{
     s,
 };
 
-use crate::python::utils::{get_tree, load_file};
+use crate::python::utils::{get_tree, load_file, parse_file};
 
 use models::{Endpoint, HttpMethod, Parameter};
 
@@ -152,4 +152,57 @@ fn base_test() {
     ];
 
     assert_eq!(endpoints, expected);
+}
+
+#[test]
+fn test_endpoint_edge_cases() {
+    let filename = "./examples/python/endpoint_edge_cases.py";
+    let (code, tree) = parse_file(filename);
+    let endpoints =
+        EndpointsExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
+
+    assert_eq!(
+        endpoints.len(),
+        3,
+        "Expected 3 endpoints: PATCH, GET (list), GET (search)"
+    );
+
+    // Edge case 1: @app.patch produces a PATCH endpoint — not present in existing tests
+    let patch_endpoints: Vec<&Endpoint> = endpoints
+        .iter()
+        .filter(|e| e.http_method == HttpMethod::PATCH)
+        .collect();
+    assert_eq!(
+        patch_endpoints.len(),
+        1,
+        "Expected exactly 1 PATCH endpoint"
+    );
+    assert_eq!(patch_endpoints[0].function_name, s!("update_item_partial"));
+    assert_eq!(patch_endpoints[0].uri, s!("/items/{item_id}"));
+
+    // Edge case 2: Parameters with plain numeric defaults — verify standard default capture
+    let list_ep = endpoints
+        .iter()
+        .find(|e| e.function_name == "list_items")
+        .unwrap();
+    assert_eq!(list_ep.http_method, HttpMethod::GET);
+    assert_eq!(list_ep.parameters.len(), 2);
+    assert_eq!(list_ep.parameters[0].name, s!("skip"));
+    assert_eq!(list_ep.parameters[0].initial_value, Some(s!("0")));
+    assert_eq!(list_ep.parameters[0].datatype, Some(s!("int")));
+    assert_eq!(list_ep.parameters[1].name, s!("limit"));
+    assert_eq!(list_ep.parameters[1].initial_value, Some(s!("10")));
+
+    // Edge case 3: Optional[str] parameter with None default — the full Optional[str]
+    // type is preserved in datatype, and "None" is the initial_value
+    let search_ep = endpoints
+        .iter()
+        .find(|e| e.function_name == "search_items")
+        .unwrap();
+    assert_eq!(search_ep.http_method, HttpMethod::GET);
+    assert_eq!(search_ep.uri, s!("/search/"));
+    assert_eq!(search_ep.parameters.len(), 1);
+    assert_eq!(search_ep.parameters[0].name, s!("q"));
+    assert_eq!(search_ep.parameters[0].datatype, Some(s!("Optional[str]")));
+    assert_eq!(search_ep.parameters[0].initial_value, Some(s!("None")));
 }

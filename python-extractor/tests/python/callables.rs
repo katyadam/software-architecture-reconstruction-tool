@@ -324,7 +324,10 @@ fn typed_parameters_test() {
 
     assert_eq!(callables.len(), 2, "expected 2 callables (A and B)");
 
-    let a = callables.iter().find(|c| c.name.starts_with("A(")).expect("callable A not found");
+    let a = callables
+        .iter()
+        .find(|c| c.name.starts_with("A("))
+        .expect("callable A not found");
     assert_eq!(a.parameters.len(), 2);
     assert_eq!(a.parameters[0].name, s!("x"));
     assert_eq!(a.parameters[0].datatype, Some(s!("int")));
@@ -333,7 +336,10 @@ fn typed_parameters_test() {
     assert!(!a.is_async);
     assert!(!a.is_constructor);
 
-    let b = callables.iter().find(|c| c.name.starts_with("B(")).expect("callable B not found");
+    let b = callables
+        .iter()
+        .find(|c| c.name.starts_with("B("))
+        .expect("callable B not found");
     assert_eq!(b.parameters.len(), 1);
     assert_eq!(b.parameters[0].name, s!("a"));
     assert_eq!(b.parameters[0].datatype, Some(s!("int")));
@@ -389,4 +395,58 @@ fn async_functions_test() {
             "expected sync callable starting with '{expected}', got: {sync_names:?}"
         );
     }
+}
+
+#[test]
+fn test_callable_edge_cases() {
+    let filename = "./examples/python/callable_edge_cases.py";
+    let (code, tree) = parse_file(filename);
+    let callables =
+        CallablesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
+
+    let names: Vec<&str> = callables.iter().map(|c| c.name.as_str()).collect();
+
+    // Edge case 1: Lambda variable — `greet = lambda name: ...` is NOT a function_definition
+    // node, so it is NOT extracted as a callable
+    assert!(
+        !names.iter().any(|n| n.contains("greet")),
+        "lambda assigned to variable must NOT be extracted as callable, got: {names:?}"
+    );
+
+    // Edge case 2: Nested function — unlike Java, the Python extractor DOES capture
+    // inner `def` blocks. Both `make_adder` (outer) and `add` (inner) are extracted.
+    assert!(
+        names.iter().any(|n| n.starts_with("make_adder")),
+        "outer function make_adder must be extracted"
+    );
+    assert!(
+        names.iter().any(|n| n.starts_with("add")),
+        "inner nested function `add` IS extracted in Python (different from Java), got: {names:?}"
+    );
+
+    // Edge case 3: @staticmethod method — `square` is inside MathUtils but decorated.
+    // The query must handle decorated_definition wrapping a function_definition inside a
+    // class body, otherwise the function falls through to the module-level case.
+    // Both square (@staticmethod) and double (regular method) must get Class namespace.
+    let square = callables
+        .iter()
+        .find(|c| c.name.starts_with("square"))
+        .unwrap();
+    assert_eq!(
+        square.namespace,
+        Namespace::Class(s!("MathUtils")),
+        "@staticmethod method must get Class namespace, not Module namespace"
+    );
+    assert!(!square.is_constructor);
+    assert!(!square.is_async);
+    assert_eq!(square.parameters.len(), 1);
+    assert_eq!(square.parameters[0].name, s!("n"));
+    assert_eq!(square.parameters[0].datatype, Some(s!("int")));
+
+    // Regular instance method also gets Class namespace
+    let double = callables
+        .iter()
+        .find(|c| c.name.starts_with("double"))
+        .unwrap();
+    assert_eq!(double.namespace, Namespace::Class(s!("MathUtils")));
 }
