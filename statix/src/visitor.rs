@@ -28,4 +28,9 @@ pub trait Visitor {
         then_b: &[Stmt],
         else_b: &Option<Vec<Stmt>>,
     ) -> Result<Option<Expr>, EvalError>;
+    fn visit_try_catch(
+        &mut self,
+        try_branch: &[Stmt],
+        catch_branch: &[Stmt],
+    ) -> Result<Option<Expr>, EvalError>;
 }

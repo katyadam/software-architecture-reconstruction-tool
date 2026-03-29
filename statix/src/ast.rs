@@ -1,3 +1,4 @@
+// TODO: Add more valuetypes - Boolean, Number,... - Now Python takes "true" as correct boolean and Java takes "True" as correct boolean - both are wrong
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Literal(String),
@@ -23,6 +24,10 @@ pub enum Stmt {
         condition: Expr,
         then_branch: Vec<Stmt>,
         else_branch: Option<Vec<Stmt>>,
+    },
+    TryCatch {
+        try_branch: Vec<Stmt>,
+        catch_branch: Vec<Stmt>,
     },
     Return(Expr),
     Empty,

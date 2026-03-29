@@ -201,6 +201,34 @@ fn parse_stmt(node: Node, source: &str) -> Result<Stmt, ParseError> {
             })
         }
 
+        "try_statement" => {
+            let try_body_node = node
+                .child_by_field_name("body")
+                .ok_or(ParseError::FieldNotFound("try body".to_string()))?;
+            let try_branch = parse_block(try_body_node, source)?;
+
+            // Collect all catch_clause children (not a named field on try_statement).
+            let mut catch_branch: Vec<Stmt> = Vec::new();
+            let mut cursor = node.walk();
+            for child in node.named_children(&mut cursor) {
+                if child.kind() == "catch_clause" {
+                    if let Some(body) = child.child_by_field_name("body") {
+                        catch_branch.extend(parse_block(body, source)?);
+                    }
+                }
+            }
+
+            if catch_branch.is_empty() {
+                // try with no catch: treat as a plain block
+                Ok(Stmt::Empty)
+            } else {
+                Ok(Stmt::TryCatch {
+                    try_branch,
+                    catch_branch,
+                })
+            }
+        }
+
         _ => Ok(Stmt::Empty),
     }
 }

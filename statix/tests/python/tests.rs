@@ -457,7 +457,7 @@ def compute(self) -> int:
 // ── Evaluator: try/except ─────────────────────────────────────────────────────
 
 #[test]
-fn python_try_except_variables_tracked_in_final_env() {
+fn python_try_except_joins_both_branches() {
     let code = r#"
 def get_url() -> str:
     try:
@@ -475,10 +475,22 @@ def get_url() -> str:
     )
     .expect("evaluation should succeed");
 
-    assert!(
-        result.final_env.contains_key("url"),
-        "variable declared inside try/except body should appear in final_env"
-    );
+    // try/except is modelled as if with unknown condition, so both branches are joined
+    if let Expr::Joined { vals } = &result.return_value {
+        assert!(
+            vals.contains(&Expr::Literal("http://service".to_string())),
+            "try-branch value should be in Joined"
+        );
+        assert!(
+            vals.contains(&Expr::Literal("http://fallback".to_string())),
+            "except-branch value should be in Joined"
+        );
+    } else {
+        panic!(
+            "Expected Expr::Joined for try/except with differing branches, got {:?}",
+            result.return_value
+        );
+    }
 }
 
 // ── Parser: parameter handling ────────────────────────────────────────────────

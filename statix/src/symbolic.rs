@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use crate::{
     ast::{CallableAst, Expr, Stmt},
@@ -214,6 +217,14 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
                         collected_returns.push(ret);
                     }
                 }
+                Stmt::TryCatch {
+                    try_branch,
+                    catch_branch,
+                } => {
+                    if let Some(ret) = self.visit_try_catch(try_branch, catch_branch)? {
+                        collected_returns.push(ret);
+                    }
+                }
                 _ => self.visit_stmt(stmt)?,
             }
         }
@@ -283,8 +294,26 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             }
         }
 
+        // Snapshot which keys existed before the if so we can find branch-only vars.
+        let pre_if_keys: HashSet<String> = self.env.keys().cloned().collect();
+
         self.merge_new_vars(&then_evaluator);
         self.merge_new_vars(&else_evaluator);
+
+        // Join variables that were declared in BOTH branches but did not exist in
+        // the parent env before the if (e.g. variables first declared inside
+        // try/except or parallel if-branches without a pre-declaration).
+        for (key, (dtype, t_val)) in &then_evaluator.env {
+            if pre_if_keys.contains(key) {
+                continue; // already handled by the per-key join loop above
+            }
+            if let Some((_, e_val)) = else_evaluator.env.get(key) {
+                if t_val != e_val {
+                    let (_, joined) = self.join(&sym_cond, t_val, e_val)?;
+                    self.env.insert(key.clone(), (dtype.clone(), joined));
+                }
+            }
+        }
 
         if then_ret.is_some() || else_ret.is_some() {
             let (_, evaluated_ite) = self.join(
@@ -296,6 +325,64 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
         }
 
         Ok(None)
+    }
+
+    fn visit_try_catch(
+        &mut self,
+        try_branch: &[Stmt],
+        catch_branch: &[Stmt],
+    ) -> Result<Option<Expr>, EvalError> {
+        let mut try_evaluator = self.branch();
+        let mut catch_evaluator = self.branch();
+
+        let try_ret = try_evaluator.visit_statements(try_branch)?;
+        let catch_ret = catch_evaluator.visit_statements(catch_branch)?;
+
+        // Merge variables from both branches into the parent env, joining values
+        // that differ (same logic as visit_if but with no condition — always joins).
+        let keys: Vec<String> = self.env.keys().cloned().collect();
+        for key in keys {
+            let (_, t_val) = try_evaluator.env.get(&key).unwrap();
+            let (_, c_val) = catch_evaluator.env.get(&key).unwrap();
+            if t_val != c_val {
+                let joined = Expr::Joined {
+                    vals: vec![t_val.clone(), c_val.clone()],
+                };
+                self.env.get_mut(&key).unwrap().1 = joined;
+            }
+        }
+
+        let pre_keys: std::collections::HashSet<String> = self.env.keys().cloned().collect();
+        self.merge_new_vars(&try_evaluator);
+        self.merge_new_vars(&catch_evaluator);
+
+        // Join variables declared in BOTH branches that did not exist before the try.
+        for (key, (dtype, t_val)) in &try_evaluator.env {
+            if pre_keys.contains(key) {
+                continue;
+            }
+            if let Some((_, c_val)) = catch_evaluator.env.get(key) {
+                if t_val != c_val {
+                    let joined = Expr::Joined {
+                        vals: vec![t_val.clone(), c_val.clone()],
+                    };
+                    self.env.insert(key.clone(), (dtype.clone(), joined));
+                }
+            }
+        }
+
+        match (try_ret, catch_ret) {
+            (None, None) => Ok(None),
+            (Some(t), None) => Ok(Some(t)),
+            (None, Some(c)) => Ok(Some(c)),
+            (Some(t), Some(c)) => {
+                if t == c {
+                    Ok(Some(t))
+                } else {
+                    Ok(Some(Expr::Joined { vals: vec![t, c] }))
+                }
+            }
+        }
     }
 }
 

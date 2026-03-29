@@ -508,6 +508,50 @@ class Svc {
     );
 }
 
+// ── Evaluator: try/catch ──────────────────────────────────────────────────────
+
+#[test]
+fn java_try_catch_joins_both_branches() {
+    let code = r#"
+class Svc {
+    String getUrl() {
+        String url;
+        try {
+            url = "http://service";
+        } catch (Exception e) {
+            url = "http://fallback";
+        }
+        return url;
+    }
+}
+"#;
+    let tree = get_java_tree(code);
+    let map = parse_java(&tree, code);
+    let result = symbolic_evaluation(
+        &map,
+        "String getUrl()",
+        Box::new(JavaCallableMatcher::new()),
+    )
+    .expect("evaluation should succeed");
+
+    // try/catch is modelled as if with unknown condition, so both branches are joined
+    if let Expr::Joined { vals } = &result.return_value {
+        assert!(
+            vals.contains(&Expr::Literal("http://service".to_string())),
+            "try-branch value should be in Joined"
+        );
+        assert!(
+            vals.contains(&Expr::Literal("http://fallback".to_string())),
+            "catch-branch value should be in Joined"
+        );
+    } else {
+        panic!(
+            "Expected Expr::Joined for try/catch with differing branches, got {:?}",
+            result.return_value
+        );
+    }
+}
+
 // ── Evaluator: error and empty-body cases ─────────────────────────────────────
 
 #[test]
