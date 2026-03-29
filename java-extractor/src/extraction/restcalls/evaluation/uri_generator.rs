@@ -2,6 +2,16 @@ use statix::{ast::Expr, symbolic::AnalysisResult};
 
 type ResolvedPart = Vec<String>;
 
+/// Resolves a URI template string into every possible concrete URI.
+///
+/// The template is a Java string-concatenation expression (parts separated by `+`).
+/// Each part is looked up in the symbolic `analysis_result` environment:
+/// - String literals have their quotes stripped.
+/// - Variables mapped to a single `Expr::Literal` produce one value.
+/// - Variables mapped to `Expr::Joined` (multiple possible values) expand the result set.
+///
+/// The resolved parts are combined via Cartesian product, so a template with two
+/// `Joined` parts of sizes 2 and 3 produces 6 URIs.
 pub fn generate_target_uris(template: &str, analysis_result: &AnalysisResult) -> Vec<String> {
     let resolved_parts: Vec<ResolvedPart> = get_resolved_parts(template, analysis_result);
 

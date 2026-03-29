@@ -19,6 +19,7 @@ pub struct Constant {
     pub value: String,
 }
 
+#[allow(dead_code)]
 impl Constant {
     pub fn new(constant_uuid: Uuid, name: String, value: String) -> Self {
         Self {

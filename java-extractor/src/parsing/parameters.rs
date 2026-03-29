@@ -1,5 +1,11 @@
 use models::Parameter;
 
+/// Parses a Java parameter list string (with or without outer parentheses) into
+/// typed [`Parameter`] entries.
+///
+/// Each token is expected to be of the form `[@Annotation]* type name [= default]`.
+/// Annotations (tokens starting with `@`) and the `final` modifier are stripped.
+/// Parameters with fewer than two remaining tokens (i.e. no discernible type+name) are skipped.
 pub fn parse_callable_params(params_string: &str) -> Vec<Parameter> {
     let params_string = strip_outer_parentheses(params_string);
 
@@ -52,6 +58,9 @@ fn strip_outer_parentheses(input: &str) -> &str {
     }
 }
 
+/// Splits `input` on `,` while ignoring commas that appear inside `<>` angle brackets.
+/// This is necessary for correctly tokenizing generic parameter types such as
+/// `Map<String, Integer>`, which must not be split at the inner comma.
 fn split_top_level_commas(input: &str) -> Vec<String> {
     let mut result = Vec::new();
     let mut depth = 0;

@@ -47,6 +47,13 @@ fn is_fqdn(datatype: &str) -> bool {
     datatype.contains(".")
 }
 
+/// Recursively unwraps arrays and generic wrappers to find the element type.
+///
+/// Examples:
+/// - `"List<User>"` → `"User"`
+/// - `"Map<String, User>"` → `"User"` (last type argument is used — the Value in `Map<K,V>`)
+/// - `"User[]"` → `"User"`
+/// - `"String"` → `"String"` (identity)
 pub fn extract_java_inner_type(datatype: &str) -> &str {
     let d = datatype.trim();
 
