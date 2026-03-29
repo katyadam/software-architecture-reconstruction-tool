@@ -3,7 +3,7 @@ use clap::Parser;
 use extractor_runtime::dispatch;
 use models::{CodeElementsAggregate, ConfigurationData};
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{fs, time::Instant};
 use synthesizer::{
     connectors::dto::Constant, direct_cm_build, direct_imcg_build, direct_sdg_build,
@@ -167,7 +167,7 @@ fn merge_aggregates(main: &mut CodeElementsAggregate, new: CodeElementsAggregate
     main.call_statements.extend(new.call_statements);
 }
 
-fn save_json<T: serde::Serialize>(dir: &PathBuf, filename: &str, data: &T) -> Result<()> {
+fn save_json<T: serde::Serialize>(dir: &Path, filename: &str, data: &T) -> Result<()> {
     let path = dir.join(filename);
 
     let json_data = serde_json::to_string_pretty(data)

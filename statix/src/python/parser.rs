@@ -268,22 +268,22 @@ fn parse_try(
             // except_clause has no named "body" field in the tree-sitter Python grammar;
             // the suite is always the last named child (block or simple_statement).
             let count = child.named_child_count();
-            if count > 0 {
-                if let Some(body) = child.named_child(count - 1) {
-                    except_stmts.extend(parse_block(body, source, &mut except_scope)?);
-                }
+            if count > 0
+                && let Some(body) = child.named_child(count - 1)
+            {
+                except_stmts.extend(parse_block(body, source, &mut except_scope)?);
             }
         }
     }
 
     // Merge all vars from both branches into the outer scope.
-    scope_vars.extend(except_scope.into_iter());
+    scope_vars.extend(except_scope);
 
     if except_stmts.is_empty() {
         Ok(try_branch)
     } else {
         Ok(vec![Stmt::TryCatch {
-            try_branch: try_branch,
+            try_branch,
             catch_branch: except_stmts,
         }])
     }

@@ -211,10 +211,10 @@ fn parse_stmt(node: Node, source: &str) -> Result<Stmt, ParseError> {
             let mut catch_branch: Vec<Stmt> = Vec::new();
             let mut cursor = node.walk();
             for child in node.named_children(&mut cursor) {
-                if child.kind() == "catch_clause" {
-                    if let Some(body) = child.child_by_field_name("body") {
-                        catch_branch.extend(parse_block(body, source)?);
-                    }
+                if child.kind() == "catch_clause"
+                    && let Some(body) = child.child_by_field_name("body")
+                {
+                    catch_branch.extend(parse_block(body, source)?);
                 }
             }
 

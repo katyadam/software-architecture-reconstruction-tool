@@ -307,11 +307,11 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             if pre_if_keys.contains(key) {
                 continue; // already handled by the per-key join loop above
             }
-            if let Some((_, e_val)) = else_evaluator.env.get(key) {
-                if t_val != e_val {
-                    let (_, joined) = self.join(&sym_cond, t_val, e_val)?;
-                    self.env.insert(key.clone(), (dtype.clone(), joined));
-                }
+            if let Some((_, e_val)) = else_evaluator.env.get(key)
+                && t_val != e_val
+            {
+                let (_, joined) = self.join(&sym_cond, t_val, e_val)?;
+                self.env.insert(key.clone(), (dtype.clone(), joined));
             }
         }
 
@@ -361,13 +361,13 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             if pre_keys.contains(key) {
                 continue;
             }
-            if let Some((_, c_val)) = catch_evaluator.env.get(key) {
-                if t_val != c_val {
-                    let joined = Expr::Joined {
-                        vals: vec![t_val.clone(), c_val.clone()],
-                    };
-                    self.env.insert(key.clone(), (dtype.clone(), joined));
-                }
+            if let Some((_, c_val)) = catch_evaluator.env.get(key)
+                && t_val != c_val
+            {
+                let joined = Expr::Joined {
+                    vals: vec![t_val.clone(), c_val.clone()],
+                };
+                self.env.insert(key.clone(), (dtype.clone(), joined));
             }
         }
 
