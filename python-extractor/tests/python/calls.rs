@@ -8,7 +8,7 @@ use python_extractor::{
     s,
 };
 
-use crate::python::utils::{get_tree, load_file};
+use crate::python::utils::{get_tree, load_file, parse_file};
 
 #[test]
 fn simple_test() {
@@ -556,5 +556,135 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
             .map(PythonCallStatement::to_language_agnostic)
             .collect::<Vec<CallStatement>>(),
         expected
+    );
+}
+
+/// Verifies that type inference resolves argument datatypes from typed function parameters.
+/// `B(a: int)` calls `A(a, c)` where `a` is typed and `c` is an untyped local assignment.
+/// After evaluation, `a` must carry `datatype: "int"` and `c` must carry `datatype: "any"`.
+#[test]
+fn typed_params_infer_argument_datatypes_test() {
+    let filename = "./examples/python/callgraph/simple_with_types.py";
+    let (code, tree) = parse_file(filename);
+    let mut calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
+    let assignments_map = get_assignments_map(&tree, &code);
+    evaluate_invocations(&mut calls, &assignments_map);
+
+    let agnostic: Vec<CallStatement> = calls
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .collect();
+
+    // B calls A — that is the only call statement in this file
+    assert_eq!(agnostic.len(), 1, "expected exactly one call statement");
+    let call = &agnostic[0];
+    assert_eq!(call.function_name, s!("A"));
+    assert_eq!(
+        call.enclosing_function_name.as_deref(),
+        Some("B(a: int) -> Any"),
+        "call should be inside B"
+    );
+
+    // argument `a` has type annotation `int` on B's parameter → should be resolved
+    let arg_a = call
+        .arguments
+        .iter()
+        .find(|a| a.value == "a")
+        .expect("argument a not found");
+    assert_eq!(
+        arg_a.datatype,
+        s!("int"),
+        "typed parameter `a: int` should produce datatype 'int'"
+    );
+
+    // argument `c` is a plain literal assignment (`c = 5`) — no type info available
+    let arg_c = call
+        .arguments
+        .iter()
+        .find(|a| a.value == "c")
+        .expect("argument c not found");
+    assert_eq!(
+        arg_c.datatype,
+        s!("any"),
+        "untyped local variable `c` should produce datatype 'any'"
+    );
+}
+
+#[test]
+fn test_call_edge_cases() {
+    let filename = "./examples/python/callgraph/call_edge_cases.py";
+    let (code, tree) = parse_file(filename);
+    let raw_calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
+    let calls: Vec<CallStatement> = raw_calls
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .collect();
+
+    // Edge case 1: Starred arguments — target(*args, **kwargs) is captured;
+    // starred expressions appear as argument values with their raw text
+    let delegate_calls: Vec<&CallStatement> = calls
+        .iter()
+        .filter(|c| {
+            c.enclosing_function_name.as_deref() == Some("delegate(target, *args, **kwargs) -> Any")
+        })
+        .collect();
+    assert!(
+        !delegate_calls.is_empty(),
+        "delegate() should contain at least one call"
+    );
+    let target_call = delegate_calls
+        .iter()
+        .find(|c| c.function_name == s!("target"))
+        .unwrap();
+    assert!(
+        target_call
+            .arguments
+            .iter()
+            .any(|a| a.value.contains("args")),
+        "starred *args should appear in call arguments"
+    );
+    assert!(
+        target_call
+            .arguments
+            .iter()
+            .any(|a| a.value.contains("kwargs")),
+        "starred **kwargs should appear in call arguments"
+    );
+
+    // Edge case 2: Call inside a list comprehension — str(x) inside [str(x) for x in items]
+    // is still captured as a regular CallStatement
+    let transform_calls: Vec<&CallStatement> = calls
+        .iter()
+        .filter(|c| c.enclosing_function_name.as_deref() == Some("transform_all(items) -> Any"))
+        .collect();
+    assert!(
+        !transform_calls.is_empty(),
+        "str(x) inside list comprehension should be captured"
+    );
+    assert!(
+        transform_calls.iter().any(|c| c.function_name == s!("str")),
+        "str() call inside comprehension must be captured"
+    );
+
+    // Edge case 3: isinstance() built-in call — captured as a regular CallStatement
+    // with two arguments (the value and the type)
+    let handle_calls: Vec<&CallStatement> = calls
+        .iter()
+        .filter(|c| c.enclosing_function_name.as_deref() == Some("handle_input(data: Any) -> str"))
+        .collect();
+    let isinstance_call = handle_calls
+        .iter()
+        .find(|c| c.function_name == s!("isinstance"))
+        .unwrap();
+    assert_eq!(
+        isinstance_call.arguments.len(),
+        2,
+        "isinstance takes 2 arguments"
+    );
+    assert_eq!(isinstance_call.arguments[0].value, s!("data"));
+    assert_eq!(isinstance_call.arguments[1].value, s!("str"));
+    assert!(
+        !isinstance_call.is_self_invoke,
+        "isinstance is not a self-invoke"
     );
 }

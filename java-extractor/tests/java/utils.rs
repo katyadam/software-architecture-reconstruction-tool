@@ -18,3 +18,11 @@ pub fn get_tree(code: &str) -> Tree {
         .expect("Failed to set language");
     parser.parse(code, None).expect("Failed to parse code")
 }
+
+#[allow(dead_code)]
+pub fn parse_file(filename: &str) -> (String, Tree) {
+    let code =
+        load_file(filename).unwrap_or_else(|e| panic!("fixture not found: {filename} — {e}"));
+    let tree = get_tree(&code);
+    (code, tree)
+}

@@ -7,7 +7,7 @@ use python_extractor::{
     s,
 };
 
-use crate::python::utils::{get_tree, load_file};
+use crate::python::utils::{get_tree, load_file, parse_file};
 
 #[test]
 fn simple_test() {
@@ -311,4 +311,142 @@ fn classes_imports_test() {
     ];
 
     assert_eq!(callables, expected);
+}
+
+/// Verifies that typed parameters (`x: int`) are extracted with their datatype,
+/// and that untyped parameters have `datatype: None`.
+#[test]
+fn typed_parameters_test() {
+    let filename = "./examples/python/callgraph/simple_with_types.py";
+    let (code, tree) = parse_file(filename);
+    let callables =
+        CallablesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
+
+    assert_eq!(callables.len(), 2, "expected 2 callables (A and B)");
+
+    let a = callables
+        .iter()
+        .find(|c| c.name.starts_with("A("))
+        .expect("callable A not found");
+    assert_eq!(a.parameters.len(), 2);
+    assert_eq!(a.parameters[0].name, s!("x"));
+    assert_eq!(a.parameters[0].datatype, Some(s!("int")));
+    assert_eq!(a.parameters[1].name, s!("y"));
+    assert_eq!(a.parameters[1].datatype, Some(s!("int")));
+    assert!(!a.is_async);
+    assert!(!a.is_constructor);
+
+    let b = callables
+        .iter()
+        .find(|c| c.name.starts_with("B("))
+        .expect("callable B not found");
+    assert_eq!(b.parameters.len(), 1);
+    assert_eq!(b.parameters[0].name, s!("a"));
+    assert_eq!(b.parameters[0].datatype, Some(s!("int")));
+    assert!(!b.is_async);
+}
+
+/// Verifies that the `is_async` flag is correctly extracted for both `async def` and
+/// regular `def` functions in a complex real-world file with nested control flow.
+#[test]
+fn async_functions_test() {
+    let filename = "./examples/python/callgraph/cycle.py";
+    let (code, tree) = parse_file(filename);
+    let callables =
+        CallablesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
+
+    let async_names: Vec<&str> = callables
+        .iter()
+        .filter(|c| c.is_async)
+        .map(|c| c.name.as_str())
+        .collect();
+    let sync_names: Vec<&str> = callables
+        .iter()
+        .filter(|c| !c.is_async)
+        .map(|c| c.name.as_str())
+        .collect();
+
+    // All `async def` functions must be detected as async
+    for expected in &[
+        "schedule_ready_jobs()",
+        "_fetch_jobs(statuses)",
+        "_send_ready_jobs_to_jes(jobs)",
+        "_update_state_for_jobs_not_in_ready_state(jobs)",
+        "_update_job_status(job_id, status, error_message)",
+        "_get_execution(job_id)",
+        "_fetch_raw_token(job)",
+        "_create_execution_request_raw(job, access_token, timeout=-1)",
+    ] {
+        assert!(
+            async_names.iter().any(|n| n.starts_with(expected)),
+            "expected async callable starting with '{expected}', got: {async_names:?}"
+        );
+    }
+
+    // Regular `def` functions must NOT be marked async
+    for expected in &[
+        "_http_exception_log(e)",
+        "_log_exception_info(e, additional_message)",
+        "_jobs_ready(jobs)",
+        "_jobs_not_ready(jobs)",
+    ] {
+        assert!(
+            sync_names.iter().any(|n| n.starts_with(expected)),
+            "expected sync callable starting with '{expected}', got: {sync_names:?}"
+        );
+    }
+}
+
+#[test]
+fn test_callable_edge_cases() {
+    let filename = "./examples/python/callable_edge_cases.py";
+    let (code, tree) = parse_file(filename);
+    let callables =
+        CallablesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
+
+    let names: Vec<&str> = callables.iter().map(|c| c.name.as_str()).collect();
+
+    // Edge case 1: Lambda variable — `greet = lambda name: ...` is NOT a function_definition
+    // node, so it is NOT extracted as a callable
+    assert!(
+        !names.iter().any(|n| n.contains("greet")),
+        "lambda assigned to variable must NOT be extracted as callable, got: {names:?}"
+    );
+
+    // Edge case 2: Nested function — unlike Java, the Python extractor DOES capture
+    // inner `def` blocks. Both `make_adder` (outer) and `add` (inner) are extracted.
+    assert!(
+        names.iter().any(|n| n.starts_with("make_adder")),
+        "outer function make_adder must be extracted"
+    );
+    assert!(
+        names.iter().any(|n| n.starts_with("add")),
+        "inner nested function `add` IS extracted in Python (different from Java), got: {names:?}"
+    );
+
+    // Edge case 3: @staticmethod method — `square` is inside MathUtils but decorated.
+    // The query must handle decorated_definition wrapping a function_definition inside a
+    // class body, otherwise the function falls through to the module-level case.
+    // Both square (@staticmethod) and double (regular method) must get Class namespace.
+    let square = callables
+        .iter()
+        .find(|c| c.name.starts_with("square"))
+        .unwrap();
+    assert_eq!(
+        square.namespace,
+        Namespace::Class(s!("MathUtils")),
+        "@staticmethod method must get Class namespace, not Module namespace"
+    );
+    assert!(!square.is_constructor);
+    assert!(!square.is_async);
+    assert_eq!(square.parameters.len(), 1);
+    assert_eq!(square.parameters[0].name, s!("n"));
+    assert_eq!(square.parameters[0].datatype, Some(s!("int")));
+
+    // Regular instance method also gets Class namespace
+    let double = callables
+        .iter()
+        .find(|c| c.name.starts_with("double"))
+        .unwrap();
+    assert_eq!(double.namespace, Namespace::Class(s!("MathUtils")));
 }

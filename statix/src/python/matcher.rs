@@ -19,8 +19,9 @@ impl CallableMatcher for PythonCallableMatcher {
         params: &[VarType],
     ) -> Option<String> {
         let mut highest: usize = 0;
+        let mut highest_not_found = true;
         let mut winner: Option<String> = None;
-        let mangled_name = mangle_header(name);
+        let mangled_name = Some(name.to_owned() + "(" + &params.join(",") + ")");
         for header in callables.keys() {
             // Prefer match by using name mangling
             if let (Some(m_our), Some(m_to_cmp)) = (&mangled_name, &mangle_header(header))
@@ -38,9 +39,10 @@ impl CallableMatcher for PythonCallableMatcher {
                     .zip(cur_params.iter())
                     .filter(|(a, b)| a == b)
                     .count();
-                if matched > highest {
+                if matched > highest || highest_not_found {
                     highest = matched;
                     winner = Some(header.clone());
+                    highest_not_found = false;
                 }
             }
         }

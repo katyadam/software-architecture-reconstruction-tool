@@ -165,7 +165,7 @@ pub const ENTITIES_QUERY: &str = r#"
 
 pub const CALLABLES_QUERY: &str = r#"
 [
-;; Case 1: Function inside a class (same as before)
+;; Case 1a: Undecorated function directly inside a class body
 (
   (class_definition
     name: (identifier) @class.name
@@ -175,8 +175,26 @@ pub const CALLABLES_QUERY: &str = r#"
         parameters: (parameters) @function.params
         (#optional? return_type)
         return_type: (type)? @function.return_type
-        body: (block) @function.body ;; Can be omitted
+        body: (block) @function.body
       ) @function
+    )
+  )
+)
+
+;; Case 1b: Decorated function inside a class body (@staticmethod, @classmethod, @property, etc.)
+(
+  (class_definition
+    name: (identifier) @class.name
+    body: (block
+      (decorated_definition
+        definition: (function_definition
+          name: (identifier) @function.name
+          parameters: (parameters) @function.params
+          (#optional? return_type)
+          return_type: (type)? @function.return_type
+          body: (block) @function.body
+        ) @function
+      )
     )
   )
 )
@@ -188,7 +206,7 @@ pub const CALLABLES_QUERY: &str = r#"
     parameters: (parameters) @function.params
     (#optional? return_type)
     return_type: (type)? @function.return_type
-    body: (block) @function.body ;; Can be omitted
+    body: (block) @function.body
   ) @function
 )
   ]

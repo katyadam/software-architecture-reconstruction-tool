@@ -223,10 +223,15 @@ fn parse_if(
 
     let mut else_branch = None;
     if let Some(alt_node) = node.child_by_field_name("alternative") {
-        if alt_node.kind() == "if_statement" {
+        if alt_node.kind() == "if_statement" || alt_node.kind() == "elif_clause" {
+            // elif_clause has the same condition/consequence fields as if_statement
             else_branch = Some(vec![parse_if(alt_node, source, scope_vars)?]);
         } else {
-            else_branch = Some(parse_block(alt_node, source, scope_vars)?);
+            // else_clause: actual statements are in its `body` field, not on the node itself
+            let body_node = alt_node
+                .child_by_field_name("body")
+                .ok_or(ParseError::FieldNotFound("else body".to_string()))?;
+            else_branch = Some(parse_block(body_node, source, scope_vars)?);
         }
     }
 
@@ -242,16 +247,46 @@ fn parse_try(
     source: &str,
     scope_vars: &mut HashSet<String>,
 ) -> Result<Vec<Stmt>, ParseError> {
-    let mut collected_stmts: Vec<Stmt> = Vec::new();
-    let try_block_node = node
+    let try_body_node = node
         .child_by_field_name("body")
         .ok_or(ParseError::FieldNotFound("try block".to_string()))?;
-    collected_stmts.extend(parse_block(try_block_node, source, scope_vars)?);
 
-    if let Some(except_block_node) = node.child_by_field_name("except_clause") {
-        collected_stmts.extend(parse_block(except_block_node, source, scope_vars)?);
+    // Snapshot scope before the try body so the except branch uses the same
+    // baseline — variables declared in the try body are not in scope when an
+    // exception is raised, so both branches should declare them independently.
+    let scope_before = scope_vars.clone();
+    let try_branch = parse_block(try_body_node, source, scope_vars)?;
+
+    // Parse all except_clause children using the pre-try scope so variables
+    // first assigned in the try body produce Declaration (not Assignment) in
+    // the except branch, enabling the evaluator to join them correctly.
+    let mut except_scope = scope_before;
+    let mut except_stmts: Vec<Stmt> = Vec::new();
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        if child.kind() == "except_clause" {
+            // except_clause has no named "body" field in the tree-sitter Python grammar;
+            // the suite is always the last named child (block or simple_statement).
+            let count = child.named_child_count();
+            if count > 0
+                && let Some(body) = child.named_child(count - 1)
+            {
+                except_stmts.extend(parse_block(body, source, &mut except_scope)?);
+            }
+        }
     }
-    Ok(collected_stmts)
+
+    // Merge all vars from both branches into the outer scope.
+    scope_vars.extend(except_scope);
+
+    if except_stmts.is_empty() {
+        Ok(try_branch)
+    } else {
+        Ok(vec![Stmt::TryCatch {
+            try_branch,
+            catch_branch: except_stmts,
+        }])
+    }
 }
 
 fn clean_python_string(s: &str) -> String {
