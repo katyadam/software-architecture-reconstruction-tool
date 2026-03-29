@@ -65,11 +65,7 @@ impl Extractor for EntitiesExtractor {
                     name: entity_name.clone(),
                     superclasses: parents,
                     fields,
-                    signature: format!(
-                        "{}/{}",
-                        params.file_name.unwrap_or_default(),
-                        entity_name
-                    ),
+                    signature: format!("{}/{}", params.file_name.unwrap_or_default(), entity_name),
                     file_path: params.file_name.unwrap_or_default().to_string(),
                 });
             }
