@@ -282,14 +282,37 @@ fn test_double_pointing_spring_restcalls() {
     .select_restcall_statements(&calls, &filename)
     .expect("Evaluation should not fail!");
 
-    assert_eq!(restcalls.len(), 8, "Expected 8 REST calls (4 methods × 2 branches each)");
+    assert_eq!(
+        restcalls.len(),
+        8,
+        "Expected 8 REST calls (4 methods × 2 branches each)"
+    );
 
     // Verify all 4 HTTP methods are represented (DELETE is key new coverage)
     let methods: Vec<&HttpMethod> = restcalls.iter().map(|rc| &rc.http_method).collect();
-    assert_eq!(methods.iter().filter(|&&m| m == &HttpMethod::GET).count(), 2, "Expected 2 GET calls");
-    assert_eq!(methods.iter().filter(|&&m| m == &HttpMethod::DELETE).count(), 2, "Expected 2 DELETE calls");
-    assert_eq!(methods.iter().filter(|&&m| m == &HttpMethod::PUT).count(), 2, "Expected 2 PUT calls");
-    assert_eq!(methods.iter().filter(|&&m| m == &HttpMethod::POST).count(), 2, "Expected 2 POST calls");
+    assert_eq!(
+        methods.iter().filter(|&&m| m == &HttpMethod::GET).count(),
+        2,
+        "Expected 2 GET calls"
+    );
+    assert_eq!(
+        methods
+            .iter()
+            .filter(|&&m| m == &HttpMethod::DELETE)
+            .count(),
+        2,
+        "Expected 2 DELETE calls"
+    );
+    assert_eq!(
+        methods.iter().filter(|&&m| m == &HttpMethod::PUT).count(),
+        2,
+        "Expected 2 PUT calls"
+    );
+    assert_eq!(
+        methods.iter().filter(|&&m| m == &HttpMethod::POST).count(),
+        2,
+        "Expected 2 POST calls"
+    );
 
     // getAllOrders: 2× GET (ts-order-service and ts-order-other-service)
     let get_all_orders: Vec<&RestCall> = restcalls
@@ -297,8 +320,18 @@ fn test_double_pointing_spring_restcalls() {
         .filter(|rc| rc.function_name.contains("getAllOrders"))
         .collect();
     assert_eq!(get_all_orders.len(), 2);
-    assert!(get_all_orders.iter().any(|rc| rc.target_uri.contains("ts-order-service") && rc.target_uri.contains("/orderservice/order")));
-    assert!(get_all_orders.iter().any(|rc| rc.target_uri.contains("ts-order-other-service") && rc.target_uri.contains("/orderOtherService/orderOther")));
+    assert!(
+        get_all_orders
+            .iter()
+            .any(|rc| rc.target_uri.contains("ts-order-service")
+                && rc.target_uri.contains("/orderservice/order"))
+    );
+    assert!(
+        get_all_orders
+            .iter()
+            .any(|rc| rc.target_uri.contains("ts-order-other-service")
+                && rc.target_uri.contains("/orderOtherService/orderOther"))
+    );
 
     // deleteOrder: 2× DELETE (ts-order-service and ts-order-other-service)
     let delete_order: Vec<&RestCall> = restcalls
@@ -306,9 +339,21 @@ fn test_double_pointing_spring_restcalls() {
         .filter(|rc| rc.function_name.contains("deleteOrder"))
         .collect();
     assert_eq!(delete_order.len(), 2);
-    assert!(delete_order.iter().all(|rc| rc.http_method == HttpMethod::DELETE));
-    assert!(delete_order.iter().any(|rc| rc.target_uri.contains("ts-order-service")));
-    assert!(delete_order.iter().any(|rc| rc.target_uri.contains("ts-order-other-service")));
+    assert!(
+        delete_order
+            .iter()
+            .all(|rc| rc.http_method == HttpMethod::DELETE)
+    );
+    assert!(
+        delete_order
+            .iter()
+            .any(|rc| rc.target_uri.contains("ts-order-service"))
+    );
+    assert!(
+        delete_order
+            .iter()
+            .any(|rc| rc.target_uri.contains("ts-order-other-service"))
+    );
 
     // updateOrder: 2× PUT
     let update_order: Vec<&RestCall> = restcalls
@@ -316,9 +361,20 @@ fn test_double_pointing_spring_restcalls() {
         .filter(|rc| rc.function_name.contains("updateOrder"))
         .collect();
     assert_eq!(update_order.len(), 2);
-    assert!(update_order.iter().all(|rc| rc.http_method == HttpMethod::PUT));
-    assert!(update_order.iter().any(|rc| rc.target_uri.contains("/orderservice/order/admin")));
-    assert!(update_order.iter().any(|rc| rc.target_uri.contains("/orderOtherService/orderOther/admin")));
+    assert!(
+        update_order
+            .iter()
+            .all(|rc| rc.http_method == HttpMethod::PUT)
+    );
+    assert!(
+        update_order
+            .iter()
+            .any(|rc| rc.target_uri.contains("/orderservice/order/admin"))
+    );
+    assert!(update_order.iter().any(|rc| {
+        rc.target_uri
+            .contains("/orderOtherService/orderOther/admin")
+    }));
 
     // addOrder: 2× POST
     let add_order: Vec<&RestCall> = restcalls
@@ -326,9 +382,20 @@ fn test_double_pointing_spring_restcalls() {
         .filter(|rc| rc.function_name.contains("addOrder"))
         .collect();
     assert_eq!(add_order.len(), 2);
-    assert!(add_order.iter().all(|rc| rc.http_method == HttpMethod::POST));
-    assert!(add_order.iter().any(|rc| rc.target_uri.contains("/orderservice/order/admin")));
-    assert!(add_order.iter().any(|rc| rc.target_uri.contains("/orderOtherService/orderOther/admin")));
+    assert!(
+        add_order
+            .iter()
+            .all(|rc| rc.http_method == HttpMethod::POST)
+    );
+    assert!(
+        add_order
+            .iter()
+            .any(|rc| rc.target_uri.contains("/orderservice/order/admin"))
+    );
+    assert!(add_order.iter().any(|rc| {
+        rc.target_uri
+            .contains("/orderOtherService/orderOther/admin")
+    }));
 }
 
 #[test]
@@ -347,27 +414,64 @@ fn test_restcall_edge_cases() {
     .select_restcall_statements(&calls, &filename)
     .expect("Evaluation should not fail!");
 
-    assert_eq!(restcalls.len(), 4, "Expected 4 REST calls: 1 PATCH + 2 GET (syncUserAndOrder) + 1 GET (getOrderItem)");
+    assert_eq!(
+        restcalls.len(),
+        4,
+        "Expected 4 REST calls: 1 PATCH + 2 GET (syncUserAndOrder) + 1 GET (getOrderItem)"
+    );
 
     // Edge case 1: PATCH call — requires fixed FromStr arm for PATCH
-    let patch_calls: Vec<&RestCall> = restcalls.iter().filter(|rc| rc.http_method == HttpMethod::PATCH).collect();
+    let patch_calls: Vec<&RestCall> = restcalls
+        .iter()
+        .filter(|rc| rc.http_method == HttpMethod::PATCH)
+        .collect();
     assert_eq!(patch_calls.len(), 1, "Expected exactly 1 PATCH call");
     assert!(patch_calls[0].function_name.contains("updateUserPartial"));
     assert!(patch_calls[0].target_uri.contains("ts-user-service"));
     assert!(patch_calls[0].target_uri.contains("/api/v1/users/"));
 
     // Edge case 2: Two calls extracted from the same method
-    let sync_calls: Vec<&RestCall> = restcalls.iter().filter(|rc| rc.function_name.contains("syncUserAndOrder")).collect();
-    assert_eq!(sync_calls.len(), 2, "Both REST calls inside syncUserAndOrder must be extracted");
-    assert!(sync_calls.iter().any(|rc| rc.target_uri.contains("ts-user-service")));
-    assert!(sync_calls.iter().any(|rc| rc.target_uri.contains("ts-order-service")));
+    let sync_calls: Vec<&RestCall> = restcalls
+        .iter()
+        .filter(|rc| rc.function_name.contains("syncUserAndOrder"))
+        .collect();
+    assert_eq!(
+        sync_calls.len(),
+        2,
+        "Both REST calls inside syncUserAndOrder must be extracted"
+    );
+    assert!(
+        sync_calls
+            .iter()
+            .any(|rc| rc.target_uri.contains("ts-user-service"))
+    );
+    assert!(
+        sync_calls
+            .iter()
+            .any(|rc| rc.target_uri.contains("ts-order-service"))
+    );
 
     // Edge case 3: URL with multiple concatenated path parameters
-    let item_calls: Vec<&RestCall> = restcalls.iter().filter(|rc| rc.function_name.contains("getOrderItem")).collect();
+    let item_calls: Vec<&RestCall> = restcalls
+        .iter()
+        .filter(|rc| rc.function_name.contains("getOrderItem"))
+        .collect();
     assert_eq!(item_calls.len(), 1);
     // Both orderId and itemId must appear in the resolved URI
-    assert!(item_calls[0].target_uri.contains("orderId"), "orderId path param should appear in URI");
-    assert!(item_calls[0].target_uri.contains("itemId"), "itemId path param should appear in URI");
-    assert!(item_calls[0].target_uri.contains("/orders/"), "URI should contain /orders/ segment");
-    assert!(item_calls[0].target_uri.contains("/items/"), "URI should contain /items/ segment");
+    assert!(
+        item_calls[0].target_uri.contains("orderId"),
+        "orderId path param should appear in URI"
+    );
+    assert!(
+        item_calls[0].target_uri.contains("itemId"),
+        "itemId path param should appear in URI"
+    );
+    assert!(
+        item_calls[0].target_uri.contains("/orders/"),
+        "URI should contain /orders/ segment"
+    );
+    assert!(
+        item_calls[0].target_uri.contains("/items/"),
+        "URI should contain /items/ segment"
+    );
 }

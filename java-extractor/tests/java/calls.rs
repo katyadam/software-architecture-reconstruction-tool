@@ -488,7 +488,11 @@ fn test_call_statements_user_account() {
 
     // UserAccount has 3 method calls: 2× Objects.equals (in equals()) and 1× Objects.hash (in hashCode())
     // this.active = false is an assignment, not a call — must not appear
-    assert_eq!(calls.len(), 3, "Expected 3 calls: 2× Objects.equals + 1× Objects.hash");
+    assert_eq!(
+        calls.len(),
+        3,
+        "Expected 3 calls: 2× Objects.equals + 1× Objects.hash"
+    );
 
     let equals_calls: Vec<&CallStatement> = calls
         .iter()
@@ -496,7 +500,9 @@ fn test_call_statements_user_account() {
         .collect();
     assert_eq!(equals_calls.len(), 2, "Expected 2 Objects.equals calls");
     assert!(
-        equals_calls.iter().all(|c| c.enclosing_function_name.as_deref() == Some("boolean equals(Object o)")),
+        equals_calls
+            .iter()
+            .all(|c| c.enclosing_function_name.as_deref() == Some("boolean equals(Object o)")),
         "Both Objects.equals calls should be inside equals()"
     );
 
@@ -513,7 +519,9 @@ fn test_call_statements_user_account() {
 
     // Verify that the assignment this.active = false is NOT extracted as a call
     assert!(
-        calls.iter().all(|c| !c.function_name.starts_with("this.active")),
+        calls
+            .iter()
+            .all(|c| !c.function_name.starts_with("this.active")),
         "this.active = false is an assignment, not a call"
     );
 }
@@ -526,23 +534,63 @@ fn test_call_statement_edge_cases() {
 
     // Edge case 1: Chained calls — input.trim().toLowerCase() produces two separate CallStatements:
     //   the inner call "input.trim()" and the outer "input.trim().toLowerCase()"
-    let trim_calls: Vec<&CallStatement> = calls.iter().filter(|c| c.function_name == s!("input.trim()")).collect();
-    assert_eq!(trim_calls.len(), 1, "input.trim() should be captured as an independent call");
-    assert_eq!(trim_calls[0].enclosing_function_name.as_deref(), Some("String normalize(String input)"));
+    let trim_calls: Vec<&CallStatement> = calls
+        .iter()
+        .filter(|c| c.function_name == s!("input.trim()"))
+        .collect();
+    assert_eq!(
+        trim_calls.len(),
+        1,
+        "input.trim() should be captured as an independent call"
+    );
+    assert_eq!(
+        trim_calls[0].enclosing_function_name.as_deref(),
+        Some("String normalize(String input)")
+    );
 
-    let chained_calls: Vec<&CallStatement> = calls.iter().filter(|c| c.function_name == s!("input.trim().toLowerCase()")).collect();
-    assert_eq!(chained_calls.len(), 1, "The full chain input.trim().toLowerCase() is the outer call's function_name");
-    assert_eq!(chained_calls[0].enclosing_function_name.as_deref(), Some("String normalize(String input)"));
+    let chained_calls: Vec<&CallStatement> = calls
+        .iter()
+        .filter(|c| c.function_name == s!("input.trim().toLowerCase()"))
+        .collect();
+    assert_eq!(
+        chained_calls.len(),
+        1,
+        "The full chain input.trim().toLowerCase() is the outer call's function_name"
+    );
+    assert_eq!(
+        chained_calls[0].enclosing_function_name.as_deref(),
+        Some("String normalize(String input)")
+    );
 
     // Edge case 2: Object creation — new StringBuilder(content) is captured via
     // object_creation_expression, not method_invocation. function_name = "StringBuilder(content)".
-    let obj_creation: Vec<&CallStatement> = calls.iter().filter(|c| c.function_name.starts_with("StringBuilder")).collect();
-    assert_eq!(obj_creation.len(), 1, "new StringBuilder(content) should be captured as a call");
-    assert_eq!(obj_creation[0].enclosing_function_name.as_deref(), Some("String buildMessage(String content)"));
+    let obj_creation: Vec<&CallStatement> = calls
+        .iter()
+        .filter(|c| c.function_name.starts_with("StringBuilder"))
+        .collect();
+    assert_eq!(
+        obj_creation.len(),
+        1,
+        "new StringBuilder(content) should be captured as a call"
+    );
+    assert_eq!(
+        obj_creation[0].enclosing_function_name.as_deref(),
+        Some("String buildMessage(String content)")
+    );
 
     // Edge case 3: Call inside if-condition — s.isEmpty() is inside a boolean guard,
     // not a statement-level expression, but is still captured.
-    let guard_calls: Vec<&CallStatement> = calls.iter().filter(|c| c.function_name == s!("s.isEmpty()")).collect();
-    assert_eq!(guard_calls.len(), 1, "s.isEmpty() inside if() must still be captured");
-    assert_eq!(guard_calls[0].enclosing_function_name.as_deref(), Some("boolean isBlank(String s)"));
+    let guard_calls: Vec<&CallStatement> = calls
+        .iter()
+        .filter(|c| c.function_name == s!("s.isEmpty()"))
+        .collect();
+    assert_eq!(
+        guard_calls.len(),
+        1,
+        "s.isEmpty() inside if() must still be captured"
+    );
+    assert_eq!(
+        guard_calls[0].enclosing_function_name.as_deref(),
+        Some("boolean isBlank(String s)")
+    );
 }

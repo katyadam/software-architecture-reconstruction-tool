@@ -10,11 +10,26 @@ async fn should_return_empty_aggregate_for_empty_python_file() {
     assert!(result.is_ok(), "parse() must not error on empty input");
     let agg = result.unwrap();
     assert!(agg.imports.is_empty(), "no imports expected for empty file");
-    assert!(agg.entities.is_empty(), "no entities expected for empty file");
-    assert!(agg.endpoints.is_empty(), "no endpoints expected for empty file");
-    assert!(agg.restcalls.is_empty(), "no restcalls expected for empty file");
-    assert!(agg.callables.is_empty(), "no callables expected for empty file");
-    assert!(agg.call_statements.is_empty(), "no call statements expected for empty file");
+    assert!(
+        agg.entities.is_empty(),
+        "no entities expected for empty file"
+    );
+    assert!(
+        agg.endpoints.is_empty(),
+        "no endpoints expected for empty file"
+    );
+    assert!(
+        agg.restcalls.is_empty(),
+        "no restcalls expected for empty file"
+    );
+    assert!(
+        agg.callables.is_empty(),
+        "no callables expected for empty file"
+    );
+    assert!(
+        agg.call_statements.is_empty(),
+        "no call statements expected for empty file"
+    );
 }
 
 /// Verifies that parsing a FastAPI endpoint file populates endpoints and callables
@@ -27,18 +42,31 @@ async fn should_parse_endpoint_file_and_populate_aggregate_correctly() {
     assert!(result.is_ok(), "parse() must not error on endpoints.py");
     let agg = result.unwrap();
 
-    assert_eq!(agg.endpoints.len(), 9, "endpoints.py defines exactly 9 FastAPI routes");
+    assert_eq!(
+        agg.endpoints.len(),
+        9,
+        "endpoints.py defines exactly 9 FastAPI routes"
+    );
     // 9 endpoint functions + Item2.__init__ + Item2.do_something = 11
-    assert_eq!(agg.callables.len(), 11, "endpoints.py defines 9 endpoint functions plus 2 Item2 class methods");
+    assert_eq!(
+        agg.callables.len(),
+        11,
+        "endpoints.py defines 9 endpoint functions plus 2 Item2 class methods"
+    );
     assert!(
         agg.restcalls.is_empty(),
         "endpoints.py contains no outbound HTTP calls, got: {:?}",
-        agg.restcalls.iter().map(|r| &r.target_uri).collect::<Vec<_>>()
+        agg.restcalls
+            .iter()
+            .map(|r| &r.target_uri)
+            .collect::<Vec<_>>()
     );
 
     // Spot-check: FastAPI imports must be captured
     assert!(
-        agg.imports.iter().any(|i| i.codeword == "FastAPI" || i.codeword == "fastapi"),
+        agg.imports
+            .iter()
+            .any(|i| i.codeword == "FastAPI" || i.codeword == "fastapi"),
         "expected a FastAPI import, got: {:?}",
         agg.imports.iter().map(|i| &i.codeword).collect::<Vec<_>>()
     );

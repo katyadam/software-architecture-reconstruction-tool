@@ -488,7 +488,9 @@ fn test_callables_user_account() {
 
     // All callables are in UserAccount class
     assert!(
-        callables.iter().all(|c| c.namespace == Namespace::Class(s!("UserAccount"))),
+        callables
+            .iter()
+            .all(|c| c.namespace == Namespace::Class(s!("UserAccount"))),
         "All callables should be in UserAccount namespace"
     );
 
@@ -496,7 +498,10 @@ fn test_callables_user_account() {
     let constructors: Vec<&Callable> = callables.iter().filter(|c| c.is_constructor).collect();
     assert_eq!(constructors.len(), 1);
     let ctor = constructors[0];
-    assert_eq!(ctor.name, s!("UserAccount(String id, String username, boolean active)"));
+    assert_eq!(
+        ctor.name,
+        s!("UserAccount(String id, String username, boolean active)")
+    );
     assert_eq!(ctor.parameters.len(), 3);
     assert_eq!(ctor.parameters[0].name, s!("id"));
     assert_eq!(ctor.parameters[0].datatype, Some(s!("String")));
@@ -521,13 +526,19 @@ fn test_callables_user_account() {
     assert!(method_names.iter().any(|&n| n.contains("toString")));
 
     // equals takes Object parameter
-    let equals = callables.iter().find(|c| c.name.contains("equals")).unwrap();
+    let equals = callables
+        .iter()
+        .find(|c| c.name.contains("equals"))
+        .unwrap();
     assert_eq!(equals.parameters.len(), 1);
     assert_eq!(equals.parameters[0].name, s!("o"));
     assert_eq!(equals.parameters[0].datatype, Some(s!("Object")));
 
     // changeUsername takes String parameter
-    let change_username = callables.iter().find(|c| c.name.contains("changeUsername")).unwrap();
+    let change_username = callables
+        .iter()
+        .find(|c| c.name.contains("changeUsername"))
+        .unwrap();
     assert_eq!(change_username.parameters.len(), 1);
     assert_eq!(change_username.parameters[0].name, s!("newName"));
     assert_eq!(change_username.parameters[0].datatype, Some(s!("String")));
@@ -540,13 +551,26 @@ fn test_callable_edge_cases() {
     let callables = CallablesExtractor.extract(&code, &tree, &filename);
 
     // Total: 2 methods in outer class (create, findMax) + 2 in Validator inner class = 4
-    assert_eq!(callables.len(), 4, "Expected 2 outer + 2 inner class callables");
+    assert_eq!(
+        callables.len(),
+        4,
+        "Expected 2 outer + 2 inner class callables"
+    );
 
     // Edge case 1: Annotated parameters — @RequestBody and @PathVariable are stripped from
     // the Parameter fields, but the annotations remain in the callable's name string.
-    let create = callables.iter().find(|c| c.name.contains("create")).unwrap();
-    assert!(create.name.contains("@RequestBody"), "Annotations remain in callable name");
-    assert!(create.name.contains("@PathVariable"), "Annotations remain in callable name");
+    let create = callables
+        .iter()
+        .find(|c| c.name.contains("create"))
+        .unwrap();
+    assert!(
+        create.name.contains("@RequestBody"),
+        "Annotations remain in callable name"
+    );
+    assert!(
+        create.name.contains("@PathVariable"),
+        "Annotations remain in callable name"
+    );
     assert_eq!(create.parameters.len(), 2);
     // Annotations are stripped from extracted parameter types
     assert_eq!(create.parameters[0].name, s!("body"));
@@ -556,9 +580,18 @@ fn test_callable_edge_cases() {
 
     // Edge case 2: Generic bounded type method — the type bound <T extends Comparable<T>> is
     // not reflected in the callable name; only the bare return type "T" and param type "List<T>" are kept.
-    let find_max = callables.iter().find(|c| c.name.contains("findMax")).unwrap();
-    assert!(find_max.name.starts_with("T findMax"), "Return type is bare T, not the bound");
-    assert!(!find_max.name.contains("Comparable"), "Type bound is not included in name");
+    let find_max = callables
+        .iter()
+        .find(|c| c.name.contains("findMax"))
+        .unwrap();
+    assert!(
+        find_max.name.starts_with("T findMax"),
+        "Return type is bare T, not the bound"
+    );
+    assert!(
+        !find_max.name.contains("Comparable"),
+        "Type bound is not included in name"
+    );
     assert_eq!(find_max.parameters.len(), 1);
     assert_eq!(find_max.parameters[0].datatype, Some(s!("List<T>")));
 
@@ -567,9 +600,21 @@ fn test_callable_edge_cases() {
         .iter()
         .filter(|c| c.namespace == Namespace::Class(s!("Validator")))
         .collect();
-    assert_eq!(validator_callables.len(), 2, "Both Validator methods should have Validator as namespace");
-    assert!(validator_callables.iter().any(|c| c.name.contains("validate")));
-    assert!(validator_callables.iter().any(|c| c.name.contains("report")));
+    assert_eq!(
+        validator_callables.len(),
+        2,
+        "Both Validator methods should have Validator as namespace"
+    );
+    assert!(
+        validator_callables
+            .iter()
+            .any(|c| c.name.contains("validate"))
+    );
+    assert!(
+        validator_callables
+            .iter()
+            .any(|c| c.name.contains("report"))
+    );
 
     // Outer class methods have CallableEdgeCases as namespace
     let outer_callables: Vec<&Callable> = callables

@@ -23,7 +23,8 @@ pub fn get_tree(code: &str) -> Tree {
 /// Reduces the repeated 3-line boilerplate (load_file / unwrap / get_tree) across tests.
 #[allow(dead_code)]
 pub fn parse_file(filename: &str) -> (String, Tree) {
-    let code = load_file(filename).unwrap_or_else(|e| panic!("fixture not found: {filename} — {e}"));
+    let code =
+        load_file(filename).unwrap_or_else(|e| panic!("fixture not found: {filename} — {e}"));
     let tree = get_tree(&code);
     (code, tree)
 }
