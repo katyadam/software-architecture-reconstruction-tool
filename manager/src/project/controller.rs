@@ -49,8 +49,8 @@ pub async fn get_project(
     project_service: web::Data<Box<dyn ProjectService>>,
     project_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
-    let projet_uuid = project_uuid_path.into_inner();
-    let project = project_service.get_single(projet_uuid)?;
+    let project_uuid = project_uuid_path.into_inner();
+    let project = project_service.get_single(project_uuid)?;
 
     Ok(HttpResponse::Ok().json(project.to_response()))
 }
@@ -68,7 +68,7 @@ pub async fn delete_project(
     project_service: web::Data<Box<dyn ProjectService>>,
     project_uuid_path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
-    let projet_uuid = project_uuid_path.into_inner();
-    project_service.delete(projet_uuid)?;
+    let project_uuid = project_uuid_path.into_inner();
+    project_service.delete(project_uuid)?;
     Ok(HttpResponse::NoContent())
 }

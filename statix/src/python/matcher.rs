@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{ast::CallableAst, matcher::CallableMatcher, symbolic::VarType};
+use crate::{ast::CallableAst, matcher::find_closest_callable_impl, symbolic::VarType};
 
 #[derive(Clone, Default)]
 pub struct PythonCallableMatcher {}
@@ -11,101 +11,22 @@ impl PythonCallableMatcher {
     }
 }
 
-impl CallableMatcher for PythonCallableMatcher {
+impl crate::matcher::CallableMatcher for PythonCallableMatcher {
     fn find_closest_callable(
         &self,
         callables: &HashMap<String, CallableAst>,
         name: &str,
         params: &[VarType],
     ) -> Option<String> {
-        let mut highest: usize = 0;
-        let mut highest_not_found = true;
-        let mut winner: Option<String> = None;
-        let mangled_name = Some(name.to_owned() + "(" + &params.join(",") + ")");
-        for header in callables.keys() {
-            // Prefer match by using name mangling
-            if let (Some(m_our), Some(m_to_cmp)) = (&mangled_name, &mangle_header(header))
-                && m_our == m_to_cmp
-            {
-                return Some(header.clone());
-            }
-            // Fallback to match by highest matched params and matching name
-            if let Some((cur_name, cur_params)) = parse_callable_header_manual(header) {
-                if cur_name != name {
-                    continue;
-                }
-                let matched = params
-                    .iter()
-                    .zip(cur_params.iter())
-                    .filter(|(a, b)| a == b)
-                    .count();
-                if matched > highest || highest_not_found {
-                    highest = matched;
-                    winner = Some(header.clone());
-                    highest_not_found = false;
-                }
-            }
-        }
-
-        winner
+        find_closest_callable_impl(callables, name, params)
     }
 
-    fn clone_box(&self) -> Box<dyn CallableMatcher> {
+    fn clone_box(&self) -> Box<dyn crate::matcher::CallableMatcher> {
         Box::new(self.clone())
     }
 }
 
-fn mangle_header(header: &str) -> Option<String> {
-    if let Some((name, params)) = parse_callable_header_manual(header) {
-        return Some(name + "(" + &params.join(",") + ")");
-    }
-
-    None
-}
-
-fn parse_callable_header_manual(header: &str) -> Option<(String, Vec<VarType>)> {
-    let open_paren = header.find('(')?;
-    let close_paren = header.rfind(')')?;
-
-    let before_paren = &header[..open_paren].trim();
-    let name = before_paren.split_whitespace().last()?.to_string();
-
-    let params_content = &header[open_paren + 1..close_paren];
-
-    let mut params = Vec::new();
-    let mut current_param = String::new();
-    let mut bracket_depth = 0;
-
-    for c in params_content.chars() {
-        match c {
-            '<' => {
-                bracket_depth += 1;
-                current_param.push(c);
-            }
-            '>' => {
-                bracket_depth -= 1;
-                current_param.push(c);
-            }
-            ',' if bracket_depth == 0 => {
-                let p = current_param.trim();
-                if !p.is_empty() {
-                    params.push(p.to_string());
-                }
-                current_param.clear();
-            }
-            _ => current_param.push(c),
-        }
-    }
-
-    let last_p = current_param.trim();
-    if !last_p.is_empty() {
-        params.push(last_p.to_string());
-    }
-
-    Some((name, params))
-}
-
-/// Full header in Java is meant by the whole method header without accessibility specifier and parameters names
+/// Full header in Python is meant by the whole function header without parameter names
 pub fn python_convert_full_header_to_mangled_name(header: &str) -> String {
     // 1. Split name/params from return type
     // Input: "create_item(client, name: str, ...) -> str"

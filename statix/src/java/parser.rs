@@ -3,6 +3,7 @@ use tree_sitter::Node;
 use crate::{
     ast::{CallableAst, Expr, Parameter, Stmt},
     error::ParseError,
+    util::{node_field_text, node_text},
 };
 
 pub fn find_method_nodes(root: Node) -> Vec<Node> {
@@ -18,26 +19,15 @@ pub fn find_method_nodes(root: Node) -> Vec<Node> {
 }
 
 pub fn parse_method(node: Node, code: &str) -> Result<CallableAst, ParseError> {
-    let return_type = node
-        .child_by_field_name("type")
-        .ok_or(ParseError::FieldNotFound("type".to_string()))?
-        .utf8_text(code.as_bytes())
-        .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
-        .to_string();
-
-    let name = node
-        .child_by_field_name("name")
-        .ok_or(ParseError::FieldNotFound("name".to_string()))?
-        .utf8_text(code.as_bytes())
-        .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
-        .to_string();
+    let return_type = node_field_text(node, "type", code)?;
+    let name = node_field_text(node, "name", code)?;
 
     let params_node = node
         .child_by_field_name("parameters")
         .ok_or(ParseError::FieldNotFound("parameters".to_string()))?;
 
     let params = parse_parameters(params_node, code)?;
-    let params_types = parse_parameters_to_datatypes(params_node, code)?;
+    let params_types: Vec<String> = params.iter().map(|p| p.datatype.clone()).collect();
 
     let body = if let Some(body_node) = node.child_by_field_name("body") {
         parse_block(body_node, code)?
@@ -56,37 +46,9 @@ fn parse_parameters(node: Node, source: &str) -> Result<Vec<Parameter>, ParseErr
     node.named_children(&mut node.walk())
         .filter(|n| n.kind() == "formal_parameter")
         .map(|param| {
-            let name = param
-                .child_by_field_name("name")
-                .ok_or(ParseError::FieldNotFound("parameter name".to_string()))?
-                .utf8_text(source.as_bytes())
-                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
-                .to_string();
-
-            let datatype = param
-                .child_by_field_name("type")
-                .ok_or(ParseError::FieldNotFound("parameter name".to_string()))?
-                .utf8_text(source.as_bytes())
-                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
-                .to_string();
-
+            let name = node_field_text(param, "name", source)?;
+            let datatype = node_field_text(param, "type", source)?;
             Ok(Parameter::without_default_value(name, datatype))
-        })
-        .collect()
-}
-
-fn parse_parameters_to_datatypes(node: Node, source: &str) -> Result<Vec<String>, ParseError> {
-    node.named_children(&mut node.walk())
-        .filter(|n| n.kind() == "formal_parameter")
-        .map(|param| {
-            let type_node = param
-                .child_by_field_name("type")
-                .ok_or(ParseError::FieldNotFound("parameter type".to_string()))?;
-            let type_text = type_node
-                .utf8_text(source.as_bytes())
-                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
-                .to_string();
-            Ok(type_text)
         })
         .collect()
 }
@@ -140,23 +102,8 @@ fn parse_stmt(node: Node, source: &str) -> Result<Stmt, ParseError> {
                 .or_else(|| node.named_child(0))
                 .ok_or(ParseError::FieldNotFound("variable declarator".to_string()))?;
 
-            let datatype = node
-                .child_by_field_name("type")
-                .ok_or(ParseError::FieldNotFound(
-                    "variable declaration datatype".to_string(),
-                ))?
-                .utf8_text(source.as_bytes())
-                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
-                .to_string();
-
-            let name_node = declarator
-                .child_by_field_name("name")
-                .ok_or(ParseError::FieldNotFound("variable name".to_string()))?;
-
-            let name = name_node
-                .utf8_text(source.as_bytes())
-                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
-                .to_string();
+            let datatype = node_field_text(node, "type", source)?;
+            let name = node_field_text(declarator, "name", source)?;
 
             let value = if let Some(value_node) = declarator.child_by_field_name("value") {
                 parse_expr(value_node, source)?
@@ -252,35 +199,14 @@ fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
             parse_expr(inner_node, source)
         }
 
-        "string_literal" => {
-            let text = node
-                .utf8_text(source.as_bytes())
-                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?;
-            Ok(Expr::Literal(strip_quotes(text)))
-        }
+        "string_literal" => Ok(Expr::Literal(strip_quotes(&node_text(node, source)?))),
 
-        "decimal_integer_literal" => {
-            let text = node
-                .utf8_text(source.as_bytes())
-                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?;
-            Ok(Expr::Literal(strip_quotes(text)))
-        }
+        "decimal_integer_literal" => Ok(Expr::Literal(strip_quotes(&node_text(node, source)?))),
 
-        "identifier" => {
-            let name = node
-                .utf8_text(source.as_bytes())
-                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
-                .to_string();
-            Ok(Expr::Var(name))
-        }
+        "identifier" => Ok(Expr::Var(node_text(node, source)?)),
 
         "binary_expression" => {
-            let op_node = node
-                .child_by_field_name("operator")
-                .ok_or(ParseError::FieldNotFound("operator".to_string()))?;
-            let op = op_node
-                .utf8_text(source.as_bytes())
-                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?;
+            let op = node_field_text(node, "operator", source)?;
 
             if op == "+" {
                 let left_node = node
@@ -298,13 +224,7 @@ fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
         }
 
         "method_invocation" => {
-            let name_node = node
-                .child_by_field_name("name")
-                .ok_or(ParseError::FieldNotFound("method name".to_string()))?;
-            let name = name_node
-                .utf8_text(source.as_bytes())
-                .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
-                .to_string();
+            let name = node_field_text(node, "name", source)?;
 
             let args_node = node
                 .child_by_field_name("arguments")
