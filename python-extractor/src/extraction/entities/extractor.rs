@@ -38,9 +38,8 @@ impl Extractor for EntitiesExtractor {
             let mut fields: Vec<Field> = vec![];
 
             for capture in m.captures {
-                let capture_text =
-                    &params.code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
-                let value = String::from_utf8_lossy(capture_text).to_string();
+                let value =
+                    params.code[capture.node.start_byte()..capture.node.end_byte()].to_string();
 
                 match query.capture_names()[capture.index as usize] {
                     "class.name" => entity_name = value,

@@ -68,7 +68,7 @@ pub async fn parse(code: &str, file_name: &str) -> Result<CodeElementsAggregate,
     evaluate_entity_fields(&imports, &mut entities, file_name);
     evaluate_invocations(&mut calls, &assignments);
     let function_asts = parse_python(&tree, code);
-    let enums = EnumIdentificator::identificate_from_entities(&entities);
+    let enums = EnumIdentificator::identify_from_entities(&entities);
 
     let restcalls = MethodCallSelector::new(
         MethodCallIdentificationStrategy::new(),

@@ -130,7 +130,7 @@ pub const ENDPOINTS_QUERY: &str = r#"
 )
 "#;
 
-pub const ASSINGMENTS_QUERY: &str = r#"
+pub const ASSIGNMENTS_QUERY: &str = r#"
 (assignment left: (_) @variable right: (_) @value)
 (assignment left: (_) @variable type: (_) @type right: (_) @value)
 (function_definition

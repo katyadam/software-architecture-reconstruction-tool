@@ -72,7 +72,7 @@ fn base_test() {
                 Field {
                     name: s!("description"),
                     datatype: Some(s!("Optional[str]")),
-                    initial_value: Some(s!("description")),
+                    initial_value: Some(s!("None")),
                     datatype_signature: None,
                     is_collection: false,
                 },
@@ -122,7 +122,7 @@ fn base_test() {
                 Field {
                     name: s!("in_stock"),
                     datatype: Some(s!("bool")),
-                    initial_value: Some(s!("in_stock")),
+                    initial_value: Some(s!("True")),
                     datatype_signature: None,
                     is_collection: false,
                 },
@@ -251,7 +251,7 @@ fn should_identificate_enums() {
     let tree = get_tree(&code);
     let entities =
         EntitiesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
-    let enums = EnumIdentificator::identificate_from_entities(&entities);
+    let enums = EnumIdentificator::identify_from_entities(&entities);
     let expected = vec![Enum {
         name: s!("MappingType"),
         values: vec![s!("cases"), s!("slides")],

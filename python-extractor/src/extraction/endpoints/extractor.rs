@@ -1,10 +1,10 @@
 use std::sync::OnceLock;
 
 use crate::extraction::callables::parser::parse_parameters;
+use crate::extraction::common::hash_text;
 use crate::extraction::extractor::{ExtractParams, Extractor};
 use crate::extraction::queries::ENDPOINTS_QUERY;
 use models::{Endpoint, HttpMethod};
-use sha2::{Digest, Sha256};
 use tree_sitter::StreamingIterator;
 use tree_sitter::{Query, QueryCursor};
 
@@ -36,9 +36,8 @@ impl Extractor for EndpointsExtractor {
             let mut function_hash = String::new();
 
             m.captures.iter().for_each(|capture| {
-                let capture_text =
-                    &params.code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
-                let value = String::from_utf8_lossy(capture_text).to_string();
+                let value =
+                    params.code[capture.node.start_byte()..capture.node.end_byte()].to_string();
                 match query.capture_names()[capture.index as usize] {
                     "function.name" => function_name = value,
                     "http.method" => http_method = value,
@@ -48,9 +47,7 @@ impl Extractor for EndpointsExtractor {
                         parameters.extend(p);
                     }
                     "function" => {
-                        let mut hasher = Sha256::new();
-                        hasher.update(value.as_bytes());
-                        function_hash = format!("{:x}", hasher.finalize());
+                        function_hash = hash_text(&value);
                     }
                     _ => {}
                 }

@@ -113,9 +113,7 @@ impl<'a> SymbolicEvaluator<'a> {
                     .env
                     .get(key)
                     .filter(|(_, b_val)| a_val != b_val)
-                    .map(|(_, b_val)| {
-                        (key.clone(), dtype.clone(), a_val.clone(), b_val.clone())
-                    })
+                    .map(|(_, b_val)| (key.clone(), dtype.clone(), a_val.clone(), b_val.clone()))
             })
             .collect();
 

@@ -35,9 +35,8 @@ impl Extractor for ImportsExtractor {
             let mut name_alias = String::new();
             let mut codeword = String::new();
             m.captures.iter().for_each(|capture| {
-                let capture_text =
-                    &params.code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
-                let value = String::from_utf8_lossy(capture_text).to_string();
+                let value =
+                    params.code[capture.node.start_byte()..capture.node.end_byte()].to_string();
                 match query.capture_names()[capture.index as usize] {
                     "import.module" => {
                         orig_module = value.clone();

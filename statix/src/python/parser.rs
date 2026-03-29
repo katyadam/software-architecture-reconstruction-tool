@@ -70,9 +70,9 @@ fn parse_parameters(node: Node, source: &str) -> Result<Vec<Parameter>, ParseErr
                 name = node_text(param, source)?;
             }
             "typed_parameter" => {
-                let name_node = param
-                    .child(0)
-                    .ok_or(ParseError::FieldNotFound("typed_parameter name".to_string()))?;
+                let name_node = param.child(0).ok_or(ParseError::FieldNotFound(
+                    "typed_parameter name".to_string(),
+                ))?;
                 name = node_text(name_node, source)?;
                 datatype = node_field_text(param, "type", source)?;
             }
@@ -99,9 +99,9 @@ fn parse_block(
         match child.kind() {
             // Difference between Python and Java is the declaration style. For Python we are using Declare-on-Write
             "expression_statement" => {
-                let inner = child
-                    .named_child(0)
-                    .ok_or(ParseError::FieldNotFound("expression_statement inner".to_string()))?;
+                let inner = child.named_child(0).ok_or(ParseError::FieldNotFound(
+                    "expression_statement inner".to_string(),
+                ))?;
                 if inner.kind() == "assignment" {
                     let name = node_field_text(inner, "left", source)?;
 
@@ -151,7 +151,9 @@ fn parse_block(
 
 fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
     match node.kind() {
-        "string" => Ok(Expr::Literal(clean_python_string(&node_text(node, source)?))),
+        "string" => Ok(Expr::Literal(clean_python_string(&node_text(
+            node, source,
+        )?))),
         "integer" => Ok(Expr::Literal(node_text(node, source)?)),
         "true" => Ok(Expr::Literal("True".to_string())),
         "false" => Ok(Expr::Literal("False".to_string())),

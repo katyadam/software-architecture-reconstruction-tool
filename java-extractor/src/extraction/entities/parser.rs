@@ -15,7 +15,12 @@ fn collect_children_by_kind<T>(
 }
 
 pub fn parse_formal_parameters(params_node: Node, code: &str) -> Vec<Field> {
-    collect_children_by_kind(params_node, code, "formal_parameter", parse_formal_parameter)
+    collect_children_by_kind(
+        params_node,
+        code,
+        "formal_parameter",
+        parse_formal_parameter,
+    )
 }
 
 fn parse_formal_parameter(node: Node, code: &str) -> Option<Field> {
@@ -43,7 +48,12 @@ fn parse_formal_parameter(node: Node, code: &str) -> Option<Field> {
 }
 
 pub fn parse_field_declarations(fields_node: Node, code: &str) -> Vec<Field> {
-    collect_children_by_kind(fields_node, code, "field_declaration", parse_field_declaration)
+    collect_children_by_kind(
+        fields_node,
+        code,
+        "field_declaration",
+        parse_field_declaration,
+    )
 }
 
 fn parse_field_declaration(node: Node, code: &str) -> Option<Field> {

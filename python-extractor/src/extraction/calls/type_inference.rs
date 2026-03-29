@@ -2,6 +2,9 @@ use crate::extraction::callables::parser::parse_parameters;
 use models::{Argument, Assignment, AssignmentKey, Parameter, Scope};
 use std::collections::HashMap;
 
+/// Resolves the datatype of `arg` by walking the assignments map.
+/// First tries the local (function/class) scope, then falls back to global scope.
+/// Mutates `arg.datatype` in place; leaves it as `"any"` if resolution fails.
 pub(in crate::extraction) fn infer_argument_type(
     arg: &mut Argument,
     arg_enclosing_scope: &Scope,
@@ -98,6 +101,9 @@ fn get_function_params(function_decl: &str) -> Vec<Parameter> {
     parse_parameters(params_str)
 }
 
+/// Returns `true` if `invoked_object` is a `self.`-prefixed attribute and the
+/// assignment's enclosing function is `__init__`. This allows constructor-scope
+/// `self.x = Foo()` assignments to be visible when resolving `self.x` at a call site.
 fn can_access_constructor(invoked_object: &str, assignment_key: &AssignmentKey) -> bool {
     if let Scope::Function(fn_header) = &assignment_key.scope
         && invoked_object.starts_with("self.")

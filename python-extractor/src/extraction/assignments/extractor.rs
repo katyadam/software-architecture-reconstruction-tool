@@ -5,7 +5,7 @@ use models::{Assignment, AssignmentKey, Scope};
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 
 use crate::extraction::{
-    callables::parser::parse_parameters, extractor::Extractor, queries::ASSINGMENTS_QUERY,
+    callables::parser::parse_parameters, extractor::Extractor, queries::ASSIGNMENTS_QUERY,
 };
 
 pub struct AssignmentsExtractor;
@@ -17,7 +17,7 @@ impl Extractor for AssignmentsExtractor {
         static QUERY: OnceLock<Query> = OnceLock::new();
 
         QUERY.get_or_init(|| {
-            Query::new(&tree_sitter_python::LANGUAGE.into(), ASSINGMENTS_QUERY)
+            Query::new(&tree_sitter_python::LANGUAGE.into(), ASSIGNMENTS_QUERY)
                 .expect("Failed to compile Python Assignments Query")
         })
     }
@@ -41,8 +41,7 @@ impl Extractor for AssignmentsExtractor {
 
             m.captures.iter().for_each(|capture| {
                 let node = capture.node;
-                let capture_text = &params.code.as_bytes()[node.start_byte()..node.end_byte()];
-                let value = String::from_utf8_lossy(capture_text).to_string();
+                let value = params.code[node.start_byte()..node.end_byte()].to_string();
 
                 match query.capture_names()[capture.index as usize] {
                     "variable" => variable_name = value,
@@ -95,6 +94,9 @@ impl Extractor for AssignmentsExtractor {
     }
 }
 
+/// Walks the parent chain of `node` upward looking for the nearest
+/// `function_definition` node. Returns `(name, params, return_type)` on success,
+/// or `None` if the node is at module level (no enclosing function).
 fn find_enclosing_function(mut node: Node, code: &str) -> Option<(String, String, String)> {
     while let Some(parent) = node.parent() {
         if parent.kind() == "function_definition" {
@@ -119,6 +121,10 @@ fn find_enclosing_function(mut node: Node, code: &str) -> Option<(String, String
     None
 }
 
+/// Converts an optional enclosing-function triple into a [`Scope`].
+/// Defaults to [`Scope::Global`] when no function context is available.
+/// Logs a warning and falls back to `Global` for partial/inconsistent inputs
+/// (e.g. params present but name absent).
 fn get_scope(
     function_name: Option<&str>,
     function_params: Option<&str>,
@@ -151,6 +157,10 @@ fn get_scope(
     }
 }
 
+/// Synthesizes [`Assignment`] entries for each parameter of a function so that
+/// type-inference can resolve parameter types when they appear as call arguments.
+/// Each entry is placed in the [`Scope::Function`] keyed by the full Python
+/// function signature (`"name(params) -> return_type"`).
 fn create_assignments_from_function_params(
     function_params: &str,
     function_name: &str,
