@@ -20,6 +20,7 @@ pub fn parse_fields(fields_string: &str) -> Vec<Field> {
     working_str
         .split([',', '\n'])
         .map(|s| s.trim_start())
+        .filter(|s| *s != "self")
         .filter_map(parse_field)
         .collect()
 }

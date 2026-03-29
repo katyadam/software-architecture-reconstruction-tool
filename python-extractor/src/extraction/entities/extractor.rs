@@ -3,7 +3,7 @@ use crate::extraction::{
     extractor::{ExtractParams, Extractor},
 };
 
-use std::{collections::HashSet, sync::OnceLock};
+use std::sync::OnceLock;
 
 use models::{Entity, Field};
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
@@ -31,7 +31,6 @@ impl Extractor for EntitiesExtractor {
         let mut matches =
             query_cursor.matches(query, params.tree.root_node(), params.code.as_bytes());
         let mut entities: Vec<Entity> = vec![];
-        let mut seen: HashSet<String> = HashSet::new();
         while let Some(m) = matches.next() {
             let mut entity_name = String::new();
             let mut parents: Vec<String> = vec![];
@@ -56,20 +55,24 @@ impl Extractor for EntitiesExtractor {
                 }
             }
 
-            if seen.contains(&entity_name) {
-                continue;
+            // If a match for this entity was already processed (e.g. pattern 1 captured
+            // Pydantic fields and pattern 2 captures __init__ parameters), merge the new
+            // fields into the existing entity rather than discarding them.
+            if let Some(existing) = entities.iter_mut().find(|e| e.name == entity_name) {
+                existing.fields.extend(fields);
+            } else {
+                entities.push(Entity {
+                    name: entity_name.clone(),
+                    superclasses: parents,
+                    fields,
+                    signature: format!(
+                        "{}/{}",
+                        params.file_name.unwrap_or_default(),
+                        entity_name
+                    ),
+                    file_path: params.file_name.unwrap_or_default().to_string(),
+                });
             }
-            seen.insert(entity_name.clone());
-
-            let new_entity = Entity {
-                name: entity_name.clone(),
-                superclasses: parents,
-                fields,
-                signature: format!("{}/{}", params.file_name.unwrap_or_default(), entity_name),
-                file_path: params.file_name.unwrap_or_default().to_string(),
-            };
-
-            entities.push(new_entity);
         }
 
         entities

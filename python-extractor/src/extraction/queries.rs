@@ -146,7 +146,7 @@ pub const ENTITIES_QUERY: &str = r#"
     (identifier) @class.name
     (argument_list) @class.superclasses
     (block
-      (expression_statement)* @class.fields))
+      (expression_statement)+ @class.fields))
 )
 
 (
