@@ -11,3 +11,63 @@ members = ["cli",
     "synthesizer",
 ]
 resolver = "3"
+
+[workspace.dependencies]
+# Internal crates
+models = { path = "models" }
+statix = { path = "statix" }
+clients = { path = "clients" }
+java-extractor = { path = "java-extractor" }
+python-extractor = { path = "python-extractor" }
+extractor-runtime = { path = "extractor-runtime" }
+synthesizer = { path = "synthesizer" }
+
+# Web framework
+actix-web = "4.12.0"
+actix-cors = "0.7.1"
+actix-multipart = "0.7.2"
+awc = "3.8.1"
+
+# Async runtime
+tokio = "1.49.0"
+async-trait = "0.1.89"
+futures = "0.3.31"
+futures-util = "0.3"
+
+# Serialization
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+
+# Database
+diesel = { version = "2.3.6", features = ["postgres", "uuid", "chrono", "r2d2", "serde_json"] }
+sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono"] }
+neo4rs = "0.8.0"
+r2d2 = "0.8.10"
+
+# Storage
+rust-s3 = "0.37.0"
+
+# Tree-sitter
+tree-sitter = "0.25.7"
+tree-sitter-java = "0.23.5"
+tree-sitter-python = "0.25.0"
+
+# API documentation
+utoipa = { version = "5.4.0", features = ["macros", "actix_extras", "uuid"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }
+
+# Utilities
+uuid = { version = "1.18.1", features = ["serde", "v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2.0.18"
+anyhow = "1.0"
+log = "0.4.29"
+env_logger = "0.11.8"
+dotenvy = "0.15.7"
+once_cell = "1.21.3"
+regex = "1.12.3"
+sha2 = "0.10.9"
+rayon = "1.11.0"
+clap = { version = "4.4", features = ["derive"] }
+strsim = "0.11"
+testcontainers = "0.18.0"

@@ -199,9 +199,13 @@ fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
             parse_expr(inner_node, source)
         }
 
-        "string_literal" => Ok(Expr::Literal(strip_quotes(&node_text(node, source)?))),
+        "string_literal" => Ok(Expr::Literal(crate::strings::strip_quotes(&node_text(
+            node, source,
+        )?))),
 
-        "decimal_integer_literal" => Ok(Expr::Literal(strip_quotes(&node_text(node, source)?))),
+        "decimal_integer_literal" => Ok(Expr::Literal(crate::strings::strip_quotes(&node_text(
+            node, source,
+        )?))),
 
         "identifier" => Ok(Expr::Var(node_text(node, source)?)),
 
@@ -240,8 +244,4 @@ fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
 
         _ => Ok(Expr::Empty),
     }
-}
-
-fn strip_quotes(s: &str) -> String {
-    s.trim_matches('"').to_string()
 }

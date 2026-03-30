@@ -93,6 +93,28 @@ fn parse_field_declaration(node: Node, code: &str) -> Option<Field> {
     }
 }
 
+const JAVA_COLLECTION_KEYWORDS: &[&str] = &[
+    "List",
+    "ArrayList",
+    "LinkedList",
+    "Vector",
+    "Set",
+    "HashSet",
+    "TreeSet",
+    "LinkedHashSet",
+    "Map",
+    "HashMap",
+    "TreeMap",
+    "Hashtable",
+    "LinkedHashMap",
+    "Queue",
+    "Deque",
+    "PriorityQueue",
+    "Collection",
+    "Iterable",
+    "Stack",
+];
+
 /// Returns `true` if `datatype` represents a Java collection:
 /// - arrays (`String[]`, `int[][]`) or varargs (`String...`)
 /// - well-known generic collection base types (`List`, `Map`, `Set`, `Queue`, etc.)
@@ -105,42 +127,10 @@ pub fn is_java_collection_type(datatype: &str) -> bool {
         return false;
     }
 
-    // 1. Arrays (e.g., String[], int[][]) or Varargs (String...)
+    // Arrays (e.g., String[], int[][]) or Varargs (String...)
     if d.ends_with(']') || d.ends_with("...") {
         return true;
     }
 
-    // List of known Java collection base names
-    let collection_keywords = [
-        "List",
-        "ArrayList",
-        "LinkedList",
-        "Vector",
-        "Set",
-        "HashSet",
-        "TreeSet",
-        "LinkedHashSet",
-        "Map",
-        "HashMap",
-        "TreeMap",
-        "Hashtable",
-        "LinkedHashMap",
-        "Queue",
-        "Deque",
-        "PriorityQueue",
-        "Collection",
-        "Iterable",
-        "Stack",
-    ];
-
-    // 2. Extract the "Base Type"
-    // For "List<String>", base is "List"
-    // For "HashMap<K, V>", base is "HashMap"
-    // For "Set", base is "Set"
-    let base_type = d.split('<').next().unwrap_or("").trim();
-
-    // 3. Check if the base type is in our whitelist, handle fully qualified names
-    collection_keywords
-        .iter()
-        .any(|&k| base_type == k || base_type.ends_with(&format!(".{}", k)))
+    statix::strings::is_collection_type(d, JAVA_COLLECTION_KEYWORDS, '<')
 }

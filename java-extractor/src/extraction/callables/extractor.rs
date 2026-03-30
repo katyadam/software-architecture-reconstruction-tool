@@ -9,7 +9,7 @@ use crate::{
         callables::enclosing_lookup::get_enclosing_element_name, extractor::Extractor,
         queries::CALLABLES_QUERY,
     },
-    parsing::parameters::{normalize_whitespace, parse_callable_params},
+    parsing::parameters::parse_callable_params,
 };
 
 pub struct CallablesExtractor;
@@ -58,7 +58,7 @@ impl Extractor<Callable> for CallablesExtractor {
             }
 
             let normalized_stringified_params =
-                normalize_whitespace(&params_string.unwrap_or_default());
+                statix::strings::normalize_whitespace(&params_string.unwrap_or_default());
 
             let callable_name = return_type.clone().unwrap_or_default()
                 + " "

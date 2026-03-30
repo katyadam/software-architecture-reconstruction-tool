@@ -60,12 +60,3 @@ pub fn hash_text(text: &str) -> String {
     hasher.update(text.as_bytes());
     format!("{:x}", hasher.finalize())
 }
-
-pub fn clean_formatted_python_string(string: String) -> String {
-    string
-        .strip_prefix("f\"")
-        .unwrap_or(&string)
-        .strip_suffix('"')
-        .unwrap_or(&string)
-        .to_string()
-}

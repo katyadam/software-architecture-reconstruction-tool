@@ -11,7 +11,7 @@ use crate::{
         extractor::Extractor,
         queries::CALL_STATEMENTS_QUERY,
     },
-    parsing::{arguments::parse_call_arguments, parameters::normalize_whitespace},
+    parsing::arguments::parse_call_arguments,
 };
 
 pub struct CallStatementsExtractor;
@@ -117,7 +117,7 @@ impl Extractor<CallStatement> for CallStatementsExtractor {
 
             calls.push(CallStatement {
                 function_name: joined_trimmed_name.to_string()
-                    + &normalize_whitespace(&args_string),
+                    + &statix::strings::normalize_whitespace(&args_string),
                 arguments,
                 enclosing_function_name,
                 enclosing_class_name,

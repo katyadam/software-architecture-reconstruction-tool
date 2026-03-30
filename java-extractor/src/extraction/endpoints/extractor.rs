@@ -11,7 +11,7 @@ use crate::{
         extractor::Extractor,
         queries::ENDPOINTS_QUERY,
     },
-    parsing::parameters::{normalize_whitespace, parse_callable_params},
+    parsing::parameters::parse_callable_params,
 };
 use models::{Endpoint, HttpMethod};
 use tree_sitter::{Query, QueryCursor, StreamingIterator, Tree};
@@ -62,7 +62,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                 continue;
             }
             let normalized_stringified_params =
-                normalize_whitespace(&stringified_params.unwrap_or_default());
+                statix::strings::normalize_whitespace(&stringified_params.unwrap_or_default());
 
             let mut endpoint = Endpoint {
                 function_name: return_type.unwrap_or_default()
