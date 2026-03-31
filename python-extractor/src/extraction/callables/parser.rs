@@ -1,11 +1,7 @@
 use models::Parameter;
 
 fn split_top_level_commas(s: &str) -> Vec<String> {
-    statix::strings::split_at_top_level(
-        s,
-        &[',', '\n'],
-        &[('(', ')'), ('[', ']'), ('{', '}')],
-    )
+    statix::strings::split_at_top_level(s, &[',', '\n'], &[('(', ')'), ('[', ']'), ('{', '}')])
 }
 
 /// Parse a function parameter list like "(a: int = 3, b: str = Path(..., gt=0))"

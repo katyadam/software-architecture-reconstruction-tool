@@ -1,6 +1,5 @@
 use std::sync::OnceLock;
 
-
 use crate::{
     extraction::{
         endpoints::annotations::{

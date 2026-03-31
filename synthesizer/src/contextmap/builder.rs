@@ -7,6 +7,10 @@ use crate::{
 };
 
 use models::{Entity, configuration::ServiceDescription};
+
+type ContextMapLinkKey = (String, String);
+type Cardinality = (i32, i32);
+
 pub trait ContextMapBuilder {
     fn build(
         &self,
@@ -107,7 +111,7 @@ impl ContextMapBuilderImpl {
 
         // 3. Combine into bidirectional links
         // We group A->B and B->A into a single entry with two multiplicities
-        let mut links: HashMap<(String, String), ((i32, i32), (String, String))> = HashMap::new();
+        let mut links: HashMap<ContextMapLinkKey, (Cardinality, (String, String))> = HashMap::new();
 
         for ((src, tgt), (mult, (ms_src, ms_tgt))) in mults {
             if let Some(val) = links.get_mut(&(tgt.clone(), src.clone())) {
