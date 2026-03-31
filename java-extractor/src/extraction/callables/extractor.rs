@@ -1,7 +1,6 @@
 use std::sync::OnceLock;
 
 use models::{Callable, Namespace};
-use sha2::{Digest, Sha256};
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
 
 use crate::{
@@ -9,7 +8,7 @@ use crate::{
         callables::enclosing_lookup::get_enclosing_element_name, extractor::Extractor,
         queries::CALLABLES_QUERY,
     },
-    parsing::parameters::{normalize_whitespace, parse_callable_params},
+    parsing::parameters::parse_callable_params,
 };
 
 pub struct CallablesExtractor;
@@ -48,9 +47,7 @@ impl Extractor<Callable> for CallablesExtractor {
                     "callable" => {
                         let enclosing_element_name = get_enclosing_element_name(capture.node, code);
                         namespace = Some(Namespace::Class(enclosing_element_name));
-                        let mut hasher = Sha256::new();
-                        hasher.update(value.as_bytes());
-                        hash = Some(format!("{:x}", hasher.finalize()));
+                        hash = Some(statix::strings::hash_text(&value));
                     }
                     "type_constructor" => is_constructor = true,
                     _ => (),
@@ -58,7 +55,7 @@ impl Extractor<Callable> for CallablesExtractor {
             }
 
             let normalized_stringified_params =
-                normalize_whitespace(&params_string.unwrap_or_default());
+                statix::strings::normalize_whitespace(&params_string.unwrap_or_default());
 
             let callable_name = return_type.clone().unwrap_or_default()
                 + " "

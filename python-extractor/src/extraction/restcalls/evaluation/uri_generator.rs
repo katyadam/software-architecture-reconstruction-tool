@@ -4,6 +4,17 @@ use statix::{ast::Expr, symbolic::AnalysisResult};
 
 type ResolvedPart = Vec<String>;
 
+/// Resolves a URI template into every possible concrete URI.
+///
+/// The template is a Python string-concatenation expression (parts separated by `+`).
+/// Each part is resolved against the symbolic `analysis_result` environment:
+/// - Quoted string literals have their quotes stripped.
+/// - Variables mapped to a single `Expr::Literal` produce one value.
+/// - Variables mapped to `Expr::Joined` expand the result set.
+/// - f-string literals are resolved by [`resolve_fstring`].
+///
+/// The resolved parts are combined via Cartesian product, so two parts with 2 and
+/// 3 possible values respectively produce 6 URIs.
 pub fn generate_target_uris(
     template: &str,
     analysis_result: &AnalysisResult,
@@ -72,6 +83,17 @@ fn get_resolved_parts(
     all_parts
 }
 
+/// Parses a Python f-string character-by-character and resolves it into a list
+/// of `ResolvedPart`s (one per segment).
+///
+/// Literal text segments become single-element `Vec`s. `{var}` placeholders are
+/// resolved against `analysis_result`:
+/// - `Expr::Literal` → single value
+/// - `Expr::Joined` → multiple values (expands the Cartesian product)
+/// - `Expr::Var` with a known enum dtype → all enum variants from `enums_map`
+/// - Anything else → the placeholder text unchanged (`{var}`)
+///
+/// Escaped braces (`{{` / `}}`) are treated as literal `{` / `}`.
 fn resolve_fstring(
     string_literal: &str,
     analysis_result: &AnalysisResult,

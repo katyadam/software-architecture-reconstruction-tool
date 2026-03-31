@@ -8,7 +8,7 @@ impl EnumIdentificator {
         Self {}
     }
 
-    pub fn identificate_from_entities(entities: &[Entity]) -> Vec<Enum> {
+    pub fn identify_from_entities(entities: &[Entity]) -> Vec<Enum> {
         entities
             .iter()
             .filter(|entity| entity.superclasses.contains(&"Enum".to_string()))

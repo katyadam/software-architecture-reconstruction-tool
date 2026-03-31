@@ -34,7 +34,7 @@ pub async fn extract(
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_java::LANGUAGE.into())
-        .map_err(|_| ExtractionError::Process("Error loading Python grammar".into()))?;
+        .map_err(|_| ExtractionError::Process("Error loading Java grammar".into()))?;
 
     let tree = parser
         .parse(code, None)

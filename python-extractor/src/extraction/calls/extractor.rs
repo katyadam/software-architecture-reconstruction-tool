@@ -2,19 +2,20 @@ use std::sync::OnceLock;
 
 use log::warn;
 use models::{Argument, CallStatement};
-use sha2::{Digest, Sha256};
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 
 use crate::extraction::{
     calls::PythonCallStatement,
+    common::node_text,
     extractor::{ExtractParams, Extractor},
     queries::CALL_QUERY,
 };
 
-fn get_node_text<'a>(node: Node, code: &'a str) -> &'a str {
-    &code[node.start_byte()..node.end_byte()]
-}
-
+/// Walks the parent chain to find the nearest enclosing `function_definition`
+/// and `class_definition` of `node`. Returns a 3-tuple of:
+/// - the full function signature (`"name(params) -> return_type"`), or `None`
+/// - the enclosing class name, or `None`
+/// - the SHA-256 hex hash of the function body (for deduplication), or `None`
 fn find_enclosing_information(
     mut node: Node,
     code: &str,
@@ -42,30 +43,28 @@ fn find_enclosing_information(
     if let Some(f_node) = function_node {
         let name = f_node
             .child_by_field_name("name")
-            .map(|n| get_node_text(n, code))
+            .map(|n| node_text(n, code))
             .unwrap_or("unknown");
 
         let params = f_node
             .child_by_field_name("parameters")
-            .map(|n| get_node_text(n, code))
+            .map(|n| node_text(n, code))
             .unwrap_or("()");
 
         let return_type = f_node
             .child_by_field_name("return_type")
-            .map(|n| get_node_text(n, code))
+            .map(|n| node_text(n, code))
             .unwrap_or("Any");
 
         function_name_full = Some(format!("{}{} -> {}", name, params, return_type));
 
-        let mut hasher = Sha256::new();
-        hasher.update(get_node_text(f_node, code).as_bytes());
-        function_hash = Some(format!("{:x}", hasher.finalize()));
+        function_hash = Some(statix::strings::hash_text(node_text(f_node, code)));
     }
 
     // 3. Process Class Information
     let class_name = class_node
         .and_then(|n| n.child_by_field_name("name"))
-        .map(|n| get_node_text(n, code).to_string());
+        .map(|n| node_text(n, code).to_string());
 
     (function_name_full, class_name, function_hash)
 }
@@ -100,9 +99,8 @@ impl Extractor for CallsExtractor {
             let mut call_node: Option<Node> = None;
 
             m.captures.iter().for_each(|capture| {
-                let capture_text =
-                    &params.code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
-                let value = String::from_utf8_lossy(capture_text).to_string();
+                let value =
+                    params.code[capture.node.start_byte()..capture.node.end_byte()].to_string();
                 match query.capture_names()[capture.index as usize] {
                     "call.ident" => function_name = value,
                     "call.args" => {

@@ -63,6 +63,74 @@ impl<'a> SymbolicEvaluator<'a> {
         }
     }
 
+    /// Merge variable changes from two branch evaluators back into `self`.
+    ///
+    /// When `sym_cond` is `Some`, joining is condition-aware (`join` is called, so
+    /// `true`/`false` literals select a single branch while unknown conditions
+    /// produce `Expr::Joined`). When `None` (try/catch), values always join.
+    ///
+    /// Three phases:
+    /// 1. Update pre-existing variables that changed in either branch.
+    /// 2. Bring variables first declared inside a branch into the parent env.
+    /// 3. For variables declared in BOTH branches that did not exist before,
+    ///    join differing values (phase 2 lets the first-branch value win otherwise).
+    fn merge_branches(
+        &mut self,
+        branch_a: &Self,
+        branch_b: &Self,
+        sym_cond: Option<&Expr>,
+    ) -> Result<(), EvalError> {
+        // Phase 1: join differing values for variables that already existed.
+        let pre_keys: Vec<String> = self.env.keys().cloned().collect();
+        for key in &pre_keys {
+            let (_, a_val) = branch_a.env.get(key).unwrap();
+            let (_, b_val) = branch_b.env.get(key).unwrap();
+            if a_val != b_val {
+                let joined = if let Some(cond) = sym_cond {
+                    self.join(cond, a_val, b_val)?.1
+                } else {
+                    Expr::Joined {
+                        vals: vec![a_val.clone(), b_val.clone()],
+                    }
+                };
+                self.env.get_mut(key).unwrap().1 = joined;
+            }
+        }
+
+        // Phase 2: bring in variables first declared inside either branch.
+        let pre_keys_set: HashSet<String> = pre_keys.into_iter().collect();
+        self.merge_new_vars(branch_a);
+        self.merge_new_vars(branch_b);
+
+        // Phase 3: join variables declared in BOTH branches that were not pre-existing.
+        // Collect first to avoid simultaneous borrows of branch_a.env and self.env.
+        let new_both: Vec<(String, String, Expr, Expr)> = branch_a
+            .env
+            .iter()
+            .filter(|(key, _)| !pre_keys_set.contains(*key))
+            .filter_map(|(key, (dtype, a_val))| {
+                branch_b
+                    .env
+                    .get(key)
+                    .filter(|(_, b_val)| a_val != b_val)
+                    .map(|(_, b_val)| (key.clone(), dtype.clone(), a_val.clone(), b_val.clone()))
+            })
+            .collect();
+
+        for (key, dtype, a_val, b_val) in new_both {
+            let joined = if let Some(cond) = sym_cond {
+                self.join(cond, &a_val, &b_val)?.1
+            } else {
+                Expr::Joined {
+                    vals: vec![a_val, b_val],
+                }
+            };
+            self.env.insert(key, (dtype, joined));
+        }
+
+        Ok(())
+    }
+
     pub fn eval_callable(
         callable_name: &str,
         ctx: &'a AnalysisContext<'a>,
@@ -276,44 +344,13 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
         let mut else_evaluator = self.branch();
 
         let then_ret = then_evaluator.visit_statements(then_b)?;
-
         let else_ret = if let Some(stmts) = else_b {
             else_evaluator.visit_statements(stmts)?
         } else {
             None
         };
 
-        let keys: Vec<String> = self.env.keys().cloned().collect();
-        for key in keys {
-            let (_, t_val) = then_evaluator.env.get(&key).unwrap();
-            let (_, e_val) = else_evaluator.env.get(&key).unwrap();
-
-            if t_val != e_val {
-                let (_, evaluated_ite) = self.join(&sym_cond, t_val, e_val)?;
-                self.env.get_mut(&key).unwrap().1 = evaluated_ite;
-            }
-        }
-
-        // Snapshot which keys existed before the if so we can find branch-only vars.
-        let pre_if_keys: HashSet<String> = self.env.keys().cloned().collect();
-
-        self.merge_new_vars(&then_evaluator);
-        self.merge_new_vars(&else_evaluator);
-
-        // Join variables that were declared in BOTH branches but did not exist in
-        // the parent env before the if (e.g. variables first declared inside
-        // try/except or parallel if-branches without a pre-declaration).
-        for (key, (dtype, t_val)) in &then_evaluator.env {
-            if pre_if_keys.contains(key) {
-                continue; // already handled by the per-key join loop above
-            }
-            if let Some((_, e_val)) = else_evaluator.env.get(key)
-                && t_val != e_val
-            {
-                let (_, joined) = self.join(&sym_cond, t_val, e_val)?;
-                self.env.insert(key.clone(), (dtype.clone(), joined));
-            }
-        }
+        self.merge_branches(&then_evaluator, &else_evaluator, Some(&sym_cond))?;
 
         if then_ret.is_some() || else_ret.is_some() {
             let (_, evaluated_ite) = self.join(
@@ -338,38 +375,8 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
         let try_ret = try_evaluator.visit_statements(try_branch)?;
         let catch_ret = catch_evaluator.visit_statements(catch_branch)?;
 
-        // Merge variables from both branches into the parent env, joining values
-        // that differ (same logic as visit_if but with no condition — always joins).
-        let keys: Vec<String> = self.env.keys().cloned().collect();
-        for key in keys {
-            let (_, t_val) = try_evaluator.env.get(&key).unwrap();
-            let (_, c_val) = catch_evaluator.env.get(&key).unwrap();
-            if t_val != c_val {
-                let joined = Expr::Joined {
-                    vals: vec![t_val.clone(), c_val.clone()],
-                };
-                self.env.get_mut(&key).unwrap().1 = joined;
-            }
-        }
-
-        let pre_keys: std::collections::HashSet<String> = self.env.keys().cloned().collect();
-        self.merge_new_vars(&try_evaluator);
-        self.merge_new_vars(&catch_evaluator);
-
-        // Join variables declared in BOTH branches that did not exist before the try.
-        for (key, (dtype, t_val)) in &try_evaluator.env {
-            if pre_keys.contains(key) {
-                continue;
-            }
-            if let Some((_, c_val)) = catch_evaluator.env.get(key)
-                && t_val != c_val
-            {
-                let joined = Expr::Joined {
-                    vals: vec![t_val.clone(), c_val.clone()],
-                };
-                self.env.insert(key.clone(), (dtype.clone(), joined));
-            }
-        }
+        // None = no condition, so merge_branches always produces Expr::Joined
+        self.merge_branches(&try_evaluator, &catch_evaluator, None)?;
 
         match (try_ret, catch_ret) {
             (None, None) => Ok(None),

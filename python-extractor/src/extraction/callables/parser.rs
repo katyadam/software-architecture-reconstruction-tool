@@ -1,72 +1,7 @@
 use models::Parameter;
 
-/// Split a parameter list into top-level tokens.
-/// Commas inside (), [], {} are ignored.
 fn split_top_level_commas(s: &str) -> Vec<String> {
-    let mut parts = Vec::new();
-    let mut depth_paren = 0i32;
-    let mut depth_brack = 0i32;
-    let mut depth_brace = 0i32;
-    let mut current = String::new();
-
-    for ch in s.chars() {
-        match ch {
-            '(' => {
-                depth_paren += 1;
-                current.push(ch);
-            }
-            ')' => {
-                depth_paren = (depth_paren - 1).max(0);
-                current.push(ch);
-            }
-            '[' => {
-                depth_brack += 1;
-                current.push(ch);
-            }
-            ']' => {
-                depth_brack = (depth_brack - 1).max(0);
-                current.push(ch);
-            }
-            '{' => {
-                depth_brace += 1;
-                current.push(ch);
-            }
-            '}' => {
-                depth_brace = (depth_brace - 1).max(0);
-                current.push(ch);
-            }
-            ',' => {
-                // only split on commas at top level
-                if depth_paren == 0 && depth_brack == 0 && depth_brace == 0 {
-                    let trimmed = current.trim();
-                    if !trimmed.is_empty() {
-                        parts.push(trimmed.to_string());
-                    }
-                    current.clear();
-                } else {
-                    current.push(ch);
-                }
-            }
-            '\n' => {
-                if depth_paren == 0 && depth_brack == 0 && depth_brace == 0 {
-                    let trimmed = current.trim();
-                    if !trimmed.is_empty() {
-                        parts.push(trimmed.to_string());
-                    }
-                    current.clear();
-                } else {
-                    current.push(ch);
-                }
-            }
-            _ => current.push(ch),
-        }
-    }
-
-    if !current.trim().is_empty() {
-        parts.push(current.trim().to_string());
-    }
-
-    parts
+    statix::strings::split_at_top_level(s, &[',', '\n'], &[('(', ')'), ('[', ']'), ('{', '}')])
 }
 
 /// Parse a function parameter list like "(a: int = 3, b: str = Path(..., gt=0))"

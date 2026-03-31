@@ -47,32 +47,23 @@ fn is_fqdn(datatype: &str) -> bool {
     datatype.contains(".")
 }
 
+/// Recursively unwraps arrays and generic wrappers to find the element type.
+///
+/// Examples:
+/// - `"List<User>"` → `"User"`
+/// - `"Map<String, User>"` → `"User"` (last type argument is used — the Value in `Map<K,V>`)
+/// - `"User[]"` → `"User"`
+/// - `"String"` → `"String"` (identity)
 pub fn extract_java_inner_type(datatype: &str) -> &str {
     let d = datatype.trim();
 
-    // 1. Handle Arrays (e.g., "User[]" or "int[][]")
-    // We strip all trailing brackets to get the base type
+    // Handle Arrays (e.g., "User[]" or "int[][]") — strip trailing brackets first
     if d.ends_with(']')
         && let Some(first_bracket) = d.find('[')
     {
         return extract_java_inner_type(d[..first_bracket].trim());
     }
 
-    // 2. Handle Generics (e.g., "List<User>" or "Map<String, User>")
-    if d.contains('<') && d.ends_with('>') {
-        let start_index = d.find('<').unwrap();
-        let end_index = d.rfind('>').unwrap();
-        let inner = &d[start_index + 1..end_index].trim();
-
-        // If it's a Map or Multi-generic, we usually want the last type (the Value)
-        if inner.contains(',') {
-            let parts: Vec<&str> = inner.split(',').collect();
-            let last_part = parts.last().unwrap_or(inner).trim();
-            return extract_java_inner_type(last_part);
-        }
-
-        return extract_java_inner_type(inner);
-    }
-
-    d
+    // Delegate generic unwrapping to the shared helper
+    statix::strings::extract_inner_generic_type(d, '<', '>')
 }

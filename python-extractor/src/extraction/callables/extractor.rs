@@ -1,7 +1,6 @@
 use std::{collections::HashSet, sync::OnceLock};
 
 use models::{Callable, Namespace, Parameter};
-use sha2::{Digest, Sha256};
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
 
 use crate::extraction::{
@@ -52,9 +51,8 @@ impl Extractor for CallablesExtractor {
             let mut class_name: Option<String> = None;
             let mut is_constructor = false;
             m.captures.iter().for_each(|capture| {
-                let capture_text =
-                    &params.code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
-                let value = String::from_utf8_lossy(capture_text).to_string();
+                let value =
+                    params.code[capture.node.start_byte()..capture.node.end_byte()].to_string();
                 match query.capture_names()[capture.index as usize] {
                     "function.name" => {
                         name = value;
@@ -72,9 +70,7 @@ impl Extractor for CallablesExtractor {
                         if value.starts_with("async") {
                             is_async = true;
                         }
-                        let mut hasher = Sha256::new();
-                        hasher.update(value.as_bytes());
-                        hash = format!("{:x}", hasher.finalize());
+                        hash = statix::strings::hash_text(&value);
                     }
                     "class.name" => class_name = Some(value),
                     _ => {}

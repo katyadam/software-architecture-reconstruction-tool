@@ -79,15 +79,15 @@ pub fn extract_uri(annot: &str) -> Option<String> {
     None
 }
 
+/// Collects every `annotation` and `marker_annotation` child of `modifiers_node`
+/// as raw source text (e.g. `"@GetMapping(\"/users\")"` or `"@Override"`).
 pub fn get_annotations_from_modifiers(modifiers_node: Node, code: &str) -> Vec<String> {
     let mut annotations = Vec::new();
 
     let mut cursor = modifiers_node.walk();
     for child in modifiers_node.children(&mut cursor) {
         if child.kind() == "annotation" || child.kind() == "marker_annotation" {
-            let capture_text = &code.as_bytes()[child.start_byte()..child.end_byte()];
-            let value = String::from_utf8_lossy(capture_text).to_string();
-            annotations.push(value);
+            annotations.push(code[child.start_byte()..child.end_byte()].to_string());
         }
     }
 

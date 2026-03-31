@@ -15,6 +15,7 @@ pub mod error;
 pub mod java;
 pub mod matcher;
 pub mod python;
+pub mod strings;
 pub mod symbolic;
 pub mod util;
 pub mod visitor;

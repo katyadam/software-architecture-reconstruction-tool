@@ -1,5 +1,11 @@
 use models::Parameter;
 
+/// Parses a Java parameter list string (with or without outer parentheses) into
+/// typed [`Parameter`] entries.
+///
+/// Each token is expected to be of the form `[@Annotation]* type name [= default]`.
+/// Annotations (tokens starting with `@`) and the `final` modifier are stripped.
+/// Parameters with fewer than two remaining tokens (i.e. no discernible type+name) are skipped.
 pub fn parse_callable_params(params_string: &str) -> Vec<Parameter> {
     let params_string = strip_outer_parentheses(params_string);
 
@@ -44,48 +50,9 @@ fn parse_single_param(param: &str) -> Option<Parameter> {
 }
 
 fn strip_outer_parentheses(input: &str) -> &str {
-    let s = input.trim();
-    if s.starts_with('(') && s.ends_with(')') {
-        &s[1..s.len() - 1]
-    } else {
-        s
-    }
+    statix::strings::strip_outer_delimiters(input, '(', ')')
 }
 
 fn split_top_level_commas(input: &str) -> Vec<String> {
-    let mut result = Vec::new();
-    let mut depth = 0;
-    let mut current = String::new();
-
-    for c in input.chars() {
-        match c {
-            '<' => {
-                depth += 1;
-                current.push(c);
-            }
-            '>' => {
-                depth -= 1;
-                current.push(c);
-            }
-            ',' if depth == 0 => {
-                result.push(current.trim().to_string());
-                current.clear();
-            }
-            _ => current.push(c),
-        }
-    }
-
-    if !current.trim().is_empty() {
-        result.push(current.trim().to_string());
-    }
-
-    result
-}
-
-pub fn normalize_whitespace(input: &str) -> String {
-    input
-        .replace(['\n', '\r'], " ")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
+    statix::strings::split_at_top_level(input, &[','], &[('<', '>')])
 }

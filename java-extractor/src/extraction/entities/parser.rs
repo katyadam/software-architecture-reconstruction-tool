@@ -1,19 +1,26 @@
 use models::Field;
 use tree_sitter::Node;
 
+fn collect_children_by_kind<T>(
+    node: Node,
+    code: &str,
+    kind: &str,
+    parse_fn: impl Fn(Node, &str) -> Option<T>,
+) -> Vec<T> {
+    (0..node.named_child_count())
+        .filter_map(|i| node.named_child(i as u32))
+        .filter(|child| child.kind() == kind)
+        .filter_map(|child| parse_fn(child, code))
+        .collect()
+}
+
 pub fn parse_formal_parameters(params_node: Node, code: &str) -> Vec<Field> {
-    let mut fields = Vec::new();
-
-    for i in 0..params_node.named_child_count() {
-        if let Some(child) = params_node.named_child(i)
-            && child.kind() == "formal_parameter"
-            && let Some(field) = parse_formal_parameter(child, code)
-        {
-            fields.push(field);
-        }
-    }
-
-    fields
+    collect_children_by_kind(
+        params_node,
+        code,
+        "formal_parameter",
+        parse_formal_parameter,
+    )
 }
 
 fn parse_formal_parameter(node: Node, code: &str) -> Option<Field> {
@@ -41,18 +48,12 @@ fn parse_formal_parameter(node: Node, code: &str) -> Option<Field> {
 }
 
 pub fn parse_field_declarations(fields_node: Node, code: &str) -> Vec<Field> {
-    let mut fields = Vec::new();
-
-    for i in 0..fields_node.named_child_count() {
-        if let Some(child) = fields_node.named_child(i)
-            && child.kind() == "field_declaration"
-            && let Some(field) = parse_field_declaration(child, code)
-        {
-            fields.push(field);
-        }
-    }
-
-    fields
+    collect_children_by_kind(
+        fields_node,
+        code,
+        "field_declaration",
+        parse_field_declaration,
+    )
 }
 
 fn parse_field_declaration(node: Node, code: &str) -> Option<Field> {
@@ -92,48 +93,44 @@ fn parse_field_declaration(node: Node, code: &str) -> Option<Field> {
     }
 }
 
+const JAVA_COLLECTION_KEYWORDS: &[&str] = &[
+    "List",
+    "ArrayList",
+    "LinkedList",
+    "Vector",
+    "Set",
+    "HashSet",
+    "TreeSet",
+    "LinkedHashSet",
+    "Map",
+    "HashMap",
+    "TreeMap",
+    "Hashtable",
+    "LinkedHashMap",
+    "Queue",
+    "Deque",
+    "PriorityQueue",
+    "Collection",
+    "Iterable",
+    "Stack",
+];
+
+/// Returns `true` if `datatype` represents a Java collection:
+/// - arrays (`String[]`, `int[][]`) or varargs (`String...`)
+/// - well-known generic collection base types (`List`, `Map`, `Set`, `Queue`, etc.)
+///   matched against the token before the first `<`, including fully-qualified names
+///
+/// Used to populate [`models::Field::is_collection`].
 pub fn is_java_collection_type(datatype: &str) -> bool {
     let d = datatype.trim();
     if d.is_empty() {
         return false;
     }
 
-    // 1. Arrays (e.g., String[], int[][]) or Varargs (String...)
+    // Arrays (e.g., String[], int[][]) or Varargs (String...)
     if d.ends_with(']') || d.ends_with("...") {
         return true;
     }
 
-    // List of known Java collection base names
-    let collection_keywords = [
-        "List",
-        "ArrayList",
-        "LinkedList",
-        "Vector",
-        "Set",
-        "HashSet",
-        "TreeSet",
-        "LinkedHashSet",
-        "Map",
-        "HashMap",
-        "TreeMap",
-        "Hashtable",
-        "LinkedHashMap",
-        "Queue",
-        "Deque",
-        "PriorityQueue",
-        "Collection",
-        "Iterable",
-        "Stack",
-    ];
-
-    // 2. Extract the "Base Type"
-    // For "List<String>", base is "List"
-    // For "HashMap<K, V>", base is "HashMap"
-    // For "Set", base is "Set"
-    let base_type = d.split('<').next().unwrap_or("").trim();
-
-    // 3. Check if the base type is in our whitelist, handle fully qualified names
-    collection_keywords
-        .iter()
-        .any(|&k| base_type == k || base_type.ends_with(&format!(".{}", k)))
+    statix::strings::is_collection_type(d, JAVA_COLLECTION_KEYWORDS, '<')
 }

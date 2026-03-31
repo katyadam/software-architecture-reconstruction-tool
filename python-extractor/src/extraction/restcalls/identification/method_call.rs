@@ -28,7 +28,9 @@ impl MethodCallIdentificationStrategy {
     }
 
     fn identify_target_uri(&self, call_args: &[Argument]) -> Option<String> {
-        call_args.first().map(|uri| clean_python_string(&uri.value))
+        call_args
+            .first()
+            .map(|uri| statix::strings::clean_python_string(&uri.value))
     }
 
     // FastAPI uses @app.http_method to denote endpoint, therefore we want to omit that here
@@ -73,20 +75,5 @@ impl IdentificationStrategy for MethodCallIdentificationStrategy {
             target_uri,
             file_path: file_path.to_string(),
         })
-    }
-}
-
-fn clean_python_string(s: &str) -> String {
-    let quote_start = s.find(['"', '\'']).unwrap_or(0);
-    let content = &s[quote_start..];
-
-    strip_quotes(content)
-}
-
-fn strip_quotes(s: &str) -> String {
-    if s.starts_with("\"\"\"") || s.starts_with("'''") {
-        s[3..s.len() - 3].to_string()
-    } else {
-        s.trim_matches(|c| c == '"' || c == '\'').to_string()
     }
 }

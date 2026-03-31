@@ -1,7 +1,5 @@
 use std::sync::OnceLock;
 
-use sha2::{Digest, Sha256};
-
 use crate::{
     extraction::{
         endpoints::annotations::{
@@ -11,7 +9,7 @@ use crate::{
         extractor::Extractor,
         queries::ENDPOINTS_QUERY,
     },
-    parsing::parameters::{normalize_whitespace, parse_callable_params},
+    parsing::parameters::parse_callable_params,
 };
 use models::{Endpoint, HttpMethod};
 use tree_sitter::{Query, QueryCursor, StreamingIterator, Tree};
@@ -51,9 +49,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                     "callable_params" => stringified_params = Some(value),
                     "modifiers" => annotations = get_annotations_from_modifiers(capture.node, code),
                     "callable" => {
-                        let mut hasher = Sha256::new();
-                        hasher.update(value.as_bytes());
-                        function_hash = Some(format!("{:x}", hasher.finalize()));
+                        function_hash = Some(statix::strings::hash_text(&value));
                     }
                     _ => (),
                 }
@@ -62,7 +58,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                 continue;
             }
             let normalized_stringified_params =
-                normalize_whitespace(&stringified_params.unwrap_or_default());
+                statix::strings::normalize_whitespace(&stringified_params.unwrap_or_default());
 
             let mut endpoint = Endpoint {
                 function_name: return_type.unwrap_or_default()

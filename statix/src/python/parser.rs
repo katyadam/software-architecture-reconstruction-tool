@@ -5,6 +5,7 @@ use tree_sitter::Node;
 use crate::{
     ast::{CallableAst, Expr, Parameter, Stmt},
     error::ParseError,
+    util::{node_field_text, node_text},
 };
 
 // TODO: find better ways to look for all functions, this iterates over all possible nodes in the tree
@@ -21,18 +22,10 @@ pub fn find_function_nodes(root: Node) -> Vec<Node> {
 }
 
 pub fn parse_python_function(node: Node, code: &str) -> Result<CallableAst, ParseError> {
-    let name = node
-        .child_by_field_name("name")
-        .ok_or(ParseError::FieldNotFound("name".to_string()))?
-        .utf8_text(code.as_bytes())
-        .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
-        .to_string();
+    let name = node_field_text(node, "name", code)?;
 
     let return_type = if let Some(rt_node) = node.child_by_field_name("return_type") {
-        rt_node
-            .utf8_text(code.as_bytes())
-            .map_err(|err| ParseError::Utf8Encoding(err.to_string()))?
-            .to_string()
+        node_text(rt_node, code)?
     } else {
         "Any".to_string()
     };
@@ -74,19 +67,18 @@ fn parse_parameters(node: Node, source: &str) -> Result<Vec<Parameter>, ParseErr
 
         match param.kind() {
             "identifier" => {
-                name = param.utf8_text(source.as_bytes()).unwrap().to_string();
+                name = node_text(param, source)?;
             }
             "typed_parameter" => {
-                let name_node = param.child(0).unwrap();
-                let type_node = param.child_by_field_name("type").unwrap();
-                name = name_node.utf8_text(source.as_bytes()).unwrap().to_string();
-                datatype = type_node.utf8_text(source.as_bytes()).unwrap().to_string();
+                let name_node = param.child(0).ok_or(ParseError::FieldNotFound(
+                    "typed_parameter name".to_string(),
+                ))?;
+                name = node_text(name_node, source)?;
+                datatype = node_field_text(param, "type", source)?;
             }
             "default_parameter" => {
-                let name_node = param.child_by_field_name("name").unwrap();
-                let value_node = param.child_by_field_name("value").unwrap();
-                name = name_node.utf8_text(source.as_bytes()).unwrap().to_string();
-                default_value = Some(value_node.utf8_text(source.as_bytes()).unwrap().to_string());
+                name = node_field_text(param, "name", source)?;
+                default_value = Some(node_field_text(param, "value", source)?);
             }
             _ => continue,
         }
@@ -107,10 +99,11 @@ fn parse_block(
         match child.kind() {
             // Difference between Python and Java is the declaration style. For Python we are using Declare-on-Write
             "expression_statement" => {
-                let inner = child.named_child(0).unwrap();
+                let inner = child.named_child(0).ok_or(ParseError::FieldNotFound(
+                    "expression_statement inner".to_string(),
+                ))?;
                 if inner.kind() == "assignment" {
-                    let left_node = inner.child_by_field_name("left").unwrap();
-                    let name = left_node.utf8_text(source.as_bytes()).unwrap().to_string();
+                    let name = node_field_text(inner, "left", source)?;
 
                     // This is really weird Python thing:
                     // a = 5
@@ -158,26 +151,23 @@ fn parse_block(
 
 fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
     match node.kind() {
-        "string" => Ok(Expr::Literal(clean_python_string(
-            node.utf8_text(source.as_bytes()).unwrap(),
+        "string" => Ok(Expr::Literal(crate::strings::clean_python_string(
+            &node_text(node, source)?,
         ))),
-        "integer" => Ok(Expr::Literal(
-            node.utf8_text(source.as_bytes()).unwrap().to_string(),
-        )),
+        "integer" => Ok(Expr::Literal(node_text(node, source)?)),
         "true" => Ok(Expr::Literal("True".to_string())),
         "false" => Ok(Expr::Literal("False".to_string())),
-        "identifier" => Ok(Expr::Var(
-            node.utf8_text(source.as_bytes()).unwrap().to_string(),
-        )),
+        "identifier" => Ok(Expr::Var(node_text(node, source)?)),
 
         "call" => {
-            let function_node = node.child_by_field_name("function").unwrap();
-            let args_node = node.child_by_field_name("arguments").unwrap();
+            let function_node = node
+                .child_by_field_name("function")
+                .ok_or(ParseError::FieldNotFound("call function".to_string()))?;
+            let args_node = node
+                .child_by_field_name("arguments")
+                .ok_or(ParseError::FieldNotFound("call arguments".to_string()))?;
 
-            let name = function_node
-                .utf8_text(source.as_bytes())
-                .unwrap()
-                .to_string();
+            let name = node_text(function_node, source)?;
             let mut args = Vec::new();
             for arg in args_node.named_children(&mut args_node.walk()) {
                 // Python adds punctuation (commas) as named children in some versions,
@@ -188,13 +178,15 @@ fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
         }
 
         "binary_operator" => {
-            let left = parse_expr(node.child_by_field_name("left").unwrap(), source)?;
-            let right = parse_expr(node.child_by_field_name("right").unwrap(), source)?;
-            let operator = node
-                .child_by_field_name("operator")
-                .unwrap()
-                .utf8_text(source.as_bytes())
-                .unwrap();
+            let left_node = node
+                .child_by_field_name("left")
+                .ok_or(ParseError::FieldNotFound("left operand".to_string()))?;
+            let right_node = node
+                .child_by_field_name("right")
+                .ok_or(ParseError::FieldNotFound("right operand".to_string()))?;
+            let left = parse_expr(left_node, source)?;
+            let right = parse_expr(right_node, source)?;
+            let operator = node_field_text(node, "operator", source)?;
 
             if operator == "+" {
                 Ok(Expr::Concat(Box::new(left), Box::new(right)))
@@ -267,7 +259,7 @@ fn parse_try(
         if child.kind() == "except_clause" {
             // except_clause has no named "body" field in the tree-sitter Python grammar;
             // the suite is always the last named child (block or simple_statement).
-            let count = child.named_child_count();
+            let count: u32 = child.named_child_count() as u32;
             if count > 0
                 && let Some(body) = child.named_child(count - 1)
             {
@@ -287,32 +279,4 @@ fn parse_try(
             catch_branch: except_stmts,
         }])
     }
-}
-
-fn clean_python_string(s: &str) -> String {
-    let s = s.trim();
-
-    if let Some(quote_start) = s.find(['"', '\'']) {
-        let content = &s[quote_start..];
-        return strip_python_quotes(content);
-    }
-
-    s.to_string()
-}
-
-fn strip_python_quotes(s: &str) -> String {
-    if s.starts_with("\"\"\"") && s.ends_with("\"\"\"") && s.len() >= 6 {
-        return s[3..s.len() - 3].to_string();
-    }
-    if s.starts_with("'''") && s.ends_with("'''") && s.len() >= 6 {
-        return s[3..s.len() - 3].to_string();
-    }
-
-    if (s.starts_with('"') && s.ends_with('"'))
-        || (s.starts_with('\'') && s.ends_with('\'')) && s.len() >= 2
-    {
-        return s[1..s.len() - 1].to_string();
-    }
-
-    s.to_string()
 }

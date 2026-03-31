@@ -44,9 +44,7 @@ impl Extractor<(AssignmentKey, Assignment)> for AssignmentsExtractor {
             let mut function_name: Option<String> = None;
             let mut params_string: Option<String> = None;
             m.captures.iter().for_each(|capture| {
-                let capture_text =
-                    &code.as_bytes()[capture.node.start_byte()..capture.node.end_byte()];
-                let value = String::from_utf8_lossy(capture_text).to_string();
+                let value = code[capture.node.start_byte()..capture.node.end_byte()].to_string();
 
                 match query.capture_names()[capture.index as usize] {
                     "name" => variable_name = Some(value),
@@ -109,17 +107,21 @@ impl Extractor<(AssignmentKey, Assignment)> for AssignmentsExtractor {
         assignments_map
     }
 }
+/// Creates [`Assignment`] entries for every parameter of a function so that
+/// type-inference (see [`crate::extraction::calls::type_inference`]) can resolve
+/// parameter types when they are used as call-site arguments.
+///
+/// Each entry is placed in a [`Scope::Function`] keyed by the full method signature
+/// (`"return_type name(params)"` or `"name(params)"` for constructors).
 fn create_assignments_from_function_params(
     function_return_type: Option<String>,
     function_params: &str,
     function_name: &str,
 ) -> Vec<(AssignmentKey, Assignment)> {
-    let scope;
-    if let Some(ftype) = function_return_type {
-        scope = Scope::Function(ftype + " " + function_name + function_params);
-    } else {
-        scope = Scope::Function(function_name.to_string() + function_params);
-    }
+    let scope = Scope::Function(match function_return_type {
+        Some(ftype) => format!("{} {}{}", ftype, function_name, function_params),
+        None => format!("{}{}", function_name, function_params),
+    });
     let mut assignments = Vec::new();
     parse_callable_params(function_params)
         .iter()

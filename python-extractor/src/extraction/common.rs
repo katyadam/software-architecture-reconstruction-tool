@@ -1,4 +1,3 @@
-use log::debug;
 use models::Argument;
 use tree_sitter::Node;
 
@@ -7,19 +6,15 @@ pub fn extract_param_names(params_node: Node, code: &str) -> Vec<String> {
     let mut cursor = params_node.walk();
 
     for param in params_node.named_children(&mut cursor) {
-        debug!("{:?}", param.kind());
-
         match param.kind() {
             "identifier" => {
-                let name = param.utf8_text(code.as_bytes()).unwrap().to_string();
-                names.push(name);
+                names.push(code[param.start_byte()..param.end_byte()].to_string());
             }
             "typed_parameter" => {
                 if let Some(ident_node) =
                     param.child_by_field_name("name").or_else(|| param.child(0))
                 {
-                    let name = ident_node.utf8_text(code.as_bytes()).unwrap().to_string();
-                    names.push(name);
+                    names.push(code[ident_node.start_byte()..ident_node.end_byte()].to_string());
                 }
             }
             _ => {}
@@ -52,11 +47,7 @@ pub fn extract_function_arguments(function_node: Node, code: &str) -> Vec<Argume
     arguments
 }
 
-pub fn clean_formatted_python_string(string: String) -> String {
-    string
-        .strip_prefix("f\"")
-        .unwrap()
-        .strip_suffix("\"")
-        .unwrap()
-        .to_string()
+/// Returns the source text slice covered by `node`.
+pub fn node_text<'a>(node: tree_sitter::Node, code: &'a str) -> &'a str {
+    &code[node.start_byte()..node.end_byte()]
 }

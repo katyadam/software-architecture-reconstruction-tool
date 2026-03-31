@@ -2,6 +2,14 @@ use std::{collections::HashMap, path::PathBuf};
 
 use models::{Entity, Import};
 
+/// Builds a file-system-style fully-qualified path for a field's type.
+///
+/// Starting from `file_path`, navigates up by the number of segments in `module_path`
+/// (treating each `.`-separated segment as one directory level), then descends
+/// through those segments and appends `datatype`.
+///
+/// Example: `file_path = "a/b/c.py"`, `module_path = "x.y"`, `datatype = "User"`
+/// → `"a/x/y/User"`
 pub fn create_field_datatype_signature(
     file_path: &str,
     module_path: &str,
@@ -62,26 +70,13 @@ pub fn get_entities_map(entities: &[Entity]) -> HashMap<String, Entity> {
         .collect()
 }
 
+/// Recursively unwraps generic brackets to find the element type.
+///
+/// Examples:
+/// - `"list[User]"` → `"User"`
+/// - `"Dict[str, User]"` → `"User"` (last argument; the Value in `Dict[K, V]`)
+/// - `"Optional[list[User]]"` → `"User"` (unwrapped recursively)
+/// - `"User"` → `"User"` (identity)
 pub fn extract_inner_type(datatype: &str) -> &str {
-    let d = datatype.trim();
-
-    // Check if it's a generic type: Name[Inner]
-    if let Some(start_index) = d.find('[')
-        && let Some(end_index) = d.rfind(']')
-    {
-        let inner = &d[start_index + 1..end_index].trim();
-
-        // Handle multiple arguments like Dict[str, User]
-        // We usually care about the custom Entity, which is likely the last part
-        if inner.contains(',') {
-            let parts: Vec<&str> = inner.split(',').collect();
-            let last_part = parts.last().unwrap_or(inner).trim();
-            // Recursively unwrap in case of list[Dict[str, User]]
-            return extract_inner_type(last_part);
-        }
-
-        // Recursively unwrap in case of Optional[list[User]]
-        return extract_inner_type(inner);
-    }
-    d
+    statix::strings::extract_inner_generic_type(datatype, '[', ']')
 }
