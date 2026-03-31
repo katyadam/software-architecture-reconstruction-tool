@@ -1,7 +1,6 @@
 use std::sync::OnceLock;
 
 use crate::extraction::callables::parser::parse_parameters;
-use crate::extraction::common::hash_text;
 use crate::extraction::extractor::{ExtractParams, Extractor};
 use crate::extraction::queries::ENDPOINTS_QUERY;
 use models::{Endpoint, HttpMethod};
@@ -47,7 +46,7 @@ impl Extractor for EndpointsExtractor {
                         parameters.extend(p);
                     }
                     "function" => {
-                        function_hash = hash_text(&value);
+                        function_hash = statix::strings::hash_text(&value);
                     }
                     _ => {}
                 }

@@ -8,7 +8,7 @@ fn collect_children_by_kind<T>(
     parse_fn: impl Fn(Node, &str) -> Option<T>,
 ) -> Vec<T> {
     (0..node.named_child_count())
-        .filter_map(|i| node.named_child(i))
+        .filter_map(|i| node.named_child(i as u32))
         .filter(|child| child.kind() == kind)
         .filter_map(|child| parse_fn(child, code))
         .collect()

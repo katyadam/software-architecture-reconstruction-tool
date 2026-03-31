@@ -259,7 +259,7 @@ fn parse_try(
         if child.kind() == "except_clause" {
             // except_clause has no named "body" field in the tree-sitter Python grammar;
             // the suite is always the last named child (block or simple_statement).
-            let count = child.named_child_count();
+            let count: u32 = child.named_child_count() as u32;
             if count > 0
                 && let Some(body) = child.named_child(count - 1)
             {

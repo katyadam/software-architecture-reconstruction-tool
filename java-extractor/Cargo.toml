@@ -10,7 +10,6 @@ statix = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-java = { workspace = true }
 regex = { workspace = true }
-sha2 = { workspace = true }
 once_cell = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 log = { workspace = true }

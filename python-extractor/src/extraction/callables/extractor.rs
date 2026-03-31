@@ -5,7 +5,6 @@ use tree_sitter::{Query, QueryCursor, StreamingIterator};
 
 use crate::extraction::{
     callables::parser::parse_parameters,
-    common::hash_text,
     extractor::{ExtractParams, Extractor},
     queries::CALLABLES_QUERY,
 };
@@ -71,7 +70,7 @@ impl Extractor for CallablesExtractor {
                         if value.starts_with("async") {
                             is_async = true;
                         }
-                        hash = hash_text(&value);
+                        hash = statix::strings::hash_text(&value);
                     }
                     "class.name" => class_name = Some(value),
                     _ => {}

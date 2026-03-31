@@ -6,7 +6,7 @@ use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 
 use crate::extraction::{
     calls::PythonCallStatement,
-    common::{hash_text, node_text},
+    common::node_text,
     extractor::{ExtractParams, Extractor},
     queries::CALL_QUERY,
 };
@@ -58,7 +58,7 @@ fn find_enclosing_information(
 
         function_name_full = Some(format!("{}{} -> {}", name, params, return_type));
 
-        function_hash = Some(hash_text(node_text(f_node, code)));
+        function_hash = Some(statix::strings::hash_text(node_text(f_node, code)));
     }
 
     // 3. Process Class Information

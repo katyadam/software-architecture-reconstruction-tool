@@ -1,7 +1,6 @@
 use std::sync::OnceLock;
 
 use models::{Callable, Namespace};
-use sha2::{Digest, Sha256};
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
 
 use crate::{
@@ -48,9 +47,7 @@ impl Extractor<Callable> for CallablesExtractor {
                     "callable" => {
                         let enclosing_element_name = get_enclosing_element_name(capture.node, code);
                         namespace = Some(Namespace::Class(enclosing_element_name));
-                        let mut hasher = Sha256::new();
-                        hasher.update(value.as_bytes());
-                        hash = Some(format!("{:x}", hasher.finalize()));
+                        hash = Some(statix::strings::hash_text(&value));
                     }
                     "type_constructor" => is_constructor = true,
                     _ => (),

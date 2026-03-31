@@ -1,6 +1,5 @@
 use std::sync::OnceLock;
 
-use sha2::{Digest, Sha256};
 
 use crate::{
     extraction::{
@@ -51,9 +50,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                     "callable_params" => stringified_params = Some(value),
                     "modifiers" => annotations = get_annotations_from_modifiers(capture.node, code),
                     "callable" => {
-                        let mut hasher = Sha256::new();
-                        hasher.update(value.as_bytes());
-                        function_hash = Some(format!("{:x}", hasher.finalize()));
+                        function_hash = Some(statix::strings::hash_text(&value));
                     }
                     _ => (),
                 }

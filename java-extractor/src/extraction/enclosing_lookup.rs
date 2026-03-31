@@ -1,4 +1,3 @@
-use sha2::{Digest, Sha256};
 use tree_sitter::Node;
 
 /// Walks the parent chain of `node` upward and returns the first ancestor
@@ -33,8 +32,6 @@ pub fn get_field_string_from_node<'tree>(
 /// Returns a SHA-256 hex digest of the source text spanning `node`.
 /// Used to fingerprint code elements (e.g. callables) for deduplication across files.
 pub fn get_hashed_node_value<'tree>(node: Node<'tree>, code: &'tree str) -> String {
-    let mut hasher = Sha256::new();
-    let value = code[node.start_byte()..node.end_byte()].to_string();
-    hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
+    let value = &code[node.start_byte()..node.end_byte()];
+    statix::strings::hash_text(value)
 }

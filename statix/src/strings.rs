@@ -130,6 +130,15 @@ pub fn is_collection_type(datatype: &str, keywords: &[&str], open_bracket: char)
         .any(|&k| base_type == k || base_type.ends_with(&format!(".{}", k)))
 }
 
+/// Returns a SHA-256 hex digest of `text`.
+/// Used to fingerprint code elements for deduplication across files.
+pub fn hash_text(text: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(text.as_bytes());
+    hasher.finalize().iter().map(|b| format!("{b:02x}")).collect()
+}
+
 /// Collapses runs of whitespace (including newlines) into single spaces and trims.
 pub fn normalize_whitespace(input: &str) -> String {
     input

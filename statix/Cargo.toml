@@ -11,3 +11,4 @@ tree-sitter-java = { workspace = true }
 tree-sitter-python = { workspace = true }
 thiserror = { workspace = true }
 once_cell = { workspace = true }
+sha2 = { workspace = true }

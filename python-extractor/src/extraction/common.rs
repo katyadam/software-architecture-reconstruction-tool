@@ -1,5 +1,4 @@
 use models::Argument;
-use sha2::{Digest, Sha256};
 use tree_sitter::Node;
 
 pub fn extract_param_names(params_node: Node, code: &str) -> Vec<String> {
@@ -51,12 +50,4 @@ pub fn extract_function_arguments(function_node: Node, code: &str) -> Vec<Argume
 /// Returns the source text slice covered by `node`.
 pub fn node_text<'a>(node: tree_sitter::Node, code: &'a str) -> &'a str {
     &code[node.start_byte()..node.end_byte()]
-}
-
-/// Returns a SHA-256 hex digest of `text`.
-/// Used to fingerprint callable bodies for deduplication across files.
-pub fn hash_text(text: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(text.as_bytes());
-    format!("{:x}", hasher.finalize())
 }
