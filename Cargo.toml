@@ -48,7 +48,7 @@ r2d2 = "0.8.10"
 rust-s3 = "0.37.0"
 
 # Tree-sitter
-tree-sitter = "0.25.7"
+tree-sitter = "0.26.7"
 tree-sitter-java = "0.23.5"
 tree-sitter-python = "0.25.0"
 
@@ -57,7 +57,7 @@ utoipa = { version = "5.4.0", features = ["macros", "actix_extras", "uuid"] }
 utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }
 
 # Utilities
-uuid = { version = "1.18.1", features = ["serde", "v4"] }
+uuid = { version = "1.23.0", features = ["serde", "v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2.0.18"
 anyhow = "1.0"
@@ -66,8 +66,8 @@ env_logger = "0.11.8"
 dotenvy = "0.15.7"
 once_cell = "1.21.3"
 regex = "1.12.3"
-sha2 = "0.10.9"
+sha2 = "0.11"
 rayon = "1.11.0"
-clap = { version = "4.4", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
 strsim = "0.11"
 testcontainers = "0.18.0"
