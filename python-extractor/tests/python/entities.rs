@@ -8,7 +8,7 @@ use python_extractor::{
     s, strs,
 };
 
-use models::{Entity, Field, enums::Enum};
+use models::{Entity, Field, enums::EnumDefinition};
 
 use crate::python::utils::{get_tree, load_file};
 
@@ -288,9 +288,10 @@ fn should_identificate_enums() {
     let entities =
         EntitiesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
     let enums = EnumIdentificator::identify_from_entities(&entities);
-    let expected = vec![Enum {
+    let expected = vec![EnumDefinition {
         name: s!("MappingType"),
-        values: vec![s!("cases"), s!("slides")],
+        variants: vec![s!("cases"), s!("slides")],
+        file_path: s!("./examples/python/enums.py"),
     }];
     assert_eq!(enums, expected);
 }

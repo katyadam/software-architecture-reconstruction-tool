@@ -1,18 +1,23 @@
 use crate::Entity;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Enum {
+pub struct EnumDefinition {
     pub name: String,
-    pub values: Vec<String>,
+    pub variants: Vec<String>,
+    pub file_path: String,
 }
 
-impl Enum {
-    pub fn new(name: String, values: Vec<String>) -> Self {
-        Self { name, values }
+impl EnumDefinition {
+    pub fn new(name: String, variants: Vec<String>, file_path: String) -> Self {
+        Self {
+            name,
+            variants,
+            file_path,
+        }
     }
 
     pub fn from_entity(entity: &Entity) -> Self {
-        let values = entity
+        let variants = entity
             .fields
             .iter()
             .filter_map(|field| {
@@ -24,7 +29,8 @@ impl Enum {
             .collect();
         Self {
             name: entity.name.clone(),
-            values,
+            variants,
+            file_path: entity.file_path.clone(),
         }
     }
 }

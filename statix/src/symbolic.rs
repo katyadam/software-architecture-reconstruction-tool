@@ -3,12 +3,9 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    ast::{CallableAst, Expr, Stmt},
-    error::EvalError,
-    matcher::CallableMatcher,
-    visitor::Visitor,
-};
+use models::ir::ast::{CallableAst, Expr, Stmt};
+
+use crate::{error::EvalError, matcher::CallableMatcher, visitor::Visitor};
 
 pub type VarName = String;
 pub type VarType = String;

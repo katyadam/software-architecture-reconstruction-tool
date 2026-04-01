@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
+use models::ir::ast::{CallableAst, Expr, Parameter, Stmt};
 use tree_sitter::Node;
 
 use crate::{
-    ast::{CallableAst, Expr, Parameter, Stmt},
     error::ParseError,
     util::{node_field_text, node_text},
 };

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{ast::CallableAst, symbolic::VarType};
+use models::ir::ast::CallableAst;
+
+use crate::symbolic::VarType;
 
 pub trait CallableMatcher {
     fn find_closest_callable(

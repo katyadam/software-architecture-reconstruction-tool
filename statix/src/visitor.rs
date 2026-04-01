@@ -1,7 +1,6 @@
-use crate::{
-    ast::{Expr, Stmt},
-    error::EvalError,
-};
+use models::ir::ast::{Expr, Stmt};
+
+use crate::error::EvalError;
 
 pub trait Visitor {
     type Out;

@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
-use models::RestCall;
+use models::{RestCall, ir::ast::CallableAst};
 use statix::{
-    ast::CallableAst,
     error::EvalError,
     java::matcher::{JavaCallableMatcher, java_convert_full_header_to_mangled_name},
     symbolic_evaluation,

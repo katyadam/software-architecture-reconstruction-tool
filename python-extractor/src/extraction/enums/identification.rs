@@ -1,4 +1,4 @@
-use models::{Entity, enums::Enum};
+use models::{Entity, enums::EnumDefinition};
 
 #[derive(Default)]
 pub struct EnumIdentificator {}
@@ -8,11 +8,11 @@ impl EnumIdentificator {
         Self {}
     }
 
-    pub fn identify_from_entities(entities: &[Entity]) -> Vec<Enum> {
+    pub fn identify_from_entities(entities: &[Entity]) -> Vec<EnumDefinition> {
         entities
             .iter()
             .filter(|entity| entity.superclasses.contains(&"Enum".to_string()))
-            .map(Enum::from_entity)
+            .map(EnumDefinition::from_entity)
             .collect()
     }
 }

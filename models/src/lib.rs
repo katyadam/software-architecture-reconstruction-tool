@@ -8,6 +8,7 @@ pub mod endpoints;
 pub mod entities;
 pub mod enums;
 pub mod imports;
+pub mod ir;
 pub mod restcalls;
 
 pub use api::CodeElementsAggregate;

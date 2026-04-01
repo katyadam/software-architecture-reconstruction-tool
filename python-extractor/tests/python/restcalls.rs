@@ -18,7 +18,7 @@ use python_extractor::{
     s,
 };
 
-use models::{Argument, HttpMethod, RestCall, enums::Enum};
+use models::{Argument, HttpMethod, RestCall, enums::EnumDefinition};
 use statix::parse_python;
 use tree_sitter::Tree;
 
@@ -479,9 +479,10 @@ fn should_correctly_generate_multiple_restcalls_with_resolved_enums() {
         MethodCallIdentificationStrategy::new(),
         MethodCallEvaluationStrategy::new(
             function_asts,
-            get_enums_map(&vec![Enum {
+            get_enums_map(&vec![EnumDefinition {
                 name: s!("MappingType"),
-                values: vec![s!("cases"), s!("slides")],
+                variants: vec![s!("cases"), s!("slides")],
+                file_path: s!("./examples/python/restcalls/enum_in_restcall_uri.py"),
             }]),
         ),
     )

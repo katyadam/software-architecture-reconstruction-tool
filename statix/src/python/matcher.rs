@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{ast::CallableAst, matcher::find_closest_callable_impl, symbolic::VarType};
+use models::ir::ast::CallableAst;
+
+use crate::{matcher::find_closest_callable_impl, symbolic::VarType};
 
 #[derive(Clone, Default)]
 pub struct PythonCallableMatcher {}

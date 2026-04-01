@@ -1,16 +1,15 @@
 use std::collections::HashMap;
 
+use models::ir::ast::CallableAst;
 use tree_sitter::Tree;
 
 use crate::{
-    ast::CallableAst,
     java::parser::{find_method_nodes, parse_method},
     matcher::CallableMatcher,
     python::parser::{find_function_nodes, parse_python_function},
     symbolic::{AnalysisContext, SymbolicEvaluator},
 };
 
-pub mod ast;
 pub mod error;
 pub mod java;
 pub mod matcher;

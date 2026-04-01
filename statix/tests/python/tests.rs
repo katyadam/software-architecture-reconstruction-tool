@@ -1,5 +1,5 @@
+use models::ir::ast::Expr;
 use statix::{
-    ast::Expr,
     parse_python,
     python::matcher::PythonCallableMatcher,
     symbolic_evaluation,

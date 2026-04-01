@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use statix::{ast::Expr, symbolic::AnalysisResult};
+use models::ir::ast::Expr;
+use statix::symbolic::AnalysisResult;
 
 type ResolvedPart = Vec<String>;
 

@@ -1,5 +1,5 @@
+use models::ir::ast::Expr;
 use statix::{
-    ast::Expr,
     java::matcher::JavaCallableMatcher,
     parse_java, symbolic_evaluation,
     util::{get_java_tree, load_file},
