@@ -147,6 +147,7 @@ mod tests {
                 }],
                 uri: "/items/".to_string(),
                 file_path: "serviceA/main.py".to_string(),
+                ..Default::default()
             },
             Endpoint {
                 function_name: "proxy_create_item".to_string(),
@@ -160,6 +161,7 @@ mod tests {
                 }],
                 uri: "/proxy-items/".to_string(),
                 file_path: "serviceB/main.py".to_string(),
+                ..Default::default()
             },
         ]
     }

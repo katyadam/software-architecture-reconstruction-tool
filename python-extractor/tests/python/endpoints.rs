@@ -30,6 +30,7 @@ fn base_test() {
             }],
             uri: s!("/items/"),
             file_path: s!(filename),
+            router_variable: Some(s!("app")),
         },
         Endpoint {
             function_name: s!("read_items"),
@@ -55,6 +56,7 @@ fn base_test() {
             ],
             uri: s!("/items/"),
             file_path: s!(filename),
+            router_variable: Some(s!("app")),
         },
         Endpoint {
             function_name: s!("read_item"),
@@ -68,6 +70,7 @@ fn base_test() {
             }],
             uri: s!("/items/{item_id}"),
             file_path: s!(filename),
+            router_variable: Some(s!("app")),
         },
         Endpoint {
             function_name: s!("update_item"),
@@ -88,6 +91,7 @@ fn base_test() {
             ],
             uri: s!("/items/{item_id}"),
             file_path: s!(filename),
+            router_variable: Some(s!("app")),
         },
         Endpoint {
             function_name: s!("delete_item"),
@@ -100,6 +104,7 @@ fn base_test() {
             }],
             uri: s!("/items/{item_id}"),
             file_path: s!(filename),
+            router_variable: Some(s!("app")),
         },
         Endpoint {
             function_name: s!("create_user"),
@@ -112,6 +117,7 @@ fn base_test() {
             }],
             uri: s!("/users/"),
             file_path: s!(filename),
+            router_variable: Some(s!("app")),
         },
         Endpoint {
             function_name: s!("list_users"),
@@ -124,6 +130,7 @@ fn base_test() {
             }],
             uri: s!("/users/"),
             file_path: s!(filename),
+            router_variable: Some(s!("app")),
         },
         Endpoint {
             function_name: s!("get_user"),
@@ -136,6 +143,7 @@ fn base_test() {
             }],
             uri: s!("/users/{user_id}"),
             file_path: s!(filename),
+            router_variable: Some(s!("app")),
         },
         Endpoint {
             function_name: s!("search"),
@@ -148,6 +156,7 @@ fn base_test() {
             }],
             uri: s!("/search/"),
             file_path: s!(filename),
+            router_variable: Some(s!("app")),
         },
     ];
 

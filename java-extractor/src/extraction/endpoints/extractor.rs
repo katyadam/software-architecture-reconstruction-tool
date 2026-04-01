@@ -70,6 +70,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                 http_method: HttpMethod::GET,
                 uri: "".to_string(),
                 file_path: file_name.to_string(),
+                router_variable: None,
             };
             apply_annotations(&mut endpoint, &annotations);
             endpoints.push(endpoint);

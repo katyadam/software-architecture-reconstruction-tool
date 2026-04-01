@@ -121,10 +121,14 @@ pub const RESTCALLS_QUERY: &str = r#"
 pub const ENDPOINTS_QUERY: &str = r#"
 (decorated_definition
     (decorator
-        (call (attribute attribute: (identifier) @http.method)
+        (call (attribute
+            object: (identifier) @router.variable
+            attribute: (identifier) @http.method
+            (#any-of? @http.method "get" "post" "put" "delete" "patch" "options" "head")
+        )
         (argument_list (string) @http.uri)
-    ) @finder (#match? @finder "app."))
-    (function_definition 
+    ))
+    (function_definition
         name: (identifier) @function.name
         parameters: (parameters) @function.params) @function
 )

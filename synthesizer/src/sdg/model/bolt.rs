@@ -62,6 +62,7 @@ impl TryFrom<BoltNode> for Service {
                         function_name: "Bad Deserialization!".to_string(),
                         http_method: models::HttpMethod::DELETE,
                         parameters: vec![],
+                        ..Default::default()
                     })),
                     _ => Err(DeError::InvalidType {
                         received: Unexpected::Other("Non BoltString type").into(),
@@ -212,6 +213,7 @@ impl TryFrom<BoltMap> for Request {
                 http_method: models::HttpMethod::DELETE,
                 parameters: vec![],
                 uri: "Bad Deserialization!".to_string(),
+                ..Default::default()
             })),
             _ => Err(DeError::InvalidType {
                 received: Unexpected::Other("Non BoltString type").into(),
