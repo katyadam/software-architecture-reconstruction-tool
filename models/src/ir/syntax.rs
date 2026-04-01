@@ -6,6 +6,7 @@ use crate::{
     ir::{ast::CallableAst, language::Language},
 };
 
+/// Pass 1 output: one per source file.
 pub struct FileRecord {
     pub file_path: String,
     pub language: Language,
