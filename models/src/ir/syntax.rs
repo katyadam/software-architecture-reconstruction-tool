@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    Assignment, AssignmentKey, CallStatement, Callable, Endpoint, Entity, Import, RestCall,
-    enums::EnumDefinition,
-    ir::{ast::CallableAst, language::Language},
+    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, ParsedCallable, RestCall,
+    enums::EnumDefinition, ir::language::Language,
 };
 
 /// Pass 1 output: one per source file.
@@ -15,12 +14,9 @@ pub struct FileRecord {
     pub imports: Vec<Import>,
     pub entities: Vec<Entity>, // Fields have raw datatype, no datatype_signature yet
     pub endpoints: Vec<Endpoint>, // URI may be incomplete (no prefix chaining)
-    pub callables: Vec<Callable>,
+    pub callables: Vec<ParsedCallable>,
     pub call_statements: Vec<CallStatement>, // Argument.datatype = "any" (unresolved)
     pub assignments: HashMap<AssignmentKey, Assignment>,
-
-    // AST for symbolic evaluation in Pass 3
-    pub callable_asts: HashMap<String, CallableAst>,
 
     // Identified enums (Python: from entities, Java: from enum declarations)
     pub enums: Vec<EnumDefinition>,

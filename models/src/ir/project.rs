@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    Assignment, AssignmentKey, CallStatement, Callable, Endpoint, Entity, Import, RestCall,
+    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, ParsedCallable, RestCall,
     enums::EnumDefinition,
-    ir::{ast::CallableAst, language::Language},
+    ir::language::Language,
 };
 
 pub struct ProjectIR {
@@ -21,11 +21,10 @@ pub struct TypedFileRecord {
     pub imports: Vec<Import>,
     pub entities: Vec<Entity>,    // Field.datatype_signature NOW resolved
     pub endpoints: Vec<Endpoint>, // Still may need prefix resolution
-    pub callables: Vec<Callable>,
+    pub callables: Vec<ParsedCallable>,
     pub call_statements: Vec<CallStatement>, // Argument.datatype NOW resolved where possible
     pub assignments: HashMap<AssignmentKey, Assignment>,
 
-    pub callable_asts: HashMap<String, CallableAst>,
     pub enums: Vec<EnumDefinition>,
     pub raw_restcalls: Vec<RestCall>,
 }

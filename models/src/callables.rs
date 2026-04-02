@@ -3,6 +3,8 @@ use std::fmt::{self, Display};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::ir::ast::CallableAst;
+
 #[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct Parameter {
     pub name: String,
@@ -74,5 +76,17 @@ impl Display for Callable {
             "\nFILE: {}\nNAMESPACE: {}\nSIGN: {}\nHASH: {}",
             self.file_path, self.namespace, self.signature, self.hash,
         )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ParsedCallable {
+    pub callable: Callable,
+    pub ast: CallableAst,
+}
+
+impl From<ParsedCallable> for Callable {
+    fn from(pc: ParsedCallable) -> Self {
+        pc.callable
     }
 }
