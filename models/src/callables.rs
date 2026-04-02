@@ -99,12 +99,12 @@ impl Display for Callable {
 
 #[derive(Clone, Debug)]
 pub struct ParsedCallable {
-    pub callable: Callable,
+    pub metadata: Callable,
     pub ast: CallableAst,
 }
 
 impl From<ParsedCallable> for Callable {
     fn from(pc: ParsedCallable) -> Self {
-        pc.callable
+        pc.metadata
     }
 }

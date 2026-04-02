@@ -77,7 +77,7 @@ pub fn parse_java(tree: &Tree, code: &str) -> HashMap<String, ParsedCallable> {
             file_path: String::new(),
         };
 
-        map.insert(mangled_key, ParsedCallable { callable, ast });
+        map.insert(mangled_key, ParsedCallable { metadata: callable, ast });
     }
 
     map
@@ -136,7 +136,7 @@ pub fn parse_python(tree: &Tree, code: &str) -> HashMap<String, ParsedCallable> 
             file_path: String::new(),
         };
 
-        map.insert(mangled_key, ParsedCallable { callable, ast });
+        map.insert(mangled_key, ParsedCallable { metadata: callable, ast });
     }
 
     map

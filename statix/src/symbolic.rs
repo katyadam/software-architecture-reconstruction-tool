@@ -143,7 +143,7 @@ impl<'a> SymbolicEvaluator<'a> {
         })?;
 
         let mut env = HashMap::new();
-        for param in &callable.callable.parameters {
+        for param in &callable.metadata.parameters {
             let inserted_expr = if let Some(initial_value) = &param.initial_value {
                 Expr::Literal(initial_value.to_string())
             } else {
@@ -256,7 +256,7 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             };
 
             for (param, val) in parsed_callable
-                .callable
+                .metadata
                 .parameters
                 .iter()
                 .zip(evaluated_args)
@@ -268,7 +268,7 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             let result = local_evaluator.visit_statements(&parsed_callable.ast.statements)?;
 
             Ok((
-                parsed_callable.callable.return_type.clone(),
+                parsed_callable.metadata.return_type.clone(),
                 result.unwrap_or(Expr::Empty),
             ))
         } else {
