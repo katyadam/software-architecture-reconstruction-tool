@@ -40,7 +40,7 @@ pub fn extract_function_arguments(function_node: Node, code: &str) -> Vec<Argume
             arguments.push(Argument {
                 assigned_variable: name.to_string(),
                 value: value.to_string(),
-                datatype: "any".to_string(),
+                datatype: None,
             });
         }
     }

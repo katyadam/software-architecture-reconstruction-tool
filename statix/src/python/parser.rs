@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 
-use models::ir::ast::{CallableAst, Expr, Parameter, Stmt};
+use models::{
+    Parameter,
+    ir::ast::{CallableAst, Expr, Stmt},
+};
 use tree_sitter::Node;
 
 use crate::{
@@ -22,20 +25,11 @@ pub fn find_function_nodes(root: Node) -> Vec<Node> {
 }
 
 pub fn parse_python_function(node: Node, code: &str) -> Result<CallableAst, ParseError> {
-    let name = node_field_text(node, "name", code)?;
-
-    let return_type = if let Some(rt_node) = node.child_by_field_name("return_type") {
-        node_text(rt_node, code)?
-    } else {
-        "Any".to_string()
-    };
-
     let params_node = node
         .child_by_field_name("parameters")
         .ok_or(ParseError::FieldNotFound("parameters".to_string()))?;
 
     let params = parse_parameters(params_node, code)?;
-    let param_types: Vec<String> = params.iter().map(|p| p.datatype.clone()).collect();
 
     let body_node = node
         .child_by_field_name("body")
@@ -48,43 +42,52 @@ pub fn parse_python_function(node: Node, code: &str) -> Result<CallableAst, Pars
 
     let body = parse_block(body_node, code, &mut declared_vars)?;
 
-    Ok(CallableAst {
-        return_type: return_type.clone(),
-        header: return_type + " " + &name + &format!("({})", param_types.join(",")),
-        params,
-        body,
-    })
+    Ok(CallableAst { statements: body })
 }
 
-fn parse_parameters(node: Node, source: &str) -> Result<Vec<Parameter>, ParseError> {
+pub(crate) fn parse_callable_parameters(node: Node, source: &str) -> Vec<Parameter> {
     let mut params = Vec::new();
     let mut cursor = node.walk();
 
     for param in node.named_children(&mut cursor) {
         let name: String;
-        let mut datatype = "Any".to_string();
-        let mut default_value = None;
+        let mut datatype = None;
+        let mut initial_value = None;
 
         match param.kind() {
             "identifier" => {
-                name = node_text(param, source)?;
+                name = match node_text(param, source) {
+                    Ok(n) => n,
+                    Err(_) => continue,
+                };
             }
             "typed_parameter" => {
-                let name_node = param.child(0).ok_or(ParseError::FieldNotFound(
-                    "typed_parameter name".to_string(),
-                ))?;
-                name = node_text(name_node, source)?;
-                datatype = node_field_text(param, "type", source)?;
+                let name_node = match param.child(0) {
+                    Some(n) => n,
+                    None => continue,
+                };
+                name = match node_text(name_node, source) {
+                    Ok(n) => n,
+                    Err(_) => continue,
+                };
+                datatype = node_field_text(param, "type", source).ok();
             }
             "default_parameter" => {
-                name = node_field_text(param, "name", source)?;
-                default_value = Some(node_field_text(param, "value", source)?);
+                name = match node_field_text(param, "name", source) {
+                    Ok(n) => n,
+                    Err(_) => continue,
+                };
+                initial_value = node_field_text(param, "value", source).ok();
             }
             _ => continue,
         }
-        params.push(Parameter::new(name, datatype, default_value));
+        params.push(Parameter { name, datatype, initial_value });
     }
-    Ok(params)
+    params
+}
+
+fn parse_parameters(node: Node, source: &str) -> Result<Vec<Parameter>, ParseError> {
+    Ok(parse_callable_parameters(node, source))
 }
 
 fn parse_block(
@@ -118,14 +121,14 @@ fn parse_block(
                             scope_vars.insert(name.clone());
                             stmts.push(Stmt::Declaration {
                                 name,
-                                dtype: "Any".to_string(),
+                                dtype: None,
                                 value,
                             });
                         }
                     } else {
                         stmts.push(Stmt::Declaration {
                             name,
-                            dtype: "Any".to_string(),
+                            dtype: None,
                             value: Expr::Empty,
                         });
                     }

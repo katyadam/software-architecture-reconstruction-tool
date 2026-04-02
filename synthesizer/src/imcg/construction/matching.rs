@@ -2,10 +2,14 @@ use models::CallStatement;
 
 use crate::imcg::model::ServiceCallable;
 
-fn match_arg_and_param_datatypes(arg_datatype: &str, param_datatype: &Option<String>) -> bool {
-    match param_datatype {
-        Some(u_param_datatype) => arg_datatype == u_param_datatype,
-        None => "any" == arg_datatype,
+fn match_arg_and_param_datatypes(
+    arg_datatype: &Option<String>,
+    param_datatype: &Option<String>,
+) -> bool {
+    match (arg_datatype, param_datatype) {
+        (Some(a), Some(p)) => a == p,
+        (None, None) => true,
+        _ => false,
     }
 }
 

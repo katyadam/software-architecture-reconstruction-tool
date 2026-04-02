@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use models::{RestCall, ir::ast::CallableAst};
+use models::{ParsedCallable, RestCall};
 use statix::{
     error::EvalError,
     java::matcher::{JavaCallableMatcher, java_convert_full_header_to_mangled_name},
@@ -12,11 +12,11 @@ use crate::extraction::restcalls::evaluation::{
 };
 
 pub struct SpringEvaluationStrategy {
-    method_asts: HashMap<String, CallableAst>,
+    method_asts: HashMap<String, ParsedCallable>,
 }
 
 impl SpringEvaluationStrategy {
-    pub fn new(method_asts: HashMap<String, CallableAst>) -> Self {
+    pub fn new(method_asts: HashMap<String, ParsedCallable>) -> Self {
         Self { method_asts }
     }
 }

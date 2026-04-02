@@ -98,12 +98,12 @@ mod tests {
                 Argument {
                     assigned_variable: "".to_string(),
                     value: "f\"{BASE_URL}/items/\"".to_string(),
-                    datatype: "any".to_string(),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: "json".to_string(),
                     value: "data.dict".to_string(),
-                    datatype: "any".to_string(),
+                    datatype: None,
                 },
             ],
             enclosing_function_name: Some("proxy_create_item(data: ProxyItemCreate)".to_string()),
@@ -125,7 +125,7 @@ mod tests {
             call_arguments: vec![Argument {
                 assigned_variable: "json".to_string(),
                 value: "data.dict()".to_string(),
-                datatype: "any".to_string(),
+                datatype: None,
             }],
             http_method: HttpMethod::POST,
             target_uri: "http://localhost:8000/items/".to_string(),

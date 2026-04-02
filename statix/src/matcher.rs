@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use models::ir::ast::CallableAst;
+use models::ParsedCallable;
 
 use crate::symbolic::VarType;
 
 pub trait CallableMatcher {
     fn find_closest_callable(
         &self,
-        callables: &HashMap<String, CallableAst>,
+        callables: &HashMap<String, ParsedCallable>,
         name: &str,
         params: &[VarType],
     ) -> Option<String>;
@@ -27,13 +27,20 @@ impl Clone for Box<dyn CallableMatcher> {
 /// function name + highest number of matching parameter types.
 /// Uses `winner.is_none() || matched > highest` so zero-param callees resolve correctly.
 pub fn find_closest_callable_impl(
-    callables: &HashMap<String, CallableAst>,
+    callables: &HashMap<String, ParsedCallable>,
     name: &str,
     params: &[VarType],
 ) -> Option<String> {
     let mut highest: usize = 0;
     let mut winner: Option<String> = None;
-    let mangled_name = name.to_owned() + "(" + &params.join(",") + ")";
+    let mangled_name = name.to_owned()
+        + "("
+        + &params
+            .iter()
+            .map(|t| t.as_deref().unwrap_or(""))
+            .collect::<Vec<_>>()
+            .join(",")
+        + ")";
 
     for header in callables.keys() {
         // Prefer exact match by mangled name
@@ -66,7 +73,15 @@ pub fn find_closest_callable_impl(
 /// stripping return type and parameter names.
 pub fn mangle_header(header: &str) -> Option<String> {
     let (name, params) = parse_callable_header_manual(header)?;
-    Some(name + "(" + &params.join(",") + ")")
+    Some(
+        name + "("
+            + &params
+                .iter()
+                .map(|t| t.as_deref().unwrap_or(""))
+                .collect::<Vec<_>>()
+                .join(",")
+            + ")",
+    )
 }
 
 /// Parse a callable header string into `(name, [param_types])`.
@@ -97,7 +112,7 @@ pub fn parse_callable_header_manual(header: &str) -> Option<(String, Vec<VarType
             ',' if bracket_depth == 0 => {
                 let p = current_param.trim();
                 if !p.is_empty() {
-                    params.push(p.to_string());
+                    params.push(Some(p.to_string()));
                 }
                 current_param.clear();
             }
@@ -107,7 +122,7 @@ pub fn parse_callable_header_manual(header: &str) -> Option<(String, Vec<VarType
 
     let last_p = current_param.trim();
     if !last_p.is_empty() {
-        params.push(last_p.to_string());
+        params.push(Some(last_p.to_string()));
     }
 
     Some((name, params))

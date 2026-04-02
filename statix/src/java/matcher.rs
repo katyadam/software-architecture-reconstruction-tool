@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use models::ir::ast::CallableAst;
+use models::ParsedCallable;
 
 use crate::{matcher::find_closest_callable_impl, symbolic::VarType};
 
@@ -16,7 +16,7 @@ impl JavaCallableMatcher {
 impl crate::matcher::CallableMatcher for JavaCallableMatcher {
     fn find_closest_callable(
         &self,
-        callables: &HashMap<String, CallableAst>,
+        callables: &HashMap<String, ParsedCallable>,
         name: &str,
         params: &[VarType],
     ) -> Option<String> {

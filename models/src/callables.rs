@@ -12,6 +12,24 @@ pub struct Parameter {
     pub initial_value: Option<String>,
 }
 
+impl Parameter {
+    pub fn new(name: String, datatype: Option<String>, initial_value: Option<String>) -> Self {
+        Self {
+            name,
+            datatype,
+            initial_value,
+        }
+    }
+
+    pub fn without_default_value(name: String, datatype: String) -> Self {
+        Self {
+            name,
+            datatype: Some(datatype),
+            initial_value: None,
+        }
+    }
+}
+
 impl fmt::Display for Parameter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let to_print = match (&self.datatype, &self.initial_value) {

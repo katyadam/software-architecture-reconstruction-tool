@@ -144,8 +144,9 @@ fn resolve_fstring(
                             }
                         })
                         .collect(),
-                    Some((dtype, Expr::Var(_))) => enums_map
-                        .get(dtype)
+                    Some((dtype, Expr::Var(_))) => dtype
+                        .as_deref()
+                        .and_then(|t| enums_map.get(t))
                         .cloned()
                         .unwrap_or_else(|| vec![format!("{{{}}}", var_name)]),
                     _ => vec![format!("{{{}}}", var_name)],

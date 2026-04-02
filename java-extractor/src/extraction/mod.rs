@@ -77,11 +77,11 @@ pub async fn extract(
     // Post-processing / evaluation
     evaluate_entity_fields(&imports, &mut entities);
     evaluate_invocations(&mut calls, &assignments);
-    let methods_asts = parse_java(&tree, code);
+    let parsed_callables = parse_java(&tree, code);
 
     let restcalls = SpringSelector::new(
         SpringIdentificationStrategy::new(),
-        SpringEvaluationStrategy::new(methods_asts),
+        SpringEvaluationStrategy::new(parsed_callables),
     )
     .select_restcall_statements(&calls, file_name)
     .map_err(|e| {

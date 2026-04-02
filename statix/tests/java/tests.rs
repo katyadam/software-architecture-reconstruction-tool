@@ -30,7 +30,8 @@ fn should_return_correct_variable_with_value_and_datatype() {
         .get("inside_payment_service_url")
         .expect("inside_payment_service_url should be in the final env!");
     assert_eq!(
-        looked_variable.0, "String",
+        looked_variable.0,
+        Some("String".to_string()),
         "inside_payment_service_url should have datatype String"
     );
     assert_eq!(

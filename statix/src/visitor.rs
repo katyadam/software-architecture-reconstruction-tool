@@ -18,8 +18,12 @@ pub trait Visitor {
     // Statement visits
     fn visit_statements(&mut self, stmts: &[Stmt]) -> Result<Option<Expr>, EvalError>;
     fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), EvalError>;
-    fn visit_declaration(&mut self, name: &str, dtype: &str, value: &Expr)
-    -> Result<(), EvalError>;
+    fn visit_declaration(
+        &mut self,
+        name: &str,
+        dtype: &Option<String>,
+        value: &Expr,
+    ) -> Result<(), EvalError>;
     fn visit_assignment(&mut self, name: &str, value: &Expr) -> Result<(), EvalError>;
     fn visit_if(
         &mut self,

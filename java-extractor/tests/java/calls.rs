@@ -33,7 +33,7 @@ fn test_all_call_statements() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("\"Overloaded Call\""),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("CallPossibilities()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
@@ -61,7 +61,7 @@ fn test_all_call_statements() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("msg"),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("CallPossibilities(String msg)")),
             enclosing_class_name: Some(s!("CallPossibilities")),
@@ -149,7 +149,7 @@ fn test_all_call_statements() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("\"Method Reference Call\""),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
@@ -189,7 +189,7 @@ fn test_all_call_statements() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("\"internalMethod\""),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
@@ -205,7 +205,7 @@ fn test_all_call_statements() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("this"),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
@@ -245,7 +245,7 @@ fn test_all_call_statements() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("\" WORLD\""),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("void demonstrateCalls()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
@@ -261,7 +261,7 @@ fn test_all_call_statements() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("\"Internal method executed.\""),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("void internalMethod()")),
             enclosing_class_name: Some(s!("CallPossibilities")),
@@ -277,7 +277,7 @@ fn test_all_call_statements() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("\"Parent method executed.\""),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("void parentMethod()")),
             enclosing_class_name: Some(s!("ParentClass")),
@@ -293,7 +293,7 @@ fn test_all_call_statements() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("\"Static call executed.\""),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("void staticAction()")),
             enclosing_class_name: Some(s!("StaticTarget")),
@@ -325,12 +325,12 @@ fn test_call_statements_evaluation_with_method_overloading() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("a"),
-                    datatype: s!("int"),
+                    datatype: Some(s!("int")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("b"),
-                    datatype: s!("int"),
+                    datatype: Some(s!("int")),
                 },
             ],
             enclosing_function_name: Some(s!("void demo()")),
@@ -348,12 +348,12 @@ fn test_call_statements_evaluation_with_method_overloading() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("2.5"),
-                    datatype: s!("double"),
+                    datatype: Some(s!("double")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("3.5"),
-                    datatype: s!("double"),
+                    datatype: Some(s!("double")),
                 },
             ],
             enclosing_function_name: Some(s!("void demo()")),
@@ -371,17 +371,17 @@ fn test_call_statements_evaluation_with_method_overloading() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("1"),
-                    datatype: s!("int"),
+                    datatype: Some(s!("int")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("2"),
-                    datatype: s!("int"),
+                    datatype: Some(s!("int")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("3"),
-                    datatype: s!("int"),
+                    datatype: Some(s!("int")),
                 },
             ],
             enclosing_function_name: Some(s!("void demo()")),
@@ -399,12 +399,12 @@ fn test_call_statements_evaluation_with_method_overloading() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("\"Hello, \""),
-                    datatype: s!("String"),
+                    datatype: Some(s!("String")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("\"World!\""),
-                    datatype: s!("String"),
+                    datatype: Some(s!("String")),
                 },
             ],
             enclosing_function_name: Some(s!("void demo()")),
@@ -448,22 +448,22 @@ fn test_call_statements_evaluation_with_method_overloading() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("order_service_url + \"/api/v1/orderservice/order\""),
-                    datatype: s!("String"),
+                    datatype: Some(s!("String")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("HttpMethod.PUT"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("Response.class"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             enclosing_function_name: Some(s!("void main(String[] args)")),

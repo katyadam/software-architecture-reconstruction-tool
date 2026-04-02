@@ -43,22 +43,22 @@ fn test_spring_restcalls_without_dfa() {
                     value: s!(
                         "notification_service_url + \"/api/v1/notifyservice/notification/order_cancel_success\""
                     ),
-                    datatype: s!("String"),
+                    datatype: Some(s!("String")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("HttpMethod.POST"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("HttpEntity"),
+                    datatype: Some(s!("HttpEntity")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("Boolean.class"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::POST,
@@ -74,22 +74,22 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("order_service_url + \"/api/v1/orderservice/order\""),
-                    datatype: s!("String"),
+                    datatype: Some(s!("String")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("HttpMethod.PUT"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("HttpEntity"),
+                    datatype: Some(s!("HttpEntity")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("Response.class"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::PUT,
@@ -103,22 +103,22 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("order_other_service_url + \"/api/v1/orderOtherService/orderOther\""),
-                    datatype: s!("String"),
+                    datatype: Some(s!("String")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("HttpMethod.PUT"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("HttpEntity"),
+                    datatype: Some(s!("HttpEntity")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("Response.class"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::PUT,
@@ -136,22 +136,22 @@ fn test_spring_restcalls_without_dfa() {
                     value: s!(
                         "inside_payment_service_url + \"/api/v1/inside_pay_service/inside_payment/drawback/\" + userId + \"/\" + money"
                     ),
-                    datatype: s!("String"),
+                    datatype: Some(s!("String")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("HttpMethod.GET"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("HttpEntity"),
+                    datatype: Some(s!("HttpEntity")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("Response.class"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::GET,
@@ -167,24 +167,24 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("user_service_url + \"/api/v1/userservice/users/id/\" + orderId"),
-                    datatype: s!("String"),
+                    datatype: Some(s!("String")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("HttpMethod.GET"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("HttpEntity"),
+                    datatype: Some(s!("HttpEntity")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!(
                         "new ParameterizedTypeReference<Response<User>>() {\n                }"
                     ),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::GET,
@@ -200,24 +200,24 @@ fn test_spring_restcalls_without_dfa() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("order_service_url + \"/api/v1/orderservice/order/\" + orderId"),
-                    datatype: s!("String"),
+                    datatype: Some(s!("String")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("HttpMethod.GET"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("HttpEntity"),
+                    datatype: Some(s!("HttpEntity")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!(
                         "new ParameterizedTypeReference<Response<Order>>() {\n                }"
                     ),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::GET,
@@ -235,24 +235,24 @@ fn test_spring_restcalls_without_dfa() {
                     value: s!(
                         "order_other_service_url + \"/api/v1/orderOtherService/orderOther/\" + orderId"
                     ),
-                    datatype: s!("String"),
+                    datatype: Some(s!("String")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("HttpMethod.GET"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("requestEntity"),
-                    datatype: s!("HttpEntity"),
+                    datatype: Some(s!("HttpEntity")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!(
                         "new ParameterizedTypeReference<Response<Order>>() {\n                }"
                     ),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::GET,

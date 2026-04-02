@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use models::{RestCall, ir::ast::CallableAst};
+use models::{ParsedCallable, RestCall};
 use statix::{
     python::matcher::{PythonCallableMatcher, python_convert_full_header_to_mangled_name},
     symbolic_evaluation,
@@ -11,13 +11,13 @@ use crate::extraction::restcalls::evaluation::{
 };
 
 pub struct MethodCallEvaluationStrategy {
-    function_asts: HashMap<String, CallableAst>,
+    function_asts: HashMap<String, ParsedCallable>,
     enums_map: HashMap<String, Vec<String>>,
 }
 
 impl MethodCallEvaluationStrategy {
     pub fn new(
-        function_asts: HashMap<String, CallableAst>,
+        function_asts: HashMap<String, ParsedCallable>,
         enums_map: HashMap<String, Vec<String>>,
     ) -> Self {
         Self {

@@ -1,4 +1,7 @@
-use models::ir::ast::{CallableAst, Expr, Parameter, Stmt};
+use models::{
+    Parameter,
+    ir::ast::{CallableAst, Expr, Stmt},
+};
 use tree_sitter::Node;
 
 use crate::{
@@ -19,36 +22,26 @@ pub fn find_method_nodes(root: Node) -> Vec<Node> {
 }
 
 pub fn parse_method(node: Node, code: &str) -> Result<CallableAst, ParseError> {
-    let return_type = node_field_text(node, "type", code)?;
-    let name = node_field_text(node, "name", code)?;
-
-    let params_node = node
-        .child_by_field_name("parameters")
-        .ok_or(ParseError::FieldNotFound("parameters".to_string()))?;
-
-    let params = parse_parameters(params_node, code)?;
-    let params_types: Vec<String> = params.iter().map(|p| p.datatype.clone()).collect();
-
     let body = if let Some(body_node) = node.child_by_field_name("body") {
         parse_block(body_node, code)?
     } else {
         Vec::new()
     };
-    Ok(CallableAst {
-        return_type: return_type.clone(),
-        header: return_type + " " + &name + &format!("({})", params_types.join(",")),
-        params,
-        body,
-    })
+    Ok(CallableAst { statements: body })
 }
 
-fn parse_parameters(node: Node, source: &str) -> Result<Vec<Parameter>, ParseError> {
+/// Extract `models::callables::Parameter` list from a Java `formal_parameters` node.
+pub(crate) fn parse_callable_parameters(node: Node, source: &str) -> Vec<Parameter> {
     node.named_children(&mut node.walk())
         .filter(|n| n.kind() == "formal_parameter")
-        .map(|param| {
-            let name = node_field_text(param, "name", source)?;
-            let datatype = node_field_text(param, "type", source)?;
-            Ok(Parameter::without_default_value(name, datatype))
+        .filter_map(|param| {
+            let name = node_field_text(param, "name", source).ok()?;
+            let datatype = node_field_text(param, "type", source).ok()?;
+            Some(Parameter {
+                name,
+                datatype: Some(datatype),
+                initial_value: None,
+            })
         })
         .collect()
 }
@@ -113,7 +106,7 @@ fn parse_stmt(node: Node, source: &str) -> Result<Stmt, ParseError> {
 
             Ok(Stmt::Declaration {
                 name,
-                dtype: datatype,
+                dtype: Some(datatype),
                 value,
             })
         }
