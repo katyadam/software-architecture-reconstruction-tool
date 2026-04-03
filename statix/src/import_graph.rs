@@ -22,7 +22,7 @@ use crate::{java::imports::resolve_java_import, python::imports::resolve_python_
 /// in the graph.
 pub fn build_import_graph(file_records: &[FileRecord]) -> ImportGraph {
     let index = FileDefinitionsIndex::build(file_records);
-    let mut resolved_imports: HashMap<String, ResolvedImport> = HashMap::new();
+    let mut resolved_imports: HashMap<(String, String), ResolvedImport> = HashMap::new();
 
     for record in file_records {
         for import in &record.imports {
@@ -34,10 +34,8 @@ pub fn build_import_graph(file_records: &[FileRecord]) -> ImportGraph {
                 Language::Java => resolve_java_import(import, &index),
             };
             if let Some(ri) = resolved {
-                // First-encountered resolution wins when the same codeword appears
-                // across multiple files.
                 resolved_imports
-                    .entry(import.codeword.clone())
+                    .entry((record.file_path.clone(), import.codeword.clone()))
                     .or_insert(ri);
             }
         }

@@ -29,8 +29,7 @@ def run():
     let graph = build_import_graph(&[main, service]);
 
     let ri = graph
-        .resolved_imports
-        .get("UserService")
+        .lookup("myapp/main.py", "UserService")
         .expect("UserService import should resolve");
     assert_eq!(ri.source_file, "myapp/services.py");
     assert!(matches!(ri.kind, ImportKind::Entity));
@@ -56,8 +55,7 @@ def authenticate(header: str) -> str:
     let graph = build_import_graph(&[auth, utils]);
 
     let ri = graph
-        .resolved_imports
-        .get("parse_token")
+        .lookup("myapp/auth.py", "parse_token")
         .expect("parse_token import should resolve");
     assert_eq!(ri.source_file, "myapp/utils.py");
     assert!(matches!(ri.kind, ImportKind::Callable));
@@ -108,8 +106,7 @@ def run():
     let graph = build_import_graph(&[main, config]);
 
     let ri = graph
-        .resolved_imports
-        .get("myapp.config")
+        .lookup("myapp/main.py", "myapp.config")
         .expect("myapp.config module import should resolve");
     assert_eq!(ri.source_file, "myapp/config.py");
     assert!(matches!(ri.kind, ImportKind::Module));
@@ -136,8 +133,6 @@ def fetch(url: str):
 
 #[test]
 fn python_src_prefix_suffix_match() {
-    // Simulates a project where file paths are stored with a src/ prefix
-    // but imports use the plain dotted module path without the prefix.
     let repo_code = r#"
 class ProductRepository():
     def __init__(self):
@@ -159,14 +154,10 @@ class ProductService():
 
     let graph = build_import_graph(&[service, repo]);
 
-    assert!(
-        graph.resolved_imports.contains_key("ProductRepository"),
-        "suffix match should resolve src/-prefixed paths"
-    );
-    assert_eq!(
-        graph.resolved_imports["ProductRepository"].source_file,
-        "src/myapp/repo.py"
-    );
+    let ri = graph
+        .lookup("src/myapp/service.py", "ProductRepository")
+        .expect("suffix match should resolve src/-prefixed paths");
+    assert_eq!(ri.source_file, "src/myapp/repo.py");
 }
 
 #[test]
@@ -193,8 +184,61 @@ def create_order(user: User) -> Order:
 
     let graph = build_import_graph(&[service, models]);
 
-    assert!(graph.resolved_imports.contains_key("User"), "User should resolve");
-    assert!(graph.resolved_imports.contains_key("Order"), "Order should resolve");
-    assert_eq!(graph.resolved_imports["User"].source_file, "myapp/models.py");
-    assert_eq!(graph.resolved_imports["Order"].source_file, "myapp/models.py");
+    assert_eq!(
+        graph.lookup("myapp/service.py", "User").expect("User should resolve").source_file,
+        "myapp/models.py"
+    );
+    assert_eq!(
+        graph.lookup("myapp/service.py", "Order").expect("Order should resolve").source_file,
+        "myapp/models.py"
+    );
+}
+
+#[test]
+fn python_same_codeword_across_microservices_resolves_independently() {
+    // Two microservices both have a class named Order but under distinct modules,
+    // which is the common real-world case. Both importers get separate graph entries
+    // and each resolves to its own source file.
+    let svc_a_model = r#"
+class Order():
+    def __init__(self, order_id: str):
+        self.order_id = order_id
+"#;
+
+    let svc_b_model = r#"
+class Order():
+    def __init__(self, amount: float):
+        self.amount = amount
+"#;
+
+    let svc_a_consumer = r#"
+from orders.models import Order
+
+def handle(order: Order):
+    pass
+"#;
+
+    let svc_b_consumer = r#"
+from payments.models import Order
+
+def process(order: Order):
+    pass
+"#;
+
+    let order_a = extract(svc_a_model, "service-a/orders/models.py");
+    let order_b = extract(svc_b_model, "service-b/payments/models.py");
+    let consumer_a = extract(svc_a_consumer, "service-a/orders/handler.py");
+    let consumer_b = extract(svc_b_consumer, "service-b/payments/processor.py");
+
+    let graph = build_import_graph(&[consumer_a, consumer_b, order_a, order_b]);
+
+    let ri_a = graph
+        .lookup("service-a/orders/handler.py", "Order")
+        .expect("service-a Order should resolve");
+    let ri_b = graph
+        .lookup("service-b/payments/processor.py", "Order")
+        .expect("service-b Order should resolve");
+
+    assert_eq!(ri_a.source_file, "service-a/orders/models.py");
+    assert_eq!(ri_b.source_file, "service-b/payments/models.py");
 }

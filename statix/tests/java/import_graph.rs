@@ -62,9 +62,10 @@ fn make_import(orig_module: &str, orig_name: &str, codeword: &str) -> Import {
 #[test]
 fn java_import_resolves_entity() {
     let mut file_b = make_file_record("com/example/service/UserService.java");
-    file_b
-        .entities
-        .push(make_entity("UserService", "com/example/service/UserService.java"));
+    file_b.entities.push(make_entity(
+        "UserService",
+        "com/example/service/UserService.java",
+    ));
 
     let mut file_a = make_file_record("com/example/Main.java");
     file_a.imports.push(make_import(
@@ -76,8 +77,7 @@ fn java_import_resolves_entity() {
     let graph = build_import_graph(&[file_a, file_b]);
 
     let ri = graph
-        .resolved_imports
-        .get("UserService")
+        .lookup("com/example/Main.java", "UserService")
         .expect("UserService should resolve");
     assert_eq!(ri.source_file, "com/example/service/UserService.java");
     assert!(matches!(ri.kind, ImportKind::Entity));
@@ -87,9 +87,11 @@ fn java_import_resolves_entity() {
 #[test]
 fn java_import_resolves_callable() {
     let mut file_b = make_file_record("com/example/Utils.java");
-    file_b
-        .callables
-        .push(make_callable("hashText(String)", "String", "com/example/Utils.java"));
+    file_b.callables.push(make_callable(
+        "hashText(String)",
+        "String",
+        "com/example/Utils.java",
+    ));
 
     let mut file_a = make_file_record("com/example/Main.java");
     file_a
@@ -99,8 +101,7 @@ fn java_import_resolves_callable() {
     let graph = build_import_graph(&[file_a, file_b]);
 
     let ri = graph
-        .resolved_imports
-        .get("hashText")
+        .lookup("com/example/Main.java", "hashText")
         .expect("hashText should resolve");
     assert_eq!(ri.source_file, "com/example/Utils.java");
     assert!(matches!(ri.kind, ImportKind::Callable));
@@ -109,8 +110,7 @@ fn java_import_resolves_callable() {
 #[test]
 fn java_suffix_match_handles_project_root_prefix() {
     // Maven layout: file_path includes "src/main/java/", but the import path doesn't.
-    let mut file_b =
-        make_file_record("src/main/java/com/example/OrderService.java");
+    let mut file_b = make_file_record("src/main/java/com/example/OrderService.java");
     file_b.entities.push(make_entity(
         "OrderService",
         "src/main/java/com/example/OrderService.java",
@@ -126,7 +126,59 @@ fn java_suffix_match_handles_project_root_prefix() {
     let graph = build_import_graph(&[file_a, file_b]);
 
     assert!(
-        graph.resolved_imports.contains_key("OrderService"),
+        graph
+            .lookup("src/main/java/com/example/Main.java", "OrderService")
+            .is_some(),
         "suffix match should resolve despite Maven project layout prefix"
+    );
+}
+
+#[test]
+fn same_codeword_in_different_files_resolves_independently() {
+    // Two microservices both have a class named Order, but under different packages,
+    // which is the common real-world case. Each importer resolves to its own target.
+    let mut order_svc_order = make_file_record("order-service/com/example/orders/Order.java");
+    order_svc_order.entities.push(make_entity(
+        "Order",
+        "order-service/com/example/orders/Order.java",
+    ));
+
+    let mut payment_svc_order = make_file_record("payment-service/com/example/payments/Order.java");
+    payment_svc_order.entities.push(make_entity(
+        "Order",
+        "payment-service/com/example/payments/Order.java",
+    ));
+
+    let mut order_svc_main = make_file_record("order-service/com/example/Main.java");
+    order_svc_main
+        .imports
+        .push(make_import("com.example.orders.Order", "Order", "Order"));
+
+    let mut payment_svc_main = make_file_record("payment-service/com/example/Main.java");
+    payment_svc_main
+        .imports
+        .push(make_import("com.example.payments.Order", "Order", "Order"));
+
+    let graph = build_import_graph(&[
+        order_svc_main,
+        payment_svc_main,
+        order_svc_order,
+        payment_svc_order,
+    ]);
+
+    let order_ri = graph
+        .lookup("order-service/com/example/Main.java", "Order")
+        .expect("order-service Order should resolve");
+    let payment_ri = graph
+        .lookup("payment-service/com/example/Main.java", "Order")
+        .expect("payment-service Order should resolve");
+
+    assert_eq!(
+        order_ri.source_file,
+        "order-service/com/example/orders/Order.java"
+    );
+    assert_eq!(
+        payment_ri.source_file,
+        "payment-service/com/example/payments/Order.java"
     );
 }

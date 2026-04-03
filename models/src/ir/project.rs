@@ -29,11 +29,22 @@ pub struct TypedFileRecord {
     pub raw_restcalls: Vec<RestCall>,
 }
 
-/// Maps import codewords to their defining file + entity/callable.
+/// Maps (importer_file_path, codeword) pairs to their resolved definition.
+///
+/// Keying on the importer prevents cross-microservice collisions: two files in
+/// different services that both import a symbol named `Order` get independent
+/// slots even if the plain codeword would otherwise clash.
 #[derive(Debug)]
 pub struct ImportGraph {
-    /// codeword -> (source_file_path, fully_qualified_name)
-    pub resolved_imports: HashMap<String, ResolvedImport>,
+    pub resolved_imports: HashMap<(String, String), ResolvedImport>,
+}
+
+impl ImportGraph {
+    /// Look up what `codeword` resolves to when used inside `importer_file`.
+    pub fn lookup(&self, importer_file: &str, codeword: &str) -> Option<&ResolvedImport> {
+        self.resolved_imports
+            .get(&(importer_file.to_string(), codeword.to_string()))
+    }
 }
 #[derive(Debug)]
 pub struct ResolvedImport {
