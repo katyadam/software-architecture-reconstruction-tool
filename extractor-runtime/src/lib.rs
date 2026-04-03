@@ -1,3 +1,4 @@
 #[macro_use]
 pub mod macros;
 pub mod dispatch;
+pub mod pipeline;

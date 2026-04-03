@@ -1448,6 +1448,7 @@ dependencies = [
  "rust-s3",
  "serde",
  "serde_json",
+ "statix",
  "thiserror 2.0.18",
  "tokio",
  "utoipa",

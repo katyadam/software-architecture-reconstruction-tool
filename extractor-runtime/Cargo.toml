@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 models = { workspace = true }
+statix = { workspace = true }
 clients = { workspace = true }
 python-extractor = { workspace = true }
 java-extractor = { workspace = true }

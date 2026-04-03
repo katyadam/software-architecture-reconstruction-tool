@@ -18,6 +18,7 @@ use crate::{
 };
 
 pub mod error;
+pub mod import_graph;
 pub mod java;
 pub mod matcher;
 pub mod python;
