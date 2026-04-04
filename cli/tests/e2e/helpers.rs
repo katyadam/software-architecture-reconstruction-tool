@@ -1,5 +1,5 @@
 use extractor_runtime::dispatch;
-use models::CodeElementsAggregate;
+use models::{CodeElementsAggregate, ir::syntax::FileRecord};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -31,6 +31,25 @@ pub fn collect_source_files(dir: &Path) -> Vec<PathBuf> {
         }
     }
     results
+}
+
+/// Synchronous helper: extracts `FileRecord`s from all source files in `dirs`
+/// using `dispatch_syntactic` (Pass 1 only — no cross-file resolution).
+pub fn collect_file_records(dirs: &[&Path]) -> Vec<FileRecord> {
+    let mut records = Vec::new();
+    for dir in dirs {
+        for file_path in collect_source_files(dir) {
+            let code = fs::read_to_string(&file_path)
+                .unwrap_or_else(|_| panic!("Failed to read {:?}", file_path));
+            let path_str = file_path.to_str().expect("Non-UTF8 path");
+            if let Some(record) = dispatch::dispatch_syntactic(&code, path_str)
+                .unwrap_or_else(|e| panic!("Syntactic dispatch failed for {:?}: {:?}", file_path, e))
+            {
+                records.push(record);
+            }
+        }
+    }
+    records
 }
 
 pub async fn extract_from_dirs(dirs: &[&Path]) -> CodeElementsAggregate {

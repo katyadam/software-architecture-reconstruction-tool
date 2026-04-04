@@ -1,4 +1,4 @@
-package order.service.model;
+package java_order_service.model;
 
 import java.util.List;
 

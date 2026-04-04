@@ -1,4 +1,4 @@
-package order.service.model;
+package java_order_service.model;
 
 public class OrderItem {
     private String productName;

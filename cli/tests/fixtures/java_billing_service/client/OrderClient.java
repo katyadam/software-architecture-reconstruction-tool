@@ -1,6 +1,6 @@
-package billing.service.client;
+package java_billing_service.client;
 
-import order.service.model.Order;
+import java_order_service.model.Order;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
