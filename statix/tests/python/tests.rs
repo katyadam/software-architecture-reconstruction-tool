@@ -264,7 +264,7 @@ def get_url(self, use_prod: bool) -> str:
     .expect("evaluation should succeed");
 
     // With unknown condition: join(Var("use_prod"), "http://prod", "http://dev")
-    // → Joined{"http://prod", "http://dev"}.
+    // -> Joined{"http://prod", "http://dev"}.
     // "http://default" does NOT appear — both branches overwrite it.
     if let Expr::Joined { vals } = &result.return_value {
         assert!(

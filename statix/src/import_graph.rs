@@ -148,8 +148,8 @@ pub fn normalize_path(path: &str) -> String {
 
 /// Extract the simple callable name from a full callable name string.
 ///
-/// - Java: `"String getUser(String id)"` → `"getUser"`
-/// - Python: `"get_user(name: str)"` → `"get_user"`
+/// - Java: `"String getUser(String id)"` -> `"getUser"`
+/// - Python: `"get_user(name: str)"` -> `"get_user"`
 pub fn callable_simple_name(name: &str) -> String {
     // Strip parameter list.
     let before_paren = name.split('(').next().unwrap_or(name).trim();

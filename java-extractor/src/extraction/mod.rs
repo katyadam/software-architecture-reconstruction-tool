@@ -1,4 +1,8 @@
-use models::{CodeElementsAggregate, ParsedCallable, api::ExtractionError, ir::{language::Language, syntax::FileRecord}};
+use models::{
+    CodeElementsAggregate, ParsedCallable,
+    api::ExtractionError,
+    ir::{language::Language, syntax::FileRecord},
+};
 use statix::parse_java;
 use tree_sitter::Parser;
 
@@ -9,7 +13,7 @@ use crate::extraction::{
     endpoints::extractor::EndpointsExtractor,
     entities::{evaluator::evaluate_entity_fields, extractor::EntitiesExtractor},
     extractor::Extractor,
-    imports::extractor::ImportsExtractor,
+    imports::{extractor::ImportsExtractor, graph::imports_to_graph},
     restcalls::{
         evaluation::spring::SpringEvaluationStrategy,
         identification::{spring::SpringIdentificationStrategy, strategy::IdentificationStrategy},
@@ -75,7 +79,8 @@ pub async fn extract(
         calls.ok_or_else(|| ExtractionError::Process("Calls extraction failed".into()))?;
 
     // Post-processing / evaluation
-    evaluate_entity_fields(&imports, &mut entities);
+    let entity_import_graph = imports_to_graph(file_name, &imports);
+    evaluate_entity_fields(&mut entities, file_name, &entity_import_graph);
     evaluate_invocations(&mut calls, &assignments);
     let parsed_callables = parse_java(&tree, code);
 
@@ -131,8 +136,7 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         entities.ok_or_else(|| ExtractionError::Process("Entities extraction failed".into()))?;
     let callables =
         callables.ok_or_else(|| ExtractionError::Process("Callables extraction failed".into()))?;
-    let calls =
-        calls.ok_or_else(|| ExtractionError::Process("Calls extraction failed".into()))?;
+    let calls = calls.ok_or_else(|| ExtractionError::Process("Calls extraction failed".into()))?;
 
     // Build ParsedCallable list: combine rich Callable metadata with parsed ASTs
     let mut parsed_callables_map = parse_java(&tree, code);
@@ -141,7 +145,10 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         .filter_map(|callable| {
             let mangled = java_convert_full_header_to_mangled_name(&callable.name);
             let ast = parsed_callables_map.remove(&mangled)?.ast;
-            Some(ParsedCallable { metadata: callable, ast })
+            Some(ParsedCallable {
+                metadata: callable,
+                ast,
+            })
         })
         .collect();
 

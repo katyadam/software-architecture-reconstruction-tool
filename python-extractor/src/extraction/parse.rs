@@ -14,7 +14,7 @@ use crate::extraction::{
     entities::{evaluator::evaluate_entity_fields, extractor::EntitiesExtractor},
     enums::{identification::EnumIdentificator, map::get_enums_map},
     extractor::{ExtractParams, Extractor},
-    imports::extractor::ImportsExtractor,
+    imports::{extractor::ImportsExtractor, graph::imports_to_graph},
     restcalls::{
         evaluation::method_call::MethodCallEvaluationStrategy,
         identification::{
@@ -71,7 +71,8 @@ pub async fn parse(code: &str, file_name: &str) -> Result<CodeElementsAggregate,
         calls.ok_or_else(|| ExtractionError::Process("Calls extraction failed".into()))?;
 
     // Post-processing / evaluation
-    evaluate_entity_fields(&imports, &mut entities, file_name);
+    let entity_import_graph = imports_to_graph(file_name, &imports);
+    evaluate_entity_fields(&mut entities, file_name, &entity_import_graph);
     evaluate_invocations(&mut calls, &assignments);
     let parsed_callables = parse_python(&tree, code);
     let enums = EnumIdentificator::identify_from_entities(&entities);

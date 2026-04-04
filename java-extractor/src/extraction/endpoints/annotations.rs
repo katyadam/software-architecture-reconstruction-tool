@@ -61,12 +61,12 @@ pub fn extract_uri(annot: &str) -> Option<String> {
     let end = annot.rfind(')')?;
     let inside = annot[start..end].trim();
 
-    // Case 1: unnamed argument → "/users"
+    // Case 1: unnamed argument -> "/users"
     if inside.starts_with('"') {
         return Some(inside.trim_matches('"').to_string());
     }
 
-    // Case 2: named argument → value = "/users" | path = "/users"
+    // Case 2: named argument -> value = "/users" | path = "/users"
     if let Some((name, value)) = inside.split_once('=') {
         let name = name.trim();
         let value = value.trim();

@@ -8,10 +8,10 @@ use crate::import_graph::FileDefinitionsIndex;
 /// Convert a Java fully-qualified import path to a candidate source file path.
 ///
 /// Java stores the complete import in `orig_module`, e.g.:
-/// `import com.example.service.UserService` → `orig_module = "com.example.service.UserService"`
+/// `import com.example.service.UserService` -> `orig_module = "com.example.service.UserService"`
 ///
 /// We convert dots to slashes and append `.java`:
-/// `"com.example.service.UserService"` → `"com/example/service/UserService.java"`
+/// `"com.example.service.UserService"` -> `"com/example/service/UserService.java"`
 pub fn java_import_to_file_path(orig_module: &str) -> String {
     format!("{}.java", orig_module.replace('.', "/"))
 }

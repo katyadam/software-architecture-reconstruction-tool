@@ -89,10 +89,10 @@ fn get_resolved_parts(
 ///
 /// Literal text segments become single-element `Vec`s. `{var}` placeholders are
 /// resolved against `analysis_result`:
-/// - `Expr::Literal` → single value
-/// - `Expr::Joined` → multiple values (expands the Cartesian product)
-/// - `Expr::Var` with a known enum dtype → all enum variants from `enums_map`
-/// - Anything else → the placeholder text unchanged (`{var}`)
+/// - `Expr::Literal` -> single value
+/// - `Expr::Joined` -> multiple values (expands the Cartesian product)
+/// - `Expr::Var` with a known enum dtype -> all enum variants from `enums_map`
+/// - Anything else -> the placeholder text unchanged (`{var}`)
 ///
 /// Escaped braces (`{{` / `}}`) are treated as literal `{` / `}`.
 fn resolve_fstring(

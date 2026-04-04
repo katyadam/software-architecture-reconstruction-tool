@@ -57,7 +57,7 @@ pub const RESTCALLS_QUERY: &str = r#"
 ) @function
 
 ;; ────────────────────────────────────────────────────────────────────────────
-;; PATTERN 2 — with_statement → block → expression_statement
+;; PATTERN 2 — with_statement -> block -> expression_statement
 ;; ────────────────────────────────────────────────────────────────────────────
 (function_definition 
   name: (identifier) @function.name

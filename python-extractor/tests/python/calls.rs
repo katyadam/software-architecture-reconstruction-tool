@@ -585,7 +585,7 @@ fn typed_params_infer_argument_datatypes_test() {
         "call should be inside B"
     );
 
-    // argument `a` has type annotation `int` on B's parameter → should be resolved
+    // argument `a` has type annotation `int` on B's parameter -> should be resolved
     let arg_a = call
         .arguments
         .iter()
@@ -604,8 +604,7 @@ fn typed_params_infer_argument_datatypes_test() {
         .find(|a| a.value == "c")
         .expect("argument c not found");
     assert_eq!(
-        arg_c.datatype,
-        None,
+        arg_c.datatype, None,
         "untyped local variable `c` should produce datatype None"
     );
 }
