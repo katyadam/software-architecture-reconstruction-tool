@@ -1,21 +1,21 @@
-# Voyantclair
+# SAR Tool
 
 A high-performance **Software Architecture Reconstruction (SAR)** tool built in Rust.
 
-Voyantclair provides a unified workflow for analyzing distributed architecture systems. It crawls project directories, dispatches files for extraction via `tree-sitter`, and synthesizes the data into structured JSON models (views).
+SAR Tool provides a unified workflow for analyzing distributed architecture systems. It crawls project directories, dispatches files for extraction via `tree-sitter`, and synthesizes the data into structured JSON models (views).
 
 ---
 
 ## Overview
 
-Voyantclair reconstructs architectural views and persists them within a **Neo4j** graph database, mapping them to Git-based repository metadata to ensure strict version consistency.
+SAR Tool reconstructs architectural views and persists them within a **Neo4j** graph database, mapping them to Git-based repository metadata to ensure strict version consistency.
 
 ### Key Capabilities:
 
-* **Automated Extraction:** Uses `tree-sitter` for fast, precise code parsing.
-* **Multi-View Synthesis:** Generates JSON models for different architectural perspectives.
-* **Graph Storage:** Maps reconstructed views to repository metadata in Neo4j.
-* **Distributed Ready:** Designed to handle complex, distributed architectural styles.
+- **Automated Extraction:** Uses `tree-sitter` for fast, precise code parsing.
+- **Multi-View Synthesis:** Generates JSON models for different architectural perspectives.
+- **Graph Storage:** Maps reconstructed views to repository metadata in Neo4j.
+- **Distributed Ready:** Designed to handle complex, distributed architectural styles.
 
 ---
 
@@ -23,8 +23,8 @@ Voyantclair reconstructs architectural views and persists them within a **Neo4j*
 
 ### Prerequisites
 
-* **Rust & Cargo** (Edition 2024) – [Install via rustup](https://rustup.rs/)
-* **Docker & Docker Compose** – Required for database storage and full-stack deployment.
+- **Rust & Cargo** (Edition 2024) – [Install via rustup](https://rustup.rs/)
+- **Docker & Docker Compose** – Required for database storage and full-stack deployment.
 
 ---
 
@@ -35,8 +35,8 @@ The CLI is the preferred lightweight method when you only need to generate SAR v
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/katyadam/VOYANTCLAIR.git
-cd VOYANTCLAIR
+git clone https://github.com/katyadam/software-architecture-reconstruction-tool.git
+cd software-architecture-reconstruction-tool
 ```
 
 ### 2. Basic Execution
@@ -51,25 +51,24 @@ cargo run -p cli --release -- \
 
 ### Example: Benchmarking "Train-Ticket"
 
-To run the benchmark, the target project must be a **sibling directory** to Voyantclair.
+To run the benchmark, the target project must be a **sibling directory** to SAR tool.
 
 1. **Clone Train-Ticket:**
+
 ```bash
-# In the parent directory where Voyantclair is located
+# In the parent directory where SAR tool is located
 git clone https://github.com/FudanSELab/train-ticket
 ```
 
-
 2. **Run Analysis:**
+
 ```bash
-# From within the VOYANTCLAIR directory
+# From within the software-architecture-reconstruction-tool directory
 cargo run -p cli --release -- \
   -p ../train-ticket \
   -c ./config/configurations/local-train-ticket-config.json \
   -o ./output-directory
 ```
-
-
 
 > **Note:** The output will be generated as JSON files in the specified `./output-directory`.
 
@@ -81,12 +80,13 @@ To access the full suite of features—including metadata storage and Neo4j visu
 
 ### Option A: Development Mode (Cargo + Docker)
 
-*Best for testing full-stack capabilities with local code changes.*
+_Best for testing full-stack capabilities with local code changes._
 
 0. **Create .env**
-In synthesizer, extractor-runtime, manager and constant-scanner, create .env files from their respective .env.example files.
+   In synthesizer, extractor-runtime, manager and constant-scanner, create .env files from their respective .env.example files.
 
 1. **Start Databases:**
+
 ```bash
 # Start Neo4J (Architectural Views)
 cd synthesizer && docker compose up -d && cd ..
@@ -115,14 +115,15 @@ diesel migration run
 cd ..
 ```
 
-
 2. **Launch Services:**
+
 ```bash
 ./run_info.sh
 ./run_client.sh
 ```
 
 3. Create testing metadata:
+
 - Navigate to: `http://localhost:8081/swagger-ui/#/`
 - Create Project
 - Create Codebase - pass created Project UUID
@@ -135,7 +136,7 @@ cd ..
 
 ### Option B: Production Mode (Full Docker Compose)
 
-*Best for a stable, fully containerized environment.*
+_Best for a stable, fully containerized environment._
 
 ```bash
 # In the root directory
@@ -146,16 +147,16 @@ docker compose up -d
 
 Once running, you can access the following services:
 
-| Service | Endpoint | Purpose |
-| --- | --- | --- |
-| **Synthesizer** | `localhost:8080` | View synthesis engine |
-| **Manager** | `localhost:8081` | Project & Commit metadata |
+| Service               | Endpoint         | Purpose                         |
+| --------------------- | ---------------- | ------------------------------- |
+| **Synthesizer**       | `localhost:8080` | View synthesis engine           |
+| **Manager**           | `localhost:8081` | Project & Commit metadata       |
 | **Extractor-Runtime** | `localhost:8082` | `tree-sitter` extraction worker |
-| **Constant-Scanner** | `localhost:8083` | Static constant analysis |
-| **Neo4j Interface** | `localhost:7475` | Graph visualization & storage |
+| **Constant-Scanner**  | `localhost:8083` | Static constant analysis        |
+| **Neo4j Interface**   | `localhost:7475` | Graph visualization & storage   |
 
 **Neo4j Database Port Mapping:**
 
-* **:7687** — Context Map DB
-* **:7688** — SDG (System Dependency Graph) DB
-* **:7689** — IMCG (Inter-Microservice Call Graph) DB
+- **:7687** — Context Map DB
+- **:7688** — SDG (System Dependency Graph) DB
+- **:7689** — IMCG (Inter-Microservice Call Graph) DB
