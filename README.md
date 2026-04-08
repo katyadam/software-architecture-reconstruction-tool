@@ -6,6 +6,9 @@ SAR Tool provides a unified workflow for analyzing distributed architecture syst
 
 ---
 
+## Disclaimer
+First, this repository is currently anonymized. Second, `main` branch currently includes only single-pass SAR. Multi-pass SAR is in the development process on the branch `multi-pass`.
+
 ## Overview
 
 SAR Tool reconstructs architectural views and persists them within a **Neo4j** graph database, mapping them to Git-based repository metadata to ensure strict version consistency.
