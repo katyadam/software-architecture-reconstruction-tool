@@ -8,7 +8,7 @@ use models::{
     Assignment, AssignmentKey, Scope,
     ir::{
         language::Language,
-        project::{ClassHierarchy, ImportGraph, ProjectIR, TypedFileRecord},
+        project::{ImportGraph, ProjectIR, TypedFileRecord},
         syntax::FileRecord,
     },
 };
@@ -16,17 +16,15 @@ use python_extractor::extraction::{
     calls::evaluator::evaluate_invocations_on_statements as python_evaluate_invocations_on_statements,
     entities::evaluator::evaluate_entity_fields as python_evaluate_entity_fields,
 };
-use statix::import_graph::build_import_graph;
+use statix::{class_hierarchy::build_class_hierarchy, import_graph::build_import_graph};
 
 /// Pass 2: Produce a `ProjectIR` from all `FileRecord`s collected in Pass 1.
 ///
-/// Currently implements:
+/// Implements:
 ///   - Import graph construction (cross-file symbol resolution)
 ///   - Entity field type resolution (`Field.datatype_signature` population)
 ///   - Call type inference (`CallStatement.invoked_on` and `Argument.datatype` population)
-///
-/// Remaining steps (class hierarchy, constant collection) are added in
-/// subsequent Phase C increments.
+///   - Class hierarchy building (`ClassHierarchy.parents` and `.children` population)
 pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
     let import_graph = build_import_graph(&file_records);
 
@@ -37,14 +35,12 @@ pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
 
     resolve_entity_fields(&mut files, &import_graph);
     resolve_call_argument_types(&mut files);
+    let class_hierarchy = build_class_hierarchy(&files, &import_graph);
 
     ProjectIR {
         files,
         import_graph,
-        class_hierarchy: ClassHierarchy {
-            parents: HashMap::new(),
-            children: HashMap::new(),
-        },
+        class_hierarchy,
         constants: HashMap::new(),
     }
 }

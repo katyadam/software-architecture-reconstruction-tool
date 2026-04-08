@@ -1,10 +1,11 @@
 pub const ENTITIES_QUERY: &str = r#"
 (package_declaration (_) @package)
 (class_declaration
-	name: 
+	name:
     	(identifier) @entity.name
     superclass: (_ (type_identifier) @entity.superclass)?
-	body: 
+    interfaces: (super_interfaces (type_list (type_identifier) @entity.interface))*
+	body:
     	(class_body 
     		(field_declaration
             	type: (_)

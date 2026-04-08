@@ -17,6 +17,7 @@ use crate::{
     symbolic::{AnalysisContext, SymbolicEvaluator},
 };
 
+pub mod class_hierarchy;
 pub mod error;
 pub mod import_graph;
 pub mod java;
@@ -78,7 +79,13 @@ pub fn parse_java(tree: &Tree, code: &str) -> HashMap<String, ParsedCallable> {
             file_path: String::new(),
         };
 
-        map.insert(mangled_key, ParsedCallable { metadata: callable, ast });
+        map.insert(
+            mangled_key,
+            ParsedCallable {
+                metadata: callable,
+                ast,
+            },
+        );
     }
 
     map
@@ -137,7 +144,13 @@ pub fn parse_python(tree: &Tree, code: &str) -> HashMap<String, ParsedCallable> 
             file_path: String::new(),
         };
 
-        map.insert(mangled_key, ParsedCallable { metadata: callable, ast });
+        map.insert(
+            mangled_key,
+            ParsedCallable {
+                metadata: callable,
+                ast,
+            },
+        );
     }
 
     map

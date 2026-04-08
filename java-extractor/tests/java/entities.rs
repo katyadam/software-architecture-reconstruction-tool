@@ -23,7 +23,7 @@ fn base_test_class() {
 
     let expected = vec![Entity {
         name: s!("AllFieldTypes"),
-        superclasses: strs!["SomeClass"],
+        superclasses: strs!["SomeClass", "SomeInterface"],
         fields: vec![
             Field {
                 name: s!("publicField"),
@@ -247,9 +247,7 @@ fn test_entity_with_interface_implementation() {
 
     let expected = vec![Entity {
         name: s!("UserAccount"),
-        // NOTE: The entities query only captures `extends` (superclass: field in tree-sitter),
-        // not `implements`. So `implements Identifiable` is NOT captured here.
-        superclasses: vec![],
+        superclasses: strs!["Identifiable"],
         fields: vec![
             Field {
                 name: s!("id"),
