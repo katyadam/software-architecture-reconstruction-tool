@@ -148,7 +148,7 @@ pub const ENTITIES_QUERY: &str = r#"
 (
   (class_definition
     (identifier) @class.name
-    (argument_list) @class.superclasses
+    (argument_list)? @class.superclasses
     (block
       (expression_statement)+ @class.fields))
 )
@@ -156,7 +156,7 @@ pub const ENTITIES_QUERY: &str = r#"
 (
   (class_definition
     (identifier) @class.name
-    (argument_list) @class.superclasses
+    (argument_list)? @class.superclasses
     (block
       (function_definition
         (identifier) @constructor.name (#match? @constructor.name "__init__")
