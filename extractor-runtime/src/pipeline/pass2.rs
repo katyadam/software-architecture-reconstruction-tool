@@ -8,7 +8,7 @@ use models::{
     Assignment, AssignmentKey, Scope,
     ir::{
         language::Language,
-        project::{ImportGraph, ProjectIR, TypedFileRecord},
+        project::{ConstantValue, ImportGraph, ProjectIR, TypedFileRecord},
         syntax::FileRecord,
     },
 };
@@ -37,11 +37,13 @@ pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
     resolve_call_argument_types(&mut files);
     let class_hierarchy = build_class_hierarchy(&files, &import_graph);
 
+    let constants = collect_constants(&files);
+
     ProjectIR {
         files,
         import_graph,
         class_hierarchy,
-        constants: HashMap::new(),
+        constants,
     }
 }
 
@@ -73,6 +75,37 @@ fn resolve_call_argument_types(files: &mut [TypedFileRecord]) {
             }
         }
     }
+}
+
+/// Collect project-wide constants from global-scope assignments with literal values.
+///
+/// A constant is any `Scope::Global` assignment whose name is `UPPER_SNAKE_CASE`
+/// and whose value is a string literal, numeric literal, or boolean.
+/// First definition wins on name collisions (import order is non-deterministic).
+fn collect_constants(files: &[TypedFileRecord]) -> HashMap<String, ConstantValue> {
+    let mut constants = HashMap::new();
+    for file in files {
+        for (key, assignment) in &file.assignments {
+            if matches!(key.scope, Scope::Global) && is_constant_name(&key.variable_name) {
+                constants
+                    .entry(key.variable_name.clone())
+                    .or_insert_with(|| ConstantValue {
+                        name: key.variable_name.clone(),
+                        value: assignment.value.clone(),
+                        source_file: file.file_path.clone(),
+                    });
+            }
+        }
+    }
+    constants
+}
+
+/// A constant name is non-empty and consists only of uppercase ASCII letters, digits, and `_`.
+fn is_constant_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c == '_' || c.is_ascii_digit())
 }
 
 /// Build a map of all global-scope assignments across all files.
