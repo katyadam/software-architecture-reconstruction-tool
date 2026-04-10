@@ -58,8 +58,7 @@ fn java_field_resolved_via_import() {
         .entities
         .push(make_entity("Order", "com.example.order.Order", vec![]));
 
-    let mut checkout_file =
-        make_file_record("com/example/checkout/Checkout.java", Language::Java);
+    let mut checkout_file = make_file_record("com/example/checkout/Checkout.java", Language::Java);
     checkout_file
         .imports
         .push(make_import("com.example.order.Order", "Order", "Order"));

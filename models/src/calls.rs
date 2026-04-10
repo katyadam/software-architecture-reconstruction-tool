@@ -10,7 +10,7 @@ pub struct Argument {
     pub datatype: Option<String>,
 }
 
-#[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct CallStatement {
     pub function_name: String,
     pub arguments: Vec<Argument>,
