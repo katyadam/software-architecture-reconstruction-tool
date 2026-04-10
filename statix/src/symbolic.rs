@@ -160,6 +160,36 @@ impl<'a> SymbolicEvaluator<'a> {
             final_env: evaluator.env,
         })
     }
+
+    /// Same as [`eval_callable`] but seeds the environment with `initial_env` before
+    /// adding parameters. Parameters always take priority over `initial_env` entries
+    pub fn eval_callable_with_env(
+        callable_name: &str,
+        ctx: &'a AnalysisContext<'a>,
+        initial_env: Env,
+    ) -> Result<AnalysisResult, EvalError> {
+        let callable = ctx.callables_map.get(callable_name).ok_or_else(|| {
+            EvalError::NonSenseEvaluation(format!("Method {} not found", callable_name))
+        })?;
+
+        let mut env = initial_env;
+        for param in &callable.metadata.parameters {
+            let inserted_expr = if let Some(initial_value) = &param.initial_value {
+                Expr::Literal(initial_value.to_string())
+            } else {
+                Expr::Var(param.name.clone())
+            };
+            env.insert(param.name.clone(), (param.datatype.clone(), inserted_expr));
+        }
+
+        let mut evaluator = Self { env, ctx };
+        let result = evaluator.visit_statements(&callable.ast.statements)?;
+
+        Ok(AnalysisResult {
+            return_value: result.unwrap_or(Expr::Empty),
+            final_env: evaluator.env,
+        })
+    }
 }
 
 impl<'a> Visitor for SymbolicEvaluator<'a> {

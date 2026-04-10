@@ -164,3 +164,16 @@ pub fn symbolic_evaluation(
     let ctx = AnalysisContext::new(callables_map, matcher.into());
     SymbolicEvaluator::eval_callable(callable_signature, &ctx)
 }
+
+/// Like [`symbolic_evaluation`] but seeds the evaluation environment with `initial_env`
+/// before processing the callable's parameters. Use to define cross-file constants in the
+/// symbolic evaluation environment.
+pub fn symbolic_evaluation_with_env(
+    callables_map: &HashMap<String, ParsedCallable>,
+    callable_signature: &str,
+    matcher: Box<dyn CallableMatcher>,
+    initial_env: HashMap<String, (Option<String>, models::ir::ast::Expr)>,
+) -> Result<symbolic::AnalysisResult, error::EvalError> {
+    let ctx = AnalysisContext::new(callables_map, matcher.into());
+    SymbolicEvaluator::eval_callable_with_env(callable_signature, &ctx, initial_env)
+}
