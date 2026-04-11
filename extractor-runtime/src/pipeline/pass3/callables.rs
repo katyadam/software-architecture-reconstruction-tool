@@ -60,7 +60,7 @@ pub(super) fn constants_to_env(
     constants
         .iter()
         .map(|(name, cv)| {
-            let value = cv.value.trim_matches('"').to_string();
+            let value = cv.value.trim_matches(|c| c == '"' || c == '\'').to_string();
             (
                 name.clone(),
                 (Some("String".to_string()), Expr::Literal(value)),
