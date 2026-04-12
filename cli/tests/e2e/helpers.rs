@@ -1,4 +1,4 @@
-use extractor_runtime::dispatch;
+use extractor_runtime::{dispatch, pipeline};
 use models::{CodeElementsAggregate, ir::syntax::FileRecord};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,8 +42,10 @@ pub fn collect_file_records(dirs: &[&Path]) -> Vec<FileRecord> {
             let code = fs::read_to_string(&file_path)
                 .unwrap_or_else(|_| panic!("Failed to read {:?}", file_path));
             let path_str = file_path.to_str().expect("Non-UTF8 path");
-            if let Some(record) = dispatch::dispatch_syntactic(&code, path_str)
-                .unwrap_or_else(|e| panic!("Syntactic dispatch failed for {:?}: {:?}", file_path, e))
+            if let Some(record) =
+                pipeline::dispatch_syntactic(&code, path_str).unwrap_or_else(|e| {
+                    panic!("Syntactic dispatch failed for {:?}: {:?}", file_path, e)
+                })
             {
                 records.push(record);
             }

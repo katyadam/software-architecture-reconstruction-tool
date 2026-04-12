@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use log::info;
-use models::{CodeElementsAggregate, api::ExtractionError, ir::syntax::FileRecord};
+use models::{CodeElementsAggregate, api::ExtractionError};
 use once_cell::sync::Lazy;
 
 use crate::dispatch::extractor::{Extractor, JavaTreeSitterExtractor, PythonTreesitterExtractor};
@@ -35,24 +35,6 @@ pub async fn dispatch(
         }
     } else {
         Ok(None)
-    }
-}
-
-/// Counterpart to [`dispatch`]: extracts a single file into a [`FileRecord`]
-/// (Pass 1 only — no cross-file resolution).
-pub fn dispatch_syntactic(
-    text: &str,
-    file_path: &str,
-) -> Result<Option<FileRecord>, ExtractionError> {
-    let ext = std::path::Path::new(file_path)
-        .extension()
-        .and_then(|e| e.to_str());
-    match ext {
-        Some("java") => java_extractor::extraction::extract_syntactic(text, file_path).map(Some),
-        Some("py") => {
-            python_extractor::extraction::parse::extract_syntactic(text, file_path).map(Some)
-        }
-        _ => Ok(None),
     }
 }
 
