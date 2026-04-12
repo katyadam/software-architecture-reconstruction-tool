@@ -73,9 +73,9 @@ impl<'a> SymbolicEvaluator<'a> {
     /// produce `Expr::Joined`). When `None` (try/catch), values always join.
     ///
     /// Three phases:
-    /// 1. Update pre-existing variables that changed in either branch.
+    /// 1. Update already declared variables that changed in either branch to joined variables in parent env.
     /// 2. Bring variables first declared inside a branch into the parent env.
-    /// 3. For variables declared in BOTH branches that did not exist before,
+    /// 3. For variables declared in BOTH branches that did not exist in the parent env,
     ///    join differing values (phase 2 lets the first-branch value win otherwise).
     fn merge_branches(
         &mut self,
@@ -86,8 +86,16 @@ impl<'a> SymbolicEvaluator<'a> {
         // Phase 1: join differing values for variables that already existed.
         let pre_keys: Vec<String> = self.env.keys().cloned().collect();
         for key in &pre_keys {
-            let (_, a_val) = branch_a.env.get(key).unwrap();
-            let (_, b_val) = branch_b.env.get(key).unwrap();
+            let (_, a_val) = branch_a.env.get(key).ok_or_else(|| {
+                EvalError::NonSenseEvaluation(format!(
+                    "merge_branches: key '{key}' missing in branch_a env"
+                ))
+            })?;
+            let (_, b_val) = branch_b.env.get(key).ok_or_else(|| {
+                EvalError::NonSenseEvaluation(format!(
+                    "merge_branches: key '{key}' missing in branch_b env"
+                ))
+            })?;
             if a_val != b_val {
                 let joined = if let Some(cond) = sym_cond {
                     self.join(cond, a_val, b_val)?.1
@@ -96,7 +104,14 @@ impl<'a> SymbolicEvaluator<'a> {
                         vals: vec![a_val.clone(), b_val.clone()],
                     }
                 };
-                self.env.get_mut(key).unwrap().1 = joined;
+                self.env
+                    .get_mut(key)
+                    .ok_or_else(|| {
+                        EvalError::NonSenseEvaluation(format!(
+                            "merge_branches: key '{key}' missing in parent env"
+                        ))
+                    })?
+                    .1 = joined;
             }
         }
 
@@ -162,17 +177,20 @@ impl<'a> SymbolicEvaluator<'a> {
     }
 
     /// Same as [`eval_callable`] but seeds the environment with `initial_env` before
-    /// adding parameters. Parameters always take priority over `initial_env` entries
+    /// adding parameters. Parameters always take priority over `initial_env` entries.
+    ///
+    /// `initial_env` is borrowed and cloned once internally so the caller can reuse
+    /// the same constants map across multiple invocations without per-call ownership transfer.
     pub fn eval_callable_with_env(
         callable_name: &str,
         ctx: &'a AnalysisContext<'a>,
-        initial_env: Env,
+        initial_env: &Env,
     ) -> Result<AnalysisResult, EvalError> {
         let callable = ctx.callables_map.get(callable_name).ok_or_else(|| {
             EvalError::NonSenseEvaluation(format!("Method {} not found", callable_name))
         })?;
 
-        let mut env = initial_env;
+        let mut env = initial_env.clone();
         for param in &callable.metadata.parameters {
             let inserted_expr = if let Some(initial_value) = &param.initial_value {
                 Expr::Literal(initial_value.to_string())

@@ -54,6 +54,10 @@ pub(super) fn build_merged_enums(files: &[TypedFileRecord]) -> HashMap<String, V
 ///
 /// Quoted string values have their surrounding quotes stripped so that
 /// `BASE_URL = "/api/v1"` becomes `Expr::Literal("/api/v1")`.
+///
+/// All constants are assigned dtype `"String"` regardless of their actual type.
+/// Numeric and boolean constants are represented correctly as `Expr::Literal` values
+/// but carry a `String` dtype, which is intentional for URI concat purposes.
 pub(super) fn constants_to_env(
     constants: &HashMap<String, ConstantValue>,
 ) -> HashMap<String, (Option<String>, Expr)> {

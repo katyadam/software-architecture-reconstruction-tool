@@ -59,10 +59,13 @@ impl LanguageSpecificEvaluator for PythonEvaluator {
     }
 }
 
-pub(super) fn evaluation_for(language: Language) -> Box<dyn LanguageSpecificEvaluator> {
+static JAVA_EVALUATOR: JavaEvaluator = JavaEvaluator;
+static PYTHON_EVALUATOR: PythonEvaluator = PythonEvaluator;
+
+pub(super) fn evaluation_for(language: Language) -> &'static dyn LanguageSpecificEvaluator {
     match language {
-        Language::Java => Box::new(JavaEvaluator),
-        Language::Python => Box::new(PythonEvaluator),
+        Language::Java => &JAVA_EVALUATOR,
+        Language::Python => &PYTHON_EVALUATOR,
     }
 }
 

@@ -2,6 +2,8 @@ use log::info;
 use models::{RestCall, ir::project::ProjectIR};
 use statix::symbolic_evaluation_with_env;
 
+use crate::pipeline::pass3::language_backend::LanguageSpecificEvaluator;
+
 use super::callables::{
     build_file_local_callables, build_merged_enums, build_project_global_callables,
     constants_to_env,
@@ -26,7 +28,7 @@ pub(super) fn evaluate_restcalls(project_ir: &ProjectIR) -> Vec<RestCall> {
             continue;
         }
         let callables = build_file_local_callables(file, &global_callables);
-        let evaluator = evaluation_for(file.language);
+        let evaluator: &dyn LanguageSpecificEvaluator = evaluation_for(file.language);
         for restcall in &file.raw_restcalls {
             if restcall.function_name.is_empty() {
                 all_restcalls.push(restcall.clone());
@@ -37,7 +39,7 @@ pub(super) fn evaluate_restcalls(project_ir: &ProjectIR) -> Vec<RestCall> {
                 &callables,
                 &mangled,
                 evaluator.matcher(),
-                constants_env.clone(),
+                &constants_env,
             );
             match result {
                 Ok(analysis) => {

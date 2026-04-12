@@ -270,6 +270,36 @@ def fetch_items():
     );
 }
 
+/// Files with no raw_restcalls produce no output and do not panic.
+///
+/// A Python file containing only a helper function (no `requests.*` calls)
+/// has an empty `raw_restcalls` list. Pass 3 must short-circuit and produce
+/// zero RestCalls rather than attempting symbolic evaluation on an empty set.
+#[test]
+fn empty_raw_restcalls_produces_no_output() {
+    let code = r#"
+def helper():
+    return "/api/v1"
+"#;
+
+    let record = python_extract(code, "helper.py").expect("helper.py should parse");
+    // raw_restcalls is empty — no requests.get/post/etc. calls in the file
+    assert!(
+        record.raw_restcalls.is_empty(),
+        "helper.py should have no raw_restcalls, got: {:?}",
+        record.raw_restcalls
+    );
+
+    let project_ir = build_project_ir(vec![record]);
+    let evaluated = evaluate(project_ir);
+
+    assert_eq!(
+        evaluated.restcalls.len(),
+        0,
+        "no restcalls expected from a file with no raw_restcalls"
+    );
+}
+
 /// Python: local callable takes priority over an identically-named global callable.
 ///
 /// `global_service.py` defines `get_prefix()` returning `"/global"`.
