@@ -2,7 +2,10 @@ use models::{Argument, CallStatement};
 use python_extractor::{
     extraction::{
         assignments::map::get_assignments_map,
-        calls::{PythonCallStatement, evaluator::evaluate_invocations, extractor::CallsExtractor},
+        calls::{
+            PythonCallStatement, evaluator::evaluate_invocations_on_statements,
+            extractor::CallsExtractor,
+        },
         extractor::{ExtractParams, Extractor},
     },
     s,
@@ -295,9 +298,13 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
     let filename = s!("./examples/python/callgraph/repository-pattern/service.py");
     let code = load_file(&filename).unwrap();
     let tree = get_tree(&code);
-    let mut calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
+    let calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
     let assignments_map = get_assignments_map(&tree, &code);
-    evaluate_invocations(&mut calls, &assignments_map);
+    let mut agnostic: Vec<CallStatement> = calls
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .collect();
+    evaluate_invocations_on_statements(&mut agnostic, &assignments_map);
 
     let expected = vec![
         CallStatement {
@@ -446,13 +453,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
         },
     ];
 
-    assert_eq!(
-        calls
-            .into_iter()
-            .map(PythonCallStatement::to_language_agnostic)
-            .collect::<Vec<CallStatement>>(),
-        expected
-    );
+    assert_eq!(agnostic, expected);
 }
 
 #[test]
@@ -460,9 +461,13 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
     let filename = s!("./examples/python/callgraph/repository-pattern/controller.py");
     let code = load_file(&filename).unwrap();
     let tree = get_tree(&code);
-    let mut calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
+    let calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
     let assignments_map = get_assignments_map(&tree, &code);
-    evaluate_invocations(&mut calls, &assignments_map);
+    let mut agnostic: Vec<CallStatement> = calls
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .collect();
+    evaluate_invocations_on_statements(&mut agnostic, &assignments_map);
 
     let expected = vec![
         CallStatement {
@@ -550,13 +555,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
         },
     ];
 
-    assert_eq!(
-        calls
-            .into_iter()
-            .map(PythonCallStatement::to_language_agnostic)
-            .collect::<Vec<CallStatement>>(),
-        expected
-    );
+    assert_eq!(agnostic, expected);
 }
 
 /// Verifies that type inference resolves argument datatypes from typed function parameters.
@@ -566,14 +565,13 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
 fn typed_params_infer_argument_datatypes_test() {
     let filename = "./examples/python/callgraph/simple_with_types.py";
     let (code, tree) = parse_file(filename);
-    let mut calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
+    let calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
     let assignments_map = get_assignments_map(&tree, &code);
-    evaluate_invocations(&mut calls, &assignments_map);
-
-    let agnostic: Vec<CallStatement> = calls
+    let mut agnostic: Vec<CallStatement> = calls
         .into_iter()
         .map(PythonCallStatement::to_language_agnostic)
         .collect();
+    evaluate_invocations_on_statements(&mut agnostic, &assignments_map);
 
     // B calls A — that is the only call statement in this file
     assert_eq!(agnostic.len(), 1, "expected exactly one call statement");
