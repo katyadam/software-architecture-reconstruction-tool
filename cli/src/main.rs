@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use extractor_runtime::dispatch;
+use extractor_runtime::pipeline::{build_project_ir, dispatch_syntactic, evaluate};
 use models::{CodeElementsAggregate, ConfigurationData};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -73,7 +73,7 @@ async fn main() -> Result<()> {
     );
 
     let extraction = Instant::now();
-    let all_code_elements = get_all_code_elements(&args.project_dir).await?;
+    let all_code_elements = get_all_code_elements(&args.project_dir)?;
     let extraction_elapsed = extraction.elapsed();
 
     println!("✅ Extraction successful!");
@@ -106,17 +106,14 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn get_all_code_elements(project_dir: &PathBuf) -> Result<CodeElementsAggregate> {
-    let mut aggregate = CodeElementsAggregate::default();
-    let mut files_processed = 0;
-
+fn get_all_code_elements(project_dir: &PathBuf) -> Result<CodeElementsAggregate> {
     let paths = collect_files(project_dir)?;
     let files_to_process = paths.len();
-    println!("Total files found: {}", files_to_process);
+    println!("Total files found: {files_to_process}");
 
-    for path in paths {
-        files_processed += 1;
-        let code = match fs::read_to_string(&path) {
+    let mut file_records = Vec::new();
+    for (i, path) in paths.iter().enumerate() {
+        let code = match fs::read_to_string(path) {
             Ok(content) => content,
             Err(e) => {
                 eprintln!(
@@ -128,18 +125,20 @@ async fn get_all_code_elements(project_dir: &PathBuf) -> Result<CodeElementsAggr
             }
         };
         println!(
-            "Extracting ({files_processed}/{files_to_process}): {:?}",
+            "Extracting ({}/{files_to_process}): {:?}",
+            i + 1,
             path.file_name().unwrap_or_default()
         );
-        if let Some(file_elements) = dispatch::dispatch(&code, path.to_str().unwrap_or_default())
-            .await
+        if let Some(record) = dispatch_syntactic(&code, path.to_str().unwrap_or_default())
             .with_context(|| format!("Error dispatching file: {:?}", path))?
         {
-            merge_aggregates(&mut aggregate, file_elements);
+            file_records.push(record);
         }
     }
 
-    Ok(aggregate)
+    let project_ir = build_project_ir(file_records);
+    let evaluated_ir = evaluate(project_ir);
+    Ok(CodeElementsAggregate::from(evaluated_ir))
 }
 
 fn collect_files(dir: &PathBuf) -> Result<Vec<PathBuf>> {
@@ -156,15 +155,6 @@ fn collect_files(dir: &PathBuf) -> Result<Vec<PathBuf>> {
         }
     }
     Ok(results)
-}
-
-fn merge_aggregates(main: &mut CodeElementsAggregate, new: CodeElementsAggregate) {
-    main.imports.extend(new.imports);
-    main.entities.extend(new.entities);
-    main.endpoints.extend(new.endpoints);
-    main.restcalls.extend(new.restcalls);
-    main.callables.extend(new.callables);
-    main.call_statements.extend(new.call_statements);
 }
 
 fn save_json<T: serde::Serialize>(dir: &Path, filename: &str, data: &T) -> Result<()> {

@@ -63,7 +63,9 @@ fn make_import(orig_module: &str, orig_name: &str, codeword: &str) -> Import {
 #[test]
 fn python_from_import_resolves_entity() {
     let mut file_b = make_file_record("myapp/services.py");
-    file_b.entities.push(make_entity("UserService", "myapp/services.py"));
+    file_b
+        .entities
+        .push(make_entity("UserService", "myapp/services.py"));
 
     let mut file_a = make_file_record("myapp/main.py");
     file_a
@@ -159,9 +161,11 @@ fn python_suffix_match_handles_project_root_prefix() {
         .push(make_entity("OrderService", "src/myapp/services.py"));
 
     let mut file_a = make_file_record("src/myapp/main.py");
-    file_a
-        .imports
-        .push(make_import("myapp.services", "OrderService", "OrderService"));
+    file_a.imports.push(make_import(
+        "myapp.services",
+        "OrderService",
+        "OrderService",
+    ));
 
     let graph = build_import_graph(&[file_a, file_b]);
 

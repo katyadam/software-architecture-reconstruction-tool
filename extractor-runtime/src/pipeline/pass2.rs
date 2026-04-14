@@ -3,6 +3,9 @@ use std::collections::HashMap;
 use java_extractor::extraction::{
     calls::evaluator::evaluate_invocations as java_evaluate_invocations,
     entities::evaluator::evaluate_entity_fields as java_evaluate_entity_fields,
+    restcalls::identification::{
+        spring::SpringIdentificationStrategy, strategy::IdentificationStrategy,
+    },
 };
 use models::{
     Assignment, AssignmentKey, Scope,
@@ -35,6 +38,7 @@ pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
 
     resolve_entity_fields(&mut files, &import_graph);
     resolve_call_argument_types(&mut files);
+    re_identify_restcalls(&mut files);
     let class_hierarchy = build_class_hierarchy(&files, &import_graph);
 
     let constants = collect_constants(&files);
@@ -74,6 +78,26 @@ fn resolve_call_argument_types(files: &mut [TypedFileRecord]) {
                 python_evaluate_invocations_on_statements(&mut file.call_statements, &assignments)
             }
         }
+    }
+}
+
+/// Re-run REST call identification on type-resolved call statements.
+///
+/// Java's Spring identification requires `call.invoked_on == "RestTemplate"`, which is only
+/// populated by `evaluate_invocations` (Pass 2). Pass 1 runs identification before types are
+/// resolved, so `raw_restcalls` for Spring clients is empty after extraction.
+fn re_identify_restcalls(files: &mut [TypedFileRecord]) {
+    let strategy = SpringIdentificationStrategy::new();
+    for file in files.iter_mut() {
+        if file.language != Language::Java {
+            continue;
+        }
+        let identified: Vec<_> = file
+            .call_statements
+            .iter()
+            .filter_map(|call| strategy.identify_restcall(call, &file.file_path))
+            .collect();
+        file.raw_restcalls.extend(identified);
     }
 }
 

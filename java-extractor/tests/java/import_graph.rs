@@ -73,7 +73,9 @@ public class Consumer {
     let graph = build_import_graph(&[consumer, utils]);
 
     assert!(
-        graph.lookup("com/example/Consumer.java", "StringUtils").is_some(),
+        graph
+            .lookup("com/example/Consumer.java", "StringUtils")
+            .is_some(),
         "StringUtils should be resolved"
     );
 }
@@ -127,15 +129,27 @@ public class ProductService {
 }
 "#;
 
-    let repo = extract(repo_code, "src/main/java/com/example/repo/ProductRepository.java");
-    let service = extract(service_code, "src/main/java/com/example/service/ProductService.java");
+    let repo = extract(
+        repo_code,
+        "src/main/java/com/example/repo/ProductRepository.java",
+    );
+    let service = extract(
+        service_code,
+        "src/main/java/com/example/service/ProductService.java",
+    );
 
     let graph = build_import_graph(&[service, repo]);
 
     let ri = graph
-        .lookup("src/main/java/com/example/service/ProductService.java", "ProductRepository")
+        .lookup(
+            "src/main/java/com/example/service/ProductService.java",
+            "ProductRepository",
+        )
         .expect("suffix match should resolve Maven-layout paths");
-    assert_eq!(ri.source_file, "src/main/java/com/example/repo/ProductRepository.java");
+    assert_eq!(
+        ri.source_file,
+        "src/main/java/com/example/repo/ProductRepository.java"
+    );
 }
 
 #[test]
@@ -185,7 +199,10 @@ public class Checkout {
         .expect("PaymentService should resolve");
 
     assert_eq!(order_ri.source_file, "com/example/model/Order.java");
-    assert_eq!(payment_ri.source_file, "com/example/service/PaymentService.java");
+    assert_eq!(
+        payment_ri.source_file,
+        "com/example/service/PaymentService.java"
+    );
 }
 
 #[test]
@@ -229,10 +246,22 @@ public class PaymentHandler {
 }
 "#;
 
-    let order_model = extract(order_svc_code, "order-service/com/example/orders/Order.java");
-    let payment_model = extract(payment_svc_code, "payment-service/com/example/payments/Order.java");
-    let order_consumer = extract(order_svc_consumer, "order-service/com/example/OrderHandler.java");
-    let payment_consumer = extract(payment_svc_consumer, "payment-service/com/example/PaymentHandler.java");
+    let order_model = extract(
+        order_svc_code,
+        "order-service/com/example/orders/Order.java",
+    );
+    let payment_model = extract(
+        payment_svc_code,
+        "payment-service/com/example/payments/Order.java",
+    );
+    let order_consumer = extract(
+        order_svc_consumer,
+        "order-service/com/example/OrderHandler.java",
+    );
+    let payment_consumer = extract(
+        payment_svc_consumer,
+        "payment-service/com/example/PaymentHandler.java",
+    );
 
     let graph = build_import_graph(&[order_consumer, payment_consumer, order_model, payment_model]);
 
@@ -243,6 +272,12 @@ public class PaymentHandler {
         .lookup("payment-service/com/example/PaymentHandler.java", "Order")
         .expect("payment-service Order should resolve");
 
-    assert_eq!(order_ri.source_file, "order-service/com/example/orders/Order.java");
-    assert_eq!(payment_ri.source_file, "payment-service/com/example/payments/Order.java");
+    assert_eq!(
+        order_ri.source_file,
+        "order-service/com/example/orders/Order.java"
+    );
+    assert_eq!(
+        payment_ri.source_file,
+        "payment-service/com/example/payments/Order.java"
+    );
 }

@@ -13,8 +13,7 @@ async fn mixed_java_python_full_pipeline() {
     let java_order_dir = format!("{}/java_order_service", base);
     let python_client_dir = format!("{}/python_client_service", base);
 
-    let aggregate =
-        extract_from_dirs(&[Path::new(&java_order_dir), Path::new(&python_client_dir)]).await;
+    let aggregate = extract_from_dirs(&[Path::new(&java_order_dir), Path::new(&python_client_dir)]);
 
     // Java side: endpoints from Spring controller
     assert!(

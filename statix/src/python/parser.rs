@@ -81,7 +81,11 @@ pub(crate) fn parse_callable_parameters(node: Node, source: &str) -> Vec<Paramet
             }
             _ => continue,
         }
-        params.push(Parameter { name, datatype, initial_value });
+        params.push(Parameter {
+            name,
+            datatype,
+            initial_value,
+        });
     }
     params
 }

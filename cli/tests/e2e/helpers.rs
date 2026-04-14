@@ -1,19 +1,10 @@
-use extractor_runtime::{dispatch, pipeline};
+use extractor_runtime::pipeline;
 use models::{CodeElementsAggregate, ir::syntax::FileRecord};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 pub fn fixture_base() -> String {
     format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"))
-}
-
-pub fn merge_aggregates(main: &mut CodeElementsAggregate, new: CodeElementsAggregate) {
-    main.imports.extend(new.imports);
-    main.entities.extend(new.entities);
-    main.endpoints.extend(new.endpoints);
-    main.restcalls.extend(new.restcalls);
-    main.callables.extend(new.callables);
-    main.call_statements.extend(new.call_statements);
 }
 
 pub fn collect_source_files(dir: &Path) -> Vec<PathBuf> {
@@ -54,20 +45,11 @@ pub fn collect_file_records(dirs: &[&Path]) -> Vec<FileRecord> {
     records
 }
 
-pub async fn extract_from_dirs(dirs: &[&Path]) -> CodeElementsAggregate {
-    let mut aggregate = CodeElementsAggregate::default();
-    for dir in dirs {
-        for file_path in collect_source_files(dir) {
-            let code = fs::read_to_string(&file_path)
-                .unwrap_or_else(|_| panic!("Failed to read {:?}", file_path));
-            let path_str = file_path.to_str().expect("Non-UTF8 path");
-            if let Some(elements) = dispatch::dispatch(&code, path_str)
-                .await
-                .unwrap_or_else(|e| panic!("Dispatch failed for {:?}: {:?}", file_path, e))
-            {
-                merge_aggregates(&mut aggregate, elements);
-            }
-        }
-    }
-    aggregate
+/// Runs the full 3-pass pipeline over all source files in `dirs` and returns
+/// the result as a `CodeElementsAggregate` suitable for synthesizer calls.
+pub fn extract_from_dirs(dirs: &[&Path]) -> CodeElementsAggregate {
+    let records = collect_file_records(dirs);
+    let project_ir = pipeline::build_project_ir(records);
+    let evaluated_ir = pipeline::evaluate(project_ir);
+    CodeElementsAggregate::from(evaluated_ir)
 }

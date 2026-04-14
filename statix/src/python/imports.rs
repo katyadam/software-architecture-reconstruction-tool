@@ -41,14 +41,14 @@ pub fn resolve_python_import(
     } else {
         // Named import: `from some.module import SomeName`
         for candidate in python_module_to_file_paths(&import.orig_module) {
-            if let Some((actual_path, defs)) = index.find_by_module_path(&candidate) {
-                if let Some((fqn, kind)) = defs.lookup(&import.orig_name) {
-                    return Some(ResolvedImport {
-                        source_file: actual_path.to_string(),
-                        fully_qualified_name: fqn,
-                        kind,
-                    });
-                }
+            if let Some((actual_path, defs)) = index.find_by_module_path(&candidate)
+                && let Some((fqn, kind)) = defs.lookup(&import.orig_name)
+            {
+                return Some(ResolvedImport {
+                    source_file: actual_path.to_string(),
+                    fully_qualified_name: fqn,
+                    kind,
+                });
             }
         }
         None

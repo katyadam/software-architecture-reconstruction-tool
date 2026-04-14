@@ -115,14 +115,35 @@ async fn should_parse_restcall_file_and_populate_aggregate_correctly() {
 #[test]
 fn should_return_empty_file_record_for_empty_python_file() {
     let result = extract_syntactic("", "empty.py");
-    assert!(result.is_ok(), "extract_syntactic() must not error on empty input");
+    assert!(
+        result.is_ok(),
+        "extract_syntactic() must not error on empty input"
+    );
     let record = result.unwrap();
-    assert!(record.imports.is_empty(), "no imports expected for empty file");
-    assert!(record.entities.is_empty(), "no entities expected for empty file");
-    assert!(record.endpoints.is_empty(), "no endpoints expected for empty file");
-    assert!(record.raw_restcalls.is_empty(), "no raw restcalls expected for empty file");
-    assert!(record.callables.is_empty(), "no callables expected for empty file");
-    assert!(record.call_statements.is_empty(), "no call statements expected for empty file");
+    assert!(
+        record.imports.is_empty(),
+        "no imports expected for empty file"
+    );
+    assert!(
+        record.entities.is_empty(),
+        "no entities expected for empty file"
+    );
+    assert!(
+        record.endpoints.is_empty(),
+        "no endpoints expected for empty file"
+    );
+    assert!(
+        record.raw_restcalls.is_empty(),
+        "no raw restcalls expected for empty file"
+    );
+    assert!(
+        record.callables.is_empty(),
+        "no callables expected for empty file"
+    );
+    assert!(
+        record.call_statements.is_empty(),
+        "no call statements expected for empty file"
+    );
     assert!(record.enums.is_empty(), "no enums expected for empty file");
 }
 

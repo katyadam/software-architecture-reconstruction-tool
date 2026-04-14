@@ -40,8 +40,7 @@ fn java_context_map_via_multipass_pipeline() {
     let order_dir = format!("{}/java_order_service", base);
     let billing_dir = format!("{}/java_billing_service", base);
 
-    let file_records =
-        collect_file_records(&[Path::new(&order_dir), Path::new(&billing_dir)]);
+    let file_records = collect_file_records(&[Path::new(&order_dir), Path::new(&billing_dir)]);
 
     let project_ir = build_project_ir(file_records);
 
@@ -67,7 +66,10 @@ fn java_context_map_via_multipass_pipeline() {
 
     // Context Map assertions.
     let entities = collect_entities(&project_ir);
-    let config = build_config(&[("order-service", &order_dir), ("billing-service", &billing_dir)]);
+    let config = build_config(&[
+        ("order-service", &order_dir),
+        ("billing-service", &billing_dir),
+    ]);
 
     let cm = ContextMapBuilderImpl::new()
         .build(&entities, &config.service_descriptions)
@@ -98,7 +100,10 @@ fn java_context_map_via_multipass_pipeline() {
          dependencies found: {:?}",
         cm.dependencies
             .iter()
-            .map(|d| format!("{} -> {} ({} -> {})", d.source_id, d.target_id, d.source_ms, d.target_ms))
+            .map(|d| format!(
+                "{} -> {} ({} -> {})",
+                d.source_id, d.target_id, d.source_ms, d.target_ms
+            ))
             .collect::<Vec<_>>()
     );
 
@@ -116,8 +121,7 @@ fn python_context_map_via_multipass_pipeline() {
     let order_dir = format!("{}/python_order_service", base);
     let invoice_dir = format!("{}/python_invoice_service", base);
 
-    let file_records =
-        collect_file_records(&[Path::new(&order_dir), Path::new(&invoice_dir)]);
+    let file_records = collect_file_records(&[Path::new(&order_dir), Path::new(&invoice_dir)]);
 
     let project_ir = build_project_ir(file_records);
 
@@ -180,7 +184,10 @@ fn python_context_map_via_multipass_pipeline() {
          dependencies found: {:?}",
         cm.dependencies
             .iter()
-            .map(|d| format!("{} -> {} ({} -> {})", d.source_id, d.target_id, d.source_ms, d.target_ms))
+            .map(|d| format!(
+                "{} -> {} ({} -> {})",
+                d.source_id, d.target_id, d.source_ms, d.target_ms
+            ))
             .collect::<Vec<_>>()
     );
 

@@ -12,7 +12,7 @@ async fn python_two_services_full_pipeline() {
     let product_dir = format!("{}/python_product_service", base);
     let cart_dir = format!("{}/python_cart_service", base);
 
-    let aggregate = extract_from_dirs(&[Path::new(&product_dir), Path::new(&cart_dir)]).await;
+    let aggregate = extract_from_dirs(&[Path::new(&product_dir), Path::new(&cart_dir)]);
 
     // Extraction assertions
     assert!(

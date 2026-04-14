@@ -1,4 +1,4 @@
-use models::CodeElementsAggregate;
+use models::ir::evaluted::EvaluatedIR;
 
 use crate::{client::s3::client::S3Client, error::S3ClientError};
 
@@ -13,25 +13,17 @@ impl S3Connector {
 }
 
 impl S3Connector {
-    pub async fn store_code_elements(
+    pub async fn store_evaluated_ir(
         &self,
-        code_elements: CodeElementsAggregate,
+        ir: EvaluatedIR,
         path: &str,
     ) -> Result<(), S3ClientError> {
+        self.s3_client.save_context_map(&ir.entities, path).await?;
         self.s3_client
-            .save_context_map(&code_elements.entities, path)
+            .save_sdg(&ir.endpoints, &ir.restcalls, path)
             .await?;
-
         self.s3_client
-            .save_sdg(&code_elements.endpoints, &code_elements.restcalls, path)
-            .await?;
-
-        self.s3_client
-            .save_imcg(
-                &code_elements.callables,
-                &code_elements.call_statements,
-                path,
-            )
+            .save_imcg(&ir.callables, &ir.call_statements, path)
             .await?;
         Ok(())
     }

@@ -1,35 +1,35 @@
-use extractor_runtime::dispatch;
+use extractor_runtime::pipeline;
 use models::{ConfigurationData, configuration::ServiceDescription};
 use std::path::Path;
 use synthesizer::{connectors::dto::Constant, direct_cm_build, direct_sdg_build};
 
 use super::helpers::{extract_from_dirs, fixture_base};
 
-#[tokio::test]
-async fn empty_java_file_produces_no_elements() {
-    let result = dispatch::dispatch("", "Empty.java").await.unwrap();
+#[test]
+fn empty_java_file_produces_no_elements() {
+    let result = pipeline::dispatch_syntactic("", "Empty.java").unwrap();
     let is_empty = result
-        .map(|agg| {
-            agg.endpoints.is_empty()
-                && agg.restcalls.is_empty()
-                && agg.entities.is_empty()
-                && agg.callables.is_empty()
-                && agg.call_statements.is_empty()
+        .map(|record| {
+            record.endpoints.is_empty()
+                && record.raw_restcalls.is_empty()
+                && record.entities.is_empty()
+                && record.callables.is_empty()
+                && record.call_statements.is_empty()
         })
         .unwrap_or(true);
     assert!(is_empty, "Empty Java file should produce no code elements");
 }
 
-#[tokio::test]
-async fn empty_python_file_produces_no_elements() {
-    let result = dispatch::dispatch("", "empty.py").await.unwrap();
+#[test]
+fn empty_python_file_produces_no_elements() {
+    let result = pipeline::dispatch_syntactic("", "empty.py").unwrap();
     let is_empty = result
-        .map(|agg| {
-            agg.endpoints.is_empty()
-                && agg.restcalls.is_empty()
-                && agg.entities.is_empty()
-                && agg.callables.is_empty()
-                && agg.call_statements.is_empty()
+        .map(|record| {
+            record.endpoints.is_empty()
+                && record.raw_restcalls.is_empty()
+                && record.entities.is_empty()
+                && record.callables.is_empty()
+                && record.call_statements.is_empty()
         })
         .unwrap_or(true);
     assert!(
@@ -38,18 +38,18 @@ async fn empty_python_file_produces_no_elements() {
     );
 }
 
-#[tokio::test]
-async fn unsupported_file_extension_returns_none() {
-    let result = dispatch::dispatch("fn main() {}", "main.rs").await.unwrap();
+#[test]
+fn unsupported_file_extension_returns_none() {
+    let result = pipeline::dispatch_syntactic("fn main() {}", "main.rs").unwrap();
     assert!(result.is_none(), "Unsupported extension should return None");
 }
 
-#[tokio::test]
-async fn no_restcalls_produces_empty_sdg_connections() {
+#[test]
+fn no_restcalls_produces_empty_sdg_connections() {
     let base = fixture_base();
     let order_dir = format!("{}/java_order_service", base);
 
-    let aggregate = extract_from_dirs(&[Path::new(&order_dir)]).await;
+    let aggregate = extract_from_dirs(&[Path::new(&order_dir)]);
 
     assert!(
         !aggregate.endpoints.is_empty(),
@@ -77,13 +77,13 @@ async fn no_restcalls_produces_empty_sdg_connections() {
     );
 }
 
-#[tokio::test]
-async fn cleared_entities_produces_empty_context_map() {
+#[test]
+fn cleared_entities_produces_empty_context_map() {
     let base = fixture_base();
     let order_dir = format!("{}/java_order_service", base);
     let billing_dir = format!("{}/java_billing_service", base);
 
-    let mut aggregate = extract_from_dirs(&[Path::new(&order_dir), Path::new(&billing_dir)]).await;
+    let mut aggregate = extract_from_dirs(&[Path::new(&order_dir), Path::new(&billing_dir)]);
 
     aggregate.entities.clear();
 
@@ -117,13 +117,13 @@ async fn cleared_entities_produces_empty_context_map() {
 /// (name = ""). The SDG builder still matches their restcalls against named-service endpoints
 /// because the service names differ ("" != "order-service"). Connections from the anonymous
 /// service have an empty source_id.
-#[tokio::test]
-async fn unassigned_files_produce_anonymous_service_connections() {
+#[test]
+fn unassigned_files_produce_anonymous_service_connections() {
     let base = fixture_base();
     let order_dir = format!("{}/java_order_service", base);
     let billing_dir = format!("{}/java_billing_service", base);
 
-    let aggregate = extract_from_dirs(&[Path::new(&order_dir), Path::new(&billing_dir)]).await;
+    let aggregate = extract_from_dirs(&[Path::new(&order_dir), Path::new(&billing_dir)]);
 
     // Only configure order-service — billing files get anonymous service name ""
     let config = ConfigurationData {

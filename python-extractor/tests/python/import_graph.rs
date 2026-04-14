@@ -185,11 +185,17 @@ def create_order(user: User) -> Order:
     let graph = build_import_graph(&[service, models]);
 
     assert_eq!(
-        graph.lookup("myapp/service.py", "User").expect("User should resolve").source_file,
+        graph
+            .lookup("myapp/service.py", "User")
+            .expect("User should resolve")
+            .source_file,
         "myapp/models.py"
     );
     assert_eq!(
-        graph.lookup("myapp/service.py", "Order").expect("Order should resolve").source_file,
+        graph
+            .lookup("myapp/service.py", "Order")
+            .expect("Order should resolve")
+            .source_file,
         "myapp/models.py"
     );
 }

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use python_extractor::{
     extraction::{
         entities::{evaluator::evaluate_entity_fields, extractor::EntitiesExtractor},
@@ -19,7 +21,9 @@ fn base_test() {
     let mut entities =
         EntitiesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
     // All types (Email) are defined in the same file, so no import graph entries are needed.
-    let import_graph = ImportGraph { resolved_imports: std::collections::HashMap::new() };
+    let import_graph = ImportGraph {
+        resolved_imports: HashMap::new(),
+    };
     evaluate_entity_fields(&mut entities, filename, &import_graph);
     let expected = vec![
         Entity {
@@ -230,7 +234,9 @@ fn should_identificate_field_datatype_collections() {
     let mut entities =
         EntitiesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
     // Email is defined in the same file as MailService, so no import graph entries are needed.
-    let import_graph = ImportGraph { resolved_imports: std::collections::HashMap::new() };
+    let import_graph = ImportGraph {
+        resolved_imports: HashMap::new(),
+    };
     evaluate_entity_fields(&mut entities, filename, &import_graph);
     let expected = vec![
         Entity {

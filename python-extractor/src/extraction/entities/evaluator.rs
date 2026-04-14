@@ -18,11 +18,11 @@ pub fn evaluate_entity_fields(
                 let inner_type = extract_inner_type(raw_dt);
 
                 // 1. Resolve via ImportGraph (cross-file)
-                if let Some(ri) = import_graph.lookup(file_path, inner_type) {
-                    if matches!(ri.kind, ImportKind::Entity) {
-                        field.datatype_signature = Some(ri.fully_qualified_name.clone());
-                        continue;
-                    }
+                if let Some(ri) = import_graph.lookup(file_path, inner_type)
+                    && matches!(ri.kind, ImportKind::Entity)
+                {
+                    field.datatype_signature = Some(ri.fully_qualified_name.clone());
+                    continue;
                 }
 
                 // 2. Resolve against local Entities (same file classes)

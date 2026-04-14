@@ -22,8 +22,10 @@ use utoipa_swagger_ui::SwaggerUi;
 mod api;
 mod bucket;
 mod client;
-mod dispatch;
 mod error;
+#[macro_use]
+mod macros;
+mod pipeline;
 
 #[derive(OpenApi)]
 #[openapi(

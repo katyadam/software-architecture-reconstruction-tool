@@ -12,7 +12,7 @@ async fn java_two_services_full_pipeline() {
     let order_dir = format!("{}/java_order_service", base);
     let billing_dir = format!("{}/java_billing_service", base);
 
-    let aggregate = extract_from_dirs(&[Path::new(&order_dir), Path::new(&billing_dir)]).await;
+    let aggregate = extract_from_dirs(&[Path::new(&order_dir), Path::new(&billing_dir)]);
 
     // Extraction assertions
     assert!(
