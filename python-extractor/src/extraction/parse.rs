@@ -1,7 +1,7 @@
 use models::{
     CallStatement, ParsedCallable,
     api::ExtractionError,
-    ir::{language::Language, syntax::FileRecord},
+    ir::{ast::CallableAst, language::Language, syntax::FileRecord},
 };
 use statix::parse_python;
 use tree_sitter::Parser;
@@ -64,22 +64,30 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
 
     let enums = EnumIdentificator::identify_from_entities(&entities);
 
-    // Build ParsedCallable list: combine rich Callable metadata with parsed ASTs
+    // Build ParsedCallable list: combine rich Callable metadata with parsed ASTs.
+    // Fall back to an empty AST when no match is found — this preserves callable
+    // metadata (hash, signature) needed by the IMCG builder for functions whose
+    // mangled name can't be matched (e.g. nested `_` handlers with inline comments
+    // in the parameter list that cause parse_python and parse_parameters to produce
+    // different mangled keys).
     let mut parsed_callables_map = parse_python(&tree, code);
     let parsed_callables: Vec<ParsedCallable> = callables
         .into_iter()
-        .filter_map(|callable| {
+        .map(|callable| {
             let full_header = format!(
                 "{} -> {}",
                 callable.name,
                 callable.return_type.as_deref().unwrap_or("Any")
             );
             let mangled = python_convert_full_header_to_mangled_name(&full_header);
-            let ast = parsed_callables_map.remove(&mangled)?.ast;
-            Some(ParsedCallable {
+            let ast = parsed_callables_map
+                .remove(&mangled)
+                .map(|pc| pc.ast)
+                .unwrap_or_else(|| CallableAst { statements: vec![] });
+            ParsedCallable {
                 metadata: callable,
                 ast,
-            })
+            }
         })
         .collect();
 
