@@ -40,6 +40,7 @@ impl<'a> AnalysisContext<'a> {
 pub struct SymbolicEvaluator<'a> {
     pub env: Env,
     pub ctx: &'a AnalysisContext<'a>,
+    pub visited: HashSet<String>,
 }
 
 // TODO: Should also take class fields to environment!
@@ -48,13 +49,18 @@ pub struct SymbolicEvaluator<'a> {
 
 impl<'a> SymbolicEvaluator<'a> {
     pub fn new(env: Env, ctx: &'a AnalysisContext<'a>) -> Self {
-        Self { env, ctx }
+        Self {
+            env,
+            ctx,
+            visited: HashSet::new(),
+        }
     }
 
     pub fn branch(&self) -> Self {
         Self {
             env: self.env.clone(),
             ctx: self.ctx,
+            visited: self.visited.clone(),
         }
     }
 
@@ -167,7 +173,9 @@ impl<'a> SymbolicEvaluator<'a> {
             env.insert(param.name.clone(), (param.datatype.clone(), inserted_expr));
         }
 
-        let mut evaluator = Self { env, ctx };
+        let mut visited = HashSet::new();
+        visited.insert(callable_name.to_string());
+        let mut evaluator = Self { env, ctx, visited };
         let result = evaluator.visit_statements(&callable.ast.statements)?;
 
         Ok(AnalysisResult {
@@ -200,7 +208,9 @@ impl<'a> SymbolicEvaluator<'a> {
             env.insert(param.name.clone(), (param.datatype.clone(), inserted_expr));
         }
 
-        let mut evaluator = Self { env, ctx };
+        let mut visited = HashSet::new();
+        visited.insert(callable_name.to_string());
+        let mut evaluator = Self { env, ctx, visited };
         let result = evaluator.visit_statements(&callable.ast.statements)?;
 
         Ok(AnalysisResult {
@@ -298,9 +308,16 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
         if let Some(m_name) = closest
             && let Some(parsed_callable) = self.ctx.callables_map.get(&m_name)
         {
+            if self.visited.contains(&m_name) {
+                return Ok((parsed_callable.metadata.return_type.clone(), Expr::Empty));
+            }
+
+            let mut visited = self.visited.clone();
+            visited.insert(m_name.clone());
             let mut local_evaluator = SymbolicEvaluator {
                 env: HashMap::new(),
                 ctx: self.ctx,
+                visited,
             };
 
             for (param, val) in parsed_callable
