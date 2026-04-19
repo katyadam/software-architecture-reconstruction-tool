@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use models::{Callable, Namespace, ParsedCallable, ir::ast::CallableAst};
+use models::{
+    Callable, Namespace, ParsedCallable,
+    ir::ast::{CallableAst, Expr},
+};
 use tree_sitter::{Node, Tree};
 
 use crate::{
@@ -172,7 +175,7 @@ pub fn symbolic_evaluation_with_env(
     callables_map: &HashMap<String, ParsedCallable>,
     callable_signature: &str,
     matcher: Box<dyn CallableMatcher>,
-    initial_env: &HashMap<String, (Option<String>, models::ir::ast::Expr)>,
+    initial_env: &HashMap<String, (Option<String>, Expr)>,
 ) -> Result<symbolic::AnalysisResult, error::EvalError> {
     let ctx = AnalysisContext::new(callables_map, matcher.into());
     SymbolicEvaluator::eval_callable_with_env(callable_signature, &ctx, initial_env)

@@ -49,9 +49,9 @@ pub fn find_closest_callable_impl(
         {
             return Some(header.clone());
         }
-        // Fallback: match by name + highest parameter type overlap
+        // Fallback: match by name + parameter types overlap
         if let Some((cur_name, cur_params)) = parse_callable_header_manual(header) {
-            if cur_name != name {
+            if cur_name != name || cur_params.len() != params.len() {
                 continue;
             }
             let matched = params

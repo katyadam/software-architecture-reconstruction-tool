@@ -330,7 +330,10 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
                     .env
                     .insert(param.name.clone(), (param.datatype.clone(), val));
             }
-            let result = local_evaluator.visit_statements(&parsed_callable.ast.statements)?;
+            // Fall back to Empty when the inner method crashes
+            let result = local_evaluator
+                .visit_statements(&parsed_callable.ast.statements)
+                .unwrap_or(None);
 
             Ok((
                 parsed_callable.metadata.return_type.clone(),
