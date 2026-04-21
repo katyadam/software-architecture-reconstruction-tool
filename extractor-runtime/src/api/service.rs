@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use actix_multipart::{Field, Multipart};
 use actix_web::{HttpResponse, Responder, Result};
 use awc::body::BoxBody;
@@ -148,7 +150,8 @@ fn run_extraction_pipeline(collected: &[(String, String, i64)]) -> EvaluatedIR {
         .collect();
 
     let project_ir = pipeline::build_project_ir(file_records);
-    pipeline::evaluate(project_ir)
+    // TODO: Take external constants that are saved in db or supplied as JSON and put them here
+    pipeline::evaluate(project_ir, &HashMap::new())
 }
 
 impl ExtractorRuntimeServiceImpl {

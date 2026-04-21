@@ -2,6 +2,8 @@ mod callables;
 mod language_backend;
 mod restcalls;
 
+use std::collections::HashMap;
+
 use models::{
     Endpoint,
     ir::{evaluted::EvaluatedIR, project::ProjectIR},
@@ -9,11 +11,11 @@ use models::{
 
 /// Pass 3: Produce `EvaluatedIR` from `ProjectIR`.
 ///
-/// Implements:
-///   - Cross-file symbolic evaluation with constant injection
-///   - URI resolution for REST calls (Java and Python)
-pub fn evaluate(project_ir: ProjectIR) -> EvaluatedIR {
-    let restcalls = restcalls::evaluate_restcalls(&project_ir);
+/// `external_constants` may contain dotted-path keys (e.g. `"settings.as_url"`)
+/// that are injected into the symbolic evaluation environment alongside
+/// the in-source constants collected in Pass 2.
+pub fn evaluate(project_ir: ProjectIR, external_constants: &HashMap<String, String>) -> EvaluatedIR {
+    let restcalls = restcalls::evaluate_restcalls(&project_ir, external_constants);
 
     let endpoints: Vec<Endpoint> = project_ir
         .files

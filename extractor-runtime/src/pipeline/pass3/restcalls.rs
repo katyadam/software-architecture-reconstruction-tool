@@ -1,5 +1,14 @@
+use std::collections::HashMap;
+
 use log::info;
-use models::{RestCall, ir::project::ProjectIR};
+use models::{
+    ParsedCallable, RestCall,
+    ir::{
+        ast::{CallableAst, Expr},
+        language::Language,
+        project::ProjectIR,
+    },
+};
 use statix::symbolic_evaluation_with_env;
 
 use crate::pipeline::pass3::language_backend::LanguageSpecificEvaluator;
@@ -10,54 +19,162 @@ use super::callables::{
 };
 use super::language_backend::{evaluation_for, mangle_callable_name};
 
-/// Evaluate all REST calls across the project, resolving target URIs via symbolic evaluation.
-///
-/// Per file:
-/// 1. Build a callable map with local-priority override on the global merged map.
-/// 2. For each raw rest call, run `symbolic_evaluation_with_env` seeded with constants.
-/// 3. Pass the analysis result to the language-specific URI generator.
-/// 4. On evaluation failure, keep the raw rest call unchanged and log the error.
-pub(super) fn evaluate_restcalls(project_ir: &ProjectIR) -> Vec<RestCall> {
+type Env = HashMap<String, (Option<String>, Expr)>;
+
+pub(super) fn evaluate_restcalls(
+    project_ir: &ProjectIR,
+    external_constants: &HashMap<String, String>,
+) -> Vec<RestCall> {
     let global_callables = build_project_global_callables(&project_ir.files);
     let merged_enums = build_merged_enums(&project_ir.files);
-    let constants_env = constants_to_env(&project_ir.constants);
+    let constants_env = build_constants_env(&project_ir.constants, external_constants);
 
-    let mut all_restcalls = Vec::new();
-    for file in &project_ir.files {
-        if file.raw_restcalls.is_empty() {
+    project_ir
+        .files
+        .iter()
+        .filter(|f| !f.raw_restcalls.is_empty())
+        .flat_map(|file| {
+            evaluate_file_restcalls(file, &global_callables, &merged_enums, &constants_env)
+        })
+        .collect()
+}
+
+/// Merge project-scanned constants with CLI-supplied external constants into one env.
+/// External constants are lower priority — they don't overwrite project-scanned values.
+/// Dotted-path keys like `"settings.as_url"` are preserved as-is.
+fn build_constants_env(
+    project_constants: &HashMap<String, models::ir::project::ConstantValue>,
+    external_constants: &HashMap<String, String>,
+) -> Env {
+    let mut env = constants_to_env(project_constants);
+    for (name, value) in external_constants {
+        let trimmed = value
+            .trim_matches(|c: char| c == '"' || c == '\'')
+            .to_string();
+        env.entry(name.clone())
+            .or_insert_with(|| (Some("String".to_string()), Expr::Literal(trimmed)));
+    }
+    env
+}
+
+fn evaluate_file_restcalls(
+    file: &models::ir::project::TypedFileRecord,
+    global_callables: &HashMap<String, ParsedCallable>,
+    merged_enums: &HashMap<String, Vec<String>>,
+    constants_env: &Env,
+) -> Vec<RestCall> {
+    let callables = build_file_local_callables(file, global_callables);
+    let evaluator: &dyn LanguageSpecificEvaluator = evaluation_for(file.language);
+    let captured_scopes = build_captured_scopes(
+        file.callables
+            .iter()
+            .map(|pc| (pc.metadata.name.as_str(), &pc.ast)),
+        &callables,
+        evaluator,
+        constants_env,
+        file.language,
+    );
+
+    file.raw_restcalls
+        .iter()
+        .flat_map(|restcall| {
+            evaluate_single_restcall(
+                restcall,
+                &callables,
+                evaluator,
+                &captured_scopes,
+                constants_env,
+                merged_enums,
+                file.language,
+            )
+        })
+        .collect()
+}
+
+fn evaluate_single_restcall(
+    restcall: &RestCall,
+    callables: &HashMap<String, ParsedCallable>,
+    evaluator: &dyn LanguageSpecificEvaluator,
+    captured_scopes: &HashMap<String, Env>,
+    constants_env: &Env,
+    merged_enums: &HashMap<String, Vec<String>>,
+    language: Language,
+) -> Vec<RestCall> {
+    if restcall.function_name.is_empty() {
+        return vec![restcall.clone()];
+    }
+
+    let mangled = mangle_callable_name(&restcall.function_name, language);
+
+    // Merge captured outer-scope env (if this callable is nested).
+    // Key by function_hash (unique per function body) so sibling inner
+    // functions with identical signatures don't collide.
+    let mut eval_env = constants_env.clone();
+    if let Some(captured) = captured_scopes.get(&restcall.function_hash) {
+        for (k, v) in captured {
+            eval_env.entry(k.clone()).or_insert_with(|| v.clone());
+        }
+    }
+
+    match symbolic_evaluation_with_env(callables, &mangled, evaluator.matcher(), &eval_env) {
+        Ok(analysis) => evaluator
+            .generate_uris(&restcall.target_uri, &analysis, merged_enums)
+            .into_iter()
+            .map(|uri| restcall.clone_from_target_uri(&uri))
+            .collect(),
+        Err(_) => {
+            info!(
+                "Symbolic Evaluation for REST call with target url: {} failed -- preserving raw REST call as-is",
+                restcall.target_uri
+            );
+            vec![restcall.clone()]
+        }
+    }
+}
+
+/// For each outer callable that has nested refs, symbolically evaluate it once
+/// (with the constants env) to populate a map from inner callable key -> captured Env.
+fn build_captured_scopes<'a>(
+    callables: impl Iterator<Item = (&'a str, &'a CallableAst)>,
+    callables_map: &HashMap<String, ParsedCallable>,
+    evaluator: &dyn LanguageSpecificEvaluator,
+    constants_env: &Env,
+    language: Language,
+) -> HashMap<String, Env> {
+    let mut captured_scopes: HashMap<String, Env> = HashMap::new();
+
+    for (name, ast) in callables {
+        if ast.nested.is_empty() {
             continue;
         }
-        let callables = build_file_local_callables(file, &global_callables);
-        let evaluator: &dyn LanguageSpecificEvaluator = evaluation_for(file.language);
-        for restcall in &file.raw_restcalls {
-            if restcall.function_name.is_empty() {
-                all_restcalls.push(restcall.clone());
-                continue;
-            }
-            let mangled = mangle_callable_name(&restcall.function_name, file.language);
-            let result = symbolic_evaluation_with_env(
-                &callables,
-                &mangled,
-                evaluator.matcher(),
-                &constants_env,
-            );
-            match result {
-                Ok(analysis) => {
-                    let uris =
-                        evaluator.generate_uris(&restcall.target_uri, &analysis, &merged_enums);
-                    for uri in uris {
-                        all_restcalls.push(restcall.clone_from_target_uri(&uri));
-                    }
-                }
-                Err(_) => {
-                    info!(
-                        "Symbolic Evaluation for REST call with target url: {} failed -- preserving raw REST call as-is",
-                        restcall.target_uri
-                    );
-                    all_restcalls.push(restcall.clone());
-                }
+        let mangled = mangle_callable_name(name, language);
+        let Ok(result) = symbolic_evaluation_with_env(
+            callables_map,
+            &mangled,
+            evaluator.matcher(),
+            constants_env,
+        ) else {
+            continue;
+        };
+
+        for nested_ref in &ast.nested {
+            let captured: Env = nested_ref
+                .captured
+                .iter()
+                .filter_map(|var| result.final_env.get(var).map(|v| (var.clone(), v.clone())))
+                .filter(|(_, (_, expr))| *expr != Expr::Empty)
+                .collect();
+
+            if !captured.is_empty() {
+                // Key by hash (unique per function body) so sibling inner functions
+                // with the same mangled name get distinct entries. Matches the
+                // lookup key `restcall.function_hash` used above.
+                captured_scopes
+                    .entry(nested_ref.hash.clone())
+                    .or_insert(captured);
             }
         }
     }
-    all_restcalls
+
+    captured_scopes
 }

@@ -3,6 +3,7 @@ use clap::Parser;
 use extractor_runtime::pipeline::{build_project_ir, dispatch_syntactic, evaluate};
 use models::{CodeElementsAggregate, ConfigurationData};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::{fs, time::Instant};
 use synthesizer::{
@@ -72,8 +73,16 @@ async fn main() -> Result<()> {
         args.project_dir
     );
 
+    // Build external constants map: all constants from the file, including dotted-path
+    // keys like "settings.as_url" that are injected into the symbolic evaluator.
+    let external_constants: HashMap<String, String> = constants_dto
+        .constants
+        .iter()
+        .map(|c| (c.name.clone(), c.value.clone()))
+        .collect();
+
     let extraction = Instant::now();
-    let all_code_elements = get_all_code_elements(&args.project_dir)?;
+    let all_code_elements = get_all_code_elements(&args.project_dir, &external_constants)?;
     let extraction_elapsed = extraction.elapsed();
 
     println!("✅ Extraction successful!");
@@ -106,7 +115,10 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn get_all_code_elements(project_dir: &PathBuf) -> Result<CodeElementsAggregate> {
+fn get_all_code_elements(
+    project_dir: &PathBuf,
+    external_constants: &HashMap<String, String>,
+) -> Result<CodeElementsAggregate> {
     let paths = collect_files(project_dir)?;
     let files_to_process = paths.len();
     println!("Total files found: {files_to_process}");
@@ -137,7 +149,7 @@ fn get_all_code_elements(project_dir: &PathBuf) -> Result<CodeElementsAggregate>
     }
 
     let project_ir = build_project_ir(file_records);
-    let evaluated_ir = evaluate(project_ir);
+    let evaluated_ir = evaluate(project_ir, external_constants);
     Ok(CodeElementsAggregate::from(evaluated_ir))
 }
 

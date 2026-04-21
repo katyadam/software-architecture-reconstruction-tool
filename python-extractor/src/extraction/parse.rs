@@ -83,7 +83,7 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
             let ast = parsed_callables_map
                 .remove(&mangled)
                 .map(|pc| pc.ast)
-                .unwrap_or_else(|| CallableAst { statements: vec![] });
+                .unwrap_or_else(|| CallableAst { statements: vec![], nested: vec![] });
             ParsedCallable {
                 metadata: callable,
                 ast,
