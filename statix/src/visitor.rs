@@ -13,7 +13,12 @@ pub trait Visitor {
     fn visit_literal(&mut self, lit: &str) -> Result<Self::Out, Self::Error>;
     fn visit_var(&mut self, name: &str) -> Result<Self::Out, Self::Error>;
     fn visit_concat(&mut self, left: &Expr, right: &Expr) -> Result<Self::Out, Self::Error>;
-    fn visit_call(&mut self, name: &str, args: &[Expr]) -> Result<Self::Out, Self::Error>;
+    fn visit_call(
+        &mut self,
+        name: &str,
+        receiver: Option<&Expr>,
+        args: &[Expr],
+    ) -> Result<Self::Out, Self::Error>;
 
     // Statement visits
     fn visit_statements(&mut self, stmts: &[Stmt]) -> Result<Option<Expr>, EvalError>;
