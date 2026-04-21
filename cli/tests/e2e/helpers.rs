@@ -1,5 +1,6 @@
 use extractor_runtime::pipeline;
 use models::{CodeElementsAggregate, ir::syntax::FileRecord};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -50,6 +51,6 @@ pub fn collect_file_records(dirs: &[&Path]) -> Vec<FileRecord> {
 pub fn extract_from_dirs(dirs: &[&Path]) -> CodeElementsAggregate {
     let records = collect_file_records(dirs);
     let project_ir = pipeline::build_project_ir(records);
-    let evaluated_ir = pipeline::evaluate(project_ir);
+    let evaluated_ir = pipeline::evaluate(project_ir, &HashMap::new());
     CodeElementsAggregate::from(evaluated_ir)
 }

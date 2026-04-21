@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use extractor_runtime::pipeline::{build_project_ir, evaluate};
 use java_extractor::extraction::extract_syntactic as java_extract;
 use models::{HttpMethod, RestCall};
@@ -47,7 +49,7 @@ class UserClient {
         .push(java_restcall("void fetchUsers()", "url", "UserClient.java"));
 
     let project_ir = build_project_ir(vec![record]);
-    let evaluated = evaluate(project_ir);
+    let evaluated = evaluate(project_ir, &HashMap::new());
 
     assert_eq!(
         evaluated.restcalls.len(),
@@ -93,7 +95,7 @@ class UserClient {
         .push(java_restcall("void fetchUsers()", "url", "UserClient.java"));
 
     let project_ir = build_project_ir(vec![base_record, client_record]);
-    let evaluated = evaluate(project_ir);
+    let evaluated = evaluate(project_ir, &HashMap::new());
 
     assert_eq!(
         evaluated.restcalls.len(),
@@ -143,7 +145,7 @@ class LocalClient {
     ));
 
     let project_ir = build_project_ir(vec![global_record, local_record]);
-    let evaluated = evaluate(project_ir);
+    let evaluated = evaluate(project_ir, &HashMap::new());
 
     assert_eq!(
         evaluated.restcalls.len(),
@@ -179,7 +181,7 @@ def fetch_by_status(status: Status):
     let record = python_extract(code, "client.py").expect("Python extraction should succeed");
 
     let project_ir = build_project_ir(vec![record]);
-    let evaluated = evaluate(project_ir);
+    let evaluated = evaluate(project_ir, &HashMap::new());
 
     assert_eq!(
         evaluated.restcalls.len(),
@@ -221,7 +223,7 @@ def fetch_items():
     let client_record = python_extract(client_code, "client.py").expect("client.py should parse");
 
     let project_ir = build_project_ir(vec![constants_record, client_record]);
-    let evaluated = evaluate(project_ir);
+    let evaluated = evaluate(project_ir, &HashMap::new());
 
     assert_eq!(
         evaluated.restcalls.len(),
@@ -257,7 +259,7 @@ def fetch_items():
     let client_record = python_extract(client_code, "client.py").expect("client.py should parse");
 
     let project_ir = build_project_ir(vec![constants_record, client_record]);
-    let evaluated = evaluate(project_ir);
+    let evaluated = evaluate(project_ir, &HashMap::new());
 
     assert_eq!(
         evaluated.restcalls.len(),
@@ -291,7 +293,7 @@ def helper():
     );
 
     let project_ir = build_project_ir(vec![record]);
-    let evaluated = evaluate(project_ir);
+    let evaluated = evaluate(project_ir, &HashMap::new());
 
     assert_eq!(
         evaluated.restcalls.len(),
@@ -328,7 +330,7 @@ def fetch():
         python_extract(local_code, "local_service.py").expect("local_service.py should parse");
 
     let project_ir = build_project_ir(vec![global_record, local_record]);
-    let evaluated = evaluate(project_ir);
+    let evaluated = evaluate(project_ir, &HashMap::new());
 
     assert_eq!(
         evaluated.restcalls.len(),
