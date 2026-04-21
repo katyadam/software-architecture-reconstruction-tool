@@ -255,9 +255,20 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             Expr::Literal(lit) => self.visit_literal(lit),
             Expr::Var(name) => self.visit_var(name),
             Expr::Concat(left, right) => self.visit_concat(left, right),
-            Expr::Call { name, args } => self.visit_call(name, args),
+            Expr::Call {
+                name,
+                receiver,
+                args,
+            } => self.visit_call(name, receiver.as_deref(), args),
             Expr::Empty => Ok((None, Expr::Empty)),
             Expr::Joined { vals } => Ok((None, Expr::Joined { vals: vals.clone() })),
+            Expr::Attr { object, field } => {
+                let dot_key = flatten_attr_to_dot_key(object, field);
+                match self.env.get(&dot_key).cloned() {
+                    Some(val) => Ok(val),
+                    None => Ok((None, Expr::Empty)),
+                }
+            }
         }
     }
 
@@ -292,12 +303,21 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
         ))
     }
 
-    fn visit_call(&mut self, name: &str, args: &[Expr]) -> Result<Self::Out, Self::Error> {
+    fn visit_call(
+        &mut self,
+        name: &str,
+        receiver: Option<&Expr>,
+        args: &[Expr],
+    ) -> Result<Self::Out, Self::Error> {
+        let (recv_type, recv_val) = receiver
+            .map(|r| self.visit_expr(r).unwrap_or((None, Expr::Empty)))
+            .unwrap_or((None, Expr::Empty));
+
         let mut evaluated_args = Vec::new();
         let mut arg_types = Vec::new();
         for arg in args {
-            let (t, v) = self.visit_expr(arg)?;
-            arg_types.push(t);
+            let (t, v) = self.visit_expr(arg).unwrap_or((None, Expr::Empty));
+            arg_types.push(t.clone());
             evaluated_args.push(v);
         }
 
@@ -330,7 +350,6 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
                     .env
                     .insert(param.name.clone(), (param.datatype.clone(), val));
             }
-            // Fall back to Empty when the inner method crashes
             let result = local_evaluator
                 .visit_statements(&parsed_callable.ast.statements)
                 .unwrap_or(None);
@@ -340,7 +359,7 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
                 result.unwrap_or(Expr::Empty),
             ))
         } else {
-            Ok((None, Expr::Empty))
+            Ok((recv_type, recv_val))
         }
     }
 
@@ -486,4 +505,20 @@ fn decide_concat_datatype(left: &Option<String>, right: &Option<String>) -> Opti
     }
 
     left.clone()
+}
+
+/// Flatten a nested `Expr::Attr` chain to a dot-separated key string.
+/// `Attr(Attr(Var("a"), "b"), "c")` -> `"a.b.c"`.
+fn flatten_attr_to_dot_key(object: &Expr, field: &str) -> String {
+    match object {
+        Expr::Var(name) => format!("{}.{}", name, field),
+        Expr::Attr {
+            object: inner_obj,
+            field: inner_field,
+        } => {
+            let base = flatten_attr_to_dot_key(inner_obj, inner_field);
+            format!("{}.{}", base, field)
+        }
+        _ => field.to_string(),
+    }
 }

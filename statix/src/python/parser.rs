@@ -2,17 +2,18 @@ use std::collections::HashSet;
 
 use models::{
     Parameter,
-    ir::ast::{CallableAst, Expr, Stmt},
+    ir::ast::{CallableAst, Expr, NestedRef, Stmt},
 };
 use tree_sitter::Node;
 
 use crate::{
     error::ParseError,
+    python::matcher::python_convert_full_header_to_mangled_name,
+    strings,
     util::{node_field_text, node_text},
 };
 
-// TODO: find better ways to look for all functions, this iterates over all possible nodes in the tree
-pub fn find_function_nodes(root: Node) -> Vec<Node> {
+pub(crate) fn find_function_nodes(root: Node) -> Vec<Node> {
     let mut functions = Vec::new();
     let mut cursor = root.walk();
     for child in root.named_children(&mut cursor) {
@@ -24,7 +25,7 @@ pub fn find_function_nodes(root: Node) -> Vec<Node> {
     functions
 }
 
-pub fn parse_python_function(node: Node, code: &str) -> Result<CallableAst, ParseError> {
+pub(crate) fn parse_python_function(node: Node, code: &str) -> Result<CallableAst, ParseError> {
     let params_node = node
         .child_by_field_name("parameters")
         .ok_or(ParseError::FieldNotFound("parameters".to_string()))?;
@@ -41,8 +42,12 @@ pub fn parse_python_function(node: Node, code: &str) -> Result<CallableAst, Pars
     }
 
     let body = parse_block(body_node, code, &mut declared_vars)?;
+    let nested = collect_nested_refs(body_node, code, &declared_vars);
 
-    Ok(CallableAst { statements: body })
+    Ok(CallableAst {
+        statements: body,
+        nested,
+    })
 }
 
 pub(crate) fn parse_callable_parameters(node: Node, source: &str) -> Vec<Parameter> {
@@ -166,6 +171,18 @@ fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
         "false" => Ok(Expr::Literal("False".to_string())),
         "identifier" => Ok(Expr::Var(node_text(node, source)?)),
 
+        "attribute" => {
+            let object_node = node
+                .child_by_field_name("object")
+                .ok_or(ParseError::FieldNotFound("attribute object".to_string()))?;
+            let field = node_field_text(node, "attribute", source)?;
+            let object = parse_expr(object_node, source)?;
+            Ok(Expr::Attr {
+                object: Box::new(object),
+                field,
+            })
+        }
+
         "call" => {
             let function_node = node
                 .child_by_field_name("function")
@@ -174,14 +191,36 @@ fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
                 .child_by_field_name("arguments")
                 .ok_or(ParseError::FieldNotFound("call arguments".to_string()))?;
 
+            // Method call on an attribute: `receiver.method(args)`.
+            // Encode as Call { name: method, args: [receiver, ...positional_args] }
+            // so the evaluator can apply identity semantics for string methods (rstrip, etc.).
+            if function_node.kind() == "attribute" {
+                let receiver_node = function_node
+                    .child_by_field_name("object")
+                    .ok_or(ParseError::FieldNotFound("method receiver".to_string()))?;
+                let method_name = node_field_text(function_node, "attribute", source)?;
+                let receiver = parse_expr(receiver_node, source)?;
+                let mut args = Vec::new();
+                for arg in args_node.named_children(&mut args_node.walk()) {
+                    args.push(parse_expr(arg, source)?);
+                }
+                return Ok(Expr::Call {
+                    name: method_name,
+                    receiver: Some(Box::new(receiver)),
+                    args,
+                });
+            }
+
             let name = node_text(function_node, source)?;
             let mut args = Vec::new();
             for arg in args_node.named_children(&mut args_node.walk()) {
-                // Python adds punctuation (commas) as named children in some versions,
-                // but usually named_children skips them.
                 args.push(parse_expr(arg, source)?);
             }
-            Ok(Expr::Call { name, args })
+            Ok(Expr::Call {
+                name,
+                receiver: None,
+                args,
+            })
         }
 
         "binary_operator" => {
@@ -286,4 +325,70 @@ fn parse_try(
             catch_branch: except_stmts,
         }])
     }
+}
+
+/// Walk `node` (a function body block) and collect `NestedRef`s for every
+/// `function_definition` or `decorated_definition` found as a direct or
+/// indirect child, but NOT descending into those inner functions themselves.
+/// `outer_vars` is the set of names declared in the enclosing function's scope;
+/// it becomes the `captured` list on each `NestedRef`.
+pub(crate) fn collect_nested_refs(
+    node: Node,
+    source: &str,
+    outer_vars: &HashSet<String>,
+) -> Vec<NestedRef> {
+    let mut nested = Vec::new();
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        match child.kind() {
+            "function_definition" => {
+                if let Some(nr) = make_nested_ref(child, source, outer_vars) {
+                    nested.push(nr);
+                }
+            }
+            "decorated_definition" => {
+                if let Some(func_node) = child.child_by_field_name("definition")
+                    && func_node.kind() == "function_definition"
+                    && let Some(nr) = make_nested_ref(func_node, source, outer_vars)
+                {
+                    nested.push(nr);
+                }
+            }
+            _ => {
+                nested.extend(collect_nested_refs(child, source, outer_vars));
+            }
+        }
+    }
+    nested
+}
+
+/// Build a `NestedRef` for a single `function_definition` node.
+fn make_nested_ref(
+    func_node: Node,
+    source: &str,
+    outer_vars: &HashSet<String>,
+) -> Option<NestedRef> {
+    let name = func_node
+        .child_by_field_name("name")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())?;
+    let params = func_node
+        .child_by_field_name("parameters")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .unwrap_or("()");
+    let return_type = func_node
+        .child_by_field_name("return_type")
+        .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+        .unwrap_or("Any");
+
+    let full_header = format!("{}{} -> {}", name, params, return_type);
+    let key = python_convert_full_header_to_mangled_name(&full_header);
+
+    let func_text = func_node.utf8_text(source.as_bytes()).unwrap_or("");
+    let hash = strings::hash_text(func_text);
+
+    Some(NestedRef {
+        key,
+        hash,
+        captured: outer_vars.iter().cloned().collect(),
+    })
 }

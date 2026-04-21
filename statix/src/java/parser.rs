@@ -27,7 +27,7 @@ pub fn parse_method(node: Node, code: &str) -> Result<CallableAst, ParseError> {
     } else {
         Vec::new()
     };
-    Ok(CallableAst { statements: body })
+    Ok(CallableAst { statements: body, nested: vec![] })
 }
 
 /// Extract `models::callables::Parameter` list from a Java `formal_parameters` node.
@@ -223,6 +223,11 @@ fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
         "method_invocation" => {
             let name = node_field_text(node, "name", source)?;
 
+            let receiver = node
+                .child_by_field_name("object")
+                .and_then(|n| parse_expr(n, source).ok())
+                .map(Box::new);
+
             let args_node = node
                 .child_by_field_name("arguments")
                 .ok_or(ParseError::FieldNotFound("method arguments".to_string()))?;
@@ -232,7 +237,7 @@ fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
                 args.push(parse_expr(arg, source)?);
             }
 
-            Ok(Expr::Call { name, args })
+            Ok(Expr::Call { name, receiver, args })
         }
 
         _ => Ok(Expr::Empty),
