@@ -51,6 +51,7 @@ pub fn collect_file_records(dirs: &[&Path]) -> Vec<FileRecord> {
 pub fn extract_from_dirs(dirs: &[&Path]) -> CodeElementsAggregate {
     let records = collect_file_records(dirs);
     let project_ir = pipeline::build_project_ir(records);
-    let evaluated_ir = pipeline::evaluate(project_ir, &HashMap::new());
+    let per_file_attrs = pipeline::pass_attr::resolve_all(&project_ir);
+    let evaluated_ir = pipeline::evaluate(project_ir, &HashMap::new(), &per_file_attrs);
     CodeElementsAggregate::from(evaluated_ir)
 }

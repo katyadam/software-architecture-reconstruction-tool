@@ -24,6 +24,7 @@ type Env = HashMap<String, (Option<String>, Expr)>;
 pub(super) fn evaluate_restcalls(
     project_ir: &ProjectIR,
     external_constants: &HashMap<String, String>,
+    per_file_attrs: &HashMap<String, HashMap<String, String>>,
 ) -> Vec<RestCall> {
     let global_callables = build_project_global_callables(&project_ir.files);
     let merged_enums = build_merged_enums(&project_ir.files);
@@ -34,7 +35,13 @@ pub(super) fn evaluate_restcalls(
         .iter()
         .filter(|f| !f.raw_restcalls.is_empty())
         .flat_map(|file| {
-            evaluate_file_restcalls(file, &global_callables, &merged_enums, &constants_env)
+            evaluate_file_restcalls(
+                file,
+                &global_callables,
+                &merged_enums,
+                &constants_env,
+                per_file_attrs,
+            )
         })
         .collect()
 }
@@ -62,16 +69,30 @@ fn evaluate_file_restcalls(
     global_callables: &HashMap<String, ParsedCallable>,
     merged_enums: &HashMap<String, Vec<String>>,
     constants_env: &Env,
+    per_file_attrs: &HashMap<String, HashMap<String, String>>,
 ) -> Vec<RestCall> {
     let callables = build_file_local_callables(file, global_callables);
     let evaluator: &dyn LanguageSpecificEvaluator = evaluation_for(file.language);
+
+    // Build a file-specific env that layers per-file attribute defaults below
+    // the shared constants env (project constants + CLI external_constants).
+    // `or_insert_with` ensures the shared env always wins on key collisions.
+    let mut file_env: Env = constants_env.clone();
+    if let Some(attrs) = per_file_attrs.get(&file.file_path) {
+        for (k, v) in attrs {
+            file_env
+                .entry(k.clone())
+                .or_insert_with(|| (Some("String".to_string()), Expr::Literal(v.clone())));
+        }
+    }
+
     let captured_scopes = build_captured_scopes(
         file.callables
             .iter()
             .map(|pc| (pc.metadata.name.as_str(), &pc.ast)),
         &callables,
         evaluator,
-        constants_env,
+        &file_env,
         file.language,
     );
 
@@ -83,7 +104,7 @@ fn evaluate_file_restcalls(
                 &callables,
                 evaluator,
                 &captured_scopes,
-                constants_env,
+                &file_env,
                 merged_enums,
                 file.language,
             )
@@ -96,7 +117,7 @@ fn evaluate_single_restcall(
     callables: &HashMap<String, ParsedCallable>,
     evaluator: &dyn LanguageSpecificEvaluator,
     captured_scopes: &HashMap<String, Env>,
-    constants_env: &Env,
+    file_env: &Env,
     merged_enums: &HashMap<String, Vec<String>>,
     language: Language,
 ) -> Vec<RestCall> {
@@ -109,7 +130,7 @@ fn evaluate_single_restcall(
     // Merge captured outer-scope env (if this callable is nested).
     // Key by function_hash (unique per function body) so sibling inner
     // functions with identical signatures don't collide.
-    let mut eval_env = constants_env.clone();
+    let mut eval_env = file_env.clone();
     if let Some(captured) = captured_scopes.get(&restcall.function_hash) {
         for (k, v) in captured {
             eval_env.entry(k.clone()).or_insert_with(|| v.clone());

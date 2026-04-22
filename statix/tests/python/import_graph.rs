@@ -46,7 +46,10 @@ fn make_callable(name: &str, return_type: &str, file_path: &str) -> ParsedCallab
             hash: String::new(),
             file_path: file_path.to_string(),
         },
-        ast: CallableAst { statements: vec![], nested: vec![] },
+        ast: CallableAst {
+            statements: vec![],
+            nested: vec![],
+        },
     }
 }
 

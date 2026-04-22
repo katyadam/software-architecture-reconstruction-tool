@@ -1,3 +1,4 @@
+mod attribute_resolution;
 mod class_hierarchy;
 mod cross_file_resolution;
 mod entity_field_resolution;
