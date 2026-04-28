@@ -27,7 +27,12 @@ def fetch():
     let record = python_extract(code, "client.py").expect("client.py should parse");
     let project_ir = build_project_ir(vec![record]);
     let per_file_attrs = pipeline::pass_attr::resolve_all(&project_ir);
-    let evaluated = evaluate(project_ir, &HashMap::new(), &per_file_attrs);
+    let evaluated = evaluate(
+        project_ir,
+        &HashMap::new(),
+        &per_file_attrs,
+        &HashMap::new(),
+    );
 
     assert_eq!(
         evaluated.restcalls.len(),
@@ -61,7 +66,12 @@ def fetch():
     let record = python_extract(code, "client.py").expect("client.py should parse");
     let project_ir = build_project_ir(vec![record]);
     let per_file_attrs = pipeline::pass_attr::resolve_all(&project_ir);
-    let evaluated = evaluate(project_ir, &HashMap::new(), &per_file_attrs);
+    let evaluated = evaluate(
+        project_ir,
+        &HashMap::new(),
+        &per_file_attrs,
+        &HashMap::new(),
+    );
 
     assert_eq!(
         evaluated.restcalls.len(),
@@ -104,7 +114,12 @@ def fetch():
 
     let project_ir = build_project_ir(vec![config_record, client_record]);
     let per_file_attrs = pipeline::pass_attr::resolve_all(&project_ir);
-    let evaluated = evaluate(project_ir, &HashMap::new(), &per_file_attrs);
+    let evaluated = evaluate(
+        project_ir,
+        &HashMap::new(),
+        &per_file_attrs,
+        &HashMap::new(),
+    );
 
     assert_eq!(
         evaluated.restcalls.len(),
@@ -148,7 +163,12 @@ def fetch():
         );
     }
 
-    let evaluated = evaluate(project_ir, &HashMap::new(), &per_file_attrs);
+    let evaluated = evaluate(
+        project_ir,
+        &HashMap::new(),
+        &per_file_attrs,
+        &HashMap::new(),
+    );
     // The restcall may or may not survive evaluation, but it must not resolve to
     // the empty string as a URI.
     for rc in &evaluated.restcalls {
@@ -187,7 +207,12 @@ def fetch():
         "http://override".to_string(),
     );
 
-    let evaluated = evaluate(project_ir, &external_constants, &per_file_attrs);
+    let evaluated = evaluate(
+        project_ir,
+        &external_constants,
+        &per_file_attrs,
+        &HashMap::new(),
+    );
 
     assert_eq!(
         evaluated.restcalls.len(),
@@ -237,7 +262,12 @@ def get_logger():
     );
 
     // The REST call to the literal URI should still resolve correctly.
-    let evaluated = evaluate(project_ir, &HashMap::new(), &per_file_attrs);
+    let evaluated = evaluate(
+        project_ir,
+        &HashMap::new(),
+        &per_file_attrs,
+        &HashMap::new(),
+    );
     assert_eq!(
         evaluated.restcalls.len(),
         1,
@@ -306,7 +336,12 @@ def fetch_b():
         "service_b.py must map settings.cds_url to http://b"
     );
 
-    let evaluated = evaluate(project_ir, &HashMap::new(), &per_file_attrs);
+    let evaluated = evaluate(
+        project_ir,
+        &HashMap::new(),
+        &per_file_attrs,
+        &HashMap::new(),
+    );
     assert_eq!(
         evaluated.restcalls.len(),
         2,

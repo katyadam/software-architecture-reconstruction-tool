@@ -16,7 +16,7 @@ use statix::{
 /// 1. Create a zero-sized struct for the language.
 /// 2. Implement `matcher` and `generate_uris`.
 /// 3. Add one arm to `backend_for`.
-pub(super) trait LanguageSpecificEvaluator {
+pub(crate) trait LanguageSpecificEvaluator {
     fn matcher(&self) -> Box<dyn CallableMatcher>;
     fn generate_uris(
         &self,
@@ -62,7 +62,7 @@ impl LanguageSpecificEvaluator for PythonEvaluator {
 static JAVA_EVALUATOR: JavaEvaluator = JavaEvaluator;
 static PYTHON_EVALUATOR: PythonEvaluator = PythonEvaluator;
 
-pub(super) fn evaluation_for(language: Language) -> &'static dyn LanguageSpecificEvaluator {
+pub(crate) fn evaluation_for(language: Language) -> &'static dyn LanguageSpecificEvaluator {
     match language {
         Language::Java => &JAVA_EVALUATOR,
         Language::Python => &PYTHON_EVALUATOR,
@@ -70,7 +70,7 @@ pub(super) fn evaluation_for(language: Language) -> &'static dyn LanguageSpecifi
 }
 
 /// Mangle a callable's full-header name to the key form used in the callable map.
-pub(super) fn mangle_callable_name(name: &str, language: Language) -> String {
+pub(crate) fn mangle_callable_name(name: &str, language: Language) -> String {
     match language {
         Language::Java => java_convert_full_header_to_mangled_name(name),
         Language::Python => python_convert_full_header_to_mangled_name(name),

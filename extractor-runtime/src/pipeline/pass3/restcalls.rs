@@ -6,12 +6,14 @@ use models::{
     ir::{
         ast::{CallableAst, Expr},
         language::Language,
-        project::ProjectIR,
+        project::{ImportKind, ProjectIR, TypedFileRecord},
     },
 };
 use statix::symbolic_evaluation_with_env;
 
-use crate::pipeline::pass3::language_backend::LanguageSpecificEvaluator;
+use crate::pipeline::{
+    pass_module::PerFileModuleConsts, pass3::language_backend::LanguageSpecificEvaluator,
+};
 
 use super::callables::{
     build_file_local_callables, build_merged_enums, build_project_global_callables,
@@ -25,6 +27,7 @@ pub(super) fn evaluate_restcalls(
     project_ir: &ProjectIR,
     external_constants: &HashMap<String, String>,
     per_file_attrs: &HashMap<String, HashMap<String, String>>,
+    per_file_module_consts: &PerFileModuleConsts,
 ) -> Vec<RestCall> {
     let global_callables = build_project_global_callables(&project_ir.files);
     let merged_enums = build_merged_enums(&project_ir.files);
@@ -37,10 +40,12 @@ pub(super) fn evaluate_restcalls(
         .flat_map(|file| {
             evaluate_file_restcalls(
                 file,
+                project_ir,
                 &global_callables,
                 &merged_enums,
                 &constants_env,
                 per_file_attrs,
+                per_file_module_consts,
             )
         })
         .collect()
@@ -66,25 +71,22 @@ fn build_constants_env(
 
 fn evaluate_file_restcalls(
     file: &models::ir::project::TypedFileRecord,
+    project_ir: &ProjectIR,
     global_callables: &HashMap<String, ParsedCallable>,
     merged_enums: &HashMap<String, Vec<String>>,
     constants_env: &Env,
     per_file_attrs: &HashMap<String, HashMap<String, String>>,
+    per_file_module_consts: &PerFileModuleConsts,
 ) -> Vec<RestCall> {
     let callables = build_file_local_callables(file, global_callables);
     let evaluator: &dyn LanguageSpecificEvaluator = evaluation_for(file.language);
-
-    // Build a file-specific env that layers per-file attribute defaults below
-    // the shared constants env (project constants + CLI external_constants).
-    // `or_insert_with` ensures the shared env always wins on key collisions.
-    let mut file_env: Env = constants_env.clone();
-    if let Some(attrs) = per_file_attrs.get(&file.file_path) {
-        for (k, v) in attrs {
-            file_env
-                .entry(k.clone())
-                .or_insert_with(|| (Some("String".to_string()), Expr::Literal(v.clone())));
-        }
-    }
+    let file_env = build_file_env(
+        file,
+        project_ir,
+        constants_env,
+        per_file_attrs,
+        per_file_module_consts,
+    );
 
     let captured_scopes = build_captured_scopes(
         file.callables
@@ -198,4 +200,55 @@ fn build_captured_scopes<'a>(
     }
 
     captured_scopes
+}
+
+fn build_file_env(
+    file: &TypedFileRecord,
+    project_ir: &ProjectIR,
+    constants_env: &Env,
+    per_file_attrs: &HashMap<String, HashMap<String, String>>,
+    per_file_module_consts: &PerFileModuleConsts,
+) -> Env {
+    let mut env: Env = constants_env.clone();
+
+    if let Some(attrs) = per_file_attrs.get(&file.file_path) {
+        for (k, v) in attrs {
+            env.entry(k.clone())
+                .or_insert_with(|| (Some("String".to_string()), Expr::Literal(v.clone())));
+        }
+    }
+
+    // Same-file module globals (e.g. `aaa_url = settings.x`) are visible to
+    // every function in the file without an explicit import.
+    if let Some(own_consts) = per_file_module_consts.get(&file.file_path) {
+        for (name, value) in own_consts {
+            env.entry(name.clone())
+                .or_insert_with(|| (Some("String".to_string()), Expr::Literal(value.clone())));
+        }
+    }
+
+    // Propagate module-level constants imported from other files. Only
+    // `ImportKind::Constant` entries are considered; keying by `import.codeword`
+    // preserves `from m import x as y` aliases.
+    for import in &file.imports {
+        let Some(resolved) = project_ir
+            .import_graph
+            .lookup(&file.file_path, &import.codeword)
+        else {
+            continue;
+        };
+        if !matches!(resolved.kind, ImportKind::Constant) {
+            continue;
+        }
+        let Some(source_consts) = per_file_module_consts.get(&resolved.source_file) else {
+            continue;
+        };
+        let Some(value) = source_consts.get(&resolved.fully_qualified_name) else {
+            continue;
+        };
+        env.entry(import.codeword.clone())
+            .or_insert_with(|| (Some("String".to_string()), Expr::Literal(value.clone())));
+    }
+
+    env
 }

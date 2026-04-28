@@ -152,7 +152,15 @@ fn run_extraction_pipeline(collected: &[(String, String, i64)]) -> EvaluatedIR {
     let project_ir = pipeline::build_project_ir(file_records);
     let per_file_attrs = pipeline::pass_attr::resolve_all(&project_ir);
     // TODO: Take external constants that are saved in db or supplied as JSON and put them here
-    pipeline::evaluate(project_ir, &HashMap::new(), &per_file_attrs)
+    let external_constants = HashMap::new();
+    let per_file_module_consts =
+        pipeline::pass_module::resolve_all(&project_ir, &external_constants, &per_file_attrs);
+    pipeline::evaluate(
+        project_ir,
+        &external_constants,
+        &per_file_attrs,
+        &per_file_module_consts,
+    )
 }
 
 impl ExtractorRuntimeServiceImpl {

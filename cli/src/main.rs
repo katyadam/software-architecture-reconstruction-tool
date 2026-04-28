@@ -119,6 +119,7 @@ fn get_all_code_elements(
     project_dir: &PathBuf,
     external_constants: &HashMap<String, String>,
 ) -> Result<CodeElementsAggregate> {
+    // Pass 1 - Syntactic Extraction
     let paths = collect_files(project_dir)?;
     let files_to_process = paths.len();
     println!("Total files found: {files_to_process}");
@@ -148,9 +149,19 @@ fn get_all_code_elements(
         }
     }
 
+    // Pass 2 - Project wide IR
     let project_ir = build_project_ir(file_records);
+
+    //Pass 3 - Semantic Analyses
     let per_file_attrs = pipeline::pass_attr::resolve_all(&project_ir);
-    let evaluated_ir = evaluate(project_ir, external_constants, &per_file_attrs);
+    let per_file_module_consts =
+        pipeline::pass_module::resolve_all(&project_ir, external_constants, &per_file_attrs);
+    let evaluated_ir = evaluate(
+        project_ir,
+        external_constants,
+        &per_file_attrs,
+        &per_file_module_consts,
+    );
     Ok(CodeElementsAggregate::from(evaluated_ir))
 }
 

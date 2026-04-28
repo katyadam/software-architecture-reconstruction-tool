@@ -26,9 +26,18 @@ fn should_return_empty_file_record_for_empty_python_file() {
         record.raw_restcalls.is_empty(),
         "no raw restcalls expected for empty file"
     );
+    assert_eq!(
+        record.callables.len(),
+        1,
+        "empty file still gets the synthetic <module> callable"
+    );
+    assert_eq!(
+        record.callables[0].metadata.name, "<module>()",
+        "the sole callable for an empty file must be the synthetic <module>"
+    );
     assert!(
-        record.callables.is_empty(),
-        "no callables expected for empty file"
+        record.callables[0].ast.statements.is_empty(),
+        "synthetic <module> for an empty file has no statements"
     );
     assert!(
         record.call_statements.is_empty(),
@@ -52,8 +61,8 @@ fn should_extract_syntactic_from_endpoint_file_without_evaluation() {
     );
     assert_eq!(
         record.callables.len(),
-        11,
-        "endpoints.py defines 9 endpoint functions plus 2 Item2 class methods"
+        12,
+        "endpoints.py defines 9 endpoint functions + 2 Item2 methods + 1 synthetic <module>"
     );
     assert!(
         record.raw_restcalls.is_empty(),
@@ -97,8 +106,8 @@ fn should_extract_syntactic_raw_restcalls_with_template_uris() {
     );
     assert_eq!(
         record.callables.len(),
-        7,
-        "large_example.py defines 6 client functions + main = 7 callables"
+        8,
+        "large_example.py defines 6 client functions + main + 1 synthetic <module> = 8"
     );
     assert!(
         record.endpoints.is_empty(),

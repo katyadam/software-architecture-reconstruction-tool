@@ -28,10 +28,14 @@ fn empty_python_file_produces_no_elements() {
             record.endpoints.is_empty()
                 && record.raw_restcalls.is_empty()
                 && record.entities.is_empty()
-                && record.callables.is_empty()
                 && record.call_statements.is_empty()
+                // synthetic <module>() callable is always emitted; exclude it
+                && record
+                    .callables
+                    .iter()
+                    .all(|c| c.metadata.name == "<module>()")
         })
-        .unwrap_or(true);
+        .expect("For empty python file, dispatch syntactic should return valid FileRecord");
     assert!(
         is_empty,
         "Empty Python file should produce no code elements"

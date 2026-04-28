@@ -25,6 +25,21 @@ pub(crate) fn find_function_nodes(root: Node) -> Vec<Node> {
     functions
 }
 
+/// Parse the module-level statements of a Python file as a `CallableAst`.
+///
+/// Reuses [`parse_block`], which silently ignores statement kinds it does not
+/// recognise (class/function definitions, imports, etc.), so the resulting AST
+/// contains only the assignment/declaration/if/try/return nodes the symbolic
+/// evaluator understands.
+pub fn parse_python_module_body(root: Node, source: &str) -> CallableAst {
+    let mut scope_vars = HashSet::new();
+    let statements = parse_block(root, source, &mut scope_vars).unwrap_or_default();
+    CallableAst {
+        statements,
+        nested: vec![],
+    }
+}
+
 pub(crate) fn parse_python_function(node: Node, code: &str) -> Result<CallableAst, ParseError> {
     let params_node = node
         .child_by_field_name("parameters")

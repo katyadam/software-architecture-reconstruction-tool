@@ -15,6 +15,7 @@ use crate::extraction::{
     enums::identification::EnumIdentificator,
     extractor::{ExtractParams, Extractor},
     imports::extractor::ImportsExtractor,
+    module::build_module_callable,
     restcalls::identification::{
         method_call::MethodCallIdentificationStrategy, strategy::IdentificationStrategy,
     },
@@ -71,7 +72,7 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
     // in the parameter list that cause parse_python and parse_parameters to produce
     // different mangled keys).
     let mut parsed_callables_map = parse_python(&tree, code);
-    let parsed_callables: Vec<ParsedCallable> = callables
+    let mut parsed_callables: Vec<ParsedCallable> = callables
         .into_iter()
         .map(|callable| {
             let full_header = format!(
@@ -93,6 +94,8 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
             }
         })
         .collect();
+
+    parsed_callables.push(build_module_callable(&tree, code, file_name));
 
     // Identification-only: no symbolic evaluation or URI resolution
     let identification_strategy = MethodCallIdentificationStrategy::new();

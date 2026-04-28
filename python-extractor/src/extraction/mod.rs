@@ -7,6 +7,7 @@ pub mod entities;
 pub mod enums;
 pub mod extractor;
 pub mod imports;
+pub mod module;
 pub mod parse;
 pub mod queries;
 pub mod restcalls;

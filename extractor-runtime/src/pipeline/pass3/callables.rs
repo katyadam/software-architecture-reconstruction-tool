@@ -11,7 +11,7 @@ use models::{
 use super::language_backend::mangle_callable_name;
 
 /// Build a merged callable map across all files; first definition wins on collisions.
-pub(super) fn build_project_global_callables(
+pub(crate) fn build_project_global_callables(
     files: &[TypedFileRecord],
 ) -> HashMap<String, ParsedCallable> {
     let mut merged = HashMap::new();
@@ -25,7 +25,7 @@ pub(super) fn build_project_global_callables(
 }
 
 /// Build a per-file callable map where local definitions override globals.
-pub(super) fn build_file_local_callables(
+pub(crate) fn build_file_local_callables(
     file: &TypedFileRecord,
     global_callables: &HashMap<String, ParsedCallable>,
 ) -> HashMap<String, ParsedCallable> {
@@ -38,7 +38,7 @@ pub(super) fn build_file_local_callables(
 }
 
 /// Merge enum variant maps across all files; first definition wins on name collisions.
-pub(super) fn build_merged_enums(files: &[TypedFileRecord]) -> HashMap<String, Vec<String>> {
+pub(crate) fn build_merged_enums(files: &[TypedFileRecord]) -> HashMap<String, Vec<String>> {
     let mut enums = HashMap::new();
     for file in files {
         for e in &file.enums {
@@ -58,7 +58,7 @@ pub(super) fn build_merged_enums(files: &[TypedFileRecord]) -> HashMap<String, V
 /// All constants are assigned dtype `"String"` regardless of their actual type.
 /// Numeric and boolean constants are represented correctly as `Expr::Literal` values
 /// but carry a `String` dtype, which is intentional for URI concat purposes.
-pub(super) fn constants_to_env(
+pub(crate) fn constants_to_env(
     constants: &HashMap<String, ConstantValue>,
 ) -> HashMap<String, (Option<String>, Expr)> {
     constants
