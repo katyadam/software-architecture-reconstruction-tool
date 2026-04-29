@@ -359,6 +359,84 @@ def fetch():
     );
 }
 
+/// Full empaia-like chain: Settings class → singletons module → examination module,
+/// where the REST call lives inside an inner `async def _` closure that captures
+/// a locally-derived URL from the outer `add_routes_examination` function.
+///
+/// This is the exact shape of `medical-data-service/api/v3/examination.py`:
+/// - `settings.py`: declares `Settings` with a non-empty `es_url` field default.
+/// - `singletons.py`: instantiates `Settings`, derives `base_url` at module level.
+/// - `examination.py`: imports `base_url`, then `add_routes_examination(app)` creates
+///   a local `route_base = base_url + "/v3"` and registers `async def _` handlers
+///   that use `route_base` in f-string target URIs.
+///
+/// Exercises two independent mechanisms in a single test:
+/// 1. **Cross-file constant propagation** (three-file chain): `settings.es_url` →
+///    `singletons.base_url` → imported into `examination.py`'s file-level env.
+/// 2. **Closure capture**: `route_base` is a local of `add_routes_examination` (not
+///    module-level), derived from the imported `base_url`.  The inner `_` captures it
+///    via `build_captured_scopes`, which evaluates the outer function with `file_env`
+///    and records captured literals keyed by the inner function's hash.
+///
+/// Note: the true empaia pattern imports the `settings` *instance* into `examination.py`
+/// and derives `base_url` locally from `settings.es_url`.  That variant does not resolve
+/// today because the cross-file import of a Settings instance (not a plain literal) does
+/// not propagate the dotted key `settings.es_url` into the importer's `file_env` via
+/// `build_file_env` — a known limitation tracked separately.
+///
+/// A second subtlety: `generate_uris` substitutes from `analysis.final_env`, which only
+/// contains variables SET inside the function body.  If the inner closure passes an
+/// f-string directly to `requests.get(f"{route_base}/...")`, the template variable is
+/// never assigned locally and stays unresolved.  The test therefore follows the natural
+/// production pattern: `url = f"{route_base}/examinations"; requests.get(url)`.  That
+/// assigns `url` in `_`'s body, so `route_base` is evaluated via the captured scope
+/// (in `eval_env`) and the resolved string lands in `final_env["url"]`.
+/// TODO: Show this test
+#[test]
+fn empaia_three_file_chain_with_closure_capture() {
+    let settings_code = r#"
+class Settings:
+    es_url: str = "http://examination-service:8000"
+"#;
+
+    let singletons_code = r#"
+from settings import Settings
+
+settings = Settings()
+base_url = settings.es_url.rstrip("/")
+"#;
+
+    let examination_code = r#"
+from singletons import base_url
+
+def add_routes_examination(app):
+    route_base = base_url + "/v3"
+
+    async def _(payload=None):
+        url = f"{route_base}/examinations"
+        requests.get(url)
+"#;
+
+    let settings = python_extract(settings_code, "settings.py").expect("settings.py parses");
+    let singletons =
+        python_extract(singletons_code, "singletons.py").expect("singletons.py parses");
+    let examination =
+        python_extract(examination_code, "examination.py").expect("examination.py parses");
+
+    let evaluated = run_pipeline(vec![settings, singletons, examination], &HashMap::new());
+
+    assert_eq!(
+        evaluated.restcalls.len(),
+        1,
+        "exactly one restcall expected"
+    );
+    assert_eq!(
+        evaluated.restcalls[0].target_uri, "http://examination-service:8000/v3/examinations",
+        "closure must capture route_base (derived locally in add_routes_examination) \
+         after three-file cross-file constant propagation"
+    );
+}
+
 /// Java files have no synthetic `<module>` callable. `pass_module::resolve_all`
 /// must skip them without error and leave Pass 3's Java evaluation unaffected.
 /// Mixes a Java file (with a REST call that resolves via a local helper) and
