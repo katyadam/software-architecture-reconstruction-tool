@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 actix-web = { workspace = true }
+actix-multipart = { workspace = true }
+futures-util = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -19,3 +21,8 @@ diesel = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
 r2d2 = { workspace = true }
+env-scraper = { workspace = true }
+models = { workspace = true}
+
+[dev-dependencies]
+tempfile = "3"

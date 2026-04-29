@@ -851,13 +851,16 @@ dependencies = [
 name = "constant-scanner"
 version = "0.1.0"
 dependencies = [
+ "actix-multipart",
  "actix-web",
  "chrono",
  "diesel",
  "dotenvy",
  "env-scraper",
  "env_logger",
+ "futures-util",
  "log",
+ "models",
  "r2d2",
  "serde",
  "serde_json",

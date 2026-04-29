@@ -1,12 +1,9 @@
 use actix_multipart::Multipart;
 use actix_web::{Responder, Result, put, web};
-use models::api::ProcessFilesIdentifier;
+use models::api::{MultipleFileUploadSchema, ProcessFilesIdentifier};
 
 use crate::{
-    api::{
-        dto::MultipleFileUploadSchema,
-        service::{ExtractorRuntimeService, ExtractorRuntimeServiceImpl},
-    },
+    api::service::{ExtractorRuntimeService, ExtractorRuntimeServiceImpl},
     error::ApiError,
 };
 
