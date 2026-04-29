@@ -2,6 +2,7 @@
 members = ["cli",
     "clients",
     "constant-scanner",
+    "env-scraper",
     "extractor-runtime",
     "java-extractor",
     "manager",
