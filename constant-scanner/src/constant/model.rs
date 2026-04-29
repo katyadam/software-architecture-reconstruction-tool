@@ -20,6 +20,10 @@ pub struct Constant {
     pub value: String,
     pub commit_hash: String,
     pub created_at: DateTime<Utc>,
+    /// Provenance tag for scraped constants.
+    /// Format: "scraper:dotenv:/abs/path" or "scraper:docker_compose:/abs/path".
+    /// NULL for constants inserted via the batch API.
+    pub source: Option<String>,
 }
 
 #[derive(Debug, Insertable)]
@@ -30,6 +34,8 @@ pub struct NewConstant {
     pub value: String,
     pub commit_hash: String,
     pub created_at: DateTime<Utc>,
+    /// Provenance tag; see [`Constant::source`].
+    pub source: Option<String>,
 }
 
 impl Constant {

@@ -72,3 +72,33 @@ pub fn parse_all(files: &[DiscoveredFile]) -> Vec<EnvEntry> {
 
     entries
 }
+
+/// Parse a set of in-memory `(filename, content)` pairs without touching disk.
+///
+/// Each filename is classified by [`crate::discovery::classify`]. This is the multipart-upload equivalent of
+/// [`parse_all`].
+pub fn parse_from_memory(files: &[(&str, &str)]) -> Vec<EnvEntry> {
+    use crate::discovery::classify;
+    use std::path::Path;
+
+    let mut entries = Vec::new();
+
+    for (filename, content) in files {
+        let path = Path::new(filename);
+        let Some(kind) = classify(path) else {
+            continue;
+        };
+
+        let parsed = match kind {
+            SourceKind::DotEnv => {
+                let priority = dotenv_priority(path);
+                DotEnvParser::new(priority).parse(content, path)
+            }
+            SourceKind::DockerCompose => DockerComposeParser.parse(content, path),
+        };
+
+        entries.extend(parsed);
+    }
+
+    entries
+}

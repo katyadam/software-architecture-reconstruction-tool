@@ -25,6 +25,9 @@ struct Cli {
 
     #[arg(short = 'o', long, value_name = "DIR")]
     output_dir: PathBuf,
+
+    #[arg(long, default_value_t = false)]
+    scrape: bool,
 }
 
 #[derive(Deserialize)]
@@ -75,11 +78,21 @@ async fn main() -> Result<()> {
 
     // Build external constants map: all constants from the file, including dotted-path
     // keys like "settings.as_url" that are injected into the symbolic evaluator.
-    let external_constants: HashMap<String, String> = constants_dto
+    let mut external_constants: HashMap<String, String> = constants_dto
         .constants
         .iter()
         .map(|c| (c.name.clone(), c.value.clone()))
         .collect();
+
+    if args.scrape {
+        println!("🔍 Scraping env files in {:?}...", args.project_dir);
+        let scraped = env_scraper::scrape(&args.project_dir);
+        let count = scraped.len();
+        for (k, v) in scraped {
+            external_constants.entry(k).or_insert(v);
+        }
+        println!("   Found {count} env vars from .env / docker-compose files.");
+    }
 
     let extraction = Instant::now();
     let all_code_elements = get_all_code_elements(&args.project_dir, &external_constants)?;

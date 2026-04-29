@@ -1,0 +1,8 @@
+version: '3.8'
+services:
+  mds:
+    image: medical-data-service
+    environment:
+      MDS_ES_URL: http://override-should-lose
+      MDS_DB_URL: postgresql://db:5432/mds
+      PLACEHOLDER_VAR: ${INJECTED_AT_RUNTIME}

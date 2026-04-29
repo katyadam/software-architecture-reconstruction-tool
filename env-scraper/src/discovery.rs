@@ -71,7 +71,7 @@ fn is_ignored(path: &Path) -> bool {
 
 /// Attempt to classify a file path as a supported [`SourceKind`].
 /// Returns `None` if the file is not recognised.
-fn classify(path: &Path) -> Option<SourceKind> {
+pub fn classify(path: &Path) -> Option<SourceKind> {
     let file_name = path.file_name()?.to_str()?;
 
     if is_docker_compose(file_name) {

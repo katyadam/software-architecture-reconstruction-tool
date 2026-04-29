@@ -10,11 +10,18 @@ use crate::{
     error::ServiceError,
 };
 
-pub trait ConstantService {
+pub trait ConstantService: Send + Sync {
     fn get_by_commit_hash(&self, commit_hash: &str) -> Result<Vec<Constant>, ServiceError>;
     fn create_batch_from_keyvalues(
         &self,
         batch: ConstantBatchInput,
+    ) -> Result<Vec<Constant>, ServiceError>;
+    /// Like [`create_batch_from_keyvalues`] but attaches a provenance `source` tag to every row.
+    /// Used by the scraper module so each constant carries its file origin.
+    fn create_batch_with_source(
+        &self,
+        commit_hash: String,
+        entries: Vec<(String, String, String)>,
     ) -> Result<Vec<Constant>, ServiceError>;
     fn delete_by_commit_hash(&self, commit_hash: &str) -> Result<(), ServiceError>;
 }
@@ -50,6 +57,31 @@ impl ConstantService for ConstantServiceImpl {
                 value: constant.value,
                 commit_hash: batch.commit_hash.clone(),
                 created_at: now,
+                source: None,
+            })
+            .collect::<Vec<NewConstant>>();
+
+        let created_constants = self.repository.save_batch(&new_constants)?;
+
+        Ok(created_constants)
+    }
+
+    fn create_batch_with_source(
+        &self,
+        commit_hash: String,
+        entries: Vec<(String, String, String)>,
+    ) -> Result<Vec<Constant>, ServiceError> {
+        let now = Utc::now();
+
+        let new_constants = entries
+            .into_iter()
+            .map(|(name, value, source)| NewConstant {
+                constant_uuid: Uuid::new_v4(),
+                name,
+                value,
+                commit_hash: commit_hash.clone(),
+                created_at: now,
+                source: Some(source),
             })
             .collect::<Vec<NewConstant>>();
 
