@@ -15,10 +15,7 @@ use crate::pipeline::{
     pass_module::PerFileModuleConsts, pass3::language_backend::LanguageSpecificEvaluator,
 };
 
-use super::callables::{
-    build_file_local_callables, build_merged_enums, build_project_global_callables,
-    constants_to_env,
-};
+use super::callables::{build_file_local_callables, build_merged_enums, constants_to_env};
 use super::language_backend::{evaluation_for, mangle_callable_name};
 
 type Env = HashMap<String, (Option<String>, Expr)>;
@@ -29,7 +26,6 @@ pub(super) fn evaluate_restcalls(
     per_file_attrs: &HashMap<String, HashMap<String, String>>,
     per_file_module_consts: &PerFileModuleConsts,
 ) -> Vec<RestCall> {
-    let global_callables = build_project_global_callables(&project_ir.files);
     let merged_enums = build_merged_enums(&project_ir.files);
     let constants_env = build_constants_env(&project_ir.constants, external_constants);
 
@@ -41,7 +37,6 @@ pub(super) fn evaluate_restcalls(
             evaluate_file_restcalls(
                 file,
                 project_ir,
-                &global_callables,
                 &merged_enums,
                 &constants_env,
                 per_file_attrs,
@@ -72,13 +67,12 @@ fn build_constants_env(
 fn evaluate_file_restcalls(
     file: &models::ir::project::TypedFileRecord,
     project_ir: &ProjectIR,
-    global_callables: &HashMap<String, ParsedCallable>,
     merged_enums: &HashMap<String, Vec<String>>,
     constants_env: &Env,
     per_file_attrs: &HashMap<String, HashMap<String, String>>,
     per_file_module_consts: &PerFileModuleConsts,
 ) -> Vec<RestCall> {
-    let callables = build_file_local_callables(file, global_callables);
+    let callables = build_file_local_callables(file, &project_ir.callable_map);
     let evaluator: &dyn LanguageSpecificEvaluator = evaluation_for(file.language);
     let file_env = build_file_env(
         file,

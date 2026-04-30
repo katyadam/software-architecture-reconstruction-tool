@@ -8,7 +8,7 @@ use java_extractor::extraction::{
     },
 };
 use models::{
-    Assignment, AssignmentKey, Scope,
+    Assignment, AssignmentKey, ParsedCallable, Scope,
     ir::{
         language::Language,
         project::{ConstantValue, ImportGraph, ProjectIR, TypedFileRecord},
@@ -19,7 +19,11 @@ use python_extractor::extraction::{
     calls::evaluator::evaluate_invocations_on_statements as python_evaluate_invocations_on_statements,
     entities::evaluator::evaluate_entity_fields as python_evaluate_entity_fields,
 };
-use statix::{class_hierarchy::build_class_hierarchy, import_graph::build_import_graph};
+use statix::{
+    class_hierarchy::build_class_hierarchy, import_graph::build_import_graph,
+    java::matcher::java_convert_full_header_to_mangled_name,
+    python::matcher::python_convert_full_header_to_mangled_name,
+};
 
 /// Pass 2: Produce a `ProjectIR` from all `FileRecord`s collected in Pass 1.
 ///
@@ -42,12 +46,14 @@ pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
     let class_hierarchy = build_class_hierarchy(&files, &import_graph);
 
     let constants = collect_constants(&files);
+    let callable_map = build_project_global_callables(&files);
 
     ProjectIR {
         files,
         import_graph,
         class_hierarchy,
         constants,
+        callable_map,
     }
 }
 
@@ -156,4 +162,26 @@ fn merged_assignments(
     let mut merged = cross_file_globals.clone();
     merged.extend(file_assignments.clone());
     merged
+}
+
+/// Build a merged callable map across all files; first definition wins on collisions.
+pub(crate) fn build_project_global_callables(
+    files: &[TypedFileRecord],
+) -> HashMap<String, ParsedCallable> {
+    let mut merged = HashMap::new();
+    for file in files {
+        for pc in &file.callables {
+            let mangled = mangle_callable_name(&pc.metadata.name, file.language);
+            merged.entry(mangled).or_insert_with(|| pc.clone());
+        }
+    }
+    merged
+}
+
+/// Mangle a callable's full-header name to the key form used in the callable map.
+pub(crate) fn mangle_callable_name(name: &str, language: Language) -> String {
+    match language {
+        Language::Java => java_convert_full_header_to_mangled_name(name),
+        Language::Python => python_convert_full_header_to_mangled_name(name),
+    }
 }

@@ -10,20 +10,6 @@ use models::{
 
 use super::language_backend::mangle_callable_name;
 
-/// Build a merged callable map across all files; first definition wins on collisions.
-pub(crate) fn build_project_global_callables(
-    files: &[TypedFileRecord],
-) -> HashMap<String, ParsedCallable> {
-    let mut merged = HashMap::new();
-    for file in files {
-        for pc in &file.callables {
-            let mangled = mangle_callable_name(&pc.metadata.name, file.language);
-            merged.entry(mangled).or_insert_with(|| pc.clone());
-        }
-    }
-    merged
-}
-
 /// Build a per-file callable map where local definitions override globals.
 pub(crate) fn build_file_local_callables(
     file: &TypedFileRecord,

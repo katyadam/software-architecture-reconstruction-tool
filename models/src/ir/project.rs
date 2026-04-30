@@ -11,6 +11,7 @@ pub struct ProjectIR {
     pub import_graph: ImportGraph,
     pub class_hierarchy: ClassHierarchy,
     pub constants: HashMap<String, ConstantValue>,
+    pub callable_map: HashMap<String, ParsedCallable>,
 }
 
 /// A FileRecord with resolved types.

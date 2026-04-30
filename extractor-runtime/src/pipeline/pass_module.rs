@@ -20,9 +20,10 @@ use statix::symbolic_evaluation_with_env;
 
 use crate::pipeline::{
     pass_attr::PerFileAttrMap,
+    pass2::mangle_callable_name,
     pass3::{
-        callables::{build_file_local_callables, build_project_global_callables, constants_to_env},
-        language_backend::{evaluation_for, mangle_callable_name},
+        callables::{build_file_local_callables, constants_to_env},
+        language_backend::evaluation_for,
     },
 };
 
@@ -53,7 +54,6 @@ pub fn resolve_all(
     external_constants: &HashMap<String, String>,
     per_file_attrs: &PerFileAttrMap,
 ) -> PerFileModuleConsts {
-    let global_callables = build_project_global_callables(&project_ir.files);
     let base_env = build_base_env(project_ir, external_constants);
 
     let mut result = PerFileModuleConsts::new();
@@ -61,7 +61,7 @@ pub fn resolve_all(
     for file in &project_ir.files {
         let Some(literals) = evaluate_module(
             file,
-            &global_callables,
+            &project_ir.callable_map,
             &base_env,
             per_file_attrs.get(&file.file_path),
         ) else {
