@@ -48,7 +48,11 @@ impl ImportGraph {
 }
 #[derive(Debug)]
 pub struct ResolvedImport {
+    /// Absolute or project-relative path to the file that defines the imported symbol.
     pub source_file: String,
+    /// Path-style identifier of the symbol in `source_file`, e.g. `"medical-data-service/base_url"`
+    /// for `from singletons import base_url` in that service. Always a slash-separated path ending
+    /// in the symbol name as defined in the source, never the local import alias.
     pub fully_qualified_name: String,
     pub kind: ImportKind,
 }
