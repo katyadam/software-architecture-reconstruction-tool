@@ -12,11 +12,15 @@ use models::{
 use statix::symbolic_evaluation_with_env;
 
 use crate::pipeline::{
-    pass_module::PerFileModuleConsts, pass3::language_backend::LanguageSpecificEvaluator,
+    pass2::callables::mangle_callable_name,
+    pass3::{
+        constants::constants_to_env, language_backend::LanguageSpecificEvaluator,
+        pass_module::PerFileModuleConsts,
+    },
 };
 
-use super::callables::{build_file_local_callables, build_merged_enums, constants_to_env};
-use super::language_backend::{evaluation_for, mangle_callable_name};
+use super::callables::{build_file_local_callables, build_merged_enums};
+use super::language_backend::evaluation_for;
 
 type Env = HashMap<String, (Option<String>, Expr)>;
 

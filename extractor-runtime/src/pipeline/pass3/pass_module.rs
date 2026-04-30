@@ -19,11 +19,10 @@ use models::{
 use statix::symbolic_evaluation_with_env;
 
 use crate::pipeline::{
-    pass_attr::PerFileAttrMap,
-    pass2::mangle_callable_name,
+    pass2::callables::mangle_callable_name,
     pass3::{
-        callables::{build_file_local_callables, constants_to_env},
-        language_backend::evaluation_for,
+        callables::build_file_local_callables, constants::constants_to_env,
+        language_backend::evaluation_for, pass_attr::PerFileAttrMap,
     },
 };
 

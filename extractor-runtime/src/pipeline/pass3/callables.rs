@@ -1,14 +1,8 @@
 use std::collections::HashMap;
 
-use models::{
-    ParsedCallable,
-    ir::{
-        ast::Expr,
-        project::{ConstantValue, TypedFileRecord},
-    },
-};
+use models::{ParsedCallable, ir::project::TypedFileRecord};
 
-use super::language_backend::mangle_callable_name;
+use crate::pipeline::pass2::callables::mangle_callable_name;
 
 /// Build a per-file callable map where local definitions override globals.
 pub(crate) fn build_file_local_callables(
@@ -34,27 +28,4 @@ pub(crate) fn build_merged_enums(files: &[TypedFileRecord]) -> HashMap<String, V
         }
     }
     enums
-}
-
-/// Convert project constants to the initial symbolic evaluation environment.
-///
-/// Quoted string values have their surrounding quotes stripped so that
-/// `BASE_URL = "/api/v1"` becomes `Expr::Literal("/api/v1")`.
-///
-/// All constants are assigned dtype `"String"` regardless of their actual type.
-/// Numeric and boolean constants are represented correctly as `Expr::Literal` values
-/// but carry a `String` dtype, which is intentional for URI concat purposes.
-pub(crate) fn constants_to_env(
-    constants: &HashMap<String, ConstantValue>,
-) -> HashMap<String, (Option<String>, Expr)> {
-    constants
-        .iter()
-        .map(|(name, cv)| {
-            let value = cv.value.trim_matches(|c| c == '"' || c == '\'').to_string();
-            (
-                name.clone(),
-                (Some("String".to_string()), Expr::Literal(value)),
-            )
-        })
-        .collect()
 }

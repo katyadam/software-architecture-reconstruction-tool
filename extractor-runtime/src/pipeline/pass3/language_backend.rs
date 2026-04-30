@@ -4,10 +4,8 @@ use java_extractor::extraction::restcalls::evaluation::uri_generator::generate_t
 use models::ir::language::Language;
 use python_extractor::extraction::restcalls::evaluation::uri_generator::generate_target_uris as python_generate_target_uris;
 use statix::{
-    java::matcher::{JavaCallableMatcher, java_convert_full_header_to_mangled_name},
-    matcher::CallableMatcher,
-    python::matcher::{PythonCallableMatcher, python_convert_full_header_to_mangled_name},
-    symbolic::AnalysisResult,
+    java::matcher::JavaCallableMatcher, matcher::CallableMatcher,
+    python::matcher::PythonCallableMatcher, symbolic::AnalysisResult,
 };
 
 /// Language-specific behaviour needed during Pass 3 REST-call evaluation.
@@ -66,13 +64,5 @@ pub(crate) fn evaluation_for(language: Language) -> &'static dyn LanguageSpecifi
     match language {
         Language::Java => &JAVA_EVALUATOR,
         Language::Python => &PYTHON_EVALUATOR,
-    }
-}
-
-/// Mangle a callable's full-header name to the key form used in the callable map.
-pub(crate) fn mangle_callable_name(name: &str, language: Language) -> String {
-    match language {
-        Language::Java => java_convert_full_header_to_mangled_name(name),
-        Language::Python => python_convert_full_header_to_mangled_name(name),
     }
 }

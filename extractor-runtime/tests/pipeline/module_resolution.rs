@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use extractor_runtime::pipeline::{self, build_project_ir, evaluate};
+use extractor_runtime::pipeline::{
+    build_project_ir, evaluate,
+    pass3::{pass_attr, pass_module},
+};
 use java_extractor::extraction::extract_syntactic as java_extract;
 use python_extractor::extraction::parse::extract_syntactic as python_extract;
 
@@ -11,9 +14,9 @@ fn run_pipeline(
     external_constants: &HashMap<String, String>,
 ) -> models::ir::evaluted::EvaluatedIR {
     let project_ir = build_project_ir(records);
-    let per_file_attrs = pipeline::pass_attr::resolve_all(&project_ir);
+    let per_file_attrs = pass_attr::resolve_all(&project_ir);
     let per_file_module_consts =
-        pipeline::pass_module::resolve_all(&project_ir, external_constants, &per_file_attrs);
+        pass_module::resolve_all(&project_ir, external_constants, &per_file_attrs);
     evaluate(
         project_ir,
         external_constants,

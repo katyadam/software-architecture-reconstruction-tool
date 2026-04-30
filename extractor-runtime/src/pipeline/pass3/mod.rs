@@ -1,5 +1,8 @@
 pub(crate) mod callables;
+mod constants;
 pub(crate) mod language_backend;
+pub mod pass_attr;
+pub mod pass_module;
 mod restcalls;
 
 use std::collections::HashMap;
@@ -9,7 +12,7 @@ use models::{
     ir::{evaluted::EvaluatedIR, project::ProjectIR},
 };
 
-use crate::pipeline::pass_module::{MODULE_CALLABLE_NAME, PerFileModuleConsts};
+use crate::pipeline::pass3::pass_module::{MODULE_CALLABLE_NAME, PerFileModuleConsts};
 
 /// Pass 3: Produce `EvaluatedIR` from `ProjectIR`.
 ///

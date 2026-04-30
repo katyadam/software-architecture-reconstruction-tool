@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use extractor_runtime::pipeline::{self, build_project_ir, dispatch_syntactic, evaluate};
+use extractor_runtime::pipeline::pass3::{pass_attr, pass_module};
+use extractor_runtime::pipeline::{build_project_ir, dispatch_syntactic, evaluate};
 use models::{CodeElementsAggregate, ConfigurationData};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -166,9 +167,9 @@ fn get_all_code_elements(
     let project_ir = build_project_ir(file_records);
 
     //Pass 3 - Semantic Analyses
-    let per_file_attrs = pipeline::pass_attr::resolve_all(&project_ir);
+    let per_file_attrs = pass_attr::resolve_all(&project_ir);
     let per_file_module_consts =
-        pipeline::pass_module::resolve_all(&project_ir, external_constants, &per_file_attrs);
+        pass_module::resolve_all(&project_ir, external_constants, &per_file_attrs);
     let evaluated_ir = evaluate(
         project_ir,
         external_constants,
