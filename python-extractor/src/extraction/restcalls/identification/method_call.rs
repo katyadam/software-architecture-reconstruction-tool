@@ -28,9 +28,15 @@ impl MethodCallIdentificationStrategy {
     }
 
     fn identify_target_uri(&self, call_args: &[Argument]) -> Option<String> {
-        call_args
-            .first()
-            .map(|uri| statix::strings::clean_python_string(&uri.value))
+        let raw = &call_args.first()?.value;
+        let uri = statix::strings::clean_python_string(raw);
+        let is_string_literal = raw.contains('"') || raw.contains('\'');
+        // String literals with no `/` are not URIs (e.g. dict key lookups like `.get("key")`).
+        // Bare variable names (no quotes) are passed through — evaluation resolves them later.
+        if is_string_literal && !uri.contains('/') {
+            return None;
+        }
+        Some(uri)
     }
 
     // FastAPI uses @app.http_method to denote endpoint, therefore we want to omit that here

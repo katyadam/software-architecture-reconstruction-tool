@@ -673,3 +673,37 @@ fn test_restcall_edge_cases() {
         "URI must contain /items/ segment"
     );
 }
+
+#[test]
+fn different_http_method_naming_restcall_extraction() {
+    let filename = "./examples/python/restcalls/different_naming_of_http_method.py";
+    let (code, tree) = parse_file(filename);
+    let mut calls = restcalls(&code, &tree, filename);
+    let assignments_map = get_assignments_map(&tree, &code);
+    evaluate_local_and_global_assignments(&mut calls, &assignments_map);
+
+    assert_eq!(calls.len(), 11);
+
+    let uris: Vec<&str> = calls.iter().map(|c| c.target_uri.as_str()).collect();
+    assert!(uris.contains(&"{base_url}/v1/collections"));
+    assert!(uris.contains(&"{base_url}/v1/collections/query"));
+    assert!(uris.contains(&"{base_url}/v1/collections/query/unique-references"));
+    assert!(uris.contains(&"{base_url}/v1/collections/{collection_id}"));
+    assert!(uris.contains(&"{base_url}/v1/collections/{collection_id}/items"));
+    assert!(uris.contains(&"{base_url}/v1/collections/{collection_id}/items/query"));
+    assert!(
+        uris.contains(&"{base_url}/v1/collections/{collection_id}/items/query/unique-references")
+    );
+    assert!(uris.contains(&"{base_url}/v1/collections/{collection_id}/items/{item_id}"));
+
+    let methods: Vec<_> = calls.iter().map(|c| &c.http_method).collect();
+    assert!(methods.iter().any(|m| format!("{m:?}") == "GET"));
+    assert!(methods.iter().any(|m| format!("{m:?}") == "POST"));
+    assert!(methods.iter().any(|m| format!("{m:?}") == "PUT"));
+    assert!(methods.iter().any(|m| format!("{m:?}") == "DELETE"));
+
+    for call in &calls {
+        assert_eq!(call.file_path, filename);
+        assert!(!call.function_hash.is_empty());
+    }
+}

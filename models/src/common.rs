@@ -18,11 +18,11 @@ impl FromStr for HttpMethod {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().as_str() {
-            "GET" => Ok(HttpMethod::GET),
-            "POST" => Ok(HttpMethod::POST),
-            "PUT" => Ok(HttpMethod::PUT),
-            "DELETE" => Ok(HttpMethod::DELETE),
-            "PATCH" => Ok(HttpMethod::PATCH),
+            "GET" | "GET_STREAM_RESPONSE" => Ok(HttpMethod::GET),
+            "POST" | "POST_STREAM_RESPONSE" => Ok(HttpMethod::POST),
+            "PUT" | "PUT_STREAM_RESPONSE" => Ok(HttpMethod::PUT),
+            "DELETE" | "DELETE_STREAM_RESPONSE" => Ok(HttpMethod::DELETE),
+            "PATCH" | "PATCH_STREAM_RESPONSE" => Ok(HttpMethod::PATCH),
             _ => Err(format!("Invalid HTTP method: {s}")),
         }
     }
