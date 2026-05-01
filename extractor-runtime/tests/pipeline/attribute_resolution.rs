@@ -26,7 +26,7 @@ def fetch():
 
     let record = python_extract(code, "client.py").expect("client.py should parse");
     let project_ir = build_project_ir(vec![record]);
-    let per_file_attrs = pass_attr::resolve_all(&project_ir);
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, &HashMap::new());
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -65,7 +65,7 @@ def fetch():
 
     let record = python_extract(code, "client.py").expect("client.py should parse");
     let project_ir = build_project_ir(vec![record]);
-    let per_file_attrs = pass_attr::resolve_all(&project_ir);
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, &HashMap::new());
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -113,7 +113,7 @@ def fetch():
     let client_record = python_extract(client_code, "client.py").expect("client.py should parse");
 
     let project_ir = build_project_ir(vec![config_record, client_record]);
-    let per_file_attrs = pass_attr::resolve_all(&project_ir);
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, &HashMap::new());
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -152,7 +152,7 @@ def fetch():
 
     let record = python_extract(code, "client.py").expect("client.py should parse");
     let project_ir = build_project_ir(vec![record]);
-    let per_file_attrs = pass_attr::resolve_all(&project_ir);
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, &HashMap::new());
 
     // No dotted constant should have been emitted for cds_url.
     if let Some(file_attrs) = per_file_attrs.get("client.py") {
@@ -199,7 +199,7 @@ def fetch():
 
     let record = python_extract(code, "client.py").expect("client.py should parse");
     let project_ir = build_project_ir(vec![record]);
-    let per_file_attrs = pass_attr::resolve_all(&project_ir);
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, &HashMap::new());
 
     let mut external_constants = HashMap::new();
     external_constants.insert(
@@ -252,7 +252,7 @@ def get_logger():
         python_extract(logging_code, "logging_utils.py").expect("logging_utils.py should parse");
 
     let project_ir = build_project_ir(vec![record, logging_record]);
-    let per_file_attrs = pass_attr::resolve_all(&project_ir);
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, &HashMap::new());
 
     // get_logger is a Callable, so Stage 2 skips it entirely — no bucket for client.py.
     assert!(
@@ -315,7 +315,7 @@ def fetch_b():
         python_extract(service_b_code, "service_b.py").expect("service_b.py should parse");
 
     let project_ir = build_project_ir(vec![record_a, record_b]);
-    let per_file_attrs = pass_attr::resolve_all(&project_ir);
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, &HashMap::new());
 
     // Verify isolation at the attr map level before evaluation.
     let attr_a = per_file_attrs

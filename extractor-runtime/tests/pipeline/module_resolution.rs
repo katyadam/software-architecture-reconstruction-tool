@@ -14,7 +14,7 @@ fn run_pipeline(
     external_constants: &HashMap<String, String>,
 ) -> models::ir::evaluted::EvaluatedIR {
     let project_ir = build_project_ir(records);
-    let per_file_attrs = pass_attr::resolve_all(&project_ir);
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, external_constants);
     let per_file_module_consts =
         pass_module::resolve_all(&project_ir, external_constants, &per_file_attrs);
     evaluate(

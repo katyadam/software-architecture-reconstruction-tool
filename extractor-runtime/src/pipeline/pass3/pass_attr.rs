@@ -14,6 +14,8 @@ use models::{
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+use crate::pipeline::pass3::constants::derive_constant_value_by_external_constants;
+
 /// Dotted attribute key (`"settings.cds_url"`) -> stripped literal default.
 type AttrMap = HashMap<String, String>;
 
@@ -52,7 +54,10 @@ struct Binding<'a> {
 /// Returns a two-level map: outer key is the importer file path; inner key is
 /// the dotted attribute path (e.g. `"settings.cds_url"`); value is the stripped
 /// literal default.
-pub fn resolve_all(project_ir: &ProjectIR) -> PerFileAttrMap {
+pub fn resolve_all(
+    project_ir: &ProjectIR,
+    external_constants: &HashMap<String, String>,
+) -> PerFileAttrMap {
     // Stage 1: collect candidate bindings from global-scope assignments.
     let bindings = collect_bindings(project_ir);
 
@@ -73,7 +78,7 @@ pub fn resolve_all(project_ir: &ProjectIR) -> PerFileAttrMap {
 
         let bucket = result.entry(binding.importer_file.to_string()).or_default();
 
-        emit_field_defaults(binding.var_name, entity, bucket);
+        emit_field_defaults(binding.var_name, entity, bucket, external_constants);
     }
 
     result
@@ -165,7 +170,12 @@ fn resolve_entity<'a>(
 ///
 /// Skips fields with no `initial_value` and fields whose value is empty after
 /// stripping surrounding single or double quotes.
-fn emit_field_defaults(var_name: &str, entity: &Entity, bucket: &mut AttrMap) {
+fn emit_field_defaults(
+    var_name: &str,
+    entity: &Entity,
+    bucket: &mut AttrMap,
+    external_constants: &HashMap<String, String>,
+) {
     for field in &entity.fields {
         let Some(raw_value) = &field.initial_value else {
             continue;
@@ -175,7 +185,16 @@ fn emit_field_defaults(var_name: &str, entity: &Entity, bucket: &mut AttrMap) {
             .trim_matches(|c: char| c == '"' || c == '\'')
             .to_string();
 
+        // When entity field is empty, try to match its name to some external constant to get
+        // value from environment variables
         if stripped.is_empty() {
+            if let Some(matched_value_from_external_constants) =
+                derive_constant_value_by_external_constants(&field.name, external_constants)
+            {
+                bucket
+                    .entry(format!("{}.{}", var_name, field.name))
+                    .or_insert(matched_value_from_external_constants);
+            }
             continue;
         }
 

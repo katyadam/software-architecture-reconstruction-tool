@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     cds_url: str = ""
     es_url: str = ""
     js_url: str = ""
-    as_url: str = "aaaa"
+    as_url: str = ""
     hs_url: str = ""
     enable_storage_routes: bool = False
     enable_profiling: bool = False

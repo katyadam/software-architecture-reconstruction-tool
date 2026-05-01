@@ -152,10 +152,11 @@ fn run_extraction_pipeline(collected: &[(String, String, i64)]) -> EvaluatedIR {
         )
         .collect();
 
-    let project_ir = pipeline::build_project_ir(file_records);
-    let per_file_attrs = pass_attr::resolve_all(&project_ir);
     // TODO: Take external constants that are saved in db or supplied as JSON and put them here
     let external_constants = HashMap::new();
+
+    let project_ir = pipeline::build_project_ir(file_records);
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, &external_constants);
     let per_file_module_consts =
         pass_module::resolve_all(&project_ir, &external_constants, &per_file_attrs);
     pipeline::evaluate(
