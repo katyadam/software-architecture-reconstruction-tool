@@ -78,6 +78,11 @@ fn get_resolved_parts(
                     .collect();
                 all_parts.push(flattened);
             }
+
+            // Used when the target URL is directly an f-string
+            _ if part.contains('{') => {
+                all_parts.extend(resolve_fstring(part, analysis_result, enums_map));
+            }
             _ => all_parts.push(vec![part.to_string()]),
         }
     }

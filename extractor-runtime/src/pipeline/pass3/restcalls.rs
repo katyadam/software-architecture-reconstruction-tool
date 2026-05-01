@@ -3,26 +3,22 @@ use std::collections::HashMap;
 use log::info;
 use models::{
     ParsedCallable, RestCall,
-    ir::{
-        ast::{CallableAst, Expr},
-        language::Language,
-        project::{ImportKind, ProjectIR, TypedFileRecord},
-    },
+    ir::{language::Language, project::ProjectIR},
 };
 use statix::symbolic_evaluation_with_env;
 
 use crate::pipeline::{
     pass2::callables::mangle_callable_name,
     pass3::{
-        constants::constants_to_env, language_backend::LanguageSpecificEvaluator,
+        callables::build_captured_scopes,
+        env::{Env, build_constants_env, build_file_env},
+        language_backend::LanguageSpecificEvaluator,
         pass_module::PerFileModuleConsts,
     },
 };
 
 use super::callables::{build_file_local_callables, build_merged_enums};
 use super::language_backend::evaluation_for;
-
-type Env = HashMap<String, (Option<String>, Expr)>;
 
 pub(super) fn evaluate_restcalls(
     project_ir: &ProjectIR,
@@ -48,24 +44,6 @@ pub(super) fn evaluate_restcalls(
             )
         })
         .collect()
-}
-
-/// Merge project-scanned constants with CLI-supplied external constants into one env.
-/// External constants are lower priority — they don't overwrite project-scanned values.
-/// Dotted-path keys like `"settings.as_url"` are preserved as-is.
-fn build_constants_env(
-    project_constants: &HashMap<String, models::ir::project::ConstantValue>,
-    external_constants: &HashMap<String, String>,
-) -> Env {
-    let mut env = constants_to_env(project_constants);
-    for (name, value) in external_constants {
-        let trimmed = value
-            .trim_matches(|c: char| c == '"' || c == '\'')
-            .to_string();
-        env.entry(name.clone())
-            .or_insert_with(|| (Some("String".to_string()), Expr::Literal(trimmed)));
-    }
-    env
 }
 
 fn evaluate_file_restcalls(
@@ -151,102 +129,4 @@ fn evaluate_single_restcall(
             vec![restcall.clone()]
         }
     }
-}
-
-/// For each outer callable that has nested refs, symbolically evaluate it once
-/// (with the constants env) to populate a map from inner callable key -> captured Env.
-fn build_captured_scopes<'a>(
-    callables: impl Iterator<Item = (&'a str, &'a CallableAst)>,
-    callables_map: &HashMap<String, ParsedCallable>,
-    evaluator: &dyn LanguageSpecificEvaluator,
-    constants_env: &Env,
-    language: Language,
-) -> HashMap<String, Env> {
-    let mut captured_scopes: HashMap<String, Env> = HashMap::new();
-
-    for (name, ast) in callables {
-        if ast.nested.is_empty() {
-            continue;
-        }
-        let mangled = mangle_callable_name(name, language);
-        let Ok(result) = symbolic_evaluation_with_env(
-            callables_map,
-            &mangled,
-            evaluator.matcher(),
-            constants_env,
-        ) else {
-            continue;
-        };
-
-        for nested_ref in &ast.nested {
-            let captured: Env = nested_ref
-                .captured
-                .iter()
-                .filter_map(|var| result.final_env.get(var).map(|v| (var.clone(), v.clone())))
-                .filter(|(_, (_, expr))| *expr != Expr::Empty)
-                .collect();
-
-            if !captured.is_empty() {
-                // Key by hash (unique per function body) so sibling inner functions
-                // with the same mangled name get distinct entries. Matches the
-                // lookup key `restcall.function_hash` used above.
-                captured_scopes
-                    .entry(nested_ref.hash.clone())
-                    .or_insert(captured);
-            }
-        }
-    }
-
-    captured_scopes
-}
-
-fn build_file_env(
-    file: &TypedFileRecord,
-    project_ir: &ProjectIR,
-    constants_env: &Env,
-    per_file_attrs: &HashMap<String, HashMap<String, String>>,
-    per_file_module_consts: &PerFileModuleConsts,
-) -> Env {
-    let mut env: Env = constants_env.clone();
-
-    if let Some(attrs) = per_file_attrs.get(&file.file_path) {
-        for (k, v) in attrs {
-            env.entry(k.clone())
-                .or_insert_with(|| (Some("String".to_string()), Expr::Literal(v.clone())));
-        }
-    }
-
-    // Same-file module globals (e.g. `aaa_url = settings.x`) are visible to
-    // every function in the file without an explicit import.
-    if let Some(own_consts) = per_file_module_consts.get(&file.file_path) {
-        for (name, value) in own_consts {
-            env.entry(name.clone())
-                .or_insert_with(|| (Some("String".to_string()), Expr::Literal(value.clone())));
-        }
-    }
-
-    // Propagate module-level constants imported from other files. Only
-    // `ImportKind::Constant` entries are considered; keying by `import.codeword`
-    // preserves `from m import x as y` aliases.
-    for import in &file.imports {
-        let Some(resolved) = project_ir
-            .import_graph
-            .lookup(&file.file_path, &import.codeword)
-        else {
-            continue;
-        };
-        if !matches!(resolved.kind, ImportKind::Constant) {
-            continue;
-        }
-        let Some(source_consts) = per_file_module_consts.get(&resolved.source_file) else {
-            continue;
-        };
-        let Some(value) = source_consts.get(&resolved.fully_qualified_name) else {
-            continue;
-        };
-        env.entry(import.codeword.clone())
-            .or_insert_with(|| (Some("String".to_string()), Expr::Literal(value.clone())));
-    }
-
-    env
 }

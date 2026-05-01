@@ -1,0 +1,229 @@
+services:
+  medical-data-service:
+    build:
+      context: "."
+      network: ${COMPOSE_NETWORK}
+    command:
+      - uvicorn
+      - --workers=${COMPOSE_MDS_WORKERS}
+      - --host=0.0.0.0
+      - --port=5000
+      - medical_data_service.app:app
+    restart: ${COMPOSE_RESTART}
+    environment:
+      MDS_DEBUG: ${DEBUG}
+      MDS_CORS_ALLOW_CREDENTIALS: ${MDS_CORS_ALLOW_CREDENTIALS}
+      MDS_CORS_ALLOW_ORIGINS: ${MDS_CORS_ALLOW_ORIGINS}
+      MDS_API_INTEGRATION: ${MDS_API_INTEGRATION}
+      MDS_REWRITE_URL_IN_WELLKNOWN: ${MDS_REWRITE_URL_IN_WELLKNOWN}
+      MDS_ROOT_PATH: ${MDS_ROOT_PATH}
+      MDS_DISABLE_OPENAPI: ${DISABLE_OPENAPI}
+      MDS_CDS_URL: http://clinical-data-service:8000
+      MDS_ES_URL: http://examination-service:8000
+      MDS_JS_URL: http://job-service:8000
+      MDS_AS_URL: http://annotation-service:8000
+      MDS_IDP_URL: https://example.empaia.org
+      MDS_HS_URL: http://harpy-service:8000
+      MDS_AUDIENCE: org.empaia.example.mds
+      MDS_ENABLE_STORAGE_ROUTES: ${MDS_ENABLE_STORAGE_ROUTES}
+      MDS_ENABLE_PROFILING: ${MDS_ENABLE_PROFILING}
+      MODELS_DISABLE_POST_VALIDATION: ${MODELS_DISABLE_POST_VALIDATION}
+      NO_PROXY: "clinical-data-service,examination-service,job-service,annotation-ser\
+        vice,keycloak,harpy-service"
+    ports:
+      - ${COMPOSE_MDS_HOST}:${COMPOSE_MDS_PORT}:5000
+
+  clinical-data-service:
+    image: registry.gitlab.com/empaia/services/clinical-data-service:0.7.5@sha256:e3eb6e7f70bd76b5f953dcbc6503d09f45a1891dff392e0d919f6636165197d0
+    restart: ${COMPOSE_RESTART}
+    command: run.sh --host=0.0.0.0 --port=8000
+    depends_on:
+      - mds-db
+      - cds-plugin-openslide
+      - cds-plugin-pil
+      - cds-plugin-tifffile
+      - cds-plugin-tiffslide
+      - cds-plugin-wsidicom
+    environment:
+      CDS_DEBUG: ${DEBUG}
+      CDS_DISABLE_OPENAPI: ${DISABLE_OPENAPI}
+      CDS_ALLOW_EXTERNAL_IDS: "True"
+      CDS_DB_HOST: mds-db
+      CDS_DB_PORT: 5432
+      CDS_DB: mds
+      CDS_DB_USERNAME: empaia_test
+      CDS_DB_PASSWORD: A6tP3osxByeM
+      # WSI related
+      CDS_DATA_DIR: /data
+      CDS_MAX_RETURNED_REGION_SIZE: 25000000
+      CDS_PLUGIN_ADDRESSES: "cds-plugin-wsidicom|cds-plugin-tifffile|cds-plugin-tiffs\
+        lide|cds-plugin-openslide|cds-plugin-pil;1"
+      CDS_MIGRATION_STORAGE_ADDRESS_LEGACY_DATA_DIR: "/data"
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ${COMPOSE_TEST_DATA}:/data
+    ports:
+      - 8000:8000
+
+  cds-plugin-openslide:
+    image: registry.gitlab.com/empaia/services/clinical-data-service/cds-plugin-openslide:0.2.1@sha256:c85c88a3b7db99a56aab55d615bbce3f1d36580a83488c1ee7d1e1b7b2d9b419
+    restart: "${COMPOSE_RESTART}"
+    environment:
+      PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
+    volumes:
+      - ${COMPOSE_TEST_DATA}:/data
+
+  cds-plugin-pil:
+    image: registry.gitlab.com/empaia/services/clinical-data-service/cds-plugin-pil:0.2.1@sha256:48e5aaa5c51a2f6156ffc54669877e06b297be8160252e4085728a34b7a03a10
+    restart: "${COMPOSE_RESTART}"
+    environment:
+      PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
+    volumes:
+      - ${COMPOSE_TEST_DATA}:/data
+
+  cds-plugin-tiffslide:
+    image: registry.gitlab.com/empaia/services/clinical-data-service/cds-plugin-tiffslide:0.2.1@sha256:b0e2eaba691cff42c9453a6f8aa7c1f74b58a1172055d6d4ec6de62f9a7596ec
+    restart: "${COMPOSE_RESTART}"
+    environment:
+      PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
+    volumes:
+      - ${COMPOSE_TEST_DATA}:/data
+
+  cds-plugin-tifffile:
+    image: registry.gitlab.com/empaia/services/clinical-data-service/cds-plugin-tifffile:0.2.1@sha256:2962f089544cfa4ad149af7e28573e7ea9e0547928bd7587812ce2a1c06236c2
+    restart: "${COMPOSE_RESTART}"
+    environment:
+      PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
+    volumes:
+      - ${COMPOSE_TEST_DATA}:/data
+
+  cds-plugin-wsidicom:
+    image: registry.gitlab.com/empaia/services/clinical-data-service/cds-plugin-wsidicom:0.2.1@sha256:bd640aa3418f5e21829990658b8603e2dd8387eee1ea6eb3c91827eb93c457d9
+    restart: "${COMPOSE_RESTART}"
+    environment:
+      PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
+    volumes:
+      - ${COMPOSE_TEST_DATA}:/data
+
+  job-service:
+    image: registry.gitlab.com/empaia/services/job-service:0.8.41@sha256:ea987a40aab68b9ec80f8ffa4748775ad1b394ec996da7746a93559d9d91faf3
+    restart: ${COMPOSE_RESTART}
+    command: run.sh --host=0.0.0.0 --port=8000
+    environment:
+      JS_DEBUG: ${DEBUG}
+      JS_DISABLE_OPENAPI: ${DISABLE_OPENAPI}
+      JS_RSA_KEYS_DIRECTORY: /app/rsa
+      JS_DB_HOST: mds-db
+      JS_DB_PORT: 5432
+      JS_DB: mds
+      JS_DB_USERNAME: empaia_test
+      JS_DB_PASSWORD: A6tP3osxByeM
+      JS_ANNOT_URL: http://annotation-service:8000
+      NO_PROXY: "annotation-service"
+      PYTHONUNBUFFERED: 1
+    depends_on:
+      - mds-db
+    volumes:
+      - js-rsa-vol:/app/rsa
+
+  examination-service:
+    image: registry.gitlab.com/empaia/services/examination-service:0.8.58@sha256:a46022dd2816a2209062b1f9d715bcae09dd60a10650635c2ca695f05f248349
+    restart: ${COMPOSE_RESTART}
+    command: run.sh --host=0.0.0.0 --port=8000
+    environment:
+      ES_DB_USERNAME: empaia_test
+      ES_DB_PASSWORD: A6tP3osxByeM
+      ES_DB: mds
+      ES_DB_HOST: mds-db
+      ES_DB_PORT: 5432
+      ES_API_V1_INTEGRATION: examination_service.api.v1.integrations.disable_auth:DisableAuth
+    depends_on:
+      - mds-db
+
+  annotation-service:
+    image: registry.gitlab.com/empaia/services/annotation-service:0.24.24@sha256:d6e7ef73d41cc6ce8e06050c0053d67b4156e80d978f6a76665cca0e663c1d12
+    command:
+      - run.sh
+      - --host=0.0.0.0
+      - --workers=4
+      - --port=8000
+    environment:
+      ANNOT_DB_HOST: mds-db
+      ANNOT_DB_PORT: 5432
+      ANNOT_DB: mds
+      ANNOT_DB_USERNAME: empaia_test
+      ANNOT_DB_PASSWORD: A6tP3osxByeM
+      ANNOT_API_V1_INTEGRATION: annotation_service.api.v1.integrations.disable_auth:DisableAuth
+      ANNOT_API_V3_INTEGRATION: annotation_service.api.v3.integrations.disable_auth:DisableAuth
+      ANNOT_PIXELMAPS_DATA_PATH: /app/data/pixelmaps/
+      ANNOT_CDS_URL: http://clinical-data-service:8000
+    depends_on:
+      - mds-db
+      - pixelmapd
+    volumes:
+      - annot-data-vol:/app/data/pixelmaps
+
+  pixelmapd:
+    image: registry.gitlab.com/empaia/services/annotation-service:0.24.24@sha256:d6e7ef73d41cc6ce8e06050c0053d67b4156e80d978f6a76665cca0e663c1d12
+    environment:
+      PMD_PORT: 5556
+      PMD_DATA_PATH: /app/data/pixelmaps/
+    command: annotctl pixelmapd
+    volumes:
+      - annot-data-vol:/app/data/pixelmaps
+
+  harpy-service:
+    image: registry.gitlab.com/empaia/services/harpy-service:0.1.66@sha256:8e3259b7a2e05a4da4aee7fce2483679d87beed42b53cd0532494db87d87d12c
+    command:
+      - run.sh
+      - --host=0.0.0.0
+      - --port=8000
+    environment:
+      HS_DEBUG: ${DEBUG}
+      HS_DB_HOST: mds-db
+      HS_DB_PORT: 5432
+      HS_DB_USERNAME: empaia_test
+      HS_DB_PASSWORD: A6tP3osxByeM
+      HS_DB: mds
+      HS_FHIR_SERVER_URL: http://blaze-fhir-server:8080/fhir
+    depends_on:
+      - blaze-fhir-server
+
+  # external services
+  blaze-fhir-server:
+    image: samply/blaze:1.4.1@sha256:53ee136ebc523f43036fad6c68ddeb668220db420815abeefcdf80439cbba639
+    volumes:
+      - blaze-data-vol:/app/data
+
+  # databases
+  mds-db:
+    image: postgres:18
+    restart: ${COMPOSE_RESTART}
+    environment:
+      POSTGRES_DB: mds
+      POSTGRES_USER: empaia_test
+      POSTGRES_PASSWORD: A6tP3osxByeM
+      PGDATA: /var/lib/postgresql/18/data
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - mds-db-vol:/var/lib/postgresql:rw
+
+volumes:
+  mds-db-vol:
+    name: mds-db-vol
+    external: false
+  js-rsa-vol:
+    name: js-rsa-vol
+    external: false
+  annot-data-vol:
+    name: annot-data-vol
+    external: false
+  blaze-data-vol:
+    name: blaze-data-vol
+    external: false
