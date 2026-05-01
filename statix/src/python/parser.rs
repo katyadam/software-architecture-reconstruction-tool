@@ -45,7 +45,7 @@ pub(crate) fn parse_python_function(node: Node, code: &str) -> Result<CallableAs
         .child_by_field_name("parameters")
         .ok_or(ParseError::FieldNotFound("parameters".to_string()))?;
 
-    let params = parse_parameters(params_node, code)?;
+    let params = parse_callable_parameters(params_node, code);
 
     let body_node = node
         .child_by_field_name("body")
@@ -108,10 +108,6 @@ pub(crate) fn parse_callable_parameters(node: Node, source: &str) -> Vec<Paramet
         });
     }
     params
-}
-
-fn parse_parameters(node: Node, source: &str) -> Result<Vec<Parameter>, ParseError> {
-    Ok(parse_callable_parameters(node, source))
 }
 
 fn parse_block(

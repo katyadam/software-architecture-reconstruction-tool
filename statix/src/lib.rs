@@ -22,6 +22,7 @@ use crate::{
 
 pub mod class_hierarchy;
 pub mod error;
+pub mod expr;
 pub mod import_graph;
 pub mod java;
 pub mod matcher;

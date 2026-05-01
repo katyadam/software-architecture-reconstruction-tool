@@ -8,7 +8,12 @@ use models::{
     ir::ast::{Expr, Stmt},
 };
 
-use crate::{error::EvalError, matcher::CallableMatcher, visitor::Visitor};
+use crate::{
+    error::EvalError,
+    expr::{concat_datatype, flatten_attr_to_dot_key, param_default_expr},
+    matcher::CallableMatcher,
+    visitor::Visitor,
+};
 
 pub type VarName = String;
 pub type VarType = Option<String>;
@@ -165,11 +170,7 @@ impl<'a> SymbolicEvaluator<'a> {
 
         let mut env = HashMap::new();
         for param in &callable.metadata.parameters {
-            let inserted_expr = if let Some(initial_value) = &param.initial_value {
-                Expr::Literal(initial_value.to_string())
-            } else {
-                Expr::Var(param.name.clone())
-            };
+            let inserted_expr = param_default_expr(param);
             env.insert(param.name.clone(), (param.datatype.clone(), inserted_expr));
         }
 
@@ -200,11 +201,7 @@ impl<'a> SymbolicEvaluator<'a> {
 
         let mut env = initial_env.clone();
         for param in &callable.metadata.parameters {
-            let inserted_expr = if let Some(initial_value) = &param.initial_value {
-                Expr::Literal(initial_value.to_string())
-            } else {
-                Expr::Var(param.name.clone())
-            };
+            let inserted_expr = param_default_expr(param);
             env.insert(param.name.clone(), (param.datatype.clone(), inserted_expr));
         }
 
@@ -289,7 +286,7 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
         let (left_type, left) = self.visit_expr(left)?;
         let (right_type, right) = self.visit_expr(right)?;
 
-        let concat_datatype = decide_concat_datatype(&left_type, &right_type);
+        let concat_datatype = concat_datatype(&left_type, &right_type);
 
         if concat_datatype == Some("String".to_string())
             && let (Expr::Literal(ls), Expr::Literal(rs)) = (&left, &right)
@@ -499,26 +496,3 @@ fn update_env(env: &mut Env, name: &str, new_val: Expr) -> Result<(), EvalError>
     }
 }
 
-fn decide_concat_datatype(left: &Option<String>, right: &Option<String>) -> Option<String> {
-    if *left == Some("String".to_string()) || *right == Some("String".to_string()) {
-        return Some("String".to_string());
-    }
-
-    left.clone()
-}
-
-/// Flatten a nested `Expr::Attr` chain to a dot-separated key string.
-/// `Attr(Attr(Var("a"), "b"), "c")` -> `"a.b.c"`.
-fn flatten_attr_to_dot_key(object: &Expr, field: &str) -> String {
-    match object {
-        Expr::Var(name) => format!("{}.{}", name, field),
-        Expr::Attr {
-            object: inner_obj,
-            field: inner_field,
-        } => {
-            let base = flatten_attr_to_dot_key(inner_obj, inner_field);
-            format!("{}.{}", base, field)
-        }
-        _ => field.to_string(),
-    }
-}
