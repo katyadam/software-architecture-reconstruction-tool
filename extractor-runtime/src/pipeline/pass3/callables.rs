@@ -16,6 +16,11 @@ use crate::pipeline::{
 };
 
 /// Build a per-file callable map where local definitions override globals.
+///
+/// Each callable is inserted twice: once under its mangled type-signature key (used
+/// for cross-call resolution) and once under its unique hash (used for direct
+/// restcall evaluation to avoid collisions between anonymous functions with identical
+/// signatures, e.g. multiple `_` route handlers in the same file).
 pub(crate) fn build_file_local_callables(
     file: &TypedFileRecord,
     global_callables: &HashMap<String, ParsedCallable>,
@@ -24,6 +29,9 @@ pub(crate) fn build_file_local_callables(
     for pc in &file.callables {
         let mangled = mangle_callable_name(&pc.metadata.name, file.language);
         map.insert(mangled, pc.clone());
+        if !pc.metadata.hash.is_empty() {
+            map.insert(pc.metadata.hash.clone(), pc.clone());
+        }
     }
     map
 }

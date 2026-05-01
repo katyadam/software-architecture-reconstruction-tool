@@ -100,6 +100,12 @@ pub fn parse_java_method(method_node: &Node, code: &str) -> Result<CallableAst, 
 
 /// Parse all functions and return a `ParsedCallable` map keyed by the mangled header
 /// (e.g. `"str get_url()"`, `"str build(Any,str,int)"`).
+/// Parse all Python functions in `tree` and return a map keyed by function body hash.
+///
+/// Keying by hash (rather than mangled type signature) ensures that anonymous
+/// functions with identical signatures (e.g. multiple `_` route handlers) each
+/// get their own AST entry. The hash is computed identically to the callable
+/// extractor so that `Callable.hash` can be used as the lookup key.
 pub fn parse_python(tree: &Tree, code: &str) -> HashMap<String, ParsedCallable> {
     let root_node = tree.root_node();
     let function_nodes = find_function_nodes(root_node);
@@ -122,9 +128,18 @@ pub fn parse_python(tree: &Tree, code: &str) -> HashMap<String, ParsedCallable> 
             .unwrap_or("Any")
             .to_string();
 
-        // python_convert_full_header_to_mangled_name expects "name(params) -> return_type"
         let full_header = format!("{}{} -> {}", name, params_text, return_type_text);
+
+        // python_convert_full_header_to_mangled_name expects "name(params) -> return_type"
         let mangled_key = python_convert_full_header_to_mangled_name(&full_header);
+
+        // Also key by full-function-text hash so that colliding mangled names
+        // (e.g. multiple `_` route handlers with identical param types) each get
+        // the correct AST. The hash matches `Callable.hash` from CallablesExtractor.
+        let function_text = function_node
+            .utf8_text(code.as_bytes())
+            .unwrap_or_default();
+        let hash_key = crate::strings::hash_text(function_text);
 
         let parameters = function_node
             .child_by_field_name("parameters")
@@ -143,17 +158,18 @@ pub fn parse_python(tree: &Tree, code: &str) -> HashMap<String, ParsedCallable> 
             return_type: Some(return_type_text),
             is_async: false,
             is_constructor: false,
-            hash: String::new(),
+            hash: hash_key.clone(),
             file_path: String::new(),
         };
 
-        map.insert(
-            mangled_key,
-            ParsedCallable {
-                metadata: callable,
-                ast,
-            },
-        );
+        let parsed = ParsedCallable {
+            metadata: callable,
+            ast,
+        };
+        // Mangled key for cross-call resolution (may collide for same-typed anonymous fns).
+        map.insert(mangled_key, parsed.clone());
+        // Hash key for direct restcall evaluation — always unique per function body.
+        map.insert(hash_key, parsed);
     }
 
     map

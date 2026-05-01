@@ -103,11 +103,16 @@ fn evaluate_single_restcall(
         return vec![restcall.clone()];
     }
 
-    let mangled = mangle_callable_name(&restcall.function_name, language);
+    // Prefer hash-keyed lookup to avoid mangled-name collisions between anonymous
+    // functions with identical signatures (e.g. multiple `_` route handlers).
+    let lookup_key =
+        if !restcall.function_hash.is_empty() && callables.contains_key(&restcall.function_hash) {
+            restcall.function_hash.clone()
+        } else {
+            mangle_callable_name(&restcall.function_name, language)
+        };
 
     // Merge captured outer-scope env (if this callable is nested).
-    // Key by function_hash (unique per function body) so sibling inner
-    // functions with identical signatures don't collide.
     let mut eval_env = file_env.clone();
     if let Some(captured) = captured_scopes.get(&restcall.function_hash) {
         for (k, v) in captured {
@@ -115,7 +120,7 @@ fn evaluate_single_restcall(
         }
     }
 
-    match symbolic_evaluation_with_env(callables, &mangled, evaluator.matcher(), &eval_env) {
+    match symbolic_evaluation_with_env(callables, &lookup_key, evaluator.matcher(), &eval_env) {
         Ok(analysis) => evaluator
             .generate_uris(&restcall.target_uri, &analysis, merged_enums)
             .into_iter()
