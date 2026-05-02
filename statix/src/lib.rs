@@ -137,9 +137,7 @@ pub fn parse_python(tree: &Tree, code: &str) -> HashMap<String, ParsedCallable> 
         // Also key by full-function-text hash so that colliding mangled names
         // (e.g. multiple `_` route handlers with identical param types) each get
         // the correct AST. The hash matches `Callable.hash` from CallablesExtractor.
-        let function_text = function_node
-            .utf8_text(code.as_bytes())
-            .unwrap_or_default();
+        let function_text = function_node.utf8_text(code.as_bytes()).unwrap_or_default();
         let hash_key = crate::strings::hash_text(function_text);
 
         let parameters = function_node

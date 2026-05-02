@@ -495,4 +495,3 @@ fn update_env(env: &mut Env, name: &str, new_val: Expr) -> Result<(), EvalError>
         )))
     }
 }
-
