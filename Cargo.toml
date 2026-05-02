@@ -8,6 +8,7 @@ members = ["cli",
     "manager",
     "models",
     "python-extractor",
+    "sage",
     "statix",
     "synthesizer",
 ]
@@ -23,6 +24,7 @@ python-extractor = { path = "python-extractor" }
 extractor-runtime = { path = "extractor-runtime" }
 synthesizer = { path = "synthesizer" }
 env-scraper = { path = "env-scraper" }
+sage = { path = "sage" }
 
 # Web framework
 actix-web = "4.12.0"
