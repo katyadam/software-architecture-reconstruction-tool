@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{ast::CallableAst, matcher::find_closest_callable_impl, symbolic::VarType};
+use models::ParsedCallable;
+
+use crate::{matcher::find_closest_callable_impl, symbolic::VarType};
 
 #[derive(Clone, Default)]
 pub struct PythonCallableMatcher {}
@@ -14,7 +16,7 @@ impl PythonCallableMatcher {
 impl crate::matcher::CallableMatcher for PythonCallableMatcher {
     fn find_closest_callable(
         &self,
-        callables: &HashMap<String, CallableAst>,
+        callables: &HashMap<String, ParsedCallable>,
         name: &str,
         params: &[VarType],
     ) -> Option<String> {

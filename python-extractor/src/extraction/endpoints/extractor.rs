@@ -33,6 +33,7 @@ impl Extractor for EndpointsExtractor {
             let mut uri = String::new();
             let mut parameters = vec![];
             let mut function_hash = String::new();
+            let mut router_variable = None;
 
             m.captures.iter().for_each(|capture| {
                 let value =
@@ -41,6 +42,7 @@ impl Extractor for EndpointsExtractor {
                     "function.name" => function_name = value,
                     "http.method" => http_method = value,
                     "http.uri" => uri = value.trim_matches('"').to_string(),
+                    "router.variable" => router_variable = Some(value),
                     "function.params" => {
                         let p = parse_parameters(&value);
                         parameters.extend(p);
@@ -59,6 +61,7 @@ impl Extractor for EndpointsExtractor {
                 parameters,
                 uri,
                 file_path: params.file_name.unwrap_or_default().to_string(),
+                router_variable,
             });
         });
         endpoints

@@ -1,7 +1,6 @@
-use crate::{
-    ast::{Expr, Stmt},
-    error::EvalError,
-};
+use models::ir::ast::{Expr, Stmt};
+
+use crate::error::EvalError;
 
 pub trait Visitor {
     type Out;
@@ -14,13 +13,22 @@ pub trait Visitor {
     fn visit_literal(&mut self, lit: &str) -> Result<Self::Out, Self::Error>;
     fn visit_var(&mut self, name: &str) -> Result<Self::Out, Self::Error>;
     fn visit_concat(&mut self, left: &Expr, right: &Expr) -> Result<Self::Out, Self::Error>;
-    fn visit_call(&mut self, name: &str, args: &[Expr]) -> Result<Self::Out, Self::Error>;
+    fn visit_call(
+        &mut self,
+        name: &str,
+        receiver: Option<&Expr>,
+        args: &[Expr],
+    ) -> Result<Self::Out, Self::Error>;
 
     // Statement visits
     fn visit_statements(&mut self, stmts: &[Stmt]) -> Result<Option<Expr>, EvalError>;
     fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), EvalError>;
-    fn visit_declaration(&mut self, name: &str, dtype: &str, value: &Expr)
-    -> Result<(), EvalError>;
+    fn visit_declaration(
+        &mut self,
+        name: &str,
+        dtype: &Option<String>,
+        value: &Expr,
+    ) -> Result<(), EvalError>;
     fn visit_assignment(&mut self, name: &str, value: &Expr) -> Result<(), EvalError>;
     fn visit_if(
         &mut self,

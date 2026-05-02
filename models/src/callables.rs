@@ -3,11 +3,31 @@ use std::fmt::{self, Display};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::ir::ast::CallableAst;
+
 #[derive(ToSchema, Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct Parameter {
     pub name: String,
     pub datatype: Option<String>,
     pub initial_value: Option<String>,
+}
+
+impl Parameter {
+    pub fn new(name: String, datatype: Option<String>, initial_value: Option<String>) -> Self {
+        Self {
+            name,
+            datatype,
+            initial_value,
+        }
+    }
+
+    pub fn without_default_value(name: String, datatype: String) -> Self {
+        Self {
+            name,
+            datatype: Some(datatype),
+            initial_value: None,
+        }
+    }
 }
 
 impl fmt::Display for Parameter {
@@ -74,5 +94,17 @@ impl Display for Callable {
             "\nFILE: {}\nNAMESPACE: {}\nSIGN: {}\nHASH: {}",
             self.file_path, self.namespace, self.signature, self.hash,
         )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ParsedCallable {
+    pub metadata: Callable,
+    pub ast: CallableAst,
+}
+
+impl From<ParsedCallable> for Callable {
+    fn from(pc: ParsedCallable) -> Self {
+        pc.metadata
     }
 }

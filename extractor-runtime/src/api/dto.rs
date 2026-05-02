@@ -2,13 +2,6 @@ use models::api::ProcessFilesIdentifier;
 use serde::Serialize;
 use uuid::Uuid;
 
-#[allow(dead_code)]
-#[derive(utoipa::ToSchema)]
-pub struct MultipleFileUploadSchema {
-    #[schema(value_type = [String], format = Binary)]
-    pub files: Vec<String>,
-}
-
 #[derive(Serialize)]
 pub struct PostFileRecord {
     pub codebase_uuid: Uuid,

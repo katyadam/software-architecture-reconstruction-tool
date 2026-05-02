@@ -1,24 +1,27 @@
-use models::{CallStatement, CodeElementsAggregate, api::ExtractionError};
+use models::{
+    CallStatement, ParsedCallable,
+    api::ExtractionError,
+    ir::{ast::CallableAst, language::Language, syntax::FileRecord},
+};
 use statix::parse_python;
 use tree_sitter::Parser;
 
 use crate::extraction::{
     assignments::map::get_assignments_map,
     callables::extractor::CallablesExtractor,
-    calls::{PythonCallStatement, evaluator::evaluate_invocations, extractor::CallsExtractor},
+    calls::{PythonCallStatement, extractor::CallsExtractor},
     endpoints::extractor::EndpointsExtractor,
-    entities::{evaluator::evaluate_entity_fields, extractor::EntitiesExtractor},
-    enums::{identification::EnumIdentificator, map::get_enums_map},
+    entities::extractor::EntitiesExtractor,
+    enums::identification::EnumIdentificator,
     extractor::{ExtractParams, Extractor},
     imports::extractor::ImportsExtractor,
-    restcalls::{
-        evaluation::method_call::MethodCallEvaluationStrategy,
-        identification::method_call::MethodCallIdentificationStrategy,
-        selection::{method_call::MethodCallSelector, selector::Selector},
+    module::build_module_callable,
+    restcalls::identification::{
+        method_call::MethodCallIdentificationStrategy, strategy::IdentificationStrategy,
     },
 };
 
-pub async fn parse(code: &str, file_name: &str) -> Result<CodeElementsAggregate, ExtractionError> {
+pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, ExtractionError> {
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_python::LANGUAGE.into())
@@ -48,48 +51,64 @@ pub async fn parse(code: &str, file_name: &str) -> Result<CodeElementsAggregate,
 
     let assignments = assignments
         .ok_or_else(|| ExtractionError::Process("Assignments extraction failed".into()))?;
-
     let imports =
         imports.ok_or_else(|| ExtractionError::Process("Imports extraction failed".into()))?;
-
     let endpoints =
         endpoints.ok_or_else(|| ExtractionError::Process("Endpoints extraction failed".into()))?;
-
-    let mut entities =
+    let entities =
         entities.ok_or_else(|| ExtractionError::Process("Entities extraction failed".into()))?;
-
     let callables =
         callables.ok_or_else(|| ExtractionError::Process("Callables extraction failed".into()))?;
+    let calls = calls.ok_or_else(|| ExtractionError::Process("Calls extraction failed".into()))?;
 
-    let mut calls =
-        calls.ok_or_else(|| ExtractionError::Process("Calls extraction failed".into()))?;
-
-    // Post-processing / evaluation
-    evaluate_entity_fields(&imports, &mut entities, file_name);
-    evaluate_invocations(&mut calls, &assignments);
-    let function_asts = parse_python(&tree, code);
     let enums = EnumIdentificator::identify_from_entities(&entities);
 
-    let restcalls = MethodCallSelector::new(
-        MethodCallIdentificationStrategy::new(),
-        MethodCallEvaluationStrategy::new(function_asts, get_enums_map(&enums)),
-    )
-    .select_restcall_statements(&calls, file_name)
-    .map_err(|e| {
-        ExtractionError::SymbolicEvaluation(format!("Restcall evaluation error: {:?}", e))
-    })?;
+    // Build ParsedCallable list: combine rich Callable metadata with parsed ASTs.
+    // parse_python keys its map by function-body hash so that anonymous functions
+    // with identical type signatures (e.g. multiple `_` route handlers) each get
+    // the correct AST. Look up by callable.hash to exploit this guarantee.
+    let mut parsed_callables_map = parse_python(&tree, code);
+    let mut parsed_callables: Vec<ParsedCallable> = callables
+        .into_iter()
+        .map(|callable| {
+            let ast = parsed_callables_map
+                .remove(&callable.hash)
+                .map(|pc| pc.ast)
+                .unwrap_or_else(|| CallableAst {
+                    statements: vec![],
+                    nested: vec![],
+                });
+            ParsedCallable {
+                metadata: callable,
+                ast,
+            }
+        })
+        .collect();
 
-    let unified_calls = calls
+    parsed_callables.push(build_module_callable(&tree, code, file_name));
+
+    // Identification-only: no symbolic evaluation or URI resolution
+    let identification_strategy = MethodCallIdentificationStrategy::new();
+    let raw_restcalls = calls
+        .iter()
+        .filter_map(|call| identification_strategy.identify_restcall(call, file_name))
+        .collect();
+
+    let call_statements = calls
         .into_iter()
         .map(PythonCallStatement::to_language_agnostic)
         .collect::<Vec<CallStatement>>();
 
-    Ok(CodeElementsAggregate::new(
+    Ok(FileRecord {
+        file_path: file_name.to_string(),
+        language: Language::Python,
         imports,
         entities,
         endpoints,
-        restcalls,
-        callables,
-        unified_calls,
-    ))
+        callables: parsed_callables,
+        call_statements,
+        assignments,
+        enums,
+        raw_restcalls,
+    })
 }

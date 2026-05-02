@@ -1,19 +1,21 @@
-use models::{CodeElementsAggregate, api::ExtractionError};
+use models::{
+    ParsedCallable,
+    api::ExtractionError,
+    ir::{language::Language, syntax::FileRecord},
+};
 use statix::parse_java;
 use tree_sitter::Parser;
 
 use crate::extraction::{
     assignments::map::get_assignments_map,
     callables::extractor::CallablesExtractor,
-    calls::{evaluator::evaluate_invocations, extractor::CallStatementsExtractor},
+    calls::extractor::CallStatementsExtractor,
     endpoints::extractor::EndpointsExtractor,
-    entities::{evaluator::evaluate_entity_fields, extractor::EntitiesExtractor},
+    entities::extractor::EntitiesExtractor,
     extractor::Extractor,
     imports::extractor::ImportsExtractor,
-    restcalls::{
-        evaluation::spring::SpringEvaluationStrategy,
-        identification::spring::SpringIdentificationStrategy,
-        selection::{selector::Selector, spring::SpringSelector},
+    restcalls::identification::{
+        spring::SpringIdentificationStrategy, strategy::IdentificationStrategy,
     },
 };
 pub mod assignments;
@@ -27,10 +29,9 @@ pub mod imports;
 mod queries;
 pub mod restcalls;
 
-pub async fn extract(
-    code: &str,
-    file_name: &str,
-) -> Result<CodeElementsAggregate, ExtractionError> {
+pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, ExtractionError> {
+    use statix::java::matcher::java_convert_full_header_to_mangled_name;
+
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_java::LANGUAGE.into())
@@ -58,37 +59,47 @@ pub async fn extract(
 
     let assignments = assignments
         .ok_or_else(|| ExtractionError::Process("Assignments extraction failed".into()))?;
-
     let imports =
         imports.ok_or_else(|| ExtractionError::Process("Imports extraction failed".into()))?;
-
     let endpoints =
         endpoints.ok_or_else(|| ExtractionError::Process("Endpoints extraction failed".into()))?;
-
-    let mut entities =
+    let entities =
         entities.ok_or_else(|| ExtractionError::Process("Entities extraction failed".into()))?;
-
     let callables =
         callables.ok_or_else(|| ExtractionError::Process("Callables extraction failed".into()))?;
+    let calls = calls.ok_or_else(|| ExtractionError::Process("Calls extraction failed".into()))?;
 
-    let mut calls =
-        calls.ok_or_else(|| ExtractionError::Process("Calls extraction failed".into()))?;
+    // Build ParsedCallable list: combine rich Callable metadata with parsed ASTs
+    let mut parsed_callables_map = parse_java(&tree, code);
+    let parsed_callables: Vec<ParsedCallable> = callables
+        .into_iter()
+        .filter_map(|callable| {
+            let mangled = java_convert_full_header_to_mangled_name(&callable.name);
+            let ast = parsed_callables_map.remove(&mangled)?.ast;
+            Some(ParsedCallable {
+                metadata: callable,
+                ast,
+            })
+        })
+        .collect();
 
-    // Post-processing / evaluation
-    evaluate_entity_fields(&imports, &mut entities);
-    evaluate_invocations(&mut calls, &assignments);
-    let methods_asts = parse_java(&tree, code);
+    // Identification-only: no symbolic evaluation or URI resolution
+    let identification_strategy = SpringIdentificationStrategy::new();
+    let raw_restcalls = calls
+        .iter()
+        .filter_map(|call| identification_strategy.identify_restcall(call, file_name))
+        .collect();
 
-    let restcalls = SpringSelector::new(
-        SpringIdentificationStrategy::new(),
-        SpringEvaluationStrategy::new(methods_asts),
-    )
-    .select_restcall_statements(&calls, file_name)
-    .map_err(|e| {
-        ExtractionError::SymbolicEvaluation(format!("Restcall evaluation error: {:?}", e))
-    })?;
-
-    Ok(CodeElementsAggregate::new(
-        imports, entities, endpoints, restcalls, callables, calls,
-    ))
+    Ok(FileRecord {
+        file_path: file_name.to_string(),
+        language: Language::Java,
+        imports,
+        entities,
+        endpoints,
+        callables: parsed_callables,
+        call_statements: calls,
+        assignments,
+        enums: vec![],
+        raw_restcalls,
+    })
 }

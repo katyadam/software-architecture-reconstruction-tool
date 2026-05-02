@@ -121,13 +121,13 @@ impl Extractor for CallsExtractor {
                                         Argument {
                                             assigned_variable: spl.first().unwrap().to_string(),
                                             value: spl.get(1).unwrap().to_string(),
-                                            datatype: "any".to_string(),
+                                            datatype: None,
                                         }
                                     } else {
                                         Argument {
                                             assigned_variable: "".to_string(),
                                             value: arg.to_string(),
-                                            datatype: "any".to_string(),
+                                            datatype: None,
                                         }
                                     }
                                 })

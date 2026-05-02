@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 models = { workspace = true }
+statix = { workspace = true }
 clients = { workspace = true }
 python-extractor = { workspace = true }
 java-extractor = { workspace = true }
@@ -28,3 +29,5 @@ rust-s3 = { workspace = true }
 actix-cors = { workspace = true }
 async-trait = { workspace = true }
 once_cell = { workspace = true }
+regex = { workspace = true }
+strsim = { workspace = true }

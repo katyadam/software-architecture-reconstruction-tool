@@ -23,7 +23,12 @@ impl SpringIdentificationStrategy {
             .iter()
             .find(|m| {
                 arg.value.to_ascii_lowercase().contains(*m)
-                    || arg.datatype.to_ascii_lowercase().contains(*m)
+                    || arg
+                        .datatype
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_ascii_lowercase()
+                        .contains(*m)
             })
             .and_then(|m| HttpMethod::from_str(m).ok())
     }

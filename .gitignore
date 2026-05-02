@@ -5,5 +5,9 @@ UPDATE_LOG.md
 DESIRED_STATE.md
 dump/
 train-ticket-sar-output/
-empaia-sar-output/
+empaia-sar-output*/
 CLAUDE.md
+.claude/
+agents/
+plans/
+perf_testing.pdf

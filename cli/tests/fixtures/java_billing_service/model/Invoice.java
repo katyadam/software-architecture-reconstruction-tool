@@ -1,6 +1,6 @@
-package billing.service.model;
+package java_billing_service.model;
 
-import order.service.model.Order;
+import java_order_service.model.Order;
 
 public class Invoice {
     private String id;

@@ -2,7 +2,10 @@ use models::{Argument, CallStatement};
 use python_extractor::{
     extraction::{
         assignments::map::get_assignments_map,
-        calls::{PythonCallStatement, evaluator::evaluate_invocations, extractor::CallsExtractor},
+        calls::{
+            PythonCallStatement, evaluator::evaluate_invocations_on_statements,
+            extractor::CallsExtractor,
+        },
         extractor::{ExtractParams, Extractor},
     },
     s,
@@ -63,7 +66,7 @@ fn nested_test() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("func"),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("B(func) -> Any")),
             enclosing_class_name: None,
@@ -79,7 +82,7 @@ fn nested_test() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("C()"),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("D() -> Any")),
             enclosing_class_name: None,
@@ -139,12 +142,12 @@ fn classes_test() {
                 Argument {
                     assigned_variable: s!("a"),
                     value: s!("self.a"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("b"),
                     value: s!("self.b"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             enclosing_function_name: Some(s!("divide(self) -> float")),
@@ -181,12 +184,12 @@ fn classes_imports_test() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("self.a"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("self.b"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             enclosing_function_name: Some(s!("divide(self) -> Any")),
@@ -216,12 +219,12 @@ fn classes_imports_test() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("self.a"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("self.b"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             enclosing_function_name: Some(s!("sum(self) -> Any")),
@@ -239,12 +242,12 @@ fn classes_imports_test() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("5"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("4"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             enclosing_function_name: Some(s!("product(self) -> Any")),
@@ -262,12 +265,12 @@ fn classes_imports_test() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("self.a"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("self.b"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             enclosing_function_name: Some(s!("product(self) -> Any")),
@@ -295,9 +298,13 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
     let filename = s!("./examples/python/callgraph/repository-pattern/service.py");
     let code = load_file(&filename).unwrap();
     let tree = get_tree(&code);
-    let mut calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
+    let calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
     let assignments_map = get_assignments_map(&tree, &code);
-    evaluate_invocations(&mut calls, &assignments_map);
+    let mut agnostic: Vec<CallStatement> = calls
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .collect();
+    evaluate_invocations_on_statements(&mut agnostic, &assignments_map);
 
     let expected = vec![
         CallStatement {
@@ -317,7 +324,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("f\"User with email {email} already exists\""),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("create_user(self, name: str, email: str) -> User")),
             enclosing_class_name: Some(s!("UserService")),
@@ -334,17 +341,17 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
                 Argument {
                     assigned_variable: s!("id"),
                     value: s!("len(self.repository.get_all()) +\n                        1"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("name"),
                     value: s!("name"),
-                    datatype: s!("str"),
+                    datatype: Some(s!("str")),
                 },
                 Argument {
                     assigned_variable: s!("email"),
                     value: s!("email"),
-                    datatype: s!("str"),
+                    datatype: Some(s!("str")),
                 },
             ],
             enclosing_function_name: Some(s!("create_user(self, name: str, email: str) -> User")),
@@ -361,7 +368,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("self.repository.get_all()"),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("create_user(self, name: str, email: str) -> User")),
             enclosing_class_name: Some(s!("UserService")),
@@ -389,7 +396,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("new_user"),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("create_user(self, name: str, email: str) -> User")),
             enclosing_class_name: Some(s!("UserService")),
@@ -405,7 +412,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("user_id"),
-                datatype: s!("int"),
+                datatype: Some(s!("int")),
             }],
             enclosing_function_name: Some(s!("get_user(self, user_id: int) -> Optional[User]")),
             enclosing_class_name: Some(s!("UserService")),
@@ -433,7 +440,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("user_id"),
-                datatype: s!("int"),
+                datatype: Some(s!("int")),
             }],
             enclosing_function_name: Some(s!("delete_user(self, user_id: int) -> bool")),
             enclosing_class_name: Some(s!("UserService")),
@@ -446,13 +453,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
         },
     ];
 
-    assert_eq!(
-        calls
-            .into_iter()
-            .map(PythonCallStatement::to_language_agnostic)
-            .collect::<Vec<CallStatement>>(),
-        expected
-    );
+    assert_eq!(agnostic, expected);
 }
 
 #[test]
@@ -460,9 +461,13 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
     let filename = s!("./examples/python/callgraph/repository-pattern/controller.py");
     let code = load_file(&filename).unwrap();
     let tree = get_tree(&code);
-    let mut calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
+    let calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
     let assignments_map = get_assignments_map(&tree, &code);
-    evaluate_invocations(&mut calls, &assignments_map);
+    let mut agnostic: Vec<CallStatement> = calls
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .collect();
+    evaluate_invocations_on_statements(&mut agnostic, &assignments_map);
 
     let expected = vec![
         CallStatement {
@@ -471,12 +476,12 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("name"),
-                    datatype: s!("str"),
+                    datatype: Some(s!("str")),
                 },
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("email"),
-                    datatype: s!("str"),
+                    datatype: Some(s!("str")),
                 },
             ],
             enclosing_function_name: Some(s!("create_user(self, name: str, email: str) -> Any")),
@@ -493,7 +498,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("e"),
-                datatype: s!("any"),
+                datatype: None,
             }],
             enclosing_function_name: Some(s!("create_user(self, name: str, email: str) -> Any")),
             enclosing_class_name: Some(s!("UserController")),
@@ -509,7 +514,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("user_id"),
-                datatype: s!("int"),
+                datatype: Some(s!("int")),
             }],
             enclosing_function_name: Some(s!("get_user(self, user_id: int) -> Any")),
             enclosing_class_name: Some(s!("UserController")),
@@ -537,7 +542,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
             arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("user_id"),
-                datatype: s!("int"),
+                datatype: Some(s!("int")),
             }],
             enclosing_function_name: Some(s!("delete_user(self, user_id: int) -> Any")),
             enclosing_class_name: Some(s!("UserController")),
@@ -550,13 +555,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
         },
     ];
 
-    assert_eq!(
-        calls
-            .into_iter()
-            .map(PythonCallStatement::to_language_agnostic)
-            .collect::<Vec<CallStatement>>(),
-        expected
-    );
+    assert_eq!(agnostic, expected);
 }
 
 /// Verifies that type inference resolves argument datatypes from typed function parameters.
@@ -566,14 +565,13 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
 fn typed_params_infer_argument_datatypes_test() {
     let filename = "./examples/python/callgraph/simple_with_types.py";
     let (code, tree) = parse_file(filename);
-    let mut calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
+    let calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
     let assignments_map = get_assignments_map(&tree, &code);
-    evaluate_invocations(&mut calls, &assignments_map);
-
-    let agnostic: Vec<CallStatement> = calls
+    let mut agnostic: Vec<CallStatement> = calls
         .into_iter()
         .map(PythonCallStatement::to_language_agnostic)
         .collect();
+    evaluate_invocations_on_statements(&mut agnostic, &assignments_map);
 
     // B calls A — that is the only call statement in this file
     assert_eq!(agnostic.len(), 1, "expected exactly one call statement");
@@ -585,7 +583,7 @@ fn typed_params_infer_argument_datatypes_test() {
         "call should be inside B"
     );
 
-    // argument `a` has type annotation `int` on B's parameter → should be resolved
+    // argument `a` has type annotation `int` on B's parameter -> should be resolved
     let arg_a = call
         .arguments
         .iter()
@@ -593,7 +591,7 @@ fn typed_params_infer_argument_datatypes_test() {
         .expect("argument a not found");
     assert_eq!(
         arg_a.datatype,
-        s!("int"),
+        Some(s!("int")),
         "typed parameter `a: int` should produce datatype 'int'"
     );
 
@@ -604,9 +602,8 @@ fn typed_params_infer_argument_datatypes_test() {
         .find(|a| a.value == "c")
         .expect("argument c not found");
     assert_eq!(
-        arg_c.datatype,
-        s!("any"),
-        "untyped local variable `c` should produce datatype 'any'"
+        arg_c.datatype, None,
+        "untyped local variable `c` should produce datatype None"
     );
 }
 

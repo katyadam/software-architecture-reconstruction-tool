@@ -1,19 +1,12 @@
-use extractor_runtime::dispatch;
-use models::CodeElementsAggregate;
+use extractor_runtime::pipeline;
+use extractor_runtime::pipeline::pass3::{pass_attr, pass_module};
+use models::{CodeElementsAggregate, ir::syntax::FileRecord};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 pub fn fixture_base() -> String {
     format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"))
-}
-
-pub fn merge_aggregates(main: &mut CodeElementsAggregate, new: CodeElementsAggregate) {
-    main.imports.extend(new.imports);
-    main.entities.extend(new.entities);
-    main.endpoints.extend(new.endpoints);
-    main.restcalls.extend(new.restcalls);
-    main.callables.extend(new.callables);
-    main.call_statements.extend(new.call_statements);
 }
 
 pub fn collect_source_files(dir: &Path) -> Vec<PathBuf> {
@@ -33,20 +26,41 @@ pub fn collect_source_files(dir: &Path) -> Vec<PathBuf> {
     results
 }
 
-pub async fn extract_from_dirs(dirs: &[&Path]) -> CodeElementsAggregate {
-    let mut aggregate = CodeElementsAggregate::default();
+/// Synchronous helper: extracts `FileRecord`s from all source files in `dirs`
+/// using `dispatch_syntactic` (Pass 1 only — no cross-file resolution).
+pub fn collect_file_records(dirs: &[&Path]) -> Vec<FileRecord> {
+    let mut records = Vec::new();
     for dir in dirs {
         for file_path in collect_source_files(dir) {
             let code = fs::read_to_string(&file_path)
                 .unwrap_or_else(|_| panic!("Failed to read {:?}", file_path));
             let path_str = file_path.to_str().expect("Non-UTF8 path");
-            if let Some(elements) = dispatch::dispatch(&code, path_str)
-                .await
-                .unwrap_or_else(|e| panic!("Dispatch failed for {:?}: {:?}", file_path, e))
+            if let Some(record) =
+                pipeline::dispatch_syntactic(&code, path_str).unwrap_or_else(|e| {
+                    panic!("Syntactic dispatch failed for {:?}: {:?}", file_path, e)
+                })
             {
-                merge_aggregates(&mut aggregate, elements);
+                records.push(record);
             }
         }
     }
-    aggregate
+    records
+}
+
+/// Runs the full 3-pass pipeline over all source files in `dirs` and returns
+/// the result as a `CodeElementsAggregate` suitable for synthesizer calls.
+pub fn extract_from_dirs(dirs: &[&Path]) -> CodeElementsAggregate {
+    let records = collect_file_records(dirs);
+    let project_ir = pipeline::build_project_ir(records);
+    let external_constants = HashMap::new();
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, &external_constants);
+    let per_file_module_consts =
+        pass_module::resolve_all(&project_ir, &external_constants, &per_file_attrs);
+    let evaluated_ir = pipeline::evaluate(
+        project_ir,
+        &external_constants,
+        &per_file_attrs,
+        &per_file_module_consts,
+    );
+    CodeElementsAggregate::from(evaluated_ir)
 }

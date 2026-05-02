@@ -42,7 +42,7 @@ impl Extractor<Entity> for EntitiesExtractor {
                 let value = String::from_utf8_lossy(capture_text).to_string();
                 match query.capture_names()[capture.index as usize] {
                     "entity.name" => entity_name = value,
-                    "entity.superclass" => superclasses.push(value),
+                    "entity.superclass" | "entity.interface" => superclasses.push(value),
                     "entity.body" => {
                         fields = parse_field_declarations(capture.node, code);
                     }

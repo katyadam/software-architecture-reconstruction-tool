@@ -1,12 +1,16 @@
+use std::collections::HashMap;
+
 use java_extractor::{
     extraction::{
         entities::{evaluator::evaluate_entity_fields, extractor::EntitiesExtractor},
         extractor::Extractor,
-        imports::extractor::ImportsExtractor,
     },
     s, strs,
 };
-use models::{Entity, Field};
+use models::{
+    Entity, Field,
+    ir::project::{ImportGraph, ImportKind, ResolvedImport},
+};
 
 use crate::java::utils::{get_tree, load_file, parse_file};
 
@@ -19,7 +23,7 @@ fn base_test_class() {
 
     let expected = vec![Entity {
         name: s!("AllFieldTypes"),
-        superclasses: strs!["SomeClass"],
+        superclasses: strs!["SomeClass", "SomeInterface"],
         fields: vec![
             Field {
                 name: s!("publicField"),
@@ -187,8 +191,21 @@ fn test_evaluation() {
     let code = load_file(&filename).unwrap();
     let tree = get_tree(&code);
     let mut entities = EntitiesExtractor.extract(&code, &tree, &filename);
-    let imports = ImportsExtractor.extract(&code, &tree, &filename);
-    evaluate_entity_fields(&imports, &mut entities);
+
+    // Build a minimal ImportGraph with the one cross-file resolution needed:
+    // ClassB imports ClassC from com.example.other
+    let mut resolved_imports = HashMap::new();
+    resolved_imports.insert(
+        (filename.clone(), s!("ClassC")),
+        ResolvedImport {
+            source_file: s!("./examples/entities/other/ClassC.java"),
+            fully_qualified_name: s!("com.example.other.ClassC"),
+            kind: ImportKind::Entity,
+        },
+    );
+    let import_graph = ImportGraph { resolved_imports };
+
+    evaluate_entity_fields(&mut entities, &filename, &import_graph);
     let expected = vec![Entity {
         name: s!("ClassB"),
         superclasses: vec![],
@@ -230,9 +247,7 @@ fn test_entity_with_interface_implementation() {
 
     let expected = vec![Entity {
         name: s!("UserAccount"),
-        // NOTE: The entities query only captures `extends` (superclass: field in tree-sitter),
-        // not `implements`. So `implements Identifiable` is NOT captured here.
-        superclasses: vec![],
+        superclasses: strs!["Identifiable"],
         fields: vec![
             Field {
                 name: s!("id"),

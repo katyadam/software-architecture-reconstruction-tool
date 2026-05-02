@@ -3,15 +3,20 @@ use std::{
     sync::Arc,
 };
 
+use models::{
+    ParsedCallable,
+    ir::ast::{Expr, Stmt},
+};
+
 use crate::{
-    ast::{CallableAst, Expr, Stmt},
     error::EvalError,
+    expr::{concat_datatype, flatten_attr_to_dot_key, param_default_expr},
     matcher::CallableMatcher,
     visitor::Visitor,
 };
 
 pub type VarName = String;
-pub type VarType = String;
+pub type VarType = Option<String>;
 type Env = HashMap<VarName, (VarType, Expr)>;
 
 #[derive(Debug)]
@@ -21,22 +26,26 @@ pub struct AnalysisResult {
 }
 
 pub struct AnalysisContext<'a> {
-    pub callables: &'a HashMap<String, CallableAst>,
+    pub callables_map: &'a HashMap<String, ParsedCallable>,
     pub matcher: Arc<dyn CallableMatcher>,
 }
 
 impl<'a> AnalysisContext<'a> {
     pub fn new(
-        callables: &'a HashMap<String, CallableAst>,
+        callables: &'a HashMap<String, ParsedCallable>,
         matcher: Arc<dyn CallableMatcher>,
     ) -> Self {
-        Self { callables, matcher }
+        Self {
+            callables_map: callables,
+            matcher,
+        }
     }
 }
 
 pub struct SymbolicEvaluator<'a> {
     pub env: Env,
     pub ctx: &'a AnalysisContext<'a>,
+    pub visited: HashSet<String>,
 }
 
 // TODO: Should also take class fields to environment!
@@ -45,13 +54,18 @@ pub struct SymbolicEvaluator<'a> {
 
 impl<'a> SymbolicEvaluator<'a> {
     pub fn new(env: Env, ctx: &'a AnalysisContext<'a>) -> Self {
-        Self { env, ctx }
+        Self {
+            env,
+            ctx,
+            visited: HashSet::new(),
+        }
     }
 
     pub fn branch(&self) -> Self {
         Self {
             env: self.env.clone(),
             ctx: self.ctx,
+            visited: self.visited.clone(),
         }
     }
 
@@ -70,9 +84,9 @@ impl<'a> SymbolicEvaluator<'a> {
     /// produce `Expr::Joined`). When `None` (try/catch), values always join.
     ///
     /// Three phases:
-    /// 1. Update pre-existing variables that changed in either branch.
+    /// 1. Update already declared variables that changed in either branch to joined variables in parent env.
     /// 2. Bring variables first declared inside a branch into the parent env.
-    /// 3. For variables declared in BOTH branches that did not exist before,
+    /// 3. For variables declared in BOTH branches that did not exist in the parent env,
     ///    join differing values (phase 2 lets the first-branch value win otherwise).
     fn merge_branches(
         &mut self,
@@ -83,8 +97,16 @@ impl<'a> SymbolicEvaluator<'a> {
         // Phase 1: join differing values for variables that already existed.
         let pre_keys: Vec<String> = self.env.keys().cloned().collect();
         for key in &pre_keys {
-            let (_, a_val) = branch_a.env.get(key).unwrap();
-            let (_, b_val) = branch_b.env.get(key).unwrap();
+            let (_, a_val) = branch_a.env.get(key).ok_or_else(|| {
+                EvalError::NonSenseEvaluation(format!(
+                    "merge_branches: key '{key}' missing in branch_a env"
+                ))
+            })?;
+            let (_, b_val) = branch_b.env.get(key).ok_or_else(|| {
+                EvalError::NonSenseEvaluation(format!(
+                    "merge_branches: key '{key}' missing in branch_b env"
+                ))
+            })?;
             if a_val != b_val {
                 let joined = if let Some(cond) = sym_cond {
                     self.join(cond, a_val, b_val)?.1
@@ -93,7 +115,14 @@ impl<'a> SymbolicEvaluator<'a> {
                         vals: vec![a_val.clone(), b_val.clone()],
                     }
                 };
-                self.env.get_mut(key).unwrap().1 = joined;
+                self.env
+                    .get_mut(key)
+                    .ok_or_else(|| {
+                        EvalError::NonSenseEvaluation(format!(
+                            "merge_branches: key '{key}' missing in parent env"
+                        ))
+                    })?
+                    .1 = joined;
             }
         }
 
@@ -104,7 +133,7 @@ impl<'a> SymbolicEvaluator<'a> {
 
         // Phase 3: join variables declared in BOTH branches that were not pre-existing.
         // Collect first to avoid simultaneous borrows of branch_a.env and self.env.
-        let new_both: Vec<(String, String, Expr, Expr)> = branch_a
+        let new_both: Vec<(String, Option<String>, Expr, Expr)> = branch_a
             .env
             .iter()
             .filter(|(key, _)| !pre_keys_set.contains(*key))
@@ -135,22 +164,51 @@ impl<'a> SymbolicEvaluator<'a> {
         callable_name: &str,
         ctx: &'a AnalysisContext<'a>,
     ) -> Result<AnalysisResult, EvalError> {
-        let callable = ctx.callables.get(callable_name).ok_or_else(|| {
+        let callable = ctx.callables_map.get(callable_name).ok_or_else(|| {
             EvalError::NonSenseEvaluation(format!("Method {} not found", callable_name))
         })?;
 
         let mut env = HashMap::new();
-        for param in &callable.params {
-            let inserted_expr = if let Some(default_value) = &param.default_value {
-                Expr::Literal(default_value.to_string())
-            } else {
-                Expr::Var(param.name.clone())
-            };
+        for param in &callable.metadata.parameters {
+            let inserted_expr = param_default_expr(param);
             env.insert(param.name.clone(), (param.datatype.clone(), inserted_expr));
         }
 
-        let mut evaluator = Self { env, ctx };
-        let result = evaluator.visit_statements(&callable.body)?;
+        let mut visited = HashSet::new();
+        visited.insert(callable_name.to_string());
+        let mut evaluator = Self { env, ctx, visited };
+        let result = evaluator.visit_statements(&callable.ast.statements)?;
+
+        Ok(AnalysisResult {
+            return_value: result.unwrap_or(Expr::Empty),
+            final_env: evaluator.env,
+        })
+    }
+
+    /// Same as [`eval_callable`] but seeds the environment with `initial_env` before
+    /// adding parameters. Parameters always take priority over `initial_env` entries.
+    ///
+    /// `initial_env` is borrowed and cloned once internally so the caller can reuse
+    /// the same constants map across multiple invocations without per-call ownership transfer.
+    pub fn eval_callable_with_env(
+        callable_name: &str,
+        ctx: &'a AnalysisContext<'a>,
+        initial_env: &Env,
+    ) -> Result<AnalysisResult, EvalError> {
+        let callable = ctx.callables_map.get(callable_name).ok_or_else(|| {
+            EvalError::NonSenseEvaluation(format!("Method {} not found", callable_name))
+        })?;
+
+        let mut env = initial_env.clone();
+        for param in &callable.metadata.parameters {
+            let inserted_expr = param_default_expr(param);
+            env.insert(param.name.clone(), (param.datatype.clone(), inserted_expr));
+        }
+
+        let mut visited = HashSet::new();
+        visited.insert(callable_name.to_string());
+        let mut evaluator = Self { env, ctx, visited };
+        let result = evaluator.visit_statements(&callable.ast.statements)?;
 
         Ok(AnalysisResult {
             return_value: result.unwrap_or(Expr::Empty),
@@ -168,12 +226,12 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
         match cond {
             Expr::Literal(lit) => {
                 if lit == "true" || lit == "True" {
-                    Ok(("any".to_owned(), then.clone()))
+                    Ok((None, then.clone()))
                 } else if lit == "false" || lit == "False" {
-                    Ok(("any".to_owned(), els.clone()))
+                    Ok((None, els.clone()))
                 } else {
                     Ok((
-                        "any".to_owned(),
+                        None,
                         Expr::Joined {
                             vals: vec![then.clone(), els.clone()],
                         },
@@ -181,7 +239,7 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
                 }
             }
             _ => Ok((
-                "any".to_owned(),
+                None,
                 Expr::Joined {
                     vals: vec![then.clone(), els.clone()],
                 },
@@ -194,14 +252,25 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
             Expr::Literal(lit) => self.visit_literal(lit),
             Expr::Var(name) => self.visit_var(name),
             Expr::Concat(left, right) => self.visit_concat(left, right),
-            Expr::Call { name, args } => self.visit_call(name, args),
-            Expr::Empty => Ok(("void".to_string(), Expr::Empty)),
-            Expr::Joined { vals } => Ok(("any".to_string(), Expr::Joined { vals: vals.clone() })),
+            Expr::Call {
+                name,
+                receiver,
+                args,
+            } => self.visit_call(name, receiver.as_deref(), args),
+            Expr::Empty => Ok((None, Expr::Empty)),
+            Expr::Joined { vals } => Ok((None, Expr::Joined { vals: vals.clone() })),
+            Expr::Attr { object, field } => {
+                let dot_key = flatten_attr_to_dot_key(object, field);
+                match self.env.get(&dot_key).cloned() {
+                    Some(val) => Ok(val),
+                    None => Ok((None, Expr::Empty)),
+                }
+            }
         }
     }
 
     fn visit_literal(&mut self, lit: &str) -> Result<Self::Out, Self::Error> {
-        Ok(("String".to_string(), Expr::Literal(lit.to_owned())))
+        Ok((Some("String".to_string()), Expr::Literal(lit.to_owned())))
     }
 
     fn visit_var(&mut self, name: &str) -> Result<Self::Out, Self::Error> {
@@ -217,9 +286,9 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
         let (left_type, left) = self.visit_expr(left)?;
         let (right_type, right) = self.visit_expr(right)?;
 
-        let concat_datatype = decide_concat_datatype(&left_type, &right_type);
+        let concat_datatype = concat_datatype(&left_type, &right_type);
 
-        if concat_datatype == "String"
+        if concat_datatype == Some("String".to_string())
             && let (Expr::Literal(ls), Expr::Literal(rs)) = (&left, &right)
         {
             return Ok((concat_datatype, Expr::Literal(format!("{}{}", ls, rs))));
@@ -231,40 +300,63 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
         ))
     }
 
-    fn visit_call(&mut self, name: &str, args: &[Expr]) -> Result<Self::Out, Self::Error> {
+    fn visit_call(
+        &mut self,
+        name: &str,
+        receiver: Option<&Expr>,
+        args: &[Expr],
+    ) -> Result<Self::Out, Self::Error> {
+        let (recv_type, recv_val) = receiver
+            .map(|r| self.visit_expr(r).unwrap_or((None, Expr::Empty)))
+            .unwrap_or((None, Expr::Empty));
+
         let mut evaluated_args = Vec::new();
         let mut arg_types = Vec::new();
         for arg in args {
-            let (t, v) = self.visit_expr(arg)?;
-            arg_types.push(t);
+            let (t, v) = self.visit_expr(arg).unwrap_or((None, Expr::Empty));
+            arg_types.push(t.clone());
             evaluated_args.push(v);
         }
 
-        let closest = self
-            .ctx
-            .matcher
-            .find_closest_callable(self.ctx.callables, name, &arg_types);
+        let closest =
+            self.ctx
+                .matcher
+                .find_closest_callable(self.ctx.callables_map, name, &arg_types);
         if let Some(m_name) = closest
-            && let Some(callable_ast) = self.ctx.callables.get(&m_name)
+            && let Some(parsed_callable) = self.ctx.callables_map.get(&m_name)
         {
+            if self.visited.contains(&m_name) {
+                return Ok((parsed_callable.metadata.return_type.clone(), Expr::Empty));
+            }
+
+            let mut visited = self.visited.clone();
+            visited.insert(m_name.clone());
             let mut local_evaluator = SymbolicEvaluator {
                 env: HashMap::new(),
                 ctx: self.ctx,
+                visited,
             };
 
-            for (param, val) in callable_ast.params.iter().zip(evaluated_args) {
+            for (param, val) in parsed_callable
+                .metadata
+                .parameters
+                .iter()
+                .zip(evaluated_args)
+            {
                 local_evaluator
                     .env
                     .insert(param.name.clone(), (param.datatype.clone(), val));
             }
-            let result = local_evaluator.visit_statements(&callable_ast.body)?;
+            let result = local_evaluator
+                .visit_statements(&parsed_callable.ast.statements)
+                .unwrap_or(None);
 
             Ok((
-                callable_ast.return_type.clone(),
+                parsed_callable.metadata.return_type.clone(),
                 result.unwrap_or(Expr::Empty),
             ))
         } else {
-            Ok(("void".to_string(), Expr::Empty))
+            Ok((recv_type, recv_val))
         }
     }
 
@@ -317,12 +409,12 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
     fn visit_declaration(
         &mut self,
         name: &str,
-        dtype: &str,
+        dtype: &Option<String>,
         value: &Expr,
     ) -> Result<(), EvalError> {
         let evaluated = self.visit_expr(value)?;
         self.env
-            .insert(name.to_string(), (dtype.to_string(), evaluated.1));
+            .insert(name.to_string(), (dtype.clone(), evaluated.1));
         Ok(())
     }
 
@@ -402,12 +494,4 @@ fn update_env(env: &mut Env, name: &str, new_val: Expr) -> Result<(), EvalError>
             "variable: {name} that should be updated to: {new_val:#?} by assignment, was not declared before -- env: {env:#?}"
         )))
     }
-}
-
-fn decide_concat_datatype(left: &str, right: &str) -> String {
-    if left == "String" || right == "String" {
-        return "String".to_string();
-    }
-
-    left.to_string()
 }

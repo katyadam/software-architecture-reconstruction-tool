@@ -1,14 +1,15 @@
+use std::collections::HashMap;
+
 use python_extractor::{
     extraction::{
         entities::{evaluator::evaluate_entity_fields, extractor::EntitiesExtractor},
         enums::identification::EnumIdentificator,
         extractor::{ExtractParams, Extractor},
-        imports::extractor::ImportsExtractor,
     },
     s, strs,
 };
 
-use models::{Entity, Field, enums::Enum};
+use models::{Entity, Field, enums::EnumDefinition, ir::project::ImportGraph};
 
 use crate::python::utils::{get_tree, load_file};
 
@@ -19,8 +20,11 @@ fn base_test() {
     let tree = get_tree(&code);
     let mut entities =
         EntitiesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
-    let imports = ImportsExtractor.extract(ExtractParams::new(&tree, &code));
-    evaluate_entity_fields(&imports, &mut entities, &filename);
+    // All types (Email) are defined in the same file, so no import graph entries are needed.
+    let import_graph = ImportGraph {
+        resolved_imports: HashMap::new(),
+    };
+    evaluate_entity_fields(&mut entities, filename, &import_graph);
     let expected = vec![
         Entity {
             name: s!("Email"),
@@ -229,8 +233,11 @@ fn should_identificate_field_datatype_collections() {
     let tree = get_tree(&code);
     let mut entities =
         EntitiesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
-    let imports = ImportsExtractor.extract(ExtractParams::new(&tree, &code));
-    evaluate_entity_fields(&imports, &mut entities, &filename);
+    // Email is defined in the same file as MailService, so no import graph entries are needed.
+    let import_graph = ImportGraph {
+        resolved_imports: HashMap::new(),
+    };
+    evaluate_entity_fields(&mut entities, filename, &import_graph);
     let expected = vec![
         Entity {
             name: s!("Email"),
@@ -288,9 +295,10 @@ fn should_identificate_enums() {
     let entities =
         EntitiesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
     let enums = EnumIdentificator::identify_from_entities(&entities);
-    let expected = vec![Enum {
+    let expected = vec![EnumDefinition {
         name: s!("MappingType"),
-        values: vec![s!("cases"), s!("slides")],
+        variants: vec![s!("cases"), s!("slides")],
+        file_path: s!("./examples/python/enums.py"),
     }];
     assert_eq!(enums, expected);
 }

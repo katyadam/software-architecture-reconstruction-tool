@@ -14,24 +14,24 @@ pub(in crate::extraction) fn infer_argument_type(
     assignments_map: &HashMap<AssignmentKey, Assignment>,
 ) {
     if let Some(approximated_datatype) = approximate_type_for_value(&arg.value) {
-        arg.datatype = approximated_datatype;
+        arg.datatype = Some(approximated_datatype);
         return;
     }
 
     let function_scope = Scope::from_enclosing_function(enclosing_function_name.clone());
     if let Some(found_type) = resolve_type(&arg.value, &function_scope, assignments_map) {
-        arg.datatype = found_type;
+        arg.datatype = Some(found_type);
         return;
     }
 
     let class_scope = Scope::from_enclosing_class(enclosing_class_name.clone());
     if let Some(found_type) = resolve_type(&arg.value, &class_scope, assignments_map) {
-        arg.datatype = found_type;
+        arg.datatype = Some(found_type);
         return;
     }
 
     if let Some(found_type) = resolve_type(&arg.value, &Scope::Global, assignments_map) {
-        arg.datatype = found_type;
+        arg.datatype = Some(found_type);
     }
 }
 

@@ -55,3 +55,11 @@ pub enum ExtractionError {
     #[error("Error occured during symbolic evaluation: {0}")]
     SymbolicEvaluation(String),
 }
+
+/// OpenAPI schema stub for the multipart file upload body.
+#[allow(dead_code)]
+#[derive(ToSchema)]
+pub struct MultipleFileUploadSchema {
+    #[schema(value_type = [String], format = Binary)]
+    pub files: Vec<String>,
+}

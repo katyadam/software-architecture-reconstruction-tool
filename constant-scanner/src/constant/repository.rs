@@ -10,7 +10,7 @@ use crate::schema;
 use crate::schema::commits::dsl::*;
 use crate::schema::constants::dsl::*;
 
-pub trait ConstantRepository {
+pub trait ConstantRepository: Send + Sync {
     fn get_by_commit_hash(&self, commit_hash_query: &str) -> Result<Vec<Constant>, DatabaseError>;
     fn save_batch(&self, new_constants: &[NewConstant]) -> Result<Vec<Constant>, DatabaseError>;
     fn delete_by_commit_hash(&self, commit_hash_query: &str) -> Result<(), DatabaseError>;
@@ -57,6 +57,8 @@ impl ConstantRepository for PgConstantRepository {
 
             diesel::insert_into(schema::constants::table)
                 .values(new_constants)
+                .on_conflict((schema::constants::commit_hash, schema::constants::name))
+                .do_nothing()
                 .returning(Constant::as_returning())
                 .get_results(conn)
         })?;

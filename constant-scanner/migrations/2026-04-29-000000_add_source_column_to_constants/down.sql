@@ -1,0 +1,1 @@
+ALTER TABLE constants DROP COLUMN IF EXISTS source;

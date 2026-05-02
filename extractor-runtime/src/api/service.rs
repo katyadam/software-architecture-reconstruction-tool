@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use actix_multipart::{Field, Multipart};
 use actix_web::{HttpResponse, Responder, Result};
 use awc::body::BoxBody;
 use futures_util::StreamExt as _;
 use log::info;
-use models::api::ProcessFilesIdentifier;
+use models::{api::ProcessFilesIdentifier, ir::evaluted::EvaluatedIR};
 use uuid::Uuid;
 
 use crate::{
@@ -14,8 +16,11 @@ use crate::{
         },
         dto::PostFileRecord,
     },
-    dispatch::dispatch,
     error::ApiError,
+    pipeline::{
+        self,
+        pass3::{pass_attr, pass_module},
+    },
 };
 
 pub trait ExtractorRuntimeService {
@@ -24,14 +29,6 @@ pub trait ExtractorRuntimeService {
         payload: &mut Multipart,
         process_files_identifier: ProcessFilesIdentifier,
     ) -> Result<ServiceResponse, ApiError>;
-
-    async fn process_file(
-        &self,
-        file_name: &str,
-        field: Field,
-        codebase_uuid: Uuid,
-        base_dir_path: &str,
-    ) -> Result<(), ApiError>;
 }
 
 pub struct ExtractorRuntimeServiceImpl {
@@ -80,77 +77,121 @@ impl ExtractorRuntimeService for ExtractorRuntimeServiceImpl {
         payload: &mut Multipart,
         identifier: ProcessFilesIdentifier,
     ) -> Result<ServiceResponse, ApiError> {
-        let run_id = uuid::Uuid::new_v4();
+        let run_id = Uuid::new_v4();
         let base_dir_path = format!("{}/{run_id}", identifier.codebase_uuid);
-        let mut any_file_processed: bool = false;
 
-        while let Some(field) = payload.next().await {
-            let field = field
-                .map_err(|_| ApiError::BadRequest("Could not get Payload Field".to_string()))?;
-
-            let file_name_opt = field
-                .content_disposition()
-                .and_then(|cd| cd.get_filename().map(|s| s.to_owned()));
-
-            if let Some(file_name) = file_name_opt
-                && let Err(e) = self
-                    .process_file(&file_name, field, identifier.codebase_uuid, &base_dir_path)
-                    .await
-            {
-                info!("An Error occured during file processing: {e}");
-                continue;
-            }
-            any_file_processed = true;
+        let collected = collect_uploaded_files(payload).await?;
+        if collected.is_empty() {
+            return Ok(ServiceResponse::NoFileFoundInRequest);
         }
 
-        self.synthesizer_connector
-            .send_load_info(identifier, &base_dir_path)
+        let evaluated_ir = run_extraction_pipeline(&collected);
+
+        self.s3_connector
+            .store_evaluated_ir(evaluated_ir, &base_dir_path)
             .await?;
 
-        if any_file_processed {
-            Ok(ServiceResponse::FileProcessed)
-        } else {
-            Ok(ServiceResponse::NoFileFoundInRequest)
-        }
+        self.notify_services(identifier, &collected, &base_dir_path)
+            .await?;
+
+        Ok(ServiceResponse::FileProcessed)
     }
+}
 
-    async fn process_file(
-        &self,
-        file_name: &str,
-        mut field: Field,
-        codebase_uuid: Uuid,
-        base_dir_path: &str,
-    ) -> Result<(), ApiError> {
-        info!("Uploaded file: {file_name}");
+/// Drain a multipart payload into an in-memory list of `(name, text, size)` tuples.
+/// Binary files (non-UTF-8) are skipped with a log message.
+async fn collect_uploaded_files(
+    payload: &mut Multipart,
+) -> Result<Vec<(String, String, i64)>, ApiError> {
+    let mut collected: Vec<(String, String, i64)> = Vec::new();
 
-        // Collect file data into a single Vec<u8>
-        let mut file_bytes = Vec::new();
+    while let Some(field) = payload.next().await {
+        let mut field: Field =
+            field.map_err(|_| ApiError::BadRequest("Could not get Payload Field".to_string()))?;
+
+        let Some(file_name) = field
+            .content_disposition()
+            .and_then(|cd| cd.get_filename().map(|s| s.to_owned()))
+        else {
+            continue;
+        };
+
+        let mut file_bytes: Vec<u8> = Vec::new();
         while let Some(chunk) = field.next().await {
             let data = chunk
                 .map_err(|_| ApiError::BadRequest("Cannot get file data from chunk".to_string()))?;
             file_bytes.extend_from_slice(&data);
         }
-        info!("Uploaded file size: {} bytes", file_bytes.len());
+        info!("Uploaded file: {file_name} ({} bytes)", file_bytes.len());
 
-        let file_size: i64 = file_bytes.len() as i64;
-        // Convert to string (assuming UTF-8 text)
-        let text = std::str::from_utf8(&file_bytes)
-            .map_err(|_| ApiError::InternalServerError("From UTF-8 failed".to_string()))?;
+        match std::str::from_utf8(&file_bytes) {
+            Ok(text) => collected.push((file_name, text.to_string(), file_bytes.len() as i64)),
+            Err(_) => info!("Skipping non-UTF-8 file: {file_name}"),
+        }
+    }
 
-        if let Some(code_elements_aggregate) = dispatch(text, file_name).await? {
-            self.s3_connector
-                .store_code_elements(code_elements_aggregate, base_dir_path)
-                .await?;
+    Ok(collected)
+}
+
+/// Run the 3-pass extraction pipeline over the collected files.
+/// Pass 1: syntactic extraction per file.
+/// Pass 2: cross-file type resolution.
+/// Pass 3: symbolic evaluation and URI resolution.
+fn run_extraction_pipeline(collected: &[(String, String, i64)]) -> EvaluatedIR {
+    let file_records: Vec<_> = collected
+        .iter()
+        .filter_map(
+            |(name, text, _)| match pipeline::dispatch_syntactic(text, name) {
+                Ok(Some(record)) => Some(record),
+                Ok(None) => None,
+                Err(e) => {
+                    info!("Pass 1 error for {name}: {e}");
+                    None
+                }
+            },
+        )
+        .collect();
+
+    // TODO: Take external constants that are saved in db or supplied as JSON and put them here
+    let external_constants = HashMap::new();
+
+    let project_ir = pipeline::build_project_ir(file_records);
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, &external_constants);
+    let per_file_module_consts =
+        pass_module::resolve_all(&project_ir, &external_constants, &per_file_attrs);
+    pipeline::evaluate(
+        project_ir,
+        &external_constants,
+        &per_file_attrs,
+        &per_file_module_consts,
+    )
+}
+
+impl ExtractorRuntimeServiceImpl {
+    /// Notify the manager (file records) and synthesizer (load trigger) after S3 storage.
+    async fn notify_services(
+        &self,
+        identifier: ProcessFilesIdentifier,
+        collected: &[(String, String, i64)],
+        base_dir_path: &str,
+    ) -> Result<(), ApiError> {
+        for (file_name, _, file_size) in collected {
+            if let Err(e) = self
+                .manager_connector
+                .send_file_record(PostFileRecord::new(
+                    identifier.codebase_uuid,
+                    file_name.clone(),
+                    *file_size,
+                ))
+                .await
+            {
+                info!("Manager file record error for {file_name}: {e}");
+            }
         }
 
-        self.manager_connector
-            .send_file_record(PostFileRecord::new(
-                codebase_uuid,
-                file_name.to_string(),
-                file_size,
-            ))
+        self.synthesizer_connector
+            .send_load_info(identifier, base_dir_path)
             .await?;
-        info!("Recorded File extraction in Manager.");
 
         Ok(())
     }

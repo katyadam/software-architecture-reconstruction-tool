@@ -47,24 +47,25 @@ mod tests {
                     http_method: HttpMethod::GET,
                     uri: "/users/{id}".to_string(),
                     file_path: "crm/user-service/src/api/controller.py".to_string(),
+                    ..Default::default()
                 },
                 Endpoint {
                     function_name: "create_user".to_string(),
                     function_hash: "some-random-hash".to_string(),
-
                     parameters: vec![],
                     http_method: HttpMethod::POST,
                     uri: "/users".to_string(),
                     file_path: "crm/user-service/src/api/controller.py".to_string(),
+                    ..Default::default()
                 },
                 Endpoint {
                     function_name: "delete_user".to_string(),
                     function_hash: "some-random-hash".to_string(),
-
                     parameters: vec![],
                     http_method: HttpMethod::DELETE,
                     uri: "/users/{id}".to_string(),
                     file_path: "crm/user-service/src/api/controller.py".to_string(),
+                    ..Default::default()
                 },
             ],
             vec![

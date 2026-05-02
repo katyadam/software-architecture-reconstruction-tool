@@ -1,4 +1,8 @@
-use std::{borrow::Cow, cmp::min, collections::HashMap};
+use std::{
+    borrow::Cow,
+    cmp::{Reverse, min},
+    collections::HashMap,
+};
 
 use models::{ConfigurationData, Endpoint, RestCall, configuration::ServiceDescription};
 use regex::Regex;
@@ -135,7 +139,7 @@ impl SdgBuilderImpl {
         }
 
         let mut sorted_constants = constants.to_vec();
-        sorted_constants.sort_by(|a, b| b.name.len().cmp(&a.name.len()));
+        sorted_constants.sort_by_key(|b| Reverse(b.name.len()));
 
         let lookup_table: HashMap<&str, &str> = sorted_constants
             .iter()

@@ -18,7 +18,7 @@ use python_extractor::{
     s,
 };
 
-use models::{Argument, HttpMethod, RestCall, enums::Enum};
+use models::{Argument, HttpMethod, RestCall, enums::EnumDefinition};
 use statix::parse_python;
 use tree_sitter::Tree;
 
@@ -52,12 +52,12 @@ fn restcalls_extraction() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/items/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("json"),
                     value: s!("payload"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::POST,
@@ -71,12 +71,12 @@ fn restcalls_extraction() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/items/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("params"),
                     value: s!("params"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::GET,
@@ -89,7 +89,7 @@ fn restcalls_extraction() {
             call_arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("f\"{BASE_URL}/items/{item_id}\""),
-                datatype: s!("any"),
+                datatype: None,
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/items/{item_id}"),
@@ -102,12 +102,12 @@ fn restcalls_extraction() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/users/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("json"),
                     value: s!("payload"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::POST,
@@ -121,12 +121,12 @@ fn restcalls_extraction() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/users/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("params"),
                     value: s!("{\"limit\": limit}"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::GET,
@@ -140,12 +140,12 @@ fn restcalls_extraction() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/search/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("params"),
                     value: s!("{\"q\": query}"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::GET,
@@ -175,14 +175,14 @@ fn restcalls_evaluation() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/items/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("json"),
                     value: s!(
                         "{\n        \"name\": name,\n        \"description\": description,\n        \"price\": price,\n        \"in_stock\": in_stock\n    }"
                     ),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::POST,
@@ -196,12 +196,12 @@ fn restcalls_evaluation() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/items/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("params"),
                     value: s!("{\"skip\": skip, \"limit\": limit}"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::GET,
@@ -215,7 +215,7 @@ fn restcalls_evaluation() {
             call_arguments: vec![Argument {
                 assigned_variable: s!(""),
                 value: s!("f\"{BASE_URL}/items/{item_id}\""),
-                datatype: s!("any"),
+                datatype: None,
             }],
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/items/{item_id}"),
@@ -229,14 +229,14 @@ fn restcalls_evaluation() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/users/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("json"),
                     value: s!(
                         "{\n        \"username\": username,\n        \"email\": email\n    }"
                     ),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::POST,
@@ -250,12 +250,12 @@ fn restcalls_evaluation() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/users/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("params"),
                     value: s!("{\"limit\": limit}"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::GET,
@@ -269,12 +269,12 @@ fn restcalls_evaluation() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/search/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("params"),
                     value: s!("{\"q\": query}"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::GET,
@@ -302,12 +302,12 @@ fn should_extract_all_types_of_restcall() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/items/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("json"),
                     value: s!("data.dict()"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::POST,
@@ -321,12 +321,12 @@ fn should_extract_all_types_of_restcall() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/items/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("json"),
                     value: s!("data.dict()"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::POST,
@@ -340,12 +340,12 @@ fn should_extract_all_types_of_restcall() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/items/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("params"),
                     value: s!("{\"skip\": skip, \"limit\": limit}"),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::GET,
@@ -359,14 +359,14 @@ fn should_extract_all_types_of_restcall() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/users/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("json"),
                     value: s!(
                         "{\n        \"username\": username,\n        \"email\": email\n    }"
                     ),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::POST,
@@ -380,14 +380,14 @@ fn should_extract_all_types_of_restcall() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/users/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("json"),
                     value: s!(
                         "{\n        \"username\": username,\n        \"email\": email\n    }"
                     ),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::POST,
@@ -401,14 +401,14 @@ fn should_extract_all_types_of_restcall() {
                 Argument {
                     assigned_variable: s!(""),
                     value: s!("f\"{BASE_URL}/users/\""),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
                 Argument {
                     assigned_variable: s!("json"),
                     value: s!(
                         "{\n        \"username\": username,\n        \"email\": email\n    }"
                     ),
-                    datatype: s!("any"),
+                    datatype: None,
                 },
             ],
             http_method: HttpMethod::POST,
@@ -438,14 +438,14 @@ fn should_assign_correct_target_uris_using_symbolic_evaluation() {
             Argument {
                 assigned_variable: s!(""),
                 value: s!("f\"{BASE_URL}/items/\""),
-                datatype: s!("any"),
+                datatype: None,
             },
             Argument {
                 assigned_variable: s!("json"),
                 value: s!(
                     "{\n        \"name\": name,\n        \"description\": description,\n        \"price\": price,\n        \"in_stock\": in_stock\n    }"
                 ),
-                datatype: s!("any"),
+                datatype: None,
             },
         ],
         http_method: HttpMethod::POST,
@@ -479,9 +479,10 @@ fn should_correctly_generate_multiple_restcalls_with_resolved_enums() {
         MethodCallIdentificationStrategy::new(),
         MethodCallEvaluationStrategy::new(
             function_asts,
-            get_enums_map(&vec![Enum {
+            get_enums_map(&vec![EnumDefinition {
                 name: s!("MappingType"),
-                values: vec![s!("cases"), s!("slides")],
+                variants: vec![s!("cases"), s!("slides")],
+                file_path: s!("./examples/python/restcalls/enum_in_restcall_uri.py"),
             }]),
         ),
     )
@@ -671,4 +672,38 @@ fn test_restcall_edge_cases() {
         item_calls[0].target_uri.contains("/items/"),
         "URI must contain /items/ segment"
     );
+}
+
+#[test]
+fn different_http_method_naming_restcall_extraction() {
+    let filename = "./examples/python/restcalls/different_naming_of_http_method.py";
+    let (code, tree) = parse_file(filename);
+    let mut calls = restcalls(&code, &tree, filename);
+    let assignments_map = get_assignments_map(&tree, &code);
+    evaluate_local_and_global_assignments(&mut calls, &assignments_map);
+
+    assert_eq!(calls.len(), 11);
+
+    let uris: Vec<&str> = calls.iter().map(|c| c.target_uri.as_str()).collect();
+    assert!(uris.contains(&"{base_url}/v1/collections"));
+    assert!(uris.contains(&"{base_url}/v1/collections/query"));
+    assert!(uris.contains(&"{base_url}/v1/collections/query/unique-references"));
+    assert!(uris.contains(&"{base_url}/v1/collections/{collection_id}"));
+    assert!(uris.contains(&"{base_url}/v1/collections/{collection_id}/items"));
+    assert!(uris.contains(&"{base_url}/v1/collections/{collection_id}/items/query"));
+    assert!(
+        uris.contains(&"{base_url}/v1/collections/{collection_id}/items/query/unique-references")
+    );
+    assert!(uris.contains(&"{base_url}/v1/collections/{collection_id}/items/{item_id}"));
+
+    let methods: Vec<_> = calls.iter().map(|c| &c.http_method).collect();
+    assert!(methods.iter().any(|m| format!("{m:?}") == "GET"));
+    assert!(methods.iter().any(|m| format!("{m:?}") == "POST"));
+    assert!(methods.iter().any(|m| format!("{m:?}") == "PUT"));
+    assert!(methods.iter().any(|m| format!("{m:?}") == "DELETE"));
+
+    for call in &calls {
+        assert_eq!(call.file_path, filename);
+        assert!(!call.function_hash.is_empty());
+    }
 }

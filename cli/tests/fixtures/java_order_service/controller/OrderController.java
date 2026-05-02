@@ -1,6 +1,6 @@
-package order.service.controller;
+package java_order_service.controller;
 
-import order.service.model.Order;
+import java_order_service.model.Order;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

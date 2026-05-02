@@ -6,7 +6,6 @@ use crate::{
             manager_connector::ManagerConnector, s3_connector::S3Connector,
             synthesizer_connector::SynthesizerConnector,
         },
-        dto::MultipleFileUploadSchema,
         service::ExtractorRuntimeServiceImpl,
     },
     bucket::get_bucket,
@@ -16,14 +15,17 @@ use actix_cors::Cors;
 use actix_web::{App, HttpServer, middleware::Logger, web};
 use awc::Client;
 use clients::http::client::HttpClient;
+use models::api::MultipleFileUploadSchema;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 mod api;
 mod bucket;
 mod client;
-mod dispatch;
 mod error;
+#[macro_use]
+mod macros;
+mod pipeline;
 
 #[derive(OpenApi)]
 #[openapi(

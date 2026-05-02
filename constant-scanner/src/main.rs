@@ -16,15 +16,22 @@ use utoipa_swagger_ui::SwaggerUi;
 mod constant;
 mod error;
 mod schema;
+mod scraper;
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
         constant::controller::save_constants,
         constant::controller::get_constants_by_commit_hash,
-        constant::controller::delete_constants_by_commit_hash
+        constant::controller::delete_constants_by_commit_hash,
+        scraper::controller::scrape_constants
     ),
-    components(schemas(ApiError))
+    components(schemas(
+        ApiError,
+        scraper::dto::ScrapeResponse,
+        scraper::dto::BySource,
+        models::api::MultipleFileUploadSchema
+    ))
 )]
 struct ApiDoc;
 
@@ -53,7 +60,8 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/constants")
                     .app_data(web::Data::new(constant_service))
-                    .configure(constant::configure),
+                    .configure(constant::configure)
+                    .configure(scraper::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

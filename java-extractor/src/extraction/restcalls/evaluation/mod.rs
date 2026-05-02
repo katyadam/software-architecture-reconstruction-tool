@@ -1,3 +1,3 @@
 pub mod spring;
 pub mod strategy;
-mod uri_generator;
+pub mod uri_generator;

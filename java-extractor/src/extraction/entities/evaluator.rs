@@ -1,9 +1,15 @@
 use std::collections::HashMap;
 
-use models::{Entity, Import};
+use models::{
+    Entity,
+    ir::project::{ImportGraph, ImportKind},
+};
 
-pub fn evaluate_entity_fields(imports: &[Import], entities: &mut Vec<Entity>) {
-    let imports_map = get_imports_map(imports);
+pub fn evaluate_entity_fields(
+    entities: &mut Vec<Entity>,
+    file_path: &str,
+    import_graph: &ImportGraph,
+) {
     let entities_map = get_entities_map(entities);
 
     for entity in entities {
@@ -16,9 +22,11 @@ pub fn evaluate_entity_fields(imports: &[Import], entities: &mut Vec<Entity>) {
                 if is_fqdn(inner_type) {
                     field.datatype_signature = Some(inner_type.to_string());
                 }
-                // 2. Resolve against Imports
-                else if let Some(import) = imports_map.get(inner_type) {
-                    field.datatype_signature = Some(import.orig_module.clone());
+                // 2. Resolve against ImportGraph (cross-file)
+                else if let Some(ri) = import_graph.lookup(file_path, inner_type) {
+                    if matches!(ri.kind, ImportKind::Entity) {
+                        field.datatype_signature = Some(ri.fully_qualified_name.clone());
+                    }
                 }
                 // 3. Resolve against local Entities (same file classes)
                 else if let Some(referenced_entity) = entities_map.get(inner_type) {
@@ -27,13 +35,6 @@ pub fn evaluate_entity_fields(imports: &[Import], entities: &mut Vec<Entity>) {
             }
         }
     }
-}
-
-fn get_imports_map(imports: &[Import]) -> HashMap<String, &Import> {
-    imports
-        .iter()
-        .map(|import| (import.codeword.clone(), import))
-        .collect()
 }
 
 fn get_entities_map(entities: &[Entity]) -> HashMap<String, Entity> {
@@ -50,10 +51,10 @@ fn is_fqdn(datatype: &str) -> bool {
 /// Recursively unwraps arrays and generic wrappers to find the element type.
 ///
 /// Examples:
-/// - `"List<User>"` → `"User"`
-/// - `"Map<String, User>"` → `"User"` (last type argument is used — the Value in `Map<K,V>`)
-/// - `"User[]"` → `"User"`
-/// - `"String"` → `"String"` (identity)
+/// - `"List<User>"` -> `"User"`
+/// - `"Map<String, User>"` -> `"User"` (last type argument is used — the Value in `Map<K,V>`)
+/// - `"User[]"` -> `"User"`
+/// - `"String"` -> `"String"` (identity)
 pub fn extract_java_inner_type(datatype: &str) -> &str {
     let d = datatype.trim();
 

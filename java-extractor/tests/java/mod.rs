@@ -3,6 +3,7 @@ mod callables;
 mod calls;
 mod endpoints;
 mod entities;
+mod import_graph;
 mod imports;
 mod integration;
 mod restcalls;

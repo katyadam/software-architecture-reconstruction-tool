@@ -11,4 +11,5 @@ pub struct Endpoint {
     pub parameters: Vec<Parameter>,
     pub uri: String,
     pub file_path: String,
+    pub router_variable: Option<String>,
 }

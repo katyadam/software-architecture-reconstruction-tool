@@ -57,7 +57,7 @@ pub const RESTCALLS_QUERY: &str = r#"
 ) @function
 
 ;; ────────────────────────────────────────────────────────────────────────────
-;; PATTERN 2 — with_statement → block → expression_statement
+;; PATTERN 2 — with_statement -> block -> expression_statement
 ;; ────────────────────────────────────────────────────────────────────────────
 (function_definition 
   name: (identifier) @function.name
@@ -121,10 +121,14 @@ pub const RESTCALLS_QUERY: &str = r#"
 pub const ENDPOINTS_QUERY: &str = r#"
 (decorated_definition
     (decorator
-        (call (attribute attribute: (identifier) @http.method)
+        (call (attribute
+            object: (identifier) @router.variable
+            attribute: (identifier) @http.method
+            (#any-of? @http.method "get" "post" "put" "delete" "patch" "options" "head")
+        )
         (argument_list (string) @http.uri)
-    ) @finder (#match? @finder "app."))
-    (function_definition 
+    ))
+    (function_definition
         name: (identifier) @function.name
         parameters: (parameters) @function.params) @function
 )
@@ -144,7 +148,7 @@ pub const ENTITIES_QUERY: &str = r#"
 (
   (class_definition
     (identifier) @class.name
-    (argument_list) @class.superclasses
+    (argument_list)? @class.superclasses
     (block
       (expression_statement)+ @class.fields))
 )
@@ -152,7 +156,7 @@ pub const ENTITIES_QUERY: &str = r#"
 (
   (class_definition
     (identifier) @class.name
-    (argument_list) @class.superclasses
+    (argument_list)? @class.superclasses
     (block
       (function_definition
         (identifier) @constructor.name (#match? @constructor.name "__init__")

@@ -1,5 +1,5 @@
+use models::ir::ast::Expr;
 use statix::{
-    ast::Expr,
     java::matcher::JavaCallableMatcher,
     parse_java, symbolic_evaluation,
     util::{get_java_tree, load_file},
@@ -30,7 +30,8 @@ fn should_return_correct_variable_with_value_and_datatype() {
         .get("inside_payment_service_url")
         .expect("inside_payment_service_url should be in the final env!");
     assert_eq!(
-        looked_variable.0, "String",
+        looked_variable.0,
+        Some("String".to_string()),
         "inside_payment_service_url should have datatype String"
     );
     assert_eq!(
@@ -550,6 +551,90 @@ class Svc {
             result.return_value
         );
     }
+}
+
+// ── Receiver: method call evaluation ─────────────────────────────────────────
+
+#[test]
+fn java_unknown_method_on_literal_receiver_returns_receiver() {
+    let code = r#"
+class Svc {
+    String getUrl() {
+        String base = "http://svc";
+        String trimmed = base.trim();
+        return trimmed;
+    }
+}
+"#;
+    let tree = get_java_tree(code);
+    let map = parse_java(&tree, code);
+    let result = symbolic_evaluation(
+        &map,
+        "String getUrl()",
+        Box::new(JavaCallableMatcher::new()),
+    )
+    .expect("evaluation should succeed");
+
+    assert_eq!(
+        result.return_value,
+        Expr::Literal("http://svc".to_string()),
+        "unknown method on a resolved receiver should return the receiver value"
+    );
+}
+
+#[test]
+fn java_unknown_method_on_unresolvable_receiver_produces_empty() {
+    let code = r#"
+class Svc {
+    String getUrl() {
+        String url = SomeLib.create();
+        return url;
+    }
+}
+"#;
+    let tree = get_java_tree(code);
+    let map = parse_java(&tree, code);
+    let result = symbolic_evaluation(
+        &map,
+        "String getUrl()",
+        Box::new(JavaCallableMatcher::new()),
+    )
+    .expect("unknown method on unresolvable receiver should not crash");
+
+    assert_eq!(
+        result.return_value,
+        Expr::Empty,
+        "method call on an unresolvable receiver should yield Expr::Empty"
+    );
+}
+
+#[test]
+fn java_known_method_called_via_receiver_resolves_normally() {
+    let code = r#"
+class Svc {
+    String getBase() {
+        return "http://base-service";
+    }
+    String getUrl(Svc svc) {
+        String url = svc.getBase();
+        return url;
+    }
+}
+"#;
+    let tree = get_java_tree(code);
+    let map = parse_java(&tree, code);
+    let result = symbolic_evaluation(
+        &map,
+        "String getUrl(Svc)",
+        Box::new(JavaCallableMatcher::new()),
+    )
+    .expect("evaluation should succeed");
+
+    assert_eq!(
+        result.return_value,
+        Expr::Literal("http://base-service".to_string()),
+        "known method on receiver should be resolved via cross-method evaluation"
+    );
 }
 
 // ── Evaluator: error and empty-body cases ─────────────────────────────────────

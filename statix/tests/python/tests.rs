@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
+use models::ir::ast::Expr;
 use statix::{
-    ast::Expr,
     parse_python,
     python::matcher::PythonCallableMatcher,
-    symbolic_evaluation,
+    symbolic_evaluation, symbolic_evaluation_with_env,
     util::{get_python_tree, load_file},
 };
 
@@ -264,7 +266,7 @@ def get_url(self, use_prod: bool) -> str:
     .expect("evaluation should succeed");
 
     // With unknown condition: join(Var("use_prod"), "http://prod", "http://dev")
-    // → Joined{"http://prod", "http://dev"}.
+    // -> Joined{"http://prod", "http://dev"}.
     // "http://default" does NOT appear — both branches overwrite it.
     if let Expr::Joined { vals } = &result.return_value {
         assert!(
@@ -548,5 +550,399 @@ def fetch(self, url: str, timeout: int) -> str:
         map.contains_key("str fetch(Any,str,int)"),
         "typed params should be extracted into mangled header, map keys: {:?}",
         map.keys().collect::<Vec<_>>()
+    );
+}
+
+// ── Closure / cross-module attribute tests ────────────────────────────────────
+
+#[test]
+fn attr_parse_settings_as_url_rstrip() {
+    // `base_url = settings.as_url.rstrip("/")` should parse to a resolved
+    // literal if `settings.as_url` is seeded in the env.
+    let code = r#"
+def outer(app) -> None:
+    base_url = settings.as_url.rstrip("/")
+    return base_url
+"#;
+    let tree = get_python_tree(code);
+    let map = parse_python(&tree, code);
+
+    let mut initial_env = HashMap::new();
+    initial_env.insert(
+        "settings.as_url".to_string(),
+        (
+            Some("String".to_string()),
+            Expr::Literal("http://annotation-service:8000".to_string()),
+        ),
+    );
+    println!("{map:#?}");
+    let result = symbolic_evaluation_with_env(
+        &map,
+        "None outer(Any)",
+        Box::new(PythonCallableMatcher::new()),
+        &initial_env,
+    )
+    .expect("evaluation should succeed");
+
+    println!("{result:#?}");
+
+    let base_url = result
+        .final_env
+        .get("base_url")
+        .expect("base_url should be in final_env");
+
+    assert_eq!(
+        base_url.1,
+        Expr::Literal("http://annotation-service:8000".to_string()),
+        "base_url should resolve to the settings.as_url value"
+    );
+}
+
+#[test]
+fn attr_eval_via_dot_key() {
+    // Direct attribute lookup via a seeded dot-path key.
+    let code = r#"
+def get_url() -> str:
+    return settings.svc_url
+"#;
+    let tree = get_python_tree(code);
+    let map = parse_python(&tree, code);
+
+    let mut initial_env = HashMap::new();
+    initial_env.insert(
+        "settings.svc_url".to_string(),
+        (
+            Some("String".to_string()),
+            Expr::Literal("http://service:9000".to_string()),
+        ),
+    );
+
+    let result = symbolic_evaluation_with_env(
+        &map,
+        "str get_url()",
+        Box::new(PythonCallableMatcher::new()),
+        &initial_env,
+    )
+    .expect("evaluation should succeed");
+
+    assert_eq!(
+        result.return_value,
+        Expr::Literal("http://service:9000".to_string()),
+        "settings.svc_url should resolve via dot-key lookup"
+    );
+}
+
+#[test]
+fn strip_methods_are_identity_on_receiver() {
+    // rstrip/lstrip/strip should return their receiver unchanged.
+    let code = r#"
+def get_url() -> str:
+    raw = settings.svc_url
+    trimmed = raw.rstrip("/")
+    return trimmed
+"#;
+    let tree = get_python_tree(code);
+    let map = parse_python(&tree, code);
+
+    let mut initial_env = HashMap::new();
+    initial_env.insert(
+        "settings.svc_url".to_string(),
+        (
+            Some("String".to_string()),
+            Expr::Literal("http://service:9000/".to_string()),
+        ),
+    );
+
+    let result = symbolic_evaluation_with_env(
+        &map,
+        "str get_url()",
+        Box::new(PythonCallableMatcher::new()),
+        &initial_env,
+    )
+    .expect("evaluation should succeed");
+
+    assert_eq!(
+        result.return_value,
+        Expr::Literal("http://service:9000/".to_string()),
+        "rstrip should be identity: receiver value is returned unchanged"
+    );
+}
+
+#[test]
+fn nested_callable_refs_recorded_on_outer() {
+    // The outer callable's CallableAst.nested should reference the inner function.
+    let code = r#"
+def add_routes(app) -> None:
+    base_url = settings.as_url.rstrip("/")
+    async def _(x: int = 0) -> None:
+        pass
+"#;
+    let tree = get_python_tree(code);
+    let map = parse_python(&tree, code);
+
+    let outer_key = "None add_routes(Any)";
+    let outer = map
+        .get(outer_key)
+        .expect("outer callable should be registered");
+
+    assert!(
+        !outer.ast.nested.is_empty(),
+        "outer callable should record nested ref for inner `_`; got nested={:?}",
+        outer.ast.nested
+    );
+
+    let inner_key = &outer.ast.nested[0].key;
+    assert!(
+        map.contains_key(inner_key.as_str()),
+        "inner callable should be registered under key {:?}; available keys: {:?}",
+        inner_key,
+        map.keys().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn captured_base_url_resolves_in_nested_callable() {
+    // End-to-end: outer callable evaluates `base_url` from settings, nested callable
+    // should have `base_url` available when evaluated.
+    let code = r#"
+def add_routes(app) -> None:
+    base_url = settings.as_url.rstrip("/")
+    async def inner() -> None:
+        url = base_url
+        return url
+"#;
+    let tree = get_python_tree(code);
+    let map = parse_python(&tree, code);
+
+    let mut constants_env: HashMap<String, (Option<String>, Expr)> = HashMap::new();
+    constants_env.insert(
+        "settings.as_url".to_string(),
+        (
+            Some("String".to_string()),
+            Expr::Literal("http://svc:8000".to_string()),
+        ),
+    );
+
+    // Evaluate the outer first to get base_url into final_env.
+    let outer_result = symbolic_evaluation_with_env(
+        &map,
+        "None add_routes(Any)",
+        Box::new(PythonCallableMatcher::new()),
+        &constants_env,
+    )
+    .expect("outer evaluation should succeed");
+
+    // Collect captured env for the inner callable.
+    let outer = map.get("None add_routes(Any)").unwrap();
+    let nested_ref = outer.ast.nested.first().expect("should have a nested ref");
+
+    let mut inner_env = constants_env.clone();
+    for var_name in &nested_ref.captured {
+        if let Some(val) = outer_result.final_env.get(var_name) {
+            if val.1 != Expr::Empty {
+                inner_env
+                    .entry(var_name.clone())
+                    .or_insert_with(|| val.clone());
+            }
+        }
+    }
+
+    let inner_result = symbolic_evaluation_with_env(
+        &map,
+        &nested_ref.key,
+        Box::new(PythonCallableMatcher::new()),
+        &inner_env,
+    )
+    .expect("inner evaluation should succeed");
+
+    let url = inner_result
+        .final_env
+        .get("url")
+        .expect("url should be in inner final_env after capture");
+
+    assert_eq!(
+        url.1,
+        Expr::Literal("http://svc:8000".to_string()),
+        "captured base_url should propagate into nested callable's env"
+    );
+}
+
+// ── Additional edge-case tests ────────────────────────────────────────────────
+
+/// Two sibling outer callables each define an inner `_` function with the same
+/// name and signature but different bodies. Their mangled keys collide, but their
+/// body hashes (stored in `NestedRef::hash`) are distinct — ensuring
+/// `build_captured_scopes` can key captured envs by hash without collision.
+#[test]
+fn two_sibling_outers_with_same_inner_name_have_distinct_hashes() {
+    let code = r#"
+def outer_a(app) -> None:
+    url_a = "http://service-a"
+    async def _(x: int = 0) -> None:
+        val = url_a
+        return val
+
+def outer_b(app) -> None:
+    url_b = "http://service-b"
+    async def _(x: int = 0) -> None:
+        val = url_b
+        return val
+"#;
+    let tree = get_python_tree(code);
+    let map = parse_python(&tree, code);
+
+    let outer_a = map
+        .get("None outer_a(Any)")
+        .expect("outer_a should be registered");
+    let outer_b = map
+        .get("None outer_b(Any)")
+        .expect("outer_b should be registered");
+
+    assert!(
+        !outer_a.ast.nested.is_empty(),
+        "outer_a should have nested refs"
+    );
+    assert!(
+        !outer_b.ast.nested.is_empty(),
+        "outer_b should have nested refs"
+    );
+
+    let key_a = &outer_a.ast.nested[0].key;
+    let key_b = &outer_b.ast.nested[0].key;
+    let hash_a = &outer_a.ast.nested[0].hash;
+    let hash_b = &outer_b.ast.nested[0].hash;
+
+    // Mangled keys still collide (same name + signature).
+    assert_eq!(
+        key_a, key_b,
+        "sibling inner `_` callables share the same mangled key"
+    );
+
+    // Body hashes must differ since the bodies reference different variables.
+    assert_ne!(
+        hash_a, hash_b,
+        "sibling inner `_` callables with different bodies must have distinct hashes; \
+         hash_a={hash_a:?} hash_b={hash_b:?}"
+    );
+}
+
+/// `Expr::Attr` chain depth > 2: `a.b.c` should look up "a.b.c" in the env.
+#[test]
+fn attr_chain_depth_3_resolves_from_env() {
+    let code = r#"
+def get_url() -> str:
+    return config.db.host
+"#;
+    let tree = get_python_tree(code);
+    let map = parse_python(&tree, code);
+
+    let mut initial_env = HashMap::new();
+    initial_env.insert(
+        "config.db.host".to_string(),
+        (
+            Some("String".to_string()),
+            Expr::Literal("postgres://localhost".to_string()),
+        ),
+    );
+
+    let result = symbolic_evaluation_with_env(
+        &map,
+        "str get_url()",
+        Box::new(PythonCallableMatcher::new()),
+        &initial_env,
+    )
+    .expect("evaluation should succeed");
+
+    assert_eq!(
+        result.return_value,
+        Expr::Literal("postgres://localhost".to_string()),
+        "depth-3 attr chain a.b.c should resolve via dot-key lookup"
+    );
+}
+
+/// `build_captured_scopes` must not pollute unrelated callables.
+/// An outer callable that defines no nested functions must not appear
+/// in the captured-scopes map; evaluating the unrelated callable with
+/// only the constants env must still succeed.
+#[test]
+fn captured_scope_does_not_pollute_unrelated_callable() {
+    let code = r#"
+def outer_with_nested(app) -> None:
+    secret = "http://internal"
+    async def inner() -> None:
+        url = secret
+        return url
+
+def unrelated() -> str:
+    return "http://public"
+"#;
+    let tree = get_python_tree(code);
+    let map = parse_python(&tree, code);
+
+    // Simulate what build_captured_scopes does: evaluate outer_with_nested only.
+    let outer = map
+        .get("None outer_with_nested(Any)")
+        .expect("outer should be registered");
+    let nested_ref = outer.ast.nested.first().expect("should have nested ref");
+
+    let constants_env: HashMap<String, (Option<String>, Expr)> = HashMap::new();
+
+    let outer_result = symbolic_evaluation_with_env(
+        &map,
+        "None outer_with_nested(Any)",
+        Box::new(PythonCallableMatcher::new()),
+        &constants_env,
+    )
+    .expect("outer evaluation should succeed");
+
+    // Build captured scope only for the inner callable.
+    let mut captured_scopes: HashMap<String, HashMap<String, (Option<String>, Expr)>> =
+        HashMap::new();
+    let captured: HashMap<_, _> = nested_ref
+        .captured
+        .iter()
+        .filter_map(|var| {
+            outer_result
+                .final_env
+                .get(var)
+                .map(|v| (var.clone(), v.clone()))
+        })
+        .filter(|(_, (_, expr))| *expr != Expr::Empty)
+        .collect();
+    if !captured.is_empty() {
+        captured_scopes.insert(nested_ref.key.clone(), captured);
+    }
+
+    // The unrelated callable must NOT appear in captured_scopes.
+    let unrelated_result = symbolic_evaluation_with_env(
+        &map,
+        "str unrelated()",
+        Box::new(PythonCallableMatcher::new()),
+        &constants_env,
+    )
+    .expect("unrelated evaluation should succeed");
+
+    // Verify captured_scopes has no entry for unrelated().
+    // We check that the unrelated callable's mangled key is absent.
+    let unrelated_mangled = "str unrelated()";
+    assert!(
+        !captured_scopes.contains_key(unrelated_mangled),
+        "captured_scopes must not contain an entry for the unrelated callable"
+    );
+
+    // And that unrelated() still evaluates correctly.
+    assert_eq!(
+        unrelated_result.return_value,
+        Expr::Literal("http://public".to_string()),
+        "unrelated callable should return its own literal, unaffected by captured scopes"
+    );
+
+    // Also confirm the inner callable's captured scope contains `secret`.
+    let inner_captured = captured_scopes
+        .get(&nested_ref.key)
+        .expect("inner callable should have a captured scope");
+    assert!(
+        inner_captured.contains_key("secret"),
+        "captured scope for inner should contain `secret`"
     );
 }

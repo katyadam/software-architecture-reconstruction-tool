@@ -9,7 +9,7 @@ pub fn parse_call_arguments(args_node: Node, code: &str) -> Vec<Argument> {
             args.push(Argument {
                 assigned_variable: "".to_string(),
                 value: arg_string.to_string(),
-                datatype: "any".to_string(),
+                datatype: None,
             });
         }
     }

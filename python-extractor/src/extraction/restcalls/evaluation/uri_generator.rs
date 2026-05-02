@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use statix::{ast::Expr, symbolic::AnalysisResult};
+use models::ir::ast::Expr;
+use statix::symbolic::AnalysisResult;
 
 type ResolvedPart = Vec<String>;
 
@@ -77,6 +78,11 @@ fn get_resolved_parts(
                     .collect();
                 all_parts.push(flattened);
             }
+
+            // Used when the target URL is directly an f-string
+            _ if part.contains('{') => {
+                all_parts.extend(resolve_fstring(part, analysis_result, enums_map));
+            }
             _ => all_parts.push(vec![part.to_string()]),
         }
     }
@@ -88,10 +94,10 @@ fn get_resolved_parts(
 ///
 /// Literal text segments become single-element `Vec`s. `{var}` placeholders are
 /// resolved against `analysis_result`:
-/// - `Expr::Literal` → single value
-/// - `Expr::Joined` → multiple values (expands the Cartesian product)
-/// - `Expr::Var` with a known enum dtype → all enum variants from `enums_map`
-/// - Anything else → the placeholder text unchanged (`{var}`)
+/// - `Expr::Literal` -> single value
+/// - `Expr::Joined` -> multiple values (expands the Cartesian product)
+/// - `Expr::Var` with a known enum dtype -> all enum variants from `enums_map`
+/// - Anything else -> the placeholder text unchanged (`{var}`)
 ///
 /// Escaped braces (`{{` / `}}`) are treated as literal `{` / `}`.
 fn resolve_fstring(
@@ -143,8 +149,9 @@ fn resolve_fstring(
                             }
                         })
                         .collect(),
-                    Some((dtype, Expr::Var(_))) => enums_map
-                        .get(dtype)
+                    Some((dtype, Expr::Var(_))) => dtype
+                        .as_deref()
+                        .and_then(|t| enums_map.get(t))
                         .cloned()
                         .unwrap_or_else(|| vec![format!("{{{}}}", var_name)]),
                     _ => vec![format!("{{{}}}", var_name)],

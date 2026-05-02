@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 /// Resolves the datatype of `arg` by walking the assignments map.
 /// First tries the local (function/class) scope, then falls back to global scope.
-/// Mutates `arg.datatype` in place; leaves it as `"any"` if resolution fails.
+/// Mutates `arg.datatype` in place; leaves it as `None` if resolution fails.
 pub(in crate::extraction) fn infer_argument_type(
     arg: &mut Argument,
     arg_enclosing_scope: &Scope,
@@ -12,16 +12,16 @@ pub(in crate::extraction) fn infer_argument_type(
 ) {
     // Try resolving in local scope
     if let Some(found_type) = resolve_type(&arg.value, arg_enclosing_scope, assignments_map) {
-        arg.datatype = found_type;
+        arg.datatype = Some(found_type);
         return;
     }
 
     // Try resolving in global scope if local didn't find anything
-    if arg.datatype == "any"
+    if arg.datatype.is_none()
         && matches!(arg_enclosing_scope, Scope::Function(_))
         && let Some(found_type) = resolve_type(&arg.value, &Scope::Global, assignments_map)
     {
-        arg.datatype = found_type;
+        arg.datatype = Some(found_type);
     }
 }
 

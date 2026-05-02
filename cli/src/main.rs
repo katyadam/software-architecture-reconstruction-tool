@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use extractor_runtime::dispatch;
-use models::{CodeElementsAggregate, ConfigurationData};
+use cli::get_all_code_elements;
+use models::ConfigurationData;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::{fs, time::Instant};
 use synthesizer::{
@@ -24,6 +25,9 @@ struct Cli {
 
     #[arg(short = 'o', long, value_name = "DIR")]
     output_dir: PathBuf,
+
+    #[arg(long, default_value_t = false)]
+    scrape: bool,
 }
 
 #[derive(Deserialize)]
@@ -72,8 +76,26 @@ async fn main() -> Result<()> {
         args.project_dir
     );
 
+    // Build external constants map: all constants from the file, including dotted-path
+    // keys like "settings.as_url" that are injected into the symbolic evaluator.
+    let mut external_constants: HashMap<String, String> = constants_dto
+        .constants
+        .iter()
+        .map(|c| (c.name.clone(), c.value.clone()))
+        .collect();
+
+    if args.scrape {
+        println!("🔍 Scraping env files in {:?}...", args.project_dir);
+        let scraped = env_scraper::scrape(&args.project_dir);
+        let count = scraped.len();
+        for (k, v) in scraped {
+            external_constants.entry(k).or_insert(v);
+        }
+        println!("   Found {count} env vars from .env / docker-compose files.");
+    }
+
     let extraction = Instant::now();
-    let all_code_elements = get_all_code_elements(&args.project_dir).await?;
+    let all_code_elements = get_all_code_elements(&args.project_dir, &external_constants)?;
     let extraction_elapsed = extraction.elapsed();
 
     println!("✅ Extraction successful!");
@@ -104,67 +126,6 @@ async fn main() -> Result<()> {
         extraction_elapsed, synthesis_elapsed
     );
     Ok(())
-}
-
-async fn get_all_code_elements(project_dir: &PathBuf) -> Result<CodeElementsAggregate> {
-    let mut aggregate = CodeElementsAggregate::default();
-    let mut files_processed = 0;
-
-    let paths = collect_files(project_dir)?;
-    let files_to_process = paths.len();
-    println!("Total files found: {}", files_to_process);
-
-    for path in paths {
-        files_processed += 1;
-        let code = match fs::read_to_string(&path) {
-            Ok(content) => content,
-            Err(e) => {
-                eprintln!(
-                    "⚠️  Skipping file {:?}: {}",
-                    path.file_name().unwrap_or_default(),
-                    e
-                );
-                continue;
-            }
-        };
-        println!(
-            "Extracting ({files_processed}/{files_to_process}): {:?}",
-            path.file_name().unwrap_or_default()
-        );
-        if let Some(file_elements) = dispatch::dispatch(&code, path.to_str().unwrap_or_default())
-            .await
-            .with_context(|| format!("Error dispatching file: {:?}", path))?
-        {
-            merge_aggregates(&mut aggregate, file_elements);
-        }
-    }
-
-    Ok(aggregate)
-}
-
-fn collect_files(dir: &PathBuf) -> Result<Vec<PathBuf>> {
-    let mut results = Vec::new();
-    if dir.is_dir() {
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                results.extend(collect_files(&path)?);
-            } else {
-                results.push(path);
-            }
-        }
-    }
-    Ok(results)
-}
-
-fn merge_aggregates(main: &mut CodeElementsAggregate, new: CodeElementsAggregate) {
-    main.imports.extend(new.imports);
-    main.entities.extend(new.entities);
-    main.endpoints.extend(new.endpoints);
-    main.restcalls.extend(new.restcalls);
-    main.callables.extend(new.callables);
-    main.call_statements.extend(new.call_statements);
 }
 
 fn save_json<T: serde::Serialize>(dir: &Path, filename: &str, data: &T) -> Result<()> {

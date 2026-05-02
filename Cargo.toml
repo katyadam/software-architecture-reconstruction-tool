@@ -2,6 +2,7 @@
 members = ["cli",
     "clients",
     "constant-scanner",
+    "env-scraper",
     "extractor-runtime",
     "java-extractor",
     "manager",
@@ -21,6 +22,7 @@ java-extractor = { path = "java-extractor" }
 python-extractor = { path = "python-extractor" }
 extractor-runtime = { path = "extractor-runtime" }
 synthesizer = { path = "synthesizer" }
+env-scraper = { path = "env-scraper" }
 
 # Web framework
 actix-web = "4.12.0"
