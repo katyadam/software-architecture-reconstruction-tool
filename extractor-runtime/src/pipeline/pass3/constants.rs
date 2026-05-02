@@ -62,7 +62,7 @@ pub(crate) fn derive_constant_value_by_external_constants(
             continue;
         }
         let normalized = levenshtein(&attr, &env) as f32 / min_len;
-        if normalized < LEVENSHTEIN_THRESHOLD && best.map_or(true, |(_, prev)| normalized < prev) {
+        if normalized < LEVENSHTEIN_THRESHOLD && best.is_none_or(|(_, prev)| normalized < prev) {
             best = Some((env_value, normalized));
         }
     }

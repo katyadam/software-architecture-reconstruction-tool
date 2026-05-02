@@ -41,7 +41,7 @@ pub fn get_all_code_elements(
 
     let project_ir = build_project_ir(file_records);
 
-    let per_file_attrs = pass_attr::resolve_all(&project_ir, &external_constants);
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, external_constants);
     let per_file_module_consts =
         pass_module::resolve_all(&project_ir, external_constants, &per_file_attrs);
     let evaluated_ir = evaluate(
