@@ -6,8 +6,10 @@ DESIRED_STATE.md
 dump/
 train-ticket-sar-output/
 empaia-sar-output*/
+# Claude Code
 CLAUDE.md
 .claude/
 agents/
 plans/
+docs/session-logs/
 perf_testing.pdf
