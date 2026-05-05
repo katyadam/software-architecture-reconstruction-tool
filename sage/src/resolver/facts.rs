@@ -1,16 +1,12 @@
-use models::ir::{
-    language::{Framework, Language},
-    project::ConstantValue,
-};
+use models::ir::{language::Framework, project::ConstantValue};
 
-use crate::{
+use crate::resolver::{
     code::{CodeSnippet, Symbol},
     messages::Message,
 };
 
 pub struct FactBundle {
-    pub site: CodeSnippet,
-    pub language: Language,
+    pub sites: Vec<CodeSnippet>,
     pub frameworks: Vec<Framework>,
     pub local_scope: Vec<Symbol>,
     pub imported_scope: Vec<Symbol>,
