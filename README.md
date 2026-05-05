@@ -7,6 +7,7 @@ SAR Tool provides a unified workflow for analyzing distributed architecture syst
 ---
 
 ## Disclaimer
+
 First, this repository is currently anonymized. Second, `main` branch currently includes multi-pass SAR. Single-pass SAR is on the branch `single-pass`. Another version is the combination of multi-pass with LLM in order to achieve the most precise reconstruction. The combination is located on the branch `sage-rework`.
 
 ## Overview
@@ -74,6 +75,68 @@ cargo run -p cli --release -- \
 ```
 
 > **Note:** The output will be generated as JSON files in the specified `./output-directory`.
+
+---
+
+## LLM-Enhanced Resolution (Sage)
+
+The `sage` crate provides an optional LLM fallback arbiter that resolves REST call sites the static passes could not determine — e.g. env-var-injected base URLs, builder chains, or reflective references.
+
+Currently, it connects to a locally running [Ollama](https://ollama.com) instance via the OpenAI-compatible API.
+
+### 1. Install Ollama
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+Or download from [ollama.com](https://ollama.com).
+
+### 2. Pull a Model
+
+The recommended model is `qwen2.5-coder:7b` (good balance of speed and code reasoning):
+
+```bash
+ollama pull qwen2.5-coder:7b
+```
+
+Other supported options:
+
+| Model               | Size  | Notes                   |
+| ------------------- | ----- | ----------------------- |
+| `qwen2.5-coder:7b`  | ~4 GB | Recommended             |
+| `qwen2.5-coder:14b` | ~8 GB | Higher accuracy, slower |
+| `codellama:7b`      | ~4 GB | Alternative             |
+
+### 3. Start Ollama
+
+```bash
+ollama serve
+```
+
+Ollama listens on `http://localhost:11434` by default.
+
+### 4. Run the Integration Tests
+
+```bash
+cargo test -p sage -- --ignored
+```
+
+This runs all `#[ignore]`-marked tests against a live Ollama instance and prints the resolved URL, confidence score, evidence, and reasoning for each query.
+
+### Connecting Programmatically
+
+```rust
+use sage::client::{SageClient, SageQuery, QueryKind};
+
+let client = SageClient::new(
+    "http://localhost:11434/v1",  // Ollama base URL
+    "qwen2.5-coder:7b",          // model name
+    0.7,                         // minimum confidence threshold
+);
+```
+
+Responses below the confidence threshold or with no supporting evidence are rejected with a typed `SageError`. See `sage/src/response.rs` for the full error taxonomy.
 
 ---
 
