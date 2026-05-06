@@ -2,6 +2,7 @@ pub(crate) mod callables;
 mod constants;
 mod env;
 pub(crate) mod language_backend;
+mod llm_enhance;
 pub mod pass_attr;
 pub mod pass_module;
 mod restcalls;
