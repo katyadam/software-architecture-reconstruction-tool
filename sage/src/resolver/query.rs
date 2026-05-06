@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+
+use models::assignments::VariableAddress;
+
 use crate::resolver::facts::FactBundle;
 
 /// The category of resolution question sent to Sage.
@@ -14,4 +18,5 @@ pub enum QueryKind {
 pub struct SageQuery {
     pub bundle: FactBundle,
     pub kind: QueryKind,
+    pub variables_map: HashMap<VariableAddress, String>,
 }

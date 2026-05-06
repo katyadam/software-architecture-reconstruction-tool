@@ -1,6 +1,8 @@
 // Debugging integration test — requires live Ollama at localhost:11434.
 // Run with: cargo test -p sage -- --ignored
 
+use std::collections::HashMap;
+
 use models::ir::{
     language::{Framework, Language},
     project::ConstantValue,
@@ -61,6 +63,7 @@ restTemplate.exchange(order_service_url + "/api/v1/orders/", HttpMethod.GET, req
         kind: QueryKind::ResolveBuilder {
             chain: r#"getServiceUrl("ts-order-service") + "/api/v1/orders/""#.to_string(),
         },
+        variables_map: HashMap::new(),
     };
 
     let result = client.query(query).await;

@@ -20,6 +20,7 @@ use crate::pipeline::pass3::constants::derive_constant_value_by_external_constan
 type AttrMap = HashMap<String, String>;
 
 /// Per-file attribute map: importer file path -> [`AttrMap`].
+/// Importer file path basically means the file where the class object is instantiated at.
 pub type PerFileAttrMap = HashMap<String, AttrMap>;
 
 /// Temporary index built once per `resolve_all` call for O(1) file lookups.

@@ -6,6 +6,13 @@ pub struct Assignment {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct VariableAddress {
+    pub microservice: String,
+    pub file: String,
+    pub key: AssignmentKey,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Scope {
     Global,
     Function(String),
