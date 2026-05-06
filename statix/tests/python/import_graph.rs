@@ -212,6 +212,59 @@ fn file_with_no_imports_produces_empty_graph() {
 }
 
 #[test]
+fn python_relative_dot_import_resolves_across_packages() {
+    // `from ....singletons import Settings` inside
+    // `medical-data-service/medical_data_service/api/v3/annotation/jobs.py` must
+    // anchor 4 dots at the importer's package and walk up to
+    // `medical-data-service/medical_data_service/singletons.py`.
+    let mut singletons =
+        make_file_record("medical-data-service/medical_data_service/singletons.py");
+    singletons.entities.push(make_entity(
+        "Settings",
+        "medical-data-service/medical_data_service/singletons.py",
+    ));
+
+    let mut jobs =
+        make_file_record("medical-data-service/medical_data_service/api/v3/annotation/jobs.py");
+    jobs.imports
+        .push(make_import("....singletons", "Settings", "Settings"));
+
+    let graph = build_import_graph(&[jobs, singletons]);
+
+    let ri = graph
+        .lookup(
+            "medical-data-service/medical_data_service/api/v3/annotation/jobs.py",
+            "Settings",
+        )
+        .expect("relative-dot import should resolve across packages");
+    assert_eq!(
+        ri.source_file,
+        "medical-data-service/medical_data_service/singletons.py"
+    );
+    assert!(matches!(ri.kind, ImportKind::Entity));
+}
+
+#[test]
+fn python_single_dot_relative_import_resolves_in_same_package() {
+    // `from .helpers import params` must stay in the importer's package.
+    let mut helpers = make_file_record("pkg/helpers.py");
+    helpers
+        .callables
+        .push(make_callable("params()", "dict", "pkg/helpers.py"));
+
+    let mut main = make_file_record("pkg/main.py");
+    main.imports
+        .push(make_import(".helpers", "params", "params"));
+
+    let graph = build_import_graph(&[main, helpers]);
+
+    let ri = graph
+        .lookup("pkg/main.py", "params")
+        .expect("single-dot relative import should resolve");
+    assert_eq!(ri.source_file, "pkg/helpers.py");
+}
+
+#[test]
 fn same_codeword_in_different_files_resolves_independently() {
     // Two microservices both have a class named Order, but under different modules,
     // which is the common real-world case. Each importer resolves to its own target.

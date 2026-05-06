@@ -30,7 +30,7 @@ pub fn build_import_graph(file_records: &[FileRecord]) -> ImportGraph {
                 continue; // Wildcard imports cannot be resolved to a single symbol.
             }
             let resolved = match record.language {
-                Language::Python => resolve_python_import(import, &index),
+                Language::Python => resolve_python_import(import, &index, &record.file_path),
                 Language::Java => resolve_java_import(import, &index),
             };
             if let Some(ri) = resolved {

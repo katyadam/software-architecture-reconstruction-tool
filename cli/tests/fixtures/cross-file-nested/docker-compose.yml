@@ -1,0 +1,5 @@
+services:
+  medical-data-service:
+    image: example/medical-data-service:latest
+    environment:
+      MDS_AS_URL: http://annotation-service:8000
