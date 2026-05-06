@@ -11,7 +11,9 @@ pub use crate::resolver::query::{QueryKind, SageQuery};
 pub use crate::resolver::response::{SageError, SageResponse};
 
 use crate::resolver::{
-    prompt::{build_facts_message, build_question_message, build_system_message},
+    prompt::{
+        build_facts_message, build_question_message, build_system_message, build_variables_message,
+    },
     response::{LlmJson, validate},
 };
 
@@ -39,6 +41,7 @@ impl SageClient {
     pub async fn query(&self, query: SageQuery) -> Result<SageResponse, SageError> {
         let system_msg = build_system_message();
         let facts_msg = build_facts_message(&query.bundle);
+        let variables_msg = build_variables_message(&query.variables_map);
         let question_msg = build_question_message(&query.kind);
 
         let messages: Vec<ChatCompletionRequestMessage> = vec![
@@ -49,6 +52,11 @@ impl SageClient {
                 .into(),
             ChatCompletionRequestUserMessageArgs::default()
                 .content(facts_msg)
+                .build()
+                .map_err(SageError::Network)?
+                .into(),
+            ChatCompletionRequestUserMessageArgs::default()
+                .content(variables_msg)
                 .build()
                 .map_err(SageError::Network)?
                 .into(),

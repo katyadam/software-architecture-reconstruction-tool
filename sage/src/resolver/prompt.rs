@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+
+use models::assignments::{Scope, VariableAddress};
+
 use crate::resolver::{code::SymbolKind, facts::FactBundle, query::QueryKind};
 
 pub fn build_system_message() -> String {
@@ -63,6 +67,35 @@ Return null if you cannot determine it with confidence >= 0.7."
 Return the URL as `resolved` and include the HTTP method in `reasoning`. \
 Return null if you cannot determine it with confidence >= 0.7."
         ),
+    }
+}
+
+pub fn build_variables_message(map: &HashMap<VariableAddress, String>) -> String {
+    if map.is_empty() {
+        return "Known VARIABLES and their VALUES:\n  none".to_string();
+    }
+    let lines = map
+        .iter()
+        .map(|(addr, value)| {
+            format!(
+                "  [{}|{}|{}|{}] = {}",
+                addr.microservice,
+                addr.file,
+                fmt_scope(&addr.key.scope),
+                addr.key.variable_name,
+                value
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("VARIABLES:\n{lines}")
+}
+
+fn fmt_scope(scope: &Scope) -> String {
+    match scope {
+        Scope::Global => "Global".to_string(),
+        Scope::Class(name) => format!("Class:{name}"),
+        Scope::Function(name) => format!("Function:{name}"),
     }
 }
 
