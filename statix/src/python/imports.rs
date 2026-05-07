@@ -69,12 +69,31 @@ fn python_relative_module_to_file_paths(
 /// `importer_file_path` since their dot prefix only makes sense relative to
 /// the importing file's package.
 ///
+/// Re-exports are followed transitively (up to 8 hops) so that a symbol
+/// defined in module A, re-exported by module B, and imported by module C
+/// still resolves to A's definition.
+///
 /// Returns `None` for third-party or unresolvable imports.
 pub fn resolve_python_import(
     import: &Import,
     index: &FileDefinitionsIndex,
     importer_file_path: &str,
 ) -> Option<ResolvedImport> {
+    resolve_recursive(import, index, importer_file_path, 0)
+}
+
+const MAX_REEXPORT_DEPTH: usize = 8;
+
+fn resolve_recursive(
+    import: &Import,
+    index: &FileDefinitionsIndex,
+    importer_file_path: &str,
+    depth: usize,
+) -> Option<ResolvedImport> {
+    if depth > MAX_REEXPORT_DEPTH {
+        return None;
+    }
+
     let candidates = python_relative_module_to_file_paths(importer_file_path, &import.orig_module)
         .unwrap_or_else(|| python_module_to_file_paths(&import.orig_module));
 
@@ -92,15 +111,28 @@ pub fn resolve_python_import(
         None
     } else {
         // Named import: `from some.module import SomeName`
-        for candidate in candidates {
-            if let Some((actual_path, defs)) = index.find_by_module_path(&candidate)
-                && let Some((fqn, kind)) = defs.lookup(&import.orig_name)
-            {
+        for candidate in &candidates {
+            let Some((actual_path, defs)) = index.find_by_module_path(candidate) else {
+                continue;
+            };
+
+            // Direct hit: the target file owns the definition.
+            if let Some((fqn, kind)) = defs.lookup(&import.orig_name) {
                 return Some(ResolvedImport {
                     source_file: actual_path.to_string(),
                     fully_qualified_name: fqn,
                     kind,
                 });
+            }
+
+            // Indirect hit: the target file re-exports the symbol from another module.
+            // Follow the chain recursively (depth-limited to guard against cycles).
+            if let Some((reexport_module, reexport_name)) = defs.reexport(&import.orig_name) {
+                let proxy =
+                    Import::from_parts(reexport_module, reexport_name, "", "", &import.codeword);
+                if let Some(resolved) = resolve_recursive(&proxy, index, actual_path, depth + 1) {
+                    return Some(resolved);
+                }
             }
         }
         None

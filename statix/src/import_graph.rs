@@ -47,6 +47,7 @@ pub fn build_import_graph(file_records: &[FileRecord]) -> ImportGraph {
 // ── Definition index ──────────────────────────────────────────────────
 
 /// Per-file definitions, keyed by simple name, used for import resolution.
+#[derive(Debug)]
 pub struct FileDefinitions {
     /// Entity / class name -> entity signature.
     entities: HashMap<String, String>,
@@ -54,6 +55,10 @@ pub struct FileDefinitions {
     callables: HashMap<String, String>,
     /// Global-scope constant names.
     constants: HashMap<String, String>,
+    /// Re-exported names: codeword -> (orig_module, orig_name).
+    /// Populated from the file's own import statements so that symbols
+    /// imported-and-re-exported can be followed across module boundaries.
+    reexports: HashMap<String, (String, String)>,
 }
 
 impl FileDefinitions {
@@ -69,6 +74,14 @@ impl FileDefinitions {
             return Some((name.to_string(), ImportKind::Constant));
         }
         None
+    }
+
+    /// If `name` is not locally defined but was imported by this file,
+    /// return `(orig_module, orig_name)` so the caller can follow the chain.
+    pub fn reexport(&self, name: &str) -> Option<(&str, &str)> {
+        self.reexports
+            .get(name)
+            .map(|(m, n)| (m.as_str(), n.as_str()))
     }
 }
 
@@ -87,6 +100,7 @@ impl FileDefinitionsIndex {
                 entities: HashMap::new(),
                 callables: HashMap::new(),
                 constants: HashMap::new(),
+                reexports: HashMap::new(),
             };
 
             for entity in &record.entities {
@@ -110,6 +124,13 @@ impl FileDefinitionsIndex {
                 if matches!(key.scope, Scope::Global) {
                     defs.constants
                         .insert(assignment.variable_name.clone(), assignment.value.clone());
+                }
+            }
+            for import in &record.imports {
+                if !import.orig_name.is_empty() && import.orig_name != "*" {
+                    defs.reexports
+                        .entry(import.codeword.clone())
+                        .or_insert_with(|| (import.orig_module.clone(), import.orig_name.clone()));
                 }
             }
 
