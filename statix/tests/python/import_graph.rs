@@ -300,3 +300,92 @@ fn same_codeword_in_different_files_resolves_independently() {
     assert_eq!(ri_a.source_file, "service-a/orders/models.py");
     assert_eq!(ri_b.source_file, "service-b/payments/models.py");
 }
+
+#[test]
+fn python_reexport_relative_chain_resolves_to_source() {
+    // importer.py -> (via re-export) holder.py -> sink.py
+    let mut sink = make_file_record("service-a/sink.py");
+    sink.entities
+        .push(make_entity("SinkEntity", "service-a/sink.py"));
+
+    // `from ..sink import SinkEntity` -- goes up 1 from b/ to service-a/, then sink.py
+    let mut holder = make_file_record("service-a/b/holder.py");
+    holder
+        .imports
+        .push(make_import("..sink", "SinkEntity", "SinkEntity"));
+
+    // `from ..holder import SinkEntity` -- goes up 1 from b/c/ to b/, then holder.py
+    let mut importer = make_file_record("service-a/b/c/importer.py");
+    importer
+        .imports
+        .push(make_import("..holder", "SinkEntity", "SinkEntity"));
+
+    let graph = build_import_graph(&[sink, holder, importer]);
+
+    let ri = graph
+        .lookup("service-a/b/c/importer.py", "SinkEntity")
+        .expect("SinkEntity should resolve through the re-export chain");
+    assert_eq!(ri.source_file, "service-a/sink.py");
+    assert!(matches!(ri.kind, ImportKind::Entity));
+}
+
+#[test]
+fn python_reexport_flat_chain_resolves_to_source() {
+    // consumer.py -> (via re-export) middle.py -> definitions.py
+    let mut definitions = make_file_record("myapp/definitions.py");
+    definitions
+        .entities
+        .push(make_entity("Config", "myapp/definitions.py"));
+
+    // `from myapp.definitions import Config` — direct import, re-exported by middle.py
+    let mut middle = make_file_record("myapp/middle.py");
+    middle
+        .imports
+        .push(make_import("myapp.definitions", "Config", "Config"));
+
+    // `from myapp.middle import Config` — consumer sees Config via middle's re-export
+    let mut consumer = make_file_record("myapp/consumer.py");
+    consumer
+        .imports
+        .push(make_import("myapp.middle", "Config", "Config"));
+
+    let graph = build_import_graph(&[definitions, middle, consumer]);
+
+    let ri = graph
+        .lookup("myapp/consumer.py", "Config")
+        .expect("Config should resolve through the flat re-export chain");
+    assert_eq!(ri.source_file, "myapp/definitions.py");
+    assert!(matches!(ri.kind, ImportKind::Entity));
+}
+
+#[test]
+fn python_reexport_stops_at_max_depth() {
+    // Chain of 10 re-exporters — resolution should not panic, just return None.
+    // build: a -> b -> c -> ... -> j -> source (11 hops, over the 8-hop limit)
+    let mut source = make_file_record("app/source.py");
+    source.entities.push(make_entity("Deep", "app/source.py"));
+
+    let names = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"];
+    let mut records: Vec<_> = names
+        .iter()
+        .map(|n| make_file_record(&format!("app/{n}.py")))
+        .collect();
+
+    // j imports from source; each preceding letter imports from the next
+    records[9]
+        .imports
+        .push(make_import("app.source", "Deep", "Deep"));
+    for i in (0..9).rev() {
+        let next = names[i + 1];
+        records[i]
+            .imports
+            .push(make_import(&format!("app.{next}"), "Deep", "Deep"));
+    }
+
+    let mut all = vec![source];
+    all.extend(records);
+    let graph = build_import_graph(&all);
+
+    // Either resolves (if within depth) or returns None — must not panic.
+    let _ = graph.lookup("app/a.py", "Deep");
+}
