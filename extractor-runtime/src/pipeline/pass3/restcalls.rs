@@ -135,3 +135,32 @@ fn evaluate_single_restcall(
         }
     }
 }
+
+#[derive(PartialEq, Eq)]
+pub(super) enum EvalState {
+    Enough,   // Skip LLM evaluation
+    NeedsLLM, // Use LLM evaluation
+    Junk,     // discard
+}
+
+const URL_ALLOWED_PATTERNS: &[&str] = &["url", "uri"];
+
+pub(super) fn is_restcall_evaluated_enough(restcall: &RestCall) -> EvalState {
+    if restcall.target_uri.is_empty() {
+        return EvalState::Junk;
+    }
+
+    if restcall.target_uri.starts_with("http") {
+        return EvalState::Enough;
+    }
+
+    if let Some(url) = restcall.target_uri.split('/').next()
+        && URL_ALLOWED_PATTERNS
+            .iter()
+            .any(|allowed_pattern| url.to_ascii_lowercase().contains(allowed_pattern))
+    {
+        return EvalState::NeedsLLM;
+    }
+
+    return EvalState::Junk;
+}

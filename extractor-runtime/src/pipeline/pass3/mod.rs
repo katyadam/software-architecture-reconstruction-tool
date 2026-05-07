@@ -10,11 +10,14 @@ mod restcalls;
 use std::collections::HashMap;
 
 use models::{
-    Endpoint,
+    Endpoint, RestCall,
     ir::{evaluted::EvaluatedIR, project::ProjectIR},
 };
 
-use crate::pipeline::pass3::pass_module::{MODULE_CALLABLE_NAME, PerFileModuleConsts};
+use crate::pipeline::pass3::{
+    pass_module::{MODULE_CALLABLE_NAME, PerFileModuleConsts},
+    restcalls::{EvalState, is_restcall_evaluated_enough},
+};
 
 /// Pass 3: Produce `EvaluatedIR` from `ProjectIR`.
 ///
@@ -43,6 +46,19 @@ pub fn evaluate(
         per_file_attrs,
         per_file_module_consts,
     );
+
+    let restcalls_need_llm: Vec<RestCall> = restcalls
+        .iter()
+        .filter(|rc| is_restcall_evaluated_enough(&rc) == EvalState::NeedsLLM)
+        .cloned()
+        .collect::<Vec<RestCall>>();
+
+    println!(
+        "NOT ENOUGH EVALUATED RESTCALLS: {}",
+        restcalls_need_llm.len()
+    );
+
+    println!("{restcalls_need_llm:#?}");
 
     let endpoints: Vec<Endpoint> = project_ir
         .files
