@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use models::{Argument, CallStatement, HttpMethod, RestCall, source_code::SourceSpan};
+use models::{Argument, CallStatement, HttpMethod, RestCall};
 
 use crate::extraction::restcalls::identification::{
     HTTP_METHODS, strategy::IdentificationStrategy,
@@ -55,7 +55,7 @@ impl IdentificationStrategy for SpringIdentificationStrategy {
             http_method,
             target_uri,
             file_path: file_path.to_string(),
-            source_span: SourceSpan::default(),
+            source_span: call.source_span.clone(),
         })
     }
 }

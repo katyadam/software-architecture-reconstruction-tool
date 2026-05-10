@@ -44,6 +44,7 @@ fn make_call_statement(
         is_self_invoke: false,
         is_super_invoke: false,
         invoked_on: None,
+        source_span: Default::default(),
     }
 }
 

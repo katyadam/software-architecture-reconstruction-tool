@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use models::{Argument, CallStatement};
+use models::{Argument, CallStatement, source_code::SourceSpan};
 use tree_sitter::{Query, QueryCursor, StreamingIterator, Tree};
 
 use crate::{
@@ -125,6 +125,7 @@ impl Extractor<CallStatement> for CallStatementsExtractor {
                 is_self_invoke,
                 is_super_invoke,
                 invoked_on: None,
+                source_span: SourceSpan::default(),
             });
         }
         calls

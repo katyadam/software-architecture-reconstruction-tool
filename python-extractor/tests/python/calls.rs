@@ -31,6 +31,7 @@ fn simple_test() {
         is_self_invoke: false,
         is_super_invoke: false,
         invoked_on: None,
+        source_span: Default::default(),
     }];
     assert_eq!(
         calls
@@ -60,6 +61,7 @@ fn nested_test() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("A"),
@@ -76,6 +78,7 @@ fn nested_test() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("B"),
@@ -92,6 +95,7 @@ fn nested_test() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("C"),
@@ -104,6 +108,7 @@ fn nested_test() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
     ];
 
@@ -135,6 +140,7 @@ fn classes_test() {
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("sum"),
@@ -158,6 +164,7 @@ fn classes_test() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
     ];
 
@@ -200,6 +207,7 @@ fn classes_imports_test() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("divider.divide"),
@@ -212,6 +220,7 @@ fn classes_imports_test() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("sum"),
@@ -235,6 +244,7 @@ fn classes_imports_test() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("classes.sum"),
@@ -258,6 +268,7 @@ fn classes_imports_test() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("product"),
@@ -281,6 +292,7 @@ fn classes_imports_test() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
     ];
 
@@ -318,6 +330,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: Some(s!("UserRepository")),
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("ValueError"),
@@ -334,6 +347,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("User"),
@@ -362,6 +376,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("len"),
@@ -378,6 +393,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("self.repository.get_all"),
@@ -390,6 +406,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: Some(s!("UserRepository")),
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("self.repository.save"),
@@ -406,6 +423,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: Some(s!("UserRepository")),
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("self.repository.get_by_id"),
@@ -422,6 +440,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: Some(s!("UserRepository")),
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("self.repository.get_all"),
@@ -434,6 +453,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: Some(s!("UserRepository")),
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("self.repository.delete"),
@@ -450,6 +470,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: Some(s!("UserRepository")),
+            source_span: Default::default(),
         },
     ];
 
@@ -492,6 +513,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: Some(s!("UserService")),
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("str"),
@@ -508,6 +530,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("self.service.get_user"),
@@ -524,6 +547,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: Some(s!("UserService")),
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("self.service.list_users"),
@@ -536,6 +560,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: Some(s!("UserService")),
+            source_span: Default::default(),
         },
         CallStatement {
             function_name: s!("self.service.delete_user"),
@@ -552,6 +577,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: Some(s!("UserService")),
+            source_span: Default::default(),
         },
     ];
 
