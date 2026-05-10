@@ -10,6 +10,7 @@ pub mod enums;
 pub mod imports;
 pub mod ir;
 pub mod restcalls;
+pub mod source_code;
 
 pub use api::CodeElementsAggregate;
 pub use assignments::{Assignment, AssignmentKey, Scope};

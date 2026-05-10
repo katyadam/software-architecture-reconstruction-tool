@@ -66,6 +66,7 @@ fn test_spring_restcalls_without_dfa() {
                 "http://ts-notification-service/api/v1/notifyservice/notification/order_cancel_success"
             ),
             file_path: s!("./examples/CancelServiceImpl.java"),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("Response cancelFromOrder(Order order, HttpHeaders headers)"),
@@ -95,6 +96,7 @@ fn test_spring_restcalls_without_dfa() {
             http_method: HttpMethod::PUT,
             target_uri: s!("http://ts-order-service/api/v1/orderservice/order"),
             file_path: s!("./examples/CancelServiceImpl.java"),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("Response cancelFromOtherOrder(Order order, HttpHeaders headers)"),
@@ -124,6 +126,7 @@ fn test_spring_restcalls_without_dfa() {
             http_method: HttpMethod::PUT,
             target_uri: s!("http://ts-order-other-service/api/v1/orderOtherService/orderOther"),
             file_path: s!("./examples/CancelServiceImpl.java"),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!(
@@ -159,6 +162,7 @@ fn test_spring_restcalls_without_dfa() {
                 "http://ts-inside-payment-service/api/v1/inside_pay_service/inside_payment/drawback/userId/money"
             ),
             file_path: s!("./examples/CancelServiceImpl.java"),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("Response<User> getAccount(String orderId, HttpHeaders headers)"),
@@ -190,6 +194,7 @@ fn test_spring_restcalls_without_dfa() {
             http_method: HttpMethod::GET,
             target_uri: s!("http://ts-user-service/api/v1/userservice/users/id/orderId"),
             file_path: s!("./examples/CancelServiceImpl.java"),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!(
@@ -223,6 +228,7 @@ fn test_spring_restcalls_without_dfa() {
             http_method: HttpMethod::GET,
             target_uri: s!("http://ts-order-service/api/v1/orderservice/order/orderId"),
             file_path: s!("./examples/CancelServiceImpl.java"),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!(
@@ -260,6 +266,7 @@ fn test_spring_restcalls_without_dfa() {
                 "http://ts-order-other-service/api/v1/orderOtherService/orderOther/orderId"
             ),
             file_path: s!("./examples/CancelServiceImpl.java"),
+            source_span: Default::default(),
         },
     ];
 

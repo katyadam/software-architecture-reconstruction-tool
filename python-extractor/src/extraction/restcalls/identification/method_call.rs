@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use models::{Argument, HttpMethod, RestCall};
+use models::{Argument, HttpMethod, RestCall, source_code::SourceSpan};
 use tree_sitter::Node;
 
 use crate::extraction::{
@@ -80,6 +80,7 @@ impl IdentificationStrategy for MethodCallIdentificationStrategy {
             http_method,
             target_uri,
             file_path: file_path.to_string(),
+            source_span: SourceSpan::default(),
         })
     }
 }
