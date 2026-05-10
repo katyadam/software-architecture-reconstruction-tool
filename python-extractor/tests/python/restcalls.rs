@@ -63,6 +63,7 @@ fn restcalls_extraction() {
             http_method: HttpMethod::POST,
             target_uri: s!("{BASE_URL}/items/"),
             file_path: s!(filename),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("get_items(client, skip=0, limit=10, q=None) -> Any"),
@@ -82,6 +83,7 @@ fn restcalls_extraction() {
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/items/"),
             file_path: s!(filename),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("get_item_by_id(client, item_id) -> Any"),
@@ -94,6 +96,7 @@ fn restcalls_extraction() {
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/items/{item_id}"),
             file_path: s!(filename),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("create_user(client, username, email) -> Any"),
@@ -113,6 +116,7 @@ fn restcalls_extraction() {
             http_method: HttpMethod::POST,
             target_uri: s!("{BASE_URL}/users/"),
             file_path: s!(filename),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("get_users(client, limit=10) -> Any"),
@@ -132,6 +136,7 @@ fn restcalls_extraction() {
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/users/"),
             file_path: s!(filename),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("search(client, query) -> Any"),
@@ -151,6 +156,7 @@ fn restcalls_extraction() {
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/search/"),
             file_path: s!(filename),
+            source_span: Default::default(),
         },
     ];
 
@@ -188,6 +194,7 @@ fn restcalls_evaluation() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/items/"),
             file_path: s!(filename),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("get_items(client, skip=0, limit=10, q=None) -> Any"),
@@ -207,6 +214,7 @@ fn restcalls_evaluation() {
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/items/"),
             file_path: s!(filename),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("get_item_by_id(client, item_id) -> Any"),
@@ -220,6 +228,7 @@ fn restcalls_evaluation() {
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/items/{item_id}"),
             file_path: s!(filename),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("create_user(client, username, email) -> Any"),
@@ -242,6 +251,7 @@ fn restcalls_evaluation() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/users/"),
             file_path: s!(filename),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("get_users(client, limit=10) -> Any"),
@@ -261,6 +271,7 @@ fn restcalls_evaluation() {
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/users/"),
             file_path: s!(filename),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("search(client, query) -> Any"),
@@ -280,6 +291,7 @@ fn restcalls_evaluation() {
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/search/"),
             file_path: s!(filename),
+            source_span: Default::default(),
         },
     ];
 
@@ -313,6 +325,7 @@ fn should_extract_all_types_of_restcall() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/items/"),
             file_path: s!("./examples/python/restcalls/different_types.py"),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("withblock_restcall_assignment(data: ProxyItemCreate) -> Any"),
@@ -332,6 +345,7 @@ fn should_extract_all_types_of_restcall() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/items/"),
             file_path: s!("./examples/python/restcalls/different_types.py"),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("restcall_assignment(client, skip=0, limit=10, q=None) -> Any"),
@@ -351,6 +365,7 @@ fn should_extract_all_types_of_restcall() {
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/items/"),
             file_path: s!("./examples/python/restcalls/different_types.py"),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("restcall_no_assignment(client, username, email) -> Any"),
@@ -372,6 +387,7 @@ fn should_extract_all_types_of_restcall() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/users/"),
             file_path: s!("./examples/python/restcalls/different_types.py"),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("await_restcall_assignment(client, username, email) -> Any"),
@@ -393,6 +409,7 @@ fn should_extract_all_types_of_restcall() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/users/"),
             file_path: s!("./examples/python/restcalls/different_types.py"),
+            source_span: Default::default(),
         },
         RestCall {
             function_name: s!("await_restcall_no_assignment(client, username, email) -> Any"),
@@ -414,6 +431,7 @@ fn should_extract_all_types_of_restcall() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/users/"),
             file_path: s!("./examples/python/restcalls/different_types.py"),
+            source_span: Default::default(),
         },
     ];
 
@@ -451,6 +469,7 @@ fn should_assign_correct_target_uris_using_symbolic_evaluation() {
         http_method: HttpMethod::POST,
         target_uri: s!("http://abrakadabra/items/"),
         file_path: s!("./examples/python/restcalls/url_not_in_call.py"),
+        source_span: Default::default(),
     }];
 
     assert_eq!(restcalls, expected);

@@ -20,6 +20,7 @@ fn java_restcall(function_name: &str, target_uri: &str, file_path: &str) -> Rest
         http_method: HttpMethod::GET,
         target_uri: target_uri.to_string(),
         file_path: file_path.to_string(),
+        source_span: Default::default(),
     }
 }
 

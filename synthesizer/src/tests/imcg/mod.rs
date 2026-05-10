@@ -130,6 +130,7 @@ mod tests {
             http_method: HttpMethod::POST,
             target_uri: "http://localhost:8000/items/".to_string(),
             file_path: "serviceB/main.py".to_string(),
+            source_span: Default::default(),
         }]
     }
 

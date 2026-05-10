@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{Argument, HttpMethod};
+use crate::{Argument, HttpMethod, source_code::SourceSpan};
 
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema, Clone, Default)]
 pub struct RestCall {
@@ -11,6 +11,7 @@ pub struct RestCall {
     pub http_method: HttpMethod,
     pub target_uri: String,
     pub file_path: String,
+    pub source_span: SourceSpan,
 }
 
 impl RestCall {
@@ -22,6 +23,7 @@ impl RestCall {
             http_method: self.http_method.clone(),
             target_uri: cloned_target_uri.to_owned(),
             file_path: self.file_path.clone(),
+            source_span: self.source_span.clone(),
         }
     }
 
@@ -33,6 +35,7 @@ impl RestCall {
             http_method: self.http_method.clone(),
             target_uri: cloned_target_uri.to_owned(),
             file_path: self.file_path.clone(),
+            source_span: self.source_span.clone(),
         }
     }
 }

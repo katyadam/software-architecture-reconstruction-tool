@@ -474,6 +474,7 @@ def fetch():
         http_method: HttpMethod::GET,
         target_uri: "url".into(),
         file_path: "JavaClient.java".into(),
+        source_span: Default::default(),
     });
     let python_record = python_extract(python_code, "client.py").expect("parses");
 
