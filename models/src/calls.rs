@@ -3,6 +3,8 @@ use std::fmt::{self, Display};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::source_code::SourceSpan;
+
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema, Clone)]
 pub struct Argument {
     pub assigned_variable: String,
@@ -20,6 +22,7 @@ pub struct CallStatement {
     pub is_self_invoke: bool,
     pub is_super_invoke: bool,
     pub invoked_on: Option<String>,
+    pub source_span: SourceSpan,
 }
 
 impl Display for CallStatement {

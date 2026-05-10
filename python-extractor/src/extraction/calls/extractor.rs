@@ -1,7 +1,7 @@
 use std::sync::OnceLock;
 
 use log::warn;
-use models::{Argument, CallStatement};
+use models::{Argument, CallStatement, source_code::SourceSpan};
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 
 use crate::extraction::{
@@ -155,6 +155,7 @@ impl Extractor for CallsExtractor {
                 is_self_invoke: function_name.starts_with("self"),
                 is_super_invoke: false,
                 invoked_on: None,
+                source_span: SourceSpan::default(),
             };
 
             if let Some(node) = call_node {
