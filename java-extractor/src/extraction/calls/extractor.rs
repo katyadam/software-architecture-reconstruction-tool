@@ -5,6 +5,7 @@ use tree_sitter::{Query, QueryCursor, StreamingIterator, Tree};
 
 use crate::{
     extraction::{
+        calls::source_span::last_class_first_function_span,
         enclosing_lookup::{
             get_enclosing_node_by_kind, get_field_string_from_node, get_hashed_node_value,
         },
@@ -42,6 +43,7 @@ impl Extractor<CallStatement> for CallStatementsExtractor {
             let mut enclosing_function_hash: Option<String> = None;
             let mut is_self_invoke = false;
             let mut is_super_invoke = false;
+            let mut source_span = SourceSpan::default();
 
             for capture in m.captures {
                 let capture_text =
@@ -72,6 +74,8 @@ impl Extractor<CallStatement> for CallStatementsExtractor {
                         explicit_constructor_call = Some(value);
                     }
                     "call" => {
+                        source_span = last_class_first_function_span(&capture.node, code);
+
                         let n = ["method_declaration", "constructor_declaration"]
                             .iter()
                             .find_map(|kind| get_enclosing_node_by_kind(capture.node, kind));
@@ -125,7 +129,7 @@ impl Extractor<CallStatement> for CallStatementsExtractor {
                 is_self_invoke,
                 is_super_invoke,
                 invoked_on: None,
-                source_span: SourceSpan::default(),
+                source_span,
             });
         }
         calls

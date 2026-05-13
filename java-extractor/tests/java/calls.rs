@@ -6,7 +6,7 @@ use java_extractor::{
     },
     s,
 };
-use models::{Argument, CallStatement};
+use models::{Argument, CallStatement, source_code::SourceSpan};
 
 use crate::java::utils::{get_tree, load_file, parse_file};
 
@@ -27,7 +27,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("this(\"Overloaded Call\")"),
@@ -44,7 +44,7 @@ fn test_all_call_statements() {
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("super()"),
@@ -57,7 +57,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: true,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("System.out.println(msg)"),
@@ -74,7 +74,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("internalMethod()"),
@@ -87,7 +87,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("this.internalMethod()"),
@@ -100,7 +100,7 @@ fn test_all_call_statements() {
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("super.parentMethod()"),
@@ -113,7 +113,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: true,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("StaticTarget.staticAction()"),
@@ -126,7 +126,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("internalMethod()"),
@@ -139,7 +139,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("r.run()"),
@@ -152,7 +152,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("printer.accept(\"Method Reference Call\")"),
@@ -169,7 +169,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("listSupplier.get()"),
@@ -182,7 +182,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("this.getClass()"),
@@ -195,7 +195,7 @@ fn test_all_call_statements() {
             is_self_invoke: true,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("this.getClass().getMethod(\"internalMethod\")"),
@@ -212,7 +212,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("m.invoke(this)"),
@@ -229,7 +229,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("\"  hello  \".trim()"),
@@ -242,7 +242,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("\"  hello  \".trim().toUpperCase()"),
@@ -255,7 +255,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("\"  hello  \".trim().toUpperCase().concat(\" WORLD\")"),
@@ -272,7 +272,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("System.out.println(\"Internal method executed.\")"),
@@ -289,7 +289,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 134, end_byte: 1850 },
         },
         CallStatement {
             function_name: s!("System.out.println(\"Parent method executed.\")"),
@@ -306,7 +306,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 1852, end_byte: 1960 },
         },
         CallStatement {
             function_name: s!("System.out.println(\"Static call executed.\")"),
@@ -323,7 +323,7 @@ fn test_all_call_statements() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 1962, end_byte: 2076 },
         },
     ];
 
@@ -362,7 +362,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 34, end_byte: 971 },
         },
         CallStatement {
             function_name: s!("add(2.5, 3.5)"),
@@ -386,7 +386,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 34, end_byte: 971 },
         },
         CallStatement {
             function_name: s!("add(1, 2, 3)"),
@@ -415,7 +415,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 34, end_byte: 971 },
         },
         CallStatement {
             function_name: s!("add(\"Hello, \", \"World!\")"),
@@ -439,7 +439,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 34, end_byte: 971 },
         },
         CallStatement {
             function_name: s!("Calculator()"),
@@ -452,7 +452,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 34, end_byte: 971 },
         },
         CallStatement {
             function_name: s!("calculator.demo()"),
@@ -465,7 +465,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: Some(s!("Calculator")),
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 34, end_byte: 971 },
         },
         CallStatement {
             function_name: s!(
@@ -501,7 +501,7 @@ fn test_call_statements_evaluation_with_method_overloading() {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: Some(s!("RestTemplate")),
-            source_span: Default::default(),
+            source_span: SourceSpan { start_byte: 34, end_byte: 971 },
         },
     ];
 

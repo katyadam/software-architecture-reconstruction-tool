@@ -1,11 +1,11 @@
 use std::sync::OnceLock;
 
 use log::warn;
-use models::{Argument, CallStatement, source_code::SourceSpan};
+use models::{Argument, CallStatement};
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 
 use crate::extraction::{
-    calls::PythonCallStatement,
+    calls::{PythonCallStatement, source_span::last_class_last_function_span},
     common::node_text,
     extractor::{ExtractParams, Extractor},
     queries::CALL_QUERY,
@@ -146,25 +146,24 @@ impl Extractor for CallsExtractor {
                 }
             });
 
-            let call_statement = CallStatement {
-                function_name: function_name.clone(),
-                arguments,
-                enclosing_function_name,
-                enclosing_class_name,
-                enclosing_function_hash,
-                is_self_invoke: function_name.starts_with("self"),
-                is_super_invoke: false,
-                invoked_on: None,
-                source_span: SourceSpan::default(),
-            };
-
             if let Some(node) = call_node {
+                let call_statement = CallStatement {
+                    function_name: function_name.clone(),
+                    arguments,
+                    enclosing_function_name,
+                    enclosing_class_name,
+                    enclosing_function_hash,
+                    is_self_invoke: function_name.starts_with("self"),
+                    is_super_invoke: false,
+                    invoked_on: None,
+                    source_span: last_class_last_function_span(&node, params.code),
+                };
                 call_statements.push(PythonCallStatement {
                     call_statement,
                     node,
                 });
             } else {
-                warn!("Call Statement: {call_statement:#?} does not have Node!");
+                warn!("Call Statement does not have its 'call' Node!");
             }
         }
 
