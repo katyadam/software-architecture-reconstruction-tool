@@ -1,7 +1,6 @@
 target/
 TODO.md
 data/
-UPDATE_LOG.md
 DESIRED_STATE.md
 dump/
 train-ticket-sar-output/
@@ -13,3 +12,6 @@ agents/
 plans/
 docs/session-logs/
 perf_testing.pdf
+.obsidian/
+empaia-llm-envscrape/
+docs/junk/
