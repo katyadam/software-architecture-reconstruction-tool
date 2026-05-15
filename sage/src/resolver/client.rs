@@ -18,6 +18,7 @@ use crate::resolver::{
 };
 
 /// HTTP client that sends resolution queries to an Ollama-backed LLM.
+#[derive(Debug)]
 pub struct SageClient {
     client: Client<OpenAIConfig>,
     model: String,

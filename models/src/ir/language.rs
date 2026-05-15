@@ -4,6 +4,7 @@ use std::fmt::Display;
 pub enum Language {
     Java,
     Python,
+    Unknown,
 }
 
 impl Display for Language {
@@ -11,6 +12,7 @@ impl Display for Language {
         match self {
             Language::Java => write!(f, "Java"),
             Language::Python => write!(f, "Python"),
+            Language::Unknown => write!(f, "Unknown"),
         }
     }
 }

@@ -1,19 +1,25 @@
+use models::ConfigurationData;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::helpers::fixture_base;
 
-#[test]
-fn cross_file_constant_resolution() {
+#[tokio::test]
+async fn cross_file_constant_resolution() {
     let fixture_dir = PathBuf::from(format!("{}/cross-file", fixture_base()));
     let mut external_constants = HashMap::new();
     let scraped = env_scraper::scrape(&fixture_dir);
     for (k, v) in scraped {
         external_constants.entry(k).or_insert(v);
     }
+    let config = ConfigurationData {
+        service_descriptions: vec![],
+    };
 
-    let result = cli::get_all_code_elements(&fixture_dir, &external_constants)
-        .expect("get_all_code_elements failed on cross-file fixture");
+    let result =
+        cli::get_all_code_elements(&fixture_dir, &external_constants, &config, None)
+            .await
+            .expect("get_all_code_elements failed on cross-file fixture");
 
     // At least one REST call must be extracted from the fixture.
     assert!(
@@ -48,8 +54,8 @@ fn cross_file_constant_resolution() {
     }
 }
 
-#[test]
-fn cross_file_relative_dot_import_resolution() {
+#[tokio::test]
+async fn cross_file_relative_dot_import_resolution() {
     // Mirrors the empaia layout: jobs.py reaches `singletons.py` via a 4-dot
     // relative import (`from ....singletons import settings`). The
     // `settings.as_url` field is empty in source but must be filled from the
@@ -61,9 +67,14 @@ fn cross_file_relative_dot_import_resolution() {
     for (k, v) in scraped {
         external_constants.entry(k).or_insert(v);
     }
+    let config = ConfigurationData {
+        service_descriptions: vec![],
+    };
 
-    let result = cli::get_all_code_elements(&fixture_dir, &external_constants)
-        .expect("get_all_code_elements failed on cross-file-nested fixture");
+    let result =
+        cli::get_all_code_elements(&fixture_dir, &external_constants, &config, None)
+            .await
+            .expect("get_all_code_elements failed on cross-file-nested fixture");
 
     assert!(
         !result.restcalls.is_empty(),

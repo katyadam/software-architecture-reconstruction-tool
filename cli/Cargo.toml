@@ -7,6 +7,7 @@ edition = "2024"
 extractor-runtime = { workspace = true }
 synthesizer = { workspace = true }
 models = { workspace = true }
+sage = { workspace = true }
 
 clap = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

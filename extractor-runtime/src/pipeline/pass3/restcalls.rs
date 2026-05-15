@@ -55,7 +55,9 @@ fn evaluate_file_restcalls(
     per_file_module_consts: &PerFileModuleConsts,
 ) -> Vec<RestCall> {
     let callables = build_file_local_callables(file, &project_ir.callable_map);
-    let evaluator: &dyn LanguageSpecificEvaluator = evaluation_for(file.language);
+    let Some(evaluator) = evaluation_for(file.language) else {
+        return vec![];
+    };
     let file_env = build_file_env(
         file,
         project_ir,

@@ -1,12 +1,108 @@
 use std::collections::HashMap;
 
+use log::warn;
 use models::{
-    ConfigurationData,
+    ConfigurationData, RestCall,
     assignments::{AssignmentKey, Scope, VariableAddress},
     ir::project::ProjectIR,
 };
+use sage::resolver::{
+    client::SageClient,
+    code::CodeSnippet,
+    facts::FactBundle,
+    query::{QueryKind, SageQuery},
+};
 
-use crate::pipeline::pass3::{pass_attr::PerFileAttrMap, pass_module::PerFileModuleConsts};
+use crate::pipeline::{
+    pass1::decide_language,
+    pass3::{
+        pass_attr::PerFileAttrMap,
+        pass_module::PerFileModuleConsts,
+        restcalls::{EvalState, is_restcall_evaluated_enough},
+    },
+};
+
+pub async fn evaluate_restcalls_with_llm(
+    restcalls: &mut Vec<RestCall>,
+    variables: HashMap<models::assignments::VariableAddress, String>,
+    sage: &SageClient,
+) {
+    let n = restcalls
+        .iter()
+        .filter(|rc| is_restcall_evaluated_enough(*rc) == EvalState::NeedsLLM)
+        .count();
+    println!("Number of REST calls to evaluate with LLM: {n}");
+    let mut cur = 0;
+    for rc in restcalls.iter_mut() {
+        if is_restcall_evaluated_enough(rc) != EvalState::NeedsLLM {
+            continue;
+        }
+        println!("Evaluating REST call: {rc:#?} -- {cur}/{n}");
+        cur += 1;
+        let snippet = match build_snippet(rc) {
+            Some(s) => s,
+            None => {
+                warn!(
+                    "sage: skipping {} — cannot read {}",
+                    rc.target_uri, rc.file_path
+                );
+                continue;
+            }
+        };
+
+        let lookup_key = rc
+            .target_uri
+            .split('/')
+            .next()
+            .unwrap_or(&rc.target_uri)
+            .to_string();
+
+        println!("Looking to resolve: {lookup_key}");
+
+        let bundle = FactBundle {
+            sites: vec![snippet],
+            frameworks: vec![],
+            scraped_variables: HashMap::new(),
+            others: vec![],
+        };
+
+        let query = SageQuery {
+            bundle,
+            kind: QueryKind::ResolveLookup { lookup_key },
+            variables_map: variables.clone(),
+        };
+
+        match sage.query(query).await {
+            Ok(resp) => {
+                if let Some(resolved) = resp.resolved {
+                    println!("Lookup key resolved to: {resolved}");
+                    let suffix: String = rc
+                        .target_uri
+                        .splitn(2, '/')
+                        .nth(1)
+                        .map(|s| format!("/{s}"))
+                        .unwrap_or_default();
+                    rc.target_uri = format!("{resolved}{suffix}");
+                    println!("Full target URL is: {}", rc.target_uri);
+                }
+            }
+            Err(e) => {
+                println!("sage: query for {} failed: {e}", rc.target_uri);
+                warn!("sage: query for {} failed: {e}", rc.target_uri);
+            }
+        }
+    }
+}
+
+fn build_snippet(rc: &RestCall) -> Option<CodeSnippet> {
+    let bytes = std::fs::read(&rc.file_path).ok()?;
+    let start = rc.source_span.start_byte as usize;
+    let end = rc.source_span.end_byte as usize;
+    let slice = bytes.get(start..end)?;
+    let code = String::from_utf8_lossy(slice).into_owned();
+    let language = decide_language(&rc.file_path);
+    Some(CodeSnippet { code, language })
+}
 
 pub fn build_variable_map(
     config: &ConfigurationData,

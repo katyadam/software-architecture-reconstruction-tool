@@ -136,6 +136,17 @@ let client = SageClient::new(
 );
 ```
 
+### Running Evaluation with LLM over Empaia with Env-scraping
+
+```bash
+cargo run -p cli --release -- \
+    -p /butler/empaia \
+    -c ./config/configurations/local-empaia-config.json \
+    -o ./output-empaia \
+    --scrape \
+    --llm
+```
+
 Responses below the confidence threshold or with no supporting evidence are rejected with a typed `SageError`. See `sage/src/response.rs` for the full error taxonomy.
 
 ---

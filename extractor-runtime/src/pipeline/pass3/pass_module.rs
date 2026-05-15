@@ -96,7 +96,7 @@ fn evaluate_module(
     file_attrs: Option<&HashMap<String, String>>,
 ) -> Option<HashMap<String, String>> {
     let mut callables = build_file_local_callables(file, global_callables);
-    let evaluator = evaluation_for(file.language);
+    let evaluator = evaluation_for(file.language)?;
     let mangled = mangle_callable_name(MODULE_CALLABLE_NAME, file.language);
 
     let module_pc = callables.remove(&mangled)?;
