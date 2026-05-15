@@ -60,9 +60,10 @@ impl LanguageSpecificEvaluator for PythonEvaluator {
 static JAVA_EVALUATOR: JavaEvaluator = JavaEvaluator;
 static PYTHON_EVALUATOR: PythonEvaluator = PythonEvaluator;
 
-pub(crate) fn evaluation_for(language: Language) -> &'static dyn LanguageSpecificEvaluator {
+pub(crate) fn evaluation_for(language: Language) -> Option<&'static dyn LanguageSpecificEvaluator> {
     match language {
-        Language::Java => &JAVA_EVALUATOR,
-        Language::Python => &PYTHON_EVALUATOR,
+        Language::Java => Some(&JAVA_EVALUATOR),
+        Language::Python => Some(&PYTHON_EVALUATOR),
+        Language::Unknown => None,
     }
 }

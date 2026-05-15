@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use cli::get_all_code_elements;
 use models::ConfigurationData;
+use sage::resolver::client::SageClient;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -28,6 +29,15 @@ struct Cli {
 
     #[arg(long, default_value_t = false)]
     scrape: bool,
+
+    #[arg(long, default_value_t = false)]
+    llm: bool,
+
+    #[arg(long, default_value = "http://localhost:11434/v1")]
+    llm_url: String,
+
+    #[arg(long, default_value = "qwen2.5-coder:7b")]
+    llm_model: String,
 }
 
 #[derive(Deserialize)]
@@ -94,8 +104,14 @@ async fn main() -> Result<()> {
         println!("   Found {count} env vars from .env / docker-compose files.");
     }
 
+    let sage = args
+        .llm
+        .then(|| SageClient::new(&args.llm_url, &args.llm_model, 0.7));
+
     let extraction = Instant::now();
-    let all_code_elements = get_all_code_elements(&args.project_dir, &external_constants)?;
+    let all_code_elements =
+        get_all_code_elements(&args.project_dir, &external_constants, &config, sage.as_ref())
+            .await?;
     let extraction_elapsed = extraction.elapsed();
 
     println!("✅ Extraction successful!");

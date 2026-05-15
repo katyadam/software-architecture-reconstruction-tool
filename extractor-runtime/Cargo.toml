@@ -9,6 +9,7 @@ statix = { workspace = true }
 clients = { workspace = true }
 python-extractor = { workspace = true }
 java-extractor = { workspace = true }
+sage = { workspace = true }
 
 actix-web = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

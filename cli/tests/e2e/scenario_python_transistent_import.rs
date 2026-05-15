@@ -1,21 +1,26 @@
+use models::ConfigurationData;
 use std::{collections::HashMap, path::PathBuf};
 
 use crate::e2e::helpers::fixture_base;
 
-#[test]
-fn transitive_import_resolution() {
+#[tokio::test]
+async fn transitive_import_resolution() {
     // Verifies: data.py imports `settings` from api/v3/singletons.py, which
     // re-exports it from singletons.py (where `settings = Settings()` lives).
     // Settings.medical_data_service_url defaults to "http://mds", so the
-    // PUT call's target URI must contain "http://mds" — not the raw "{mds_url}".
+    // PUT call's target URI must contain "http://mds" -- not the raw "{mds_url}".
     let fixture_dir = PathBuf::from(format!("{}/trans-import", fixture_base()));
     let mut external_constants = HashMap::new();
     let scraped = env_scraper::scrape(&fixture_dir);
     for (k, v) in scraped {
         external_constants.entry(k).or_insert(v);
     }
+    let config = ConfigurationData {
+        service_descriptions: vec![],
+    };
 
-    let result = cli::get_all_code_elements(&fixture_dir, &external_constants)
+    let result = cli::get_all_code_elements(&fixture_dir, &external_constants, &config, None)
+        .await
         .expect("get_all_code_elements failed on trans-import fixture");
 
     assert!(

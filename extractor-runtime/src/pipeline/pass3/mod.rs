@@ -10,13 +10,14 @@ mod restcalls;
 use std::collections::HashMap;
 
 use models::{
-    Endpoint, RestCall,
+    ConfigurationData, Endpoint,
     ir::{evaluted::EvaluatedIR, project::ProjectIR},
 };
+use sage::resolver::client::SageClient;
 
 use crate::pipeline::pass3::{
+    llm_enhance::{build_variable_map, evaluate_restcalls_with_llm},
     pass_module::{MODULE_CALLABLE_NAME, PerFileModuleConsts},
-    restcalls::{EvalState, is_restcall_evaluated_enough},
 };
 
 /// Pass 3: Produce `EvaluatedIR` from `ProjectIR`.
@@ -47,18 +48,61 @@ pub fn evaluate(
         per_file_module_consts,
     );
 
-    let restcalls_need_llm: Vec<RestCall> = restcalls
+    let endpoints: Vec<Endpoint> = project_ir
+        .files
         .iter()
-        .filter(|rc| is_restcall_evaluated_enough(&rc) == EvalState::NeedsLLM)
-        .cloned()
-        .collect::<Vec<RestCall>>();
+        .flat_map(|f| f.endpoints.clone())
+        .collect();
 
-    println!(
-        "NOT ENOUGH EVALUATED RESTCALLS: {}",
-        restcalls_need_llm.len()
+    let entities = project_ir
+        .files
+        .iter()
+        .flat_map(|f| f.entities.clone())
+        .collect();
+
+    let callables = project_ir
+        .files
+        .iter()
+        .flat_map(|f| f.callables.iter().map(|pc| pc.metadata.clone()))
+        .filter(|c| c.name != MODULE_CALLABLE_NAME)
+        .collect();
+
+    let call_statements = project_ir
+        .files
+        .iter()
+        .flat_map(|f| f.call_statements.clone())
+        .collect();
+
+    EvaluatedIR {
+        entities,
+        endpoints,
+        restcalls,
+        callables,
+        call_statements,
+    }
+}
+
+/// Used only in CLI lib which is not binary. This means this function is not used within binary
+///  and marked as dead_code even though it is used in CLI through the lib.
+#[allow(dead_code)]
+pub async fn evaluate_with_llm(
+    project_ir: ProjectIR,
+    external_constants: &HashMap<String, String>,
+    per_file_attrs: &HashMap<String, HashMap<String, String>>,
+    per_file_module_consts: &PerFileModuleConsts,
+    config: &ConfigurationData,
+    sage: &SageClient,
+) -> EvaluatedIR {
+    let mut restcalls = restcalls::evaluate_restcalls(
+        &project_ir,
+        external_constants,
+        per_file_attrs,
+        per_file_module_consts,
     );
 
-    println!("{restcalls_need_llm:#?}");
+    let variables = build_variable_map(config, &project_ir, per_file_attrs, per_file_module_consts);
+
+    evaluate_restcalls_with_llm(&mut restcalls, variables, sage).await;
 
     let endpoints: Vec<Endpoint> = project_ir
         .files
