@@ -109,9 +109,13 @@ async fn main() -> Result<()> {
         .then(|| SageClient::new(&args.llm_url, &args.llm_model, 0.7));
 
     let extraction = Instant::now();
-    let all_code_elements =
-        get_all_code_elements(&args.project_dir, &external_constants, &config, sage.as_ref())
-            .await?;
+    let all_code_elements = get_all_code_elements(
+        &args.project_dir,
+        &external_constants,
+        &config,
+        sage.as_ref(),
+    )
+    .await?;
     let extraction_elapsed = extraction.elapsed();
 
     println!("✅ Extraction successful!");

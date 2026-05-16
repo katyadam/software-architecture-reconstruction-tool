@@ -26,14 +26,7 @@ Rules:
 }
 
 pub fn build_facts_message(bundle: &FactBundle) -> String {
-    format!(
-        "FRAMEWORKS: {}\nCONSTANTS:\n{}\nOTHER:\n{}\nSITES:\n`{}`",
-        fmt_frameworks(bundle),
-        // fmt_symbols(bundle),
-        fmt_constants(bundle),
-        fmt_others(bundle),
-        fmt_sites(bundle),
-    )
+    format!("SITES:\n`{}`", fmt_sites(bundle))
 }
 
 pub fn build_question_message(kind: &QueryKind) -> String {
@@ -100,66 +93,6 @@ fn fmt_scope(scope: &Scope) -> String {
     }
 }
 
-fn fmt_frameworks(bundle: &FactBundle) -> String {
-    if bundle.frameworks.is_empty() {
-        return "none".to_string();
-    }
-    bundle
-        .frameworks
-        .iter()
-        .map(|f| f.to_string())
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-// fn fmt_symbols(bundle: &FactBundle) -> String {
-//     let lines: String = bundle
-//         .local_scope
-//         .iter()
-//         .chain(bundle.imported_scope.iter())
-//         .chain(bundle.class_or_module_attrs.iter())
-//         .map(|sym| {
-//             let value = sym.value.as_deref().unwrap_or("?");
-//             let datatype = sym.datatype.as_deref().unwrap_or("?");
-//             let kind = match &sym.kind {
-//                 SymbolKind::Named => "local".to_string(),
-//                 SymbolKind::Imported { target_file } => format!("imported from {target_file}"),
-//                 SymbolKind::Attr { class } => format!("attr of {class}"),
-//             };
-//             format!("  {} ({}) -> {} : {}\n", sym.name, kind, value, datatype)
-//         })
-//         .collect();
-//     if lines.is_empty() {
-//         "  none\n".to_string()
-//     } else {
-//         lines
-//     }
-// }
-
-fn fmt_constants(bundle: &FactBundle) -> String {
-    if bundle.scraped_variables.is_empty() {
-        return "none".to_string();
-    }
-    bundle
-        .scraped_variables
-        .iter()
-        .map(|(k, v)| format!("{k} = {v}"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn fmt_others(bundle: &FactBundle) -> String {
-    if bundle.others.is_empty() {
-        return "none".to_string();
-    }
-    bundle
-        .others
-        .iter()
-        .map(|m| format!("  {}", m.text))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 fn fmt_sites(bundle: &FactBundle) -> String {
     bundle
         .sites
@@ -172,55 +105,14 @@ fn fmt_sites(bundle: &FactBundle) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resolver::{
-        code::CodeSnippet, facts::FactBundle, messages::Message, query::QueryKind,
-    };
-    use models::ir::language::{Framework, Language};
-
-    fn empty_bundle() -> FactBundle {
-        FactBundle {
-            sites: vec![],
-            frameworks: vec![],
-            // local_scope: vec![],
-            // imported_scope: vec![],
-            // class_or_module_attrs: vec![],
-            scraped_variables: HashMap::new(),
-            others: vec![],
-        }
-    }
+    use crate::resolver::{code::CodeSnippet, facts::FactBundle, query::QueryKind};
+    use models::ir::language::Language;
 
     fn full_bundle() -> FactBundle {
         FactBundle {
             sites: vec![CodeSnippet {
                 code: "restTemplate.getForObject(BASE_URL, String.class)".to_string(),
                 language: Language::Java,
-            }],
-            frameworks: vec![Framework::Spring],
-            // local_scope: vec![Symbol {
-            //     name: "restTemplate".to_string(),
-            //     value: None,
-            //     datatype: Some("RestTemplate".to_string()),
-            //     kind: SymbolKind::Named,
-            // }],
-            // imported_scope: vec![Symbol {
-            //     name: "UserClient".to_string(),
-            //     value: None,
-            //     datatype: None,
-            //     kind: SymbolKind::Imported {
-            //         target_file: "com/example/UserClient.java".to_string(),
-            //     },
-            // }],
-            // class_or_module_attrs: vec![Symbol {
-            //     name: "BASE_URL".to_string(),
-            //     value: None,
-            //     datatype: Some("String".to_string()),
-            //     kind: SymbolKind::Attr {
-            //         class: "UserServiceClient".to_string(),
-            //     },
-            // }],
-            scraped_variables: HashMap::new(),
-            others: vec![Message {
-                text: "injected via @Value".to_string(),
             }],
         }
     }
@@ -234,57 +126,11 @@ mod tests {
         assert!(msg.contains("\"reasoning\""));
     }
 
-    // #[test]
-    // fn facts_empty_bundle_shows_none_everywhere() {
-    //     let msg = build_facts_message(&empty_bundle());
-    //     assert!(msg.contains("FRAMEWORKS: none"));
-    //     assert!(msg.contains("CONSTANTS:\nnone"));
-    //     assert!(msg.contains("OTHER:\nnone"));
-    //     assert!(msg.contains("  none\n"));
-    // }
-
-    #[test]
-    fn facts_full_bundle_includes_framework() {
-        let msg = build_facts_message(&full_bundle());
-        assert!(msg.contains("Spring"));
-    }
-
-    // #[test]
-    // fn facts_full_bundle_includes_all_symbol_kinds() {
-    //     let msg = build_facts_message(&full_bundle());
-    //     assert!(msg.contains("restTemplate (local)"));
-    //     assert!(msg.contains("imported from com/example/UserClient.java"));
-    //     assert!(msg.contains("attr of UserServiceClient"));
-    // }
-
-    // #[test]
-    // fn facts_full_bundle_includes_constant_with_source() {
-    //     let msg = build_facts_message(&full_bundle());
-    //     assert!(msg.contains("BASE_URL = http://user-service:8080"));
-    //     assert!(msg.contains("application.properties"));
-    // }
-
-    #[test]
-    fn facts_full_bundle_includes_other_messages() {
-        let msg = build_facts_message(&full_bundle());
-        assert!(msg.contains("injected via @Value"));
-    }
-
     #[test]
     fn facts_full_bundle_includes_site_language_and_code() {
         let msg = build_facts_message(&full_bundle());
         assert!(msg.contains("Language: Java"));
         assert!(msg.contains("restTemplate.getForObject"));
-    }
-
-    #[test]
-    fn facts_multiple_frameworks_are_comma_separated() {
-        let mut bundle = empty_bundle();
-        bundle.frameworks = vec![Framework::Spring, Framework::FastAPI];
-        let msg = build_facts_message(&bundle);
-        assert!(msg.contains("Spring"));
-        assert!(msg.contains("FastAPI"));
-        assert!(msg.contains(", "));
     }
 
     #[test]
