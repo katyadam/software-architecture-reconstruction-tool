@@ -63,7 +63,10 @@ fn restcalls_extraction() {
             http_method: HttpMethod::POST,
             target_uri: s!("{BASE_URL}/items/"),
             file_path: s!(filename),
-            source_span: SourceSpan { start_byte: 74, end_byte: 400 },
+            source_span: SourceSpan {
+                start_byte: 74,
+                end_byte: 400,
+            },
         },
         RestCall {
             function_name: s!("get_items(client, skip=0, limit=10, q=None) -> Any"),
@@ -83,7 +86,10 @@ fn restcalls_extraction() {
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/items/"),
             file_path: s!(filename),
-            source_span: SourceSpan { start_byte: 403, end_byte: 663 },
+            source_span: SourceSpan {
+                start_byte: 403,
+                end_byte: 663,
+            },
         },
         RestCall {
             function_name: s!("get_item_by_id(client, item_id) -> Any"),
@@ -96,7 +102,10 @@ fn restcalls_extraction() {
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/items/{item_id}"),
             file_path: s!(filename),
-            source_span: SourceSpan { start_byte: 666, end_byte: 886 },
+            source_span: SourceSpan {
+                start_byte: 666,
+                end_byte: 886,
+            },
         },
         RestCall {
             function_name: s!("create_user(client, username, email) -> Any"),
@@ -116,7 +125,10 @@ fn restcalls_extraction() {
             http_method: HttpMethod::POST,
             target_uri: s!("{BASE_URL}/users/"),
             file_path: s!(filename),
-            source_span: SourceSpan { start_byte: 889, end_byte: 1139 },
+            source_span: SourceSpan {
+                start_byte: 889,
+                end_byte: 1139,
+            },
         },
         RestCall {
             function_name: s!("get_users(client, limit=10) -> Any"),
@@ -136,7 +148,10 @@ fn restcalls_extraction() {
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/users/"),
             file_path: s!(filename),
-            source_span: SourceSpan { start_byte: 1142, end_byte: 1318 },
+            source_span: SourceSpan {
+                start_byte: 1142,
+                end_byte: 1318,
+            },
         },
         RestCall {
             function_name: s!("search(client, query) -> Any"),
@@ -156,7 +171,10 @@ fn restcalls_extraction() {
             http_method: HttpMethod::GET,
             target_uri: s!("{BASE_URL}/search/"),
             file_path: s!(filename),
-            source_span: SourceSpan { start_byte: 1321, end_byte: 1488 },
+            source_span: SourceSpan {
+                start_byte: 1321,
+                end_byte: 1488,
+            },
         },
     ];
 
@@ -194,7 +212,10 @@ fn restcalls_evaluation() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/items/"),
             file_path: s!(filename),
-            source_span: SourceSpan { start_byte: 74, end_byte: 400 },
+            source_span: SourceSpan {
+                start_byte: 74,
+                end_byte: 400,
+            },
         },
         RestCall {
             function_name: s!("get_items(client, skip=0, limit=10, q=None) -> Any"),
@@ -214,7 +235,10 @@ fn restcalls_evaluation() {
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/items/"),
             file_path: s!(filename),
-            source_span: SourceSpan { start_byte: 403, end_byte: 663 },
+            source_span: SourceSpan {
+                start_byte: 403,
+                end_byte: 663,
+            },
         },
         RestCall {
             function_name: s!("get_item_by_id(client, item_id) -> Any"),
@@ -228,7 +252,10 @@ fn restcalls_evaluation() {
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/items/{item_id}"),
             file_path: s!(filename),
-            source_span: SourceSpan { start_byte: 666, end_byte: 886 },
+            source_span: SourceSpan {
+                start_byte: 666,
+                end_byte: 886,
+            },
         },
         RestCall {
             function_name: s!("create_user(client, username, email) -> Any"),
@@ -251,7 +278,10 @@ fn restcalls_evaluation() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/users/"),
             file_path: s!(filename),
-            source_span: SourceSpan { start_byte: 889, end_byte: 1139 },
+            source_span: SourceSpan {
+                start_byte: 889,
+                end_byte: 1139,
+            },
         },
         RestCall {
             function_name: s!("get_users(client, limit=10) -> Any"),
@@ -271,7 +301,10 @@ fn restcalls_evaluation() {
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/users/"),
             file_path: s!(filename),
-            source_span: SourceSpan { start_byte: 1142, end_byte: 1318 },
+            source_span: SourceSpan {
+                start_byte: 1142,
+                end_byte: 1318,
+            },
         },
         RestCall {
             function_name: s!("search(client, query) -> Any"),
@@ -291,7 +324,10 @@ fn restcalls_evaluation() {
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/search/"),
             file_path: s!(filename),
-            source_span: SourceSpan { start_byte: 1321, end_byte: 1488 },
+            source_span: SourceSpan {
+                start_byte: 1321,
+                end_byte: 1488,
+            },
         },
     ];
 
@@ -325,7 +361,10 @@ fn should_extract_all_types_of_restcall() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/items/"),
             file_path: s!("./examples/python/restcalls/different_types.py"),
-            source_span: SourceSpan { start_byte: 101, end_byte: 304 },
+            source_span: SourceSpan {
+                start_byte: 101,
+                end_byte: 304,
+            },
         },
         RestCall {
             function_name: s!("withblock_restcall_assignment(data: ProxyItemCreate) -> Any"),
@@ -345,7 +384,10 @@ fn should_extract_all_types_of_restcall() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/items/"),
             file_path: s!("./examples/python/restcalls/different_types.py"),
-            source_span: SourceSpan { start_byte: 307, end_byte: 554 },
+            source_span: SourceSpan {
+                start_byte: 307,
+                end_byte: 554,
+            },
         },
         RestCall {
             function_name: s!("restcall_assignment(client, skip=0, limit=10, q=None) -> Any"),
@@ -365,7 +407,10 @@ fn should_extract_all_types_of_restcall() {
             http_method: HttpMethod::GET,
             target_uri: s!("http://localhost:8000/items/"),
             file_path: s!("./examples/python/restcalls/different_types.py"),
-            source_span: SourceSpan { start_byte: 557, end_byte: 821 },
+            source_span: SourceSpan {
+                start_byte: 557,
+                end_byte: 821,
+            },
         },
         RestCall {
             function_name: s!("restcall_no_assignment(client, username, email) -> Any"),
@@ -387,7 +432,10 @@ fn should_extract_all_types_of_restcall() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/users/"),
             file_path: s!("./examples/python/restcalls/different_types.py"),
-            source_span: SourceSpan { start_byte: 824, end_byte: 1027 },
+            source_span: SourceSpan {
+                start_byte: 824,
+                end_byte: 1027,
+            },
         },
         RestCall {
             function_name: s!("await_restcall_assignment(client, username, email) -> Any"),
@@ -409,7 +457,10 @@ fn should_extract_all_types_of_restcall() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/users/"),
             file_path: s!("./examples/python/restcalls/different_types.py"),
-            source_span: SourceSpan { start_byte: 1030, end_byte: 1247 },
+            source_span: SourceSpan {
+                start_byte: 1030,
+                end_byte: 1247,
+            },
         },
         RestCall {
             function_name: s!("await_restcall_no_assignment(client, username, email) -> Any"),
@@ -431,7 +482,10 @@ fn should_extract_all_types_of_restcall() {
             http_method: HttpMethod::POST,
             target_uri: s!("http://localhost:8000/users/"),
             file_path: s!("./examples/python/restcalls/different_types.py"),
-            source_span: SourceSpan { start_byte: 1250, end_byte: 1465 },
+            source_span: SourceSpan {
+                start_byte: 1250,
+                end_byte: 1465,
+            },
         },
     ];
 
@@ -469,7 +523,10 @@ fn should_assign_correct_target_uris_using_symbolic_evaluation() {
         http_method: HttpMethod::POST,
         target_uri: s!("http://abrakadabra/items/"),
         file_path: s!("./examples/python/restcalls/url_not_in_call.py"),
-        source_span: SourceSpan { start_byte: 34, end_byte: 386 },
+        source_span: SourceSpan {
+            start_byte: 34,
+            end_byte: 386,
+        },
     }];
 
     assert_eq!(restcalls, expected);

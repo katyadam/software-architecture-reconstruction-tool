@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use futures_util::stream::{self, StreamExt};
 use log::warn;
 use models::{
     ConfigurationData, RestCall,
@@ -11,6 +12,7 @@ use sage::resolver::{
     code::CodeSnippet,
     facts::FactBundle,
     query::{QueryKind, SageQuery},
+    response::{SageError, SageResponse},
 };
 
 use crate::pipeline::{
@@ -22,76 +24,120 @@ use crate::pipeline::{
     },
 };
 
+const MAX_CONCURRENT_LLM_QUERIES: usize = 4;
+
+struct PendingQuery {
+    index: usize,
+    original_uri: String,
+    query: SageQuery,
+}
+
+struct QueryOutcome {
+    index: usize,
+    original_uri: String,
+    result: Result<SageResponse, SageError>,
+}
+
 pub async fn evaluate_restcalls_with_llm(
     restcalls: &mut Vec<RestCall>,
-    variables: HashMap<models::assignments::VariableAddress, String>,
+    variables: HashMap<VariableAddress, String>,
     sage: &SageClient,
 ) {
-    let n = restcalls
+    let pending = collect_pending_queries(restcalls, &variables);
+    println!(
+        "Number of REST calls to evaluate with LLM: {}",
+        pending.len()
+    );
+    let outcomes = dispatch_queries_concurrently(pending, sage).await;
+    apply_query_outcomes(restcalls, outcomes);
+}
+
+fn collect_pending_queries(
+    restcalls: &[RestCall],
+    variables: &HashMap<VariableAddress, String>,
+) -> Vec<PendingQuery> {
+    restcalls
         .iter()
-        .filter(|rc| is_restcall_evaluated_enough(*rc) == EvalState::NeedsLLM)
-        .count();
-    println!("Number of REST calls to evaluate with LLM: {n}");
-    let mut cur = 0;
-    for rc in restcalls.iter_mut() {
-        if is_restcall_evaluated_enough(rc) != EvalState::NeedsLLM {
-            continue;
-        }
-        println!("Evaluating REST call: {rc:#?} -- {cur}/{n}");
-        cur += 1;
-        let snippet = match build_snippet(rc) {
-            Some(s) => s,
-            None => {
+        .enumerate()
+        .filter(|(_, rc)| is_restcall_evaluated_enough(rc) == EvalState::NeedsLLM)
+        .filter_map(|(index, rc)| {
+            let query = build_query_for_restcall(rc, variables).or_else(|| {
                 warn!(
                     "sage: skipping {} — cannot read {}",
                     rc.target_uri, rc.file_path
                 );
-                continue;
+                None
+            })?;
+            Some(PendingQuery {
+                index,
+                original_uri: rc.target_uri.clone(),
+                query,
+            })
+        })
+        .collect()
+}
+
+async fn dispatch_queries_concurrently(
+    pending: Vec<PendingQuery>,
+    sage: &SageClient,
+) -> Vec<QueryOutcome> {
+    stream::iter(pending)
+        .map(|p| async move {
+            let result = sage.query(p.query).await;
+            QueryOutcome {
+                index: p.index,
+                original_uri: p.original_uri,
+                result,
             }
-        };
+        })
+        .buffer_unordered(MAX_CONCURRENT_LLM_QUERIES)
+        .collect()
+        .await
+}
 
-        let lookup_key = rc
-            .target_uri
-            .split('/')
-            .next()
-            .unwrap_or(&rc.target_uri)
-            .to_string();
-
-        println!("Looking to resolve: {lookup_key}");
-
-        let bundle = FactBundle {
-            sites: vec![snippet],
-            frameworks: vec![],
-            scraped_variables: HashMap::new(),
-            others: vec![],
-        };
-
-        let query = SageQuery {
-            bundle,
-            kind: QueryKind::ResolveLookup { lookup_key },
-            variables_map: variables.clone(),
-        };
-
-        match sage.query(query).await {
+fn apply_query_outcomes(restcalls: &mut [RestCall], outcomes: Vec<QueryOutcome>) {
+    for outcome in outcomes {
+        match outcome.result {
             Ok(resp) => {
                 if let Some(resolved) = resp.resolved {
-                    println!("Lookup key resolved to: {resolved}");
-                    let suffix: String = rc
-                        .target_uri
-                        .splitn(2, '/')
-                        .nth(1)
-                        .map(|s| format!("/{s}"))
-                        .unwrap_or_default();
-                    rc.target_uri = format!("{resolved}{suffix}");
-                    println!("Full target URL is: {}", rc.target_uri);
+                    restcalls[outcome.index].target_uri =
+                        rewrite_target_uri_with_resolution(&outcome.original_uri, &resolved);
                 }
             }
             Err(e) => {
-                println!("sage: query for {} failed: {e}", rc.target_uri);
-                warn!("sage: query for {} failed: {e}", rc.target_uri);
+                warn!("sage: query for {} failed: {e}", outcome.original_uri);
             }
         }
     }
+}
+
+fn build_query_for_restcall(
+    rc: &RestCall,
+    variables: &HashMap<VariableAddress, String>,
+) -> Option<SageQuery> {
+    let snippet = build_snippet(rc)?;
+    let lookup_key = rc
+        .target_uri
+        .split('/')
+        .next()
+        .unwrap_or(&rc.target_uri)
+        .to_string();
+    let bundle = FactBundle {
+        sites: vec![snippet],
+    };
+    Some(SageQuery {
+        bundle,
+        kind: QueryKind::ResolveLookup { lookup_key },
+        variables_map: variables.clone(),
+    })
+}
+
+fn rewrite_target_uri_with_resolution(original_uri: &str, resolved: &str) -> String {
+    let suffix: String = original_uri
+        .split_once('/')
+        .map(|(_, rest)| format!("/{rest}"))
+        .unwrap_or_default();
+    format!("{resolved}{suffix}")
 }
 
 fn build_snippet(rc: &RestCall) -> Option<CodeSnippet> {
