@@ -102,7 +102,7 @@ pub async fn evaluate_with_llm(
 
     let variables = build_variable_map(config, &project_ir, per_file_attrs, per_file_module_consts);
 
-    evaluate_restcalls_with_llm(&mut restcalls, variables, sage).await;
+    evaluate_restcalls_with_llm(&mut restcalls, variables, config, sage).await;
 
     let endpoints: Vec<Endpoint> = project_ir
         .files
