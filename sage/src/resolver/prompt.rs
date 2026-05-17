@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use models::assignments::{Scope, VariableAddress};
 
 use crate::resolver::{facts::FactBundle, query::QueryKind};
@@ -64,11 +62,18 @@ Return null if you cannot determine it with confidence >= 0.7."
     }
 }
 
-pub fn build_variables_message(map: &HashMap<VariableAddress, String>) -> String {
-    if map.is_empty() {
-        return "Known VARIABLES and their VALUES:\n  none".to_string();
+/// Render the variables block of the prompt.
+///
+/// `entries` is iterated in the order given by the caller; the function does
+/// not re-sort or otherwise reorder the input. This is what makes prompts
+/// deterministic across runs.
+pub fn build_variables_message(entries: &[(VariableAddress, String)]) -> String {
+    const HINT: &str = "Note: the snippet may reference a field (e.g. `self._mds_url`) whose value is set by a constructor argument defined in another file or microservice. Prefer variables whose name resembles the referenced field, even if defined elsewhere.";
+
+    if entries.is_empty() {
+        return format!("Known VARIABLES and their VALUES:\n  none\n{HINT}");
     }
-    let lines = map
+    let lines = entries
         .iter()
         .map(|(addr, value)| {
             format!(
@@ -82,7 +87,7 @@ pub fn build_variables_message(map: &HashMap<VariableAddress, String>) -> String
         })
         .collect::<Vec<_>>()
         .join("\n");
-    format!("VARIABLES:\n{lines}")
+    format!("VARIABLES:\n{lines}\n{HINT}")
 }
 
 fn fmt_scope(scope: &Scope) -> String {
@@ -106,6 +111,7 @@ fn fmt_sites(bundle: &FactBundle) -> String {
 mod tests {
     use super::*;
     use crate::resolver::{code::CodeSnippet, facts::FactBundle, query::QueryKind};
+    use models::assignments::AssignmentKey;
     use models::ir::language::Language;
 
     fn full_bundle() -> FactBundle {
@@ -179,6 +185,69 @@ mod tests {
             call_expr: "client.post(\"/users\")".to_string(),
         });
         assert!(msg.contains("`client.post(\"/users\")`"));
+    }
+
+    #[test]
+    fn variables_message_empty_includes_constructor_hint() {
+        let entries: Vec<(VariableAddress, String)> = Vec::new();
+        let msg = build_variables_message(&entries);
+        assert!(msg.contains("none"));
+        assert!(msg.contains("self._mds_url"));
+        assert!(msg.contains("constructor argument"));
+    }
+
+    #[test]
+    fn variables_message_populated_includes_constructor_hint() {
+        let entries = vec![(
+            VariableAddress {
+                microservice: "svc".to_string(),
+                file: "f.py".to_string(),
+                key: AssignmentKey {
+                    scope: Scope::Global,
+                    variable_name: "BASE_URL".to_string(),
+                },
+            },
+            "http://example".to_string(),
+        )];
+        let msg = build_variables_message(&entries);
+        assert!(msg.contains("BASE_URL"));
+        assert!(msg.contains("self._mds_url"));
+        assert!(msg.contains("constructor argument"));
+    }
+
+    #[test]
+    fn variables_message_preserves_input_order() {
+        let entries = vec![
+            (
+                VariableAddress {
+                    microservice: "svc".to_string(),
+                    file: "f.py".to_string(),
+                    key: AssignmentKey {
+                        scope: Scope::Global,
+                        variable_name: "ZETA".to_string(),
+                    },
+                },
+                "z".to_string(),
+            ),
+            (
+                VariableAddress {
+                    microservice: "svc".to_string(),
+                    file: "f.py".to_string(),
+                    key: AssignmentKey {
+                        scope: Scope::Global,
+                        variable_name: "ALPHA".to_string(),
+                    },
+                },
+                "a".to_string(),
+            ),
+        ];
+        let msg = build_variables_message(&entries);
+        let zeta_pos = msg.find("ZETA").expect("zeta present");
+        let alpha_pos = msg.find("ALPHA").expect("alpha present");
+        assert!(
+            zeta_pos < alpha_pos,
+            "expected ZETA to appear before ALPHA, got: {msg}"
+        );
     }
 
     #[test]
