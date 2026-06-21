@@ -55,6 +55,7 @@ struct ConstantsDto {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    env_logger::init();
     let args = Cli::parse();
 
     if !args.project_dir.is_dir() {
