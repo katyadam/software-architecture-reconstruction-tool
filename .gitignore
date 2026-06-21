@@ -3,8 +3,6 @@ TODO.md
 data/
 DESIRED_STATE.md
 dump/
-train-ticket-sar-output/
-empaia-sar-output*/
 # Claude Code
 CLAUDE.md
 .claude/
@@ -15,3 +13,4 @@ perf_testing.pdf
 .obsidian/
 empaia-llm-envscrape/
 docs/junk/
+results/

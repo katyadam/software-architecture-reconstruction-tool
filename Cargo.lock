@@ -810,6 +810,7 @@ dependencies = [
  "anyhow",
  "clap",
  "env-scraper",
+ "env_logger",
  "extractor-runtime",
  "models",
  "sage",
@@ -3826,6 +3827,7 @@ name = "sage"
 version = "0.1.0"
 dependencies = [
  "async-openai",
+ "log",
  "models",
  "serde",
  "serde_json",
