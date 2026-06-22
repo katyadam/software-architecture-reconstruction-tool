@@ -9,6 +9,7 @@
 mod dispatch;
 mod query_builder;
 mod ranking;
+mod signals;
 mod variables;
 
 pub use dispatch::evaluate_restcalls_with_llm;

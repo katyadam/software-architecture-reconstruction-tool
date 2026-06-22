@@ -28,7 +28,29 @@ happen.
 
 ## Phase 0 — Foundation + baseline
 
-- **S0.1 — Signal extractor:** _pending._
+- **S0.1 — Signal extractor:** _done (2026-06-22)._ New
+  `llm_enhance/signals.rs`: `CallSiteSignals { origin_service, client_class,
+  imports, operand_identifiers, candidate_services }` via
+  `extract(rc, project_ir, config)`. `&ProjectIR` threaded into the LLM path;
+  temporary `SIGNALS:` instrumentation in `dispatch.rs` (to be removed once the
+  matcher consumes signals). Green: `cargo test -p extractor-runtime` 48 + 21
+  pass, clippy clean (2 pre-existing warnings only).
+  - **Correction:** `project_ir.callable_map` is keyed by **mangled name, not
+    `function_hash`** (`pass2::callables::build_project_global_callables`). The
+    plan/§5 assumption was wrong. Class is recovered by scanning the owning
+    file's `callables` for `metadata.hash == rc.function_hash`. See memory
+    `callable_map_keying.md`.
+  - **Empaia validation (128 residuals, all Python):**
+    - `client_class` recovered: **48 / 128** (was 0 before the keying fix). The
+      other 80 are FastAPI module-level route handlers (legitimately `Module`).
+    - operand identifiers present: **127 / 128**.
+    - Sample target_uris are bare path params (`case_id`, `class_id`,
+      `collection_id`, `annotation_id`) — flag for S0.3: the residual set looks
+      polluted with non-client / path-fragment targets; the old lexical gate's
+      behavior here needs the bucket breakdown.
+  - **Known gap (defer):** class resolved only via hash; no mangled-name
+    fallback when `rc.function_hash` is empty (unlike `restcalls.rs`). 1/128 had
+    no operand identifiers — quantify empty-hash rate in S0.3.
 - **S0.2 — Ground truth + scorer:** _pending._
 - **S0.3 — Baseline buckets** (old lexical gate, provisional):
   - `Enough`: _pending_
@@ -68,4 +90,13 @@ happen.
 
 > Chronological record of decisions taken and why. One line each.
 
-- _(empty)_
+- **2026-06-22** — Ground truth cannot be hand-supplied by the user. Scorer
+  oracle is auto-derived from `empaia-constants.json` (identifier -> URL) +
+  `empaia-config.json` (URL -> service). Limitation: only scores residuals whose
+  identifier appears in the curated file. Not circular — classifier resolves from
+  names/classes, never from the constants' URL values.
+- **2026-06-22** — Phase 0's label-free measurements (GATE A buckets,
+  strong-vs-thin split) do not depend on the oracle above; only the precision/
+  recall scorer (S0.2) does.
+- **2026-06-22** — Execution: Phase 0 implemented via Code Writer subagent per
+  project CLAUDE.md agentic pipeline.
