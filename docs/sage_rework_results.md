@@ -35,11 +35,14 @@ happen.
   temporary `SIGNALS:` instrumentation in `dispatch.rs` (to be removed once the
   matcher consumes signals). Green: `cargo test -p extractor-runtime` 48 + 21
   pass, clippy clean (2 pre-existing warnings only).
-  - **Correction:** `project_ir.callable_map` is keyed by **mangled name, not
-    `function_hash`** (`pass2::callables::build_project_global_callables`). The
-    plan/§5 assumption was wrong. Class is recovered by scanning the owning
-    file's `callables` for `metadata.hash == rc.function_hash`. See memory
-    `callable_map_keying.md`.
+  - **Correction:** `project_ir.callable_map` (the *global* map from
+    `pass2::callables::build_project_global_callables`) is keyed by **mangled
+    name only** — it never inserts the hash, so a hash lookup against it always
+    misses. (The separate *file-local* map from `build_file_local_callables` is
+    keyed by **both** mangled name and `metadata.hash`; that is what
+    `restcalls.rs` uses.) The plan/§5 assumption conflated the two. Class is
+    recovered by scanning the owning file's `callables` for
+    `metadata.hash == rc.function_hash`. See memory `callable_map_keying.md`.
   - **Empaia validation (128 residuals, all Python):**
     - `client_class` recovered: **48 / 128** (was 0 before the keying fix). The
       other 80 are FastAPI module-level route handlers (legitimately `Module`).
@@ -52,14 +55,39 @@ happen.
     fallback when `rc.function_hash` is empty (unlike `restcalls.rs`). 1/128 had
     no operand identifiers — quantify empty-hash rate in S0.3.
 - **S0.2 — Ground truth + scorer:** _pending._
-- **S0.3 — Baseline buckets** (old lexical gate, provisional):
-  - `Enough`: _pending_
-  - `NeedsLLM`: _pending_
-  - `Junk:empty`: _pending_
-  - `Junk:non-empty-but-failed-lexical-gate` (silent recall hole): _pending_
-- **S0.4 — Strong-vs-thin split:** _pending._
+- **S0.3 — Baseline buckets** (old lexical gate; measured 2026-06-22 via
+  temporary `llm_enhance/baseline.rs`, observation-only). Run before any network
+  dispatch, so independent of Ollama/sage availability.
+
+  | Bucket | empaia (577 total) | train-ticket (237 total) |
+  |---|---|---|
+  | `Enough` (http) | 449 (77%) | 213 (89%) |
+  | `NeedsLLM` (passes url/uri test) | 18 (3%) | 2 (0%) |
+  | `Junk:empty` | 0 (0%) | 0 (0%) |
+  | **`Junk:non-empty`** (silent recall hole) | **110 (19%)** | **22 (9%)** |
+
+- **S0.4 — Strong-vs-thin split** (residual = `NeedsLLM` + `Junk:non-empty`):
+
+  | | empaia | train-ticket |
+  |---|---|---|
+  | residual total | 128 | 24 |
+  | strong (class **or** import-token overlap) | 127 (99%) | 24 (100%) |
+  | thin | 1 (0%) | 0 (0%) |
+  | empty `function_hash` | 0 (0%) | 0 (0%) |
+
+  Note: empaia's high "strong" rate is partly driven by the *loose* import-token
+  overlap heuristic (route files import many same-service-named modules), not
+  only `client_class` (which S0.1 measured at 48/128). The matcher's real
+  precision on these is a Phase 2 / GATE B question, not settled here.
 - **S0.5 — Gate thresholds committed:** see section above.
-- **GATE A verdict:** _pending._
+- **GATE A verdict: CONFIRMED — the lexical gate is the leak.** On both corpora
+  `Junk:non-empty` dominates the residual set and dwarfs `NeedsLLM`: empaia
+  forwards 18 to the resolver while silently junking 110 (~6x); train-ticket
+  forwards 2 vs 22 junked (~11x). ~99-100% of those junked residuals carry a
+  structural signal, so they are recoverable, not noise. **Phase 1 gate rework
+  is justified and is the highest-leverage next step.** `function_hash` is never
+  empty on residuals (0/128, 0/24) -> the S0.1 empty-hash fallback gap is a
+  non-issue on these corpora; deprioritize.
 
 ---
 

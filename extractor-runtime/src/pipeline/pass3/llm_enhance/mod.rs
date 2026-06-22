@@ -6,6 +6,7 @@
 //! - [`variables`]: the canonical variable map builder consumed by Pass 3
 //! - [`ranking`]: relevance ranking + secret redaction for variable maps
 
+mod baseline;
 mod dispatch;
 mod query_builder;
 mod ranking;
