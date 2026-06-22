@@ -140,29 +140,89 @@ fn evaluate_single_restcall(
 
 #[derive(PartialEq, Eq)]
 pub(super) enum EvalState {
-    Enough,   // Skip LLM evaluation
-    NeedsLLM, // Use LLM evaluation
-    Junk,     // discard
+    ResolvedURL,     // eval produced a concrete http... URL; skip resolution
+    NeedsResolution, // non-empty residual eval did not turn into a URL; resolve it
+    Junk,            // genuinely empty; nothing to resolve
 }
 
-const URL_ALLOWED_PATTERNS: &[&str] = &["url", "uri"];
-
+/// Structural gate over a symbolically-evaluated `RestCall`.
+///
+/// A `RestCall` already IS an HTTP call (it carries `http_method`); any
+/// non-empty residual that eval did not turn into an http URL is a real
+/// residual the Phase 2 matcher should try, regardless of how it is named. The
+/// only thing not worth forwarding is an empty `target_uri` -> there is nothing
+/// to resolve.
 pub(super) fn is_restcall_evaluated_enough(restcall: &RestCall) -> EvalState {
     if restcall.target_uri.is_empty() {
-        return EvalState::Junk;
+        EvalState::Junk
+    } else if restcall.target_uri.starts_with("http") {
+        EvalState::ResolvedURL
+    } else {
+        EvalState::NeedsResolution
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use models::source_code::SourceSpan;
+
+    fn restcall(target_uri: &str) -> RestCall {
+        RestCall {
+            function_name: "do_call".to_string(),
+            function_hash: "h1".to_string(),
+            call_arguments: vec![],
+            http_method: Default::default(),
+            target_uri: target_uri.to_string(),
+            file_path: "/proj/caller/client.py".to_string(),
+            source_span: SourceSpan::new(0, 0),
+        }
     }
 
-    if restcall.target_uri.starts_with("http") {
-        return EvalState::Enough;
+    #[test]
+    fn empty_target_uri_is_junk() {
+        assert!(is_restcall_evaluated_enough(&restcall("")) == EvalState::Junk);
     }
 
-    if let Some(url) = restcall.target_uri.split('/').next()
-        && URL_ALLOWED_PATTERNS
-            .iter()
-            .any(|allowed_pattern| url.to_ascii_lowercase().contains(allowed_pattern))
-    {
-        return EvalState::NeedsLLM;
+    #[test]
+    fn http_url_is_resolved() {
+        assert!(
+            is_restcall_evaluated_enough(&restcall("http://medical-data-service:8000/x"))
+                == EvalState::ResolvedURL
+        );
     }
 
-    return EvalState::Junk;
+    #[test]
+    fn https_url_is_resolved() {
+        assert!(
+            is_restcall_evaluated_enough(&restcall("https://medical-data-service:8000/x"))
+                == EvalState::ResolvedURL
+        );
+    }
+
+    #[test]
+    fn url_named_residual_needs_resolution() {
+        // Was NeedsLLM under the old lexical gate; still forwarded.
+        assert!(
+            is_restcall_evaluated_enough(&restcall("self._mds_url + url"))
+                == EvalState::NeedsResolution
+        );
+    }
+
+    #[test]
+    fn bare_path_param_needs_resolution() {
+        // CRITICAL: under the OLD gate this was Junk -- the first `/`-segment
+        // "case_id" carries no url/uri token -- and it is exactly a recovered
+        // case. The structural gate now forwards it.
+        assert!(is_restcall_evaluated_enough(&restcall("case_id")) == EvalState::NeedsResolution);
+    }
+
+    #[test]
+    fn non_url_token_residual_needs_resolution() {
+        // Another previously-Junk case: no url/uri token anywhere.
+        assert!(
+            is_restcall_evaluated_enough(&restcall("self._client_base + path"))
+                == EvalState::NeedsResolution
+        );
+    }
 }

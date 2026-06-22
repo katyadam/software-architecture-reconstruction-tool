@@ -93,8 +93,56 @@ happen.
 
 ## Phase 1 — Structural gate
 
-- **S1.4 — Post-gate buckets** (`NeedsResolution` vs old `NeedsLLM`): _pending._
-- **Refreshed strong-vs-thin split** (real population): _pending._
+- **S1.1-S1.3 — Gate reworked** (2026-06-22). Lexical `url`/`uri` substring test
+  replaced by a structural rule in `restcalls.rs`. `EvalState` is now
+  `ResolvedURL | NeedsResolution | Junk`:
+  - empty `target_uri` -> `Junk`
+  - starts with `http` -> `ResolvedURL`
+  - any other non-empty residual -> `NeedsResolution`
+
+  Rationale: a `RestCall` already IS an HTTP call (it carries `http_method`), so
+  any non-empty residual eval did not turn into a URL is a real residual the
+  Phase 2 matcher should try, regardless of naming. `dispatch.rs` filter now
+  selects `NeedsResolution`. 6 unit tests added.
+- **S1.4 — Post-gate buckets** (new structural gate; measured 2026-06-22 via
+  `llm_enhance/baseline.rs`, observation-only, before any network dispatch).
+
+  | Bucket | empaia (577 total) | train-ticket (237 total) |
+  |---|---|---|
+  | `ResolvedURL` (http) | 449 (77%) | 213 (89%) |
+  | `NeedsResolution` (non-empty residual) | 128 (22%) | 24 (10%) |
+  | `Junk:empty` | 0 (0%) | 0 (0%) |
+  | **`Junk:non-empty`** | **0 (0%)** | **0 (0%)** |
+
+  Totals match the S0.3 baseline (577 / 237) -> same invocation, same population.
+
+- **Recovery — `NeedsResolution` vs old `NeedsLLM`:**
+
+  | Corpus | old `NeedsLLM` | new `NeedsResolution` | recovery |
+  |---|---|---|---|
+  | empaia | 18 | 128 | ~7.1x (= 18 + 110 old `Junk:non-empty`) |
+  | train-ticket | 2 | 24 | 12x (= 2 + 22 old `Junk:non-empty`) |
+
+  The new `NeedsResolution` count is exactly the old `NeedsLLM` plus the old
+  `Junk:non-empty` (the silent recall hole). No residual is lost or added.
+
+- **Refreshed strong-vs-thin split** (residual population = `NeedsResolution`):
+
+  | | empaia | train-ticket |
+  |---|---|---|
+  | residual total | 128 | 24 |
+  | strong (class **or** import-token overlap) | 127 (99%) | 24 (100%) |
+  | thin | 1 (0%) | 0 (0%) |
+  | empty `function_hash` | 0 (0%) | 0 (0%) |
+
+  Unchanged from S0.4 -> the population is identical (S0.4 already measured over
+  `NeedsLLM` + `Junk:non-empty`, which is exactly the new `NeedsResolution` set).
+
+- **`Junk:non-empty` is now structurally 0** on both corpora. Under the new
+  gate `Junk` is only returned for an empty `target_uri`, so a non-empty residual
+  can never be junked -> the silent recall hole is closed by construction, and
+  the 0 is the proof. (`baseline.rs` keeps the four-bucket breakdown to
+  demonstrate this; it is removed in S3.3 cleanup.)
 
 ---
 
@@ -128,3 +176,11 @@ happen.
   recall scorer (S0.2) does.
 - **2026-06-22** — Execution: Phase 0 implemented via Code Writer subagent per
   project CLAUDE.md agentic pipeline.
+- **2026-06-22 — NEXT ACTION (reorder).** Do **Phase 1 (gate rework, S1.1-S1.4)
+  next**, NOT S0.2, despite the plan's literal order. Reason: Phase 1 changes
+  the residual population (empaia 18 -> 128 forwarded), so building S0.2's
+  ground-truth/scorer against the old-gate population would have to be redone.
+  **S0.2 (scorer + auto-derived oracle) is deferred to immediately before M1**
+  (Phase 2 deterministic coverage), measured against the real post-gate
+  population. Phase 1 needs no oracle. Resume a cold session by spawning a Code
+  Writer for S1.1-S1.4 (see plan §9 Phase 1).

@@ -4,8 +4,13 @@
 //! hole created by the lexical gate `restcalls::is_restcall_evaluated_enough`
 //! (GATE A) and sizes the strong-vs-thin signal split (S0.4) over the residual
 //! population. It only observes -- it never changes the gate's behavior, the
-//! dispatch path, or any restcall. Remove this whole module once the Phase 1
-//! gate rework lands.
+//! dispatch path, or any restcall. Remove in S3.3 cleanup.
+//!
+//! Note (S1.4): under the NEW structural gate the gate can only return `Junk`
+//! when `target_uri` is empty, so the `Junk:non-empty` bucket -- the old silent
+//! recall hole -- is now structurally impossible (always 0). That 0 is the
+//! proof the hole is closed. The four-bucket breakdown is kept to demonstrate
+//! it.
 
 use log::info;
 use models::{ConfigurationData, RestCall, ir::project::ProjectIR};
@@ -17,27 +22,31 @@ use crate::pipeline::pass3::restcalls::{EvalState, is_restcall_evaluated_enough}
 /// noise now that the per-line dump is replaced by the aggregated summary).
 const SAMPLE_RESIDUAL_LINES: usize = 8;
 
-/// The four observation buckets, refining the old gate's three `EvalState`
+/// The four observation buckets, refining the gate's three `EvalState`
 /// variants by splitting `Junk` into empty vs non-empty target_uri.
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum Bucket {
-    /// `target_uri` starts with "http": resolved, skip LLM.
-    Enough,
-    /// Passes the url/uri lexical test: sent to resolver.
-    NeedsLlm,
+    /// `target_uri` starts with "http": resolved, skip resolution.
+    ResolvedUrl,
+    /// Non-empty, non-http residual: forwarded to the resolver.
+    NeedsResolution,
     /// `target_uri` is empty: nothing to resolve.
     JunkEmpty,
-    /// Non-empty, non-http, fails the lexical test -- the silent recall hole.
+    /// Non-empty + `Junk`: under the NEW structural gate this is unreachable
+    /// (the gate only junks empty targets), so this bucket is always 0 -- the
+    /// proof the old silent recall hole is closed.
     JunkNonEmpty,
 }
 
 /// Classify a single restcall into one of the four observation buckets. This
-/// mirrors the old gate exactly; for the two cases the gate collapses into
-/// `Junk`, it inspects `target_uri` to split empty from non-empty.
+/// mirrors the gate exactly; for the case the gate collapses into `Junk`, it
+/// inspects `target_uri` to split empty from non-empty. With the new
+/// structural gate `Junk` implies an empty `target_uri`, so `JunkNonEmpty` is
+/// never produced.
 fn classify(rc: &RestCall) -> Bucket {
     match is_restcall_evaluated_enough(rc) {
-        EvalState::Enough => Bucket::Enough,
-        EvalState::NeedsLLM => Bucket::NeedsLlm,
+        EvalState::ResolvedURL => Bucket::ResolvedUrl,
+        EvalState::NeedsResolution => Bucket::NeedsResolution,
         EvalState::Junk => {
             if rc.target_uri.is_empty() {
                 Bucket::JunkEmpty
@@ -82,41 +91,46 @@ pub(super) fn log_baseline_buckets(
     project_ir: &ProjectIR,
 ) {
     let total = restcalls.len();
-    let mut enough = 0usize;
-    let mut needs_llm = 0usize;
+    let mut resolved_url = 0usize;
+    let mut needs_resolution = 0usize;
     let mut junk_empty = 0usize;
     let mut junk_non_empty = 0usize;
 
     for rc in restcalls {
         match classify(rc) {
-            Bucket::Enough => enough += 1,
-            Bucket::NeedsLlm => needs_llm += 1,
+            Bucket::ResolvedUrl => resolved_url += 1,
+            Bucket::NeedsResolution => needs_resolution += 1,
             Bucket::JunkEmpty => junk_empty += 1,
             Bucket::JunkNonEmpty => junk_non_empty += 1,
         }
     }
 
-    info!("BASELINE BUCKETS (old lexical gate):");
+    info!("BASELINE BUCKETS (new structural gate):");
     info!("  total restcalls:        {total}");
-    info!("  Enough:                 {enough}   ({})", pct(enough, total));
     info!(
-        "  NeedsLLM:               {needs_llm}   ({})",
-        pct(needs_llm, total)
+        "  ResolvedURL:            {resolved_url}   ({})",
+        pct(resolved_url, total)
+    );
+    info!(
+        "  NeedsResolution:        {needs_resolution}   ({})",
+        pct(needs_resolution, total)
     );
     info!(
         "  Junk:empty:             {junk_empty}   ({})",
         pct(junk_empty, total)
     );
     info!(
-        "  Junk:non-empty:         {junk_non_empty}   ({})   <- silent recall hole",
+        "  Junk:non-empty:         {junk_non_empty}   ({})   <- structurally 0: recall hole closed",
         pct(junk_non_empty, total)
     );
 
     // Residual population = the calls a resolver *could* act on:
-    // NeedsLLM + Junk:non-empty (everything that is NOT Enough and NOT empty).
+    // NeedsResolution + Junk:non-empty (everything that is NOT ResolvedURL and
+    // NOT empty). Under the new gate Junk:non-empty is always 0, so this is
+    // exactly the NeedsResolution set.
     let residuals: Vec<&RestCall> = restcalls
         .iter()
-        .filter(|rc| matches!(classify(rc), Bucket::NeedsLlm | Bucket::JunkNonEmpty))
+        .filter(|rc| matches!(classify(rc), Bucket::NeedsResolution | Bucket::JunkNonEmpty))
         .collect();
 
     let residual_total = residuals.len();
@@ -151,7 +165,7 @@ pub(super) fn log_baseline_buckets(
     }
     let thin = residual_total - strong;
 
-    info!("STRONG-VS-THIN (residual population = NeedsLLM + Junk:non-empty):");
+    info!("STRONG-VS-THIN (residual population = NeedsResolution + Junk:non-empty):");
     info!("  residual total:         {residual_total}");
     info!(
         "  strong (class/import):  {strong}   ({})",

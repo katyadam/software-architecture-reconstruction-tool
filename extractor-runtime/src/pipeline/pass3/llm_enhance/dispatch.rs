@@ -62,7 +62,7 @@ fn collect_pending_queries(
     restcalls
         .iter()
         .enumerate()
-        .filter(|(_, rc)| is_restcall_evaluated_enough(rc) == EvalState::NeedsLLM)
+        .filter(|(_, rc)| is_restcall_evaluated_enough(rc) == EvalState::NeedsResolution)
         .filter_map(|(index, rc)| {
             let query = build_query_for_restcall(rc, variables, config, sage).or_else(|| {
                 warn!(
