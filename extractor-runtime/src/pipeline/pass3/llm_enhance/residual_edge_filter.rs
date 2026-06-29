@@ -209,6 +209,7 @@ mod tests {
             },
             constants: HashMap::new(),
             callable_map: HashMap::new(),
+            callables_by_file_hash: HashMap::new(),
         }
     }
 

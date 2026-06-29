@@ -35,24 +35,11 @@ pub(super) fn extract(
 ) -> CallSiteSignals {
     let origin_service = microservice_for_file(&rc.file_path, config);
 
-    // NOTE: `project_ir.callable_map` is keyed by *mangled name*, not by hash
-    // (see pass2::callables::build_project_global_callables), so a direct
-    // `callable_map.get(function_hash)` never hits. The per-file `callables`
-    // carry the real `hash` and `namespace`, so resolve the enclosing callable
-    // by scanning the owning file's callables for a matching hash.
-    let client_class = (!rc.function_hash.is_empty())
-        .then(|| {
-            project_ir
-                .files
-                .iter()
-                .find(|f| f.file_path == rc.file_path)
-                .and_then(|f| {
-                    f.callables
-                        .iter()
-                        .find(|c| c.metadata.hash == rc.function_hash)
-                })
-        })
-        .flatten()
+    // Resolve the enclosing callable via the `(file_path, hash)` index (built in
+    // pass2). `function_hash` is a content hash -- not unique across files -- so
+    // the index is scoped by file_path; see `ProjectIR::enclosing_callable`.
+    let client_class = project_ir
+        .enclosing_callable(&rc.file_path, &rc.function_hash)
         .and_then(|callable| match &callable.metadata.namespace {
             Namespace::Class(name) => Some(name.clone()),
             Namespace::Module(_) => None,
@@ -170,8 +157,11 @@ mod tests {
     }
 
     fn project_ir(files: Vec<TypedFileRecord>) -> ProjectIR {
-        // callable_map is keyed by mangled name in production; the signal
-        // extractor deliberately does not rely on it, so it stays empty here.
+        // callable_map (mangled name) is unused by the signal extractor, so it
+        // stays empty; the `(file_path, hash)` index IS used for client_class, so
+        // build it from the files exactly as production does.
+        let callables_by_file_hash =
+            crate::pipeline::pass2::callables::build_callables_by_file_hash(&files);
         ProjectIR {
             files,
             import_graph: ImportGraph {
@@ -183,6 +173,7 @@ mod tests {
             },
             constants: HashMap::new(),
             callable_map: HashMap::new(),
+            callables_by_file_hash,
         }
     }
 
@@ -216,7 +207,7 @@ mod tests {
     }
 
     #[test]
-    fn class_recovered_from_callable_map() {
+    fn class_recovered_from_callable_index() {
         let file = "/proj/caller/client.py";
         let pir = project_ir(vec![typed_file(
             file,

@@ -5,7 +5,8 @@ use models::ir::{
 use statix::{class_hierarchy::build_class_hierarchy, import_graph::build_import_graph};
 
 use crate::pipeline::pass2::{
-    callables::build_project_global_callables, constants::collect_constants,
+    callables::{build_callables_by_file_hash, build_project_global_callables},
+    constants::collect_constants,
     entities::resolve_entity_fields, restcalls::re_identify_restcalls,
     type_inference::resolve_call_argument_types,
 };
@@ -39,6 +40,7 @@ pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
 
     let constants = collect_constants(&files);
     let callable_map = build_project_global_callables(&files);
+    let callables_by_file_hash = build_callables_by_file_hash(&files);
 
     ProjectIR {
         files,
@@ -46,5 +48,6 @@ pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
         class_hierarchy,
         constants,
         callable_map,
+        callables_by_file_hash,
     }
 }

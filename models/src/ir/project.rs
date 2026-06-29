@@ -11,7 +11,26 @@ pub struct ProjectIR {
     pub import_graph: ImportGraph,
     pub class_hierarchy: ClassHierarchy,
     pub constants: HashMap<String, ConstantValue>,
+    /// Callables keyed by *mangled name* -- the lookup when you know the symbol.
     pub callable_map: HashMap<String, ParsedCallable>,
+    /// Callables keyed by `(file_path, content-hash)` -- the lookup when you know
+    /// a call site. Companion to [`Self::callable_map`]: `function_hash` is a
+    /// *content* hash (identical bodies collide across files), so it is paired
+    /// with `file_path` to scope the lookup to the owning file.
+    pub callables_by_file_hash: HashMap<(String, String), ParsedCallable>,
+}
+
+impl ProjectIR {
+    /// Resolve the callable enclosing a call site by its `(file_path, hash)`.
+    /// Returns `None` for an empty hash or a miss. Safe against cross-file hash
+    /// collisions because the key is scoped by `file_path`.
+    pub fn enclosing_callable(&self, file_path: &str, hash: &str) -> Option<&ParsedCallable> {
+        if hash.is_empty() {
+            return None;
+        }
+        self.callables_by_file_hash
+            .get(&(file_path.to_string(), hash.to_string()))
+    }
 }
 
 /// A FileRecord with resolved types.
