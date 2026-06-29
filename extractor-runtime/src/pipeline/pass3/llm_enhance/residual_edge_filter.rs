@@ -47,10 +47,7 @@ pub(super) enum ResidualEdge {
 /// over-matches -- `BASE` hits `database`, `PORT` hits `report`. None of
 /// empaia's observed non-edge operands (`class_id`, `annotation_id`, `item_id`,
 /// `collection_id`) trip these, so it is not corrected here.
-pub(super) fn classify_residual(
-    rc: &models::RestCall,
-    signals: &CallSiteSignals,
-) -> ResidualEdge {
+pub(super) fn classify_residual(rc: &models::RestCall, signals: &CallSiteSignals) -> ResidualEdge {
     // Rules 1 & 2: target itself is a URL/path expression.
     if rc.target_uri.contains("http") || rc.target_uri.contains('/') {
         return ResidualEdge::CrossService;
@@ -142,10 +139,7 @@ mod tests {
         // `self._mds_url + url` -> url-hint on operand.
         let rc = restcall("self._mds_url + url");
         let s = signals(&["self", "_mds_url", "url"], &["medical-data-service"]);
-        assert_eq!(
-            classify_residual(&rc, &s),
-            ResidualEdge::CrossService
-        );
+        assert_eq!(classify_residual(&rc, &s), ResidualEdge::CrossService);
     }
 
     #[test]
@@ -165,10 +159,7 @@ mod tests {
     fn http_literal_is_cross_service() {
         let rc = restcall("http://x/y");
         let s = signals(&[], &[]);
-        assert_eq!(
-            classify_residual(&rc, &s),
-            ResidualEdge::CrossService
-        );
+        assert_eq!(classify_residual(&rc, &s), ResidualEdge::CrossService);
     }
 
     #[test]
@@ -176,10 +167,7 @@ mod tests {
         // `base + "/cases"` contains a path separator.
         let rc = restcall("base + \"/cases\"");
         let s = signals(&["base"], &[]);
-        assert_eq!(
-            classify_residual(&rc, &s),
-            ResidualEdge::CrossService
-        );
+        assert_eq!(classify_residual(&rc, &s), ResidualEdge::CrossService);
     }
 
     // --- triage (S1.7): gate composed with edge filter ---

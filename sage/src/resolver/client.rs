@@ -171,7 +171,11 @@ fn trace_query(query: &SageQuery, raw_response: &str, outcome: &Result<SageRespo
         }
     };
 
-    let mut file = match std::fs::OpenOptions::new().append(true).create(true).open(&path) {
+    let mut file = match std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&path)
+    {
         Ok(f) => f,
         Err(e) => {
             log::warn!("SAGE_TRACE: failed to open trace file {path:?}: {e}");

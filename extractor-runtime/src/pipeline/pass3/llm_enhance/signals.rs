@@ -8,11 +8,7 @@
 
 use std::collections::BTreeSet;
 
-use models::{
-    ConfigurationData, RestCall,
-    callables::Namespace,
-    ir::project::ProjectIR,
-};
+use models::{ConfigurationData, RestCall, callables::Namespace, ir::project::ProjectIR};
 
 use crate::pipeline::pass1::decide_language;
 use crate::pipeline::pass3::llm_enhance::variables::microservice_for_file;
@@ -225,7 +221,11 @@ mod tests {
         let pir = project_ir(vec![typed_file(
             file,
             vec![],
-            vec![callable("h1", file, Namespace::Class("ApiClient".to_string()))],
+            vec![callable(
+                "h1",
+                file,
+                Namespace::Class("ApiClient".to_string()),
+            )],
         )]);
         let rc = restcall(file, "h1", "self.url + '/x'");
         let signals = extract(&rc, &pir, &config());
@@ -239,7 +239,11 @@ mod tests {
         let pir = project_ir(vec![typed_file(
             file,
             vec![],
-            vec![callable("h1", file, Namespace::Module("client".to_string()))],
+            vec![callable(
+                "h1",
+                file,
+                Namespace::Module("client".to_string()),
+            )],
         )]);
         let rc = restcall(file, "h1", "url + '/x'");
         let signals = extract(&rc, &pir, &config());

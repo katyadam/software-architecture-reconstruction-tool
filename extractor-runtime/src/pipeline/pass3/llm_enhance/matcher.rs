@@ -212,7 +212,11 @@ mod tests {
 
     #[test]
     fn class_unique_accept() {
-        let cfg = config(&["medical-data-service", "clinical-data-service", "app-service"]);
+        let cfg = config(&[
+            "medical-data-service",
+            "clinical-data-service",
+            "app-service",
+        ]);
         let s = signals("app-service", Some("MedicalDataServiceClient"), &[], &[]);
         let hit = deterministic_match(&s, &cfg).expect("should match");
         assert_eq!(hit.name, "medical-data-service");
@@ -220,7 +224,11 @@ mod tests {
 
     #[test]
     fn operand_acronym_unique_accept() {
-        let cfg = config(&["clinical-data-service", "medical-data-service", "app-service"]);
+        let cfg = config(&[
+            "clinical-data-service",
+            "medical-data-service",
+            "app-service",
+        ]);
         let s = signals("app-service", None, &[], &["cds_url"]);
         let hit = deterministic_match(&s, &cfg).expect("should match");
         assert_eq!(hit.name, "clinical-data-service");
@@ -250,7 +258,11 @@ mod tests {
 
     #[test]
     fn untelling_operand_no_match() {
-        let cfg = config(&["medical-data-service", "clinical-data-service", "app-service"]);
+        let cfg = config(&[
+            "medical-data-service",
+            "clinical-data-service",
+            "app-service",
+        ]);
         let s = signals("app-service", None, &[], &["base_url"]);
         assert!(deterministic_match(&s, &cfg).is_none());
     }
@@ -271,7 +283,11 @@ mod tests {
 
     #[test]
     fn import_token_subset_accept() {
-        let cfg = config(&["medical-data-service", "clinical-data-service", "app-service"]);
+        let cfg = config(&[
+            "medical-data-service",
+            "clinical-data-service",
+            "app-service",
+        ]);
         let s = signals(
             "app-service",
             None,

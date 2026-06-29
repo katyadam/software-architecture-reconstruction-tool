@@ -93,8 +93,14 @@ mod tests {
     fn oracle() -> ServiceOracle {
         let config = ConfigurationData {
             service_descriptions: vec![
-                svc("medical-data-service", &["http://medical-data-service:8000"]),
-                svc("clinical-data-service", &["http://clinical-data-service:8000"]),
+                svc(
+                    "medical-data-service",
+                    &["http://medical-data-service:8000"],
+                ),
+                svc(
+                    "clinical-data-service",
+                    &["http://clinical-data-service:8000"],
+                ),
             ],
         };
         let constants = vec![

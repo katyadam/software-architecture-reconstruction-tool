@@ -15,9 +15,9 @@
 use log::info;
 use models::{ConfigurationData, RestCall, ir::project::ProjectIR};
 
-use crate::pipeline::pass3::llm_enhance::residual_edge_filter::{ResidualEdge, classify_residual};
 use crate::pipeline::pass3::llm_enhance::matcher::deterministic_match;
 use crate::pipeline::pass3::llm_enhance::oracle::ServiceOracle;
+use crate::pipeline::pass3::llm_enhance::residual_edge_filter::{ResidualEdge, classify_residual};
 use crate::pipeline::pass3::llm_enhance::scorer::{ProducedEdge, score};
 use crate::pipeline::pass3::llm_enhance::signals;
 use crate::pipeline::pass3::restcalls::{EvalState, is_restcall_evaluated_enough};
@@ -83,7 +83,9 @@ fn import_matches_a_service(imports: &[String], candidate_services: &[String]) -
     }
     imports.iter().any(|imp| {
         let lower = imp.to_ascii_lowercase();
-        service_tokens.iter().any(|tok| lower.contains(tok.as_str()))
+        service_tokens
+            .iter()
+            .any(|tok| lower.contains(tok.as_str()))
     })
 }
 
@@ -147,8 +149,8 @@ pub(super) fn log_baseline_buckets(
             empty_hash += 1;
         }
         let s = signals::extract(rc, project_ir, config);
-        let is_strong = s.client_class.is_some()
-            || import_matches_a_service(&s.imports, &s.candidate_services);
+        let is_strong =
+            s.client_class.is_some() || import_matches_a_service(&s.imports, &s.candidate_services);
         if is_strong {
             strong += 1;
         }
@@ -175,7 +177,10 @@ pub(super) fn log_baseline_buckets(
         "  strong (class/import):  {strong}   ({})",
         pct(strong, residual_total)
     );
-    info!("  thin:                   {thin}   ({})", pct(thin, residual_total));
+    info!(
+        "  thin:                   {thin}   ({})",
+        pct(thin, residual_total)
+    );
     info!(
         "  empty function_hash:    {empty_hash}   ({})   <- class unrecoverable regardless",
         pct(empty_hash, residual_total)
