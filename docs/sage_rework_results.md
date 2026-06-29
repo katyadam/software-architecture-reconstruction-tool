@@ -235,6 +235,31 @@ happen.
   77/152 over the polluted set). Caveat: 60% is *coverage*, not precision;
   precision is still only spot-checkable on the 11-sample oracle (2/3). The 43
   cross-service set is what Phase 2 should actually resolve.
+- **S1.7 — Unified triage + enforcement:** _done (2026-06-29)._ New
+  `residual_edge_filter::triage(rc, project_ir, config) -> ResidualTriage`
+  composes the structural gate with the edge filter into ONE decision:
+  `ResidualTriage { Resolved | Empty | NonEdge | NeedsResolution }`. `Resolved`
+  (gate `ResolvedURL`) and `Empty` (gate `Junk`) come straight from the gate; a
+  gate `NeedsResolution` is refined via `classify_residual` into `NeedsResolution`
+  (genuine cross-service residual -> forward) vs `NonEdge` (DB/dict/route noise ->
+  drop). `Empty` and `NonEdge` stay DISTINCT so the two drop reasons remain
+  auditable. Signals are extracted LAZILY -- only on a gate `NeedsResolution` --
+  so the bulk `ResolvedURL`/`Junk` calls never pay for `signals::extract`.
+  - **Enforcement.** `dispatch.rs::collect_pending_queries` now filters on
+    `triage(...) == NeedsResolution` (was `is_restcall_evaluated_enough(rc) ==
+    NeedsResolution`), so the ~71% non-edge population is excluded from LLM
+    resolution. `evaluate_restcalls_with_llm` logs an `info!` with the non-edge
+    exclusion count. Enforcement is confined to the LLM dispatch path; the non-LLM
+    `evaluate` path does no resolution, so nothing there changes.
+  - `classify_residual`/`ResidualEdge` unchanged (still used by `baseline.rs`'s
+    measurement-only EDGE HYGIENE block, removed in S3.3).
+  - **Live numbers (empaia, `--scrape`, 2026-06-29).** Confirmed end-to-end:
+    gate `NeedsResolution` = 152; edge filter splits 43 cross-service / 109
+    non-edge; dispatch log: `residual edge filter: excluded 109 non-edge
+    residual(s) from resolution`, then `Number of REST calls to evaluate with
+    LLM: 43`. So the resolver/LLM population dropped **152 -> 43** (-72%); the
+    109 non-edges (DB/dict/route noise) no longer reach resolution. This is the
+    first behavior change in the live path since Phase 1.
 
 ---
 

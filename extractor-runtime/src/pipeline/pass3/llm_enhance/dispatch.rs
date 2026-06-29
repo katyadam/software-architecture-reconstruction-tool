@@ -9,10 +9,10 @@ use sage::resolver::{
     response::{SageError, SageResponse},
 };
 
-use crate::pipeline::pass3::{
-    llm_enhance::baseline::log_baseline_buckets,
-    llm_enhance::query_builder::{build_query_for_restcall, rewrite_target_uri_with_resolution},
-    restcalls::{EvalState, is_restcall_evaluated_enough},
+use crate::pipeline::pass3::llm_enhance::{
+    baseline::log_baseline_buckets,
+    query_builder::{build_query_for_restcall, rewrite_target_uri_with_resolution},
+    residual_edge_filter::{ResidualTriage, triage},
 };
 
 const MAX_CONCURRENT_LLM_QUERIES: usize = 4;
@@ -44,7 +44,18 @@ pub async fn evaluate_restcalls_with_llm(
     // sample residual lines are still printed by the measurement itself.)
     log_baseline_buckets(restcalls, config, project_ir);
 
-    let pending = collect_pending_queries(restcalls, &variables, config, sage);
+    // S1.7: report how many residuals the unified triage drops as non-edges
+    // (intra-service DB/dict/route reads the lexical identifier swept in) before
+    // they would have reached the LLM. Cheap second pass; signals are lazy.
+    let excluded_non_edges = restcalls
+        .iter()
+        .filter(|rc| triage(rc, project_ir, config) == ResidualTriage::NonEdge)
+        .count();
+    info!(
+        "residual edge filter: excluded {excluded_non_edges} non-edge residual(s) from resolution"
+    );
+
+    let pending = collect_pending_queries(restcalls, &variables, config, sage, project_ir);
     info!(
         "Number of REST calls to evaluate with LLM: {}",
         pending.len()
@@ -58,11 +69,12 @@ fn collect_pending_queries(
     variables: &HashMap<VariableAddress, String>,
     config: &ConfigurationData,
     sage: &SageClient,
+    project_ir: &ProjectIR,
 ) -> Vec<PendingQuery> {
     restcalls
         .iter()
         .enumerate()
-        .filter(|(_, rc)| is_restcall_evaluated_enough(rc) == EvalState::NeedsResolution)
+        .filter(|(_, rc)| triage(rc, project_ir, config) == ResidualTriage::NeedsResolution)
         .filter_map(|(index, rc)| {
             let query = build_query_for_restcall(rc, variables, config, sage).or_else(|| {
                 warn!(

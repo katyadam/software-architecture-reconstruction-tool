@@ -9,11 +9,14 @@
 //! which are cross-service HTTP edges. This module classifies a residual as a
 //! genuine cross-service call or a `NonEdge` by the URL-nature of its target.
 //!
-//! MEASUREMENT-ONLY (S1.5): nothing here changes what the matcher or dispatch
-//! sees. Enforcement (dropping `NonEdge`s before resolution) is S1.7. See plan
-//! §4 Phase 1.5.
+//! `classify_residual` is MEASUREMENT-ONLY (S1.5): it changes nothing the matcher
+//! or dispatch sees; `baseline.rs` consumes it for its `EDGE HYGIENE` block.
+//! Enforcement lives in [`triage`] (S1.7), which composes the gate with the edge
+//! filter and is what `dispatch.rs` uses to DROP `NonEdge`s before resolution.
+//! See plan §4 Phase 1.5.
 
-use crate::pipeline::pass3::llm_enhance::signals::CallSiteSignals;
+use crate::pipeline::pass3::llm_enhance::signals::{self, CallSiteSignals};
+use crate::pipeline::pass3::restcalls::{EvalState, is_restcall_evaluated_enough};
 
 /// Whether a `NeedsResolution` residual is a genuine cross-service HTTP call or
 /// a non-edge (intra-service DB/dict `.get`, route-internal read) that the
@@ -61,6 +64,41 @@ pub(super) fn classify_residual(
         return ResidualEdge::CrossService;
     }
     ResidualEdge::NonEdge
+}
+
+/// The single residual decision: gate (`restcalls::is_restcall_evaluated_enough`)
+/// composed with the edge filter ([`classify_residual`]). `Resolved`/`Empty` come
+/// from the gate; a gate `NeedsResolution` is refined into `NeedsResolution`
+/// (genuine cross-service residual -> forward) vs `NonEdge` (DB/dict/route noise
+/// -> drop). `Empty` and `NonEdge` are kept DISTINCT so the two drop reasons stay
+/// auditable. See plan §4 Phase 1.5.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub(super) enum ResidualTriage {
+    Resolved,
+    Empty,
+    NonEdge,
+    NeedsResolution,
+}
+
+/// Triage a residual. Signals are computed LAZILY -- only on a gate
+/// `NeedsResolution` -- so the bulk `ResolvedURL`/`Junk` calls never pay for
+/// `signals::extract`.
+pub(super) fn triage(
+    rc: &models::RestCall,
+    project_ir: &models::ir::project::ProjectIR,
+    config: &models::ConfigurationData,
+) -> ResidualTriage {
+    match is_restcall_evaluated_enough(rc) {
+        EvalState::ResolvedURL => ResidualTriage::Resolved,
+        EvalState::Junk => ResidualTriage::Empty,
+        EvalState::NeedsResolution => {
+            let signals = signals::extract(rc, project_ir, config);
+            match classify_residual(rc, &signals) {
+                ResidualEdge::CrossService => ResidualTriage::NeedsResolution,
+                ResidualEdge::NonEdge => ResidualTriage::NonEdge,
+            }
+        }
+    }
 }
 
 /// Mirrors `ranking.rs::name_hints_url` (private there; replicated so this
@@ -141,6 +179,86 @@ mod tests {
         assert_eq!(
             classify_residual(&rc, &s),
             ResidualEdge::CrossService
+        );
+    }
+
+    // --- triage (S1.7): gate composed with edge filter ---
+
+    use models::{
+        ConfigurationData,
+        configuration::ServiceDescription,
+        ir::project::{ClassHierarchy, ImportGraph, ProjectIR},
+    };
+    use std::collections::HashMap;
+
+    fn triage_config() -> ConfigurationData {
+        ConfigurationData {
+            service_descriptions: vec![
+                ServiceDescription {
+                    name: "caller-service".to_string(),
+                    base_dir_path: "/proj/caller".to_string(),
+                    urls: vec![],
+                },
+                ServiceDescription {
+                    name: "medical-data-service".to_string(),
+                    base_dir_path: "/proj/mds".to_string(),
+                    urls: vec![],
+                },
+            ],
+        }
+    }
+
+    // Empty `files` is fine: triage's operands come from `target_uri`, not the IR.
+    fn triage_pir() -> ProjectIR {
+        ProjectIR {
+            files: vec![],
+            import_graph: ImportGraph {
+                resolved_imports: HashMap::new(),
+            },
+            class_hierarchy: ClassHierarchy {
+                parents: HashMap::new(),
+                children: HashMap::new(),
+            },
+            constants: HashMap::new(),
+            callable_map: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn triage_http_target_is_resolved() {
+        let rc = restcall("http://medical-data-service:8000/x");
+        assert_eq!(
+            triage(&rc, &triage_pir(), &triage_config()),
+            ResidualTriage::Resolved
+        );
+    }
+
+    #[test]
+    fn triage_empty_target_is_empty() {
+        let rc = restcall("");
+        assert_eq!(
+            triage(&rc, &triage_pir(), &triage_config()),
+            ResidualTriage::Empty
+        );
+    }
+
+    #[test]
+    fn triage_url_hint_operand_needs_resolution() {
+        // `self._mds_url + url` -> gate NeedsResolution, edge filter CrossService.
+        let rc = restcall("self._mds_url + url");
+        assert_eq!(
+            triage(&rc, &triage_pir(), &triage_config()),
+            ResidualTriage::NeedsResolution
+        );
+    }
+
+    #[test]
+    fn triage_bare_id_param_is_non_edge() {
+        // `class_id` -> gate NeedsResolution, edge filter NonEdge -> dropped.
+        let rc = restcall("class_id");
+        assert_eq!(
+            triage(&rc, &triage_pir(), &triage_config()),
+            ResidualTriage::NonEdge
         );
     }
 
