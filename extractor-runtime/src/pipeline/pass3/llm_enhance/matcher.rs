@@ -212,7 +212,6 @@ mod tests {
             client_class: client_class.map(|c| c.to_string()),
             imports: imports.iter().map(|s| s.to_string()).collect(),
             operand_identifiers: operands.iter().map(|s| s.to_string()).collect(),
-            candidate_services: vec![],
         }
     }
 

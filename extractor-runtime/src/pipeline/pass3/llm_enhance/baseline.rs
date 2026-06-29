@@ -144,13 +144,20 @@ pub(super) fn log_baseline_buckets(
     let mut empty_hash = 0usize;
     let mut samples_printed = 0usize;
 
+    // Config service names: identical for every residual, so derive once.
+    let candidate_services: Vec<String> = config
+        .service_descriptions
+        .iter()
+        .map(|s| s.name.clone())
+        .collect();
+
     for rc in &residuals {
         if rc.function_hash.is_empty() {
             empty_hash += 1;
         }
         let s = signals::extract(rc, project_ir, config);
         let is_strong =
-            s.client_class.is_some() || import_matches_a_service(&s.imports, &s.candidate_services);
+            s.client_class.is_some() || import_matches_a_service(&s.imports, &candidate_services);
         if is_strong {
             strong += 1;
         }

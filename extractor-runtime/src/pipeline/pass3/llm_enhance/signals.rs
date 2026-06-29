@@ -23,8 +23,6 @@ pub(super) struct CallSiteSignals {
     pub imports: Vec<String>,
     /// Identifiers appearing in the residual `target_uri` expression.
     pub operand_identifiers: Vec<String>,
-    /// Config service names: the closed set the answer must come from.
-    pub candidate_services: Vec<String>,
 }
 
 /// Extract [`CallSiteSignals`] for a residual REST call.
@@ -60,18 +58,11 @@ pub(super) fn extract(
             .into_iter()
             .collect();
 
-    let candidate_services = config
-        .service_descriptions
-        .iter()
-        .map(|s| s.name.clone())
-        .collect();
-
     CallSiteSignals {
         origin_service,
         client_class,
         imports,
         operand_identifiers,
-        candidate_services,
     }
 }
 
@@ -279,20 +270,5 @@ mod tests {
         let signals = extract(&rc, &pir, &config());
         assert!(signals.imports.contains(&"singletons.base_url".to_string()));
         assert!(signals.imports.contains(&"os.environ as env".to_string()));
-    }
-
-    #[test]
-    fn candidate_services_mirror_config() {
-        let file = "/proj/caller/client.py";
-        let pir = project_ir(vec![typed_file(file, vec![], vec![])]);
-        let rc = restcall(file, "absent", "url");
-        let signals = extract(&rc, &pir, &config());
-        assert_eq!(
-            signals.candidate_services,
-            vec![
-                "caller-service".to_string(),
-                "medical-data-service".to_string(),
-            ]
-        );
     }
 }

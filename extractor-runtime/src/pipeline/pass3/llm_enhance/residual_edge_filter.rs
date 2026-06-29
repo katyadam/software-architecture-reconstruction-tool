@@ -112,13 +112,12 @@ mod tests {
     use super::*;
     use models::{RestCall, source_code::SourceSpan};
 
-    fn signals(operands: &[&str], candidate_services: &[&str]) -> CallSiteSignals {
+    fn signals(operands: &[&str]) -> CallSiteSignals {
         CallSiteSignals {
             origin_service: "caller-service".to_string(),
             client_class: None,
             imports: vec![],
             operand_identifiers: operands.iter().map(|s| s.to_string()).collect(),
-            candidate_services: candidate_services.iter().map(|s| s.to_string()).collect(),
         }
     }
 
@@ -138,7 +137,7 @@ mod tests {
     fn mds_url_operand_is_cross_service() {
         // `self._mds_url + url` -> url-hint on operand.
         let rc = restcall("self._mds_url + url");
-        let s = signals(&["self", "_mds_url", "url"], &["medical-data-service"]);
+        let s = signals(&["self", "_mds_url", "url"]);
         assert_eq!(classify_residual(&rc, &s), ResidualEdge::CrossService);
     }
 
@@ -146,7 +145,7 @@ mod tests {
     fn bare_path_params_are_non_edges() {
         for target in ["class_id", "annotation_id", "item_id", "collection_id"] {
             let rc = restcall(target);
-            let s = signals(&[target], &["app-service", "billing-service"]);
+            let s = signals(&[target]);
             assert_eq!(
                 classify_residual(&rc, &s),
                 ResidualEdge::NonEdge,
@@ -158,7 +157,7 @@ mod tests {
     #[test]
     fn http_literal_is_cross_service() {
         let rc = restcall("http://x/y");
-        let s = signals(&[], &[]);
+        let s = signals(&[]);
         assert_eq!(classify_residual(&rc, &s), ResidualEdge::CrossService);
     }
 
@@ -166,7 +165,7 @@ mod tests {
     fn path_in_target_is_cross_service() {
         // `base + "/cases"` contains a path separator.
         let rc = restcall("base + \"/cases\"");
-        let s = signals(&["base"], &[]);
+        let s = signals(&["base"]);
         assert_eq!(classify_residual(&rc, &s), ResidualEdge::CrossService);
     }
 
@@ -251,22 +250,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn id_param_sharing_a_service_token_is_still_non_edge() {
-        // Regression for the dropped rule 4: `class_id` shares `id` with
-        // `id-mapper-service` and `annotation_id` shares `annotation` with
-        // `annotation-service`, yet both are local id-param reads, not edges.
-        for target in ["class_id", "annotation_id"] {
-            let rc = restcall(target);
-            let s = signals(
-                &[target],
-                &["id-mapper-service", "annotation-service", "app-service"],
-            );
-            assert_eq!(
-                classify_residual(&rc, &s),
-                ResidualEdge::NonEdge,
-                "expected NonEdge for {target}"
-            );
-        }
-    }
 }
