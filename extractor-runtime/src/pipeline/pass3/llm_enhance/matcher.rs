@@ -17,7 +17,7 @@ use crate::pipeline::pass3::llm_enhance::tokens::{RECEIVER_KEYWORDS, split_camel
 const GENERIC_TOKENS: [&str; 6] = ["service", "client", "url", "uri", "api", "http"];
 
 /// A configured service reduced to its match keys.
-struct IndexedService<'a> {
+pub(super) struct IndexedService<'a> {
     desc: &'a ServiceDescription,
     /// Stripped, lowercased token set (generics removed). e.g. {medical,data}.
     tokens: BTreeSet<String>,
@@ -25,8 +25,10 @@ struct IndexedService<'a> {
     acronym: String,
 }
 
-/// Build the per-service match index over the configured service set.
-fn build_index(config: &ConfigurationData) -> Vec<IndexedService<'_>> {
+/// Build the per-service match index over the configured service set. Build it
+/// ONCE and reuse it across call sites -- [`deterministic_match`] takes the index
+/// rather than the config so the per-residual loop does not rebuild it.
+pub(super) fn build_index(config: &ConfigurationData) -> Vec<IndexedService<'_>> {
     config
         .service_descriptions
         .iter()
@@ -149,18 +151,16 @@ fn match_operands(index: &[IndexedService], identifiers: &[String]) -> Vec<usize
 /// next. Returns the matched service, or `None` to defer to the LLM.
 pub(super) fn deterministic_match(
     signals: &CallSiteSignals,
-    config: &ConfigurationData,
+    index: &[IndexedService],
 ) -> Option<ServiceDescription> {
-    let index = build_index(config);
-
     let groups: [Vec<usize>; 3] = [
         signals
             .client_class
             .as_deref()
-            .map(|c| match_client_class(&index, c))
+            .map(|c| match_client_class(index, c))
             .unwrap_or_default(),
-        match_imports(&index, &signals.imports),
-        match_operands(&index, &signals.operand_identifiers),
+        match_imports(index, &signals.imports),
+        match_operands(index, &signals.operand_identifiers),
     ];
 
     for group in groups {
@@ -195,6 +195,12 @@ mod tests {
         }
     }
 
+    /// Build the index from a config and match in one step (mirrors how callers
+    /// build the index once, then match per call site).
+    fn resolve(s: &CallSiteSignals, cfg: &ConfigurationData) -> Option<ServiceDescription> {
+        deterministic_match(s, &build_index(cfg))
+    }
+
     fn signals(
         origin: &str,
         client_class: Option<&str>,
@@ -218,7 +224,7 @@ mod tests {
             "app-service",
         ]);
         let s = signals("app-service", Some("MedicalDataServiceClient"), &[], &[]);
-        let hit = deterministic_match(&s, &cfg).expect("should match");
+        let hit = resolve(&s, &cfg).expect("should match");
         assert_eq!(hit.name, "medical-data-service");
     }
 
@@ -230,7 +236,7 @@ mod tests {
             "app-service",
         ]);
         let s = signals("app-service", None, &[], &["cds_url"]);
-        let hit = deterministic_match(&s, &cfg).expect("should match");
+        let hit = resolve(&s, &cfg).expect("should match");
         assert_eq!(hit.name, "clinical-data-service");
     }
 
@@ -239,7 +245,7 @@ mod tests {
         let cfg = config(&["event-service", "examination-service", "app-service"]);
         let s = signals("app-service", None, &[], &["es_url"]);
         // `es` acronym matches BOTH event-service and examination-service.
-        assert!(deterministic_match(&s, &cfg).is_none());
+        assert!(resolve(&s, &cfg).is_none());
     }
 
     #[test]
@@ -252,7 +258,7 @@ mod tests {
             &["es_url"],
         );
         // class group resolves uniquely before the ambiguous operand acronym.
-        let hit = deterministic_match(&s, &cfg).expect("class should fire first");
+        let hit = resolve(&s, &cfg).expect("class should fire first");
         assert_eq!(hit.name, "examination-service");
     }
 
@@ -264,7 +270,7 @@ mod tests {
             "app-service",
         ]);
         let s = signals("app-service", None, &[], &["base_url"]);
-        assert!(deterministic_match(&s, &cfg).is_none());
+        assert!(resolve(&s, &cfg).is_none());
     }
 
     #[test]
@@ -278,7 +284,7 @@ mod tests {
             &[],
             &[],
         );
-        assert!(deterministic_match(&s, &cfg).is_none());
+        assert!(resolve(&s, &cfg).is_none());
     }
 
     #[test]
@@ -294,7 +300,7 @@ mod tests {
             &["custom_clients.medical_data_service.MedicalDataServiceClient"],
             &[],
         );
-        let hit = deterministic_match(&s, &cfg).expect("import should match");
+        let hit = resolve(&s, &cfg).expect("import should match");
         assert_eq!(hit.name, "medical-data-service");
     }
 
@@ -302,7 +308,7 @@ mod tests {
     fn operand_full_word_token_subset_accept() {
         let cfg = config(&["annotation-service", "app-service"]);
         let s = signals("app-service", None, &[], &["annotation_url"]);
-        let hit = deterministic_match(&s, &cfg).expect("word should match");
+        let hit = resolve(&s, &cfg).expect("word should match");
         assert_eq!(hit.name, "annotation-service");
     }
 }

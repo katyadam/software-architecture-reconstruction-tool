@@ -15,7 +15,7 @@
 use log::info;
 use models::{ConfigurationData, RestCall, ir::project::ProjectIR};
 
-use crate::pipeline::pass3::llm_enhance::matcher::deterministic_match;
+use crate::pipeline::pass3::llm_enhance::matcher::{build_index, deterministic_match};
 use crate::pipeline::pass3::llm_enhance::oracle::ServiceOracle;
 use crate::pipeline::pass3::llm_enhance::residual_edge_filter::{ResidualEdge, classify_residual};
 use crate::pipeline::pass3::llm_enhance::scorer::{ProducedEdge, score};
@@ -206,9 +206,10 @@ fn log_deterministic_coverage(
     let mut non_edge = 0usize;
     let mut det_hits_on_cross = 0usize;
     let mut produced = Vec::with_capacity(residuals.len());
+    let index = build_index(config);
     for rc in residuals {
         let s = signals::extract(rc, project_ir, config);
-        let chosen = deterministic_match(&s, config).map(|svc| svc.name);
+        let chosen = deterministic_match(&s, &index).map(|svc| svc.name);
         if chosen.is_some() {
             hits += 1;
         }
