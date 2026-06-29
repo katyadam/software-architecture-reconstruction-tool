@@ -15,6 +15,10 @@
 use log::info;
 use models::{ConfigurationData, RestCall, ir::project::ProjectIR};
 
+use crate::pipeline::pass3::llm_enhance::residual_edge_filter::{ResidualEdge, classify_residual};
+use crate::pipeline::pass3::llm_enhance::matcher::deterministic_match;
+use crate::pipeline::pass3::llm_enhance::oracle::ServiceOracle;
+use crate::pipeline::pass3::llm_enhance::scorer::{ProducedEdge, score};
 use crate::pipeline::pass3::llm_enhance::signals;
 use crate::pipeline::pass3::restcalls::{EvalState, is_restcall_evaluated_enough};
 
@@ -176,6 +180,95 @@ pub(super) fn log_baseline_buckets(
         "  empty function_hash:    {empty_hash}   ({})   <- class unrecoverable regardless",
         pct(empty_hash, residual_total)
     );
+
+    log_deterministic_coverage(&residuals, config, project_ir);
+}
+
+/// Emit the S2.1 deterministic-matcher coverage over the residual population
+/// (M1 precursor). Pure observation; resolves each residual to a service via
+/// the rule-based [`deterministic_match`] and reports the hit rate. When the
+/// `SAGE_ORACLE_CONSTANTS` (+ `SAGE_ORACLE_CONFIG`) env vars point at the
+/// curated fixtures, it additionally derives the [`ServiceOracle`] and reports
+/// precision/recall via [`score`]. Without them it reports coverage only.
+fn log_deterministic_coverage(
+    residuals: &[&RestCall],
+    config: &ConfigurationData,
+    project_ir: &ProjectIR,
+) {
+    let mut hits = 0usize;
+    // S1.5 edge-hygiene split over the SAME residual population.
+    let mut cross_service = 0usize;
+    let mut non_edge = 0usize;
+    let mut det_hits_on_cross = 0usize;
+    let mut produced = Vec::with_capacity(residuals.len());
+    for rc in residuals {
+        let s = signals::extract(rc, project_ir, config);
+        let chosen = deterministic_match(&s, config).map(|svc| svc.name);
+        if chosen.is_some() {
+            hits += 1;
+        }
+        match classify_residual(rc, &s) {
+            ResidualEdge::CrossService => {
+                cross_service += 1;
+                if chosen.is_some() {
+                    det_hits_on_cross += 1;
+                }
+            }
+            ResidualEdge::NonEdge => non_edge += 1,
+        }
+        produced.push(ProducedEdge {
+            identifiers: s.operand_identifiers,
+            chosen_service: chosen,
+        });
+    }
+
+    info!("DETERMINISTIC COVERAGE (S2.1 matcher over residuals):");
+    info!("  residual total:         {}", residuals.len());
+    info!(
+        "  deterministic hits:     {hits}   ({})",
+        pct(hits, residuals.len())
+    );
+
+    info!("EDGE HYGIENE (S1.5, residual population):");
+    info!(
+        "  cross-service:          {cross_service}   ({})",
+        pct(cross_service, residuals.len())
+    );
+    info!(
+        "  non-edge:               {non_edge}   ({})",
+        pct(non_edge, residuals.len())
+    );
+    info!(
+        "  det. hits on cross-svc: {det_hits_on_cross}   ({})   <- coverage on the clean set",
+        pct(det_hits_on_cross, cross_service)
+    );
+
+    let (Ok(constants_path), Ok(config_path)) = (
+        std::env::var("SAGE_ORACLE_CONSTANTS"),
+        std::env::var("SAGE_ORACLE_CONFIG"),
+    ) else {
+        info!(
+            "  oracle:                 not loaded (set SAGE_ORACLE_CONSTANTS + SAGE_ORACLE_CONFIG to score)"
+        );
+        return;
+    };
+
+    match ServiceOracle::load(&constants_path, &config_path) {
+        Ok(oracle) => {
+            let s = score(&produced, &oracle);
+            info!(
+                "ORACLE SCORE (S0.2, {} edges, {} dropped):",
+                oracle.len(),
+                oracle.dropped()
+            );
+            info!("  scoreable:              {}", s.scoreable);
+            info!("  produced:               {}", s.produced);
+            info!("  correct:                {}", s.correct);
+            info!("  precision:              {:.3}", s.precision);
+            info!("  recall:                 {:.3}", s.recall);
+        }
+        Err(e) => info!("  oracle: failed to load: {e:#}"),
+    }
 }
 
 /// Format `n` as a whole-number percentage of `total`, guarding against zero.

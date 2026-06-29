@@ -7,6 +7,8 @@ use models::{
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+use crate::pipeline::pass3::llm_enhance::tokens::{RECEIVER_KEYWORDS, split_camel, split_snake};
+
 /// Hostname/host:port regex used by [`looks_url_or_host`]. Compiled once.
 static HOST_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^[A-Za-z0-9][A-Za-z0-9._-]*(:[0-9]+)?(/.*)?$").expect("static regex compiles")
@@ -97,7 +99,7 @@ fn extract_identifiers(code: &str, language: Language) -> HashSet<String> {
     let raw_tokens = statix::identifiers::identifiers_in_snippet(code, language);
     let mut out: HashSet<String> = HashSet::new();
     for raw in raw_tokens {
-        if raw == "self" || raw == "this" {
+        if RECEIVER_KEYWORDS.contains(&raw.as_str()) {
             continue;
         }
         let lower = raw.to_lowercase();
@@ -121,28 +123,6 @@ fn extract_identifiers(code: &str, language: Language) -> HashSet<String> {
         out.extend(camel_parts);
     }
     out
-}
-
-fn split_snake(s: &str) -> Vec<String> {
-    s.split('_')
-        .filter(|p| !p.is_empty())
-        .map(|p| p.to_string())
-        .collect()
-}
-
-fn split_camel(s: &str) -> Vec<String> {
-    let mut parts = Vec::new();
-    let mut current = String::new();
-    for c in s.chars() {
-        if c.is_uppercase() && !current.is_empty() {
-            parts.push(std::mem::take(&mut current));
-        }
-        current.push(c);
-    }
-    if !current.is_empty() {
-        parts.push(current);
-    }
-    parts
 }
 
 /// Case-insensitive similarity after stripping leading underscores.

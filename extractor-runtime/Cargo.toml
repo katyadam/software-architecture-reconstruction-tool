@@ -25,6 +25,7 @@ actix-multipart = { workspace = true }
 futures-util = { workspace = true }
 awc = { workspace = true }
 thiserror = { workspace = true }
+anyhow = { workspace = true }
 chrono = { workspace = true }
 rust-s3 = { workspace = true }
 actix-cors = { workspace = true }

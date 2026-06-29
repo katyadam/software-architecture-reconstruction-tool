@@ -1548,6 +1548,7 @@ dependencies = [
  "actix-cors",
  "actix-multipart",
  "actix-web",
+ "anyhow",
  "async-trait",
  "awc",
  "chrono",

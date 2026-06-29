@@ -175,6 +175,51 @@ hole, and lets Phase 2 do the discriminating.
 `llm_enhance/dispatch.rs` (filter on the new state).
 **Output:** recovered `NeedsResolution` count vs the old `NeedsLLM` count.
 
+### Phase 1.5 — Residual edge hygiene (added 2026-06-29)
+
+**Why this exists.** The M1 preview (empaia, `--scrape`) showed the structural
+gate recovered recall but also swept in **non-edges**: of 77 deterministic
+matcher fires, ~74 landed on calls that are not cross-service HTTP at all. REST
+calls are identified purely lexically (`python-extractor`:
+`identification/method_call.rs` — *any* `*.get/post/...(arg)` whose first arg is
+a `/`-string or a bare variable), so the `NeedsResolution` set is polluted with:
+
+- **intra-service DB clients** — e.g. `ClassClient.get(class_id)` whose receiver
+  is the class's own asyncpg-backed method (`self.get(class_id)`);
+- **route-internal client reads** — `clients.annotation.get(annot_id=...)`;
+- **dict/collection `.get`** with bare-variable keys.
+
+FastAPI route *decorators* (`@app.get(...)`) are already excluded at
+identification. The remainder is what we filter here.
+
+**Discriminator (validated against empaia source).** A genuine cross-service
+call's target is a **URL expression** — `self._http_client.get(self._mds_url +
+url)` -> target `self._mds_url + url`. A non-edge's target is a **bare id /
+param** — `class_id`, `annotation_id`, `item_id`. So classify a
+`NeedsResolution` residual as a real cross-service residual iff its target has a
+**URL nature**: an operand whose name hints url/uri/host/endpoint/base (reuse
+`ranking.rs::name_hints_url`), or a `/`-path / `http` / a token matching a
+config service host; otherwise it is a **non-edge**.
+
+> **Tension to respect (do not repeat Phase 1's mistake).** Phase 1 deleted a
+> lexical gate that over-pruned real URL-bearing calls by *variable naming*.
+> This filter must NOT resurrect that: it junks calls that are *not URL-shaped
+> at all* (DB/dict reads), not URL-bearing calls with an unlucky name. Keep the
+> classification a **distinct `NonEdge` state**, never folded into `Junk`
+> (empty), so what we drop stays auditable. Measurement-first: report the
+> split before enforcing it.
+
+**Plan:** measure the genuine-vs-non-edge split on empaia + train-ticket
+(observation-only), then enforce by excluding `NonEdge` from the Phase 2 matcher
+/ LLM. Receiver-type analysis (receiver is an httpx/requests/aiohttp client or
+an injected `http_client`) is a sharper but heavier signal — defer unless the
+URL-nature signal proves too coarse.
+
+**Files:** new residual edge classifier under `llm_enhance/`; measurement via
+`llm_enhance/baseline.rs`; enforcement later in the Phase 2 wiring.
+**Output:** genuine cross-service residual count (the real Phase 2 population)
+vs non-edge count, per corpus.
+
 ### Phase 2 — Service matcher
 
 For each `NeedsResolution` residual, determine the target service, then rewrite
@@ -443,9 +488,19 @@ the per-phase rule (§4): end green, committed, with results written to
   `ProjectIR` + `ConfigurationData`: origin service, client class, file imports,
   operand identifiers, candidate services. *Files:* new `llm_enhance/signals.rs`.
   *Validate* on real empaia residuals.
-- **S0.2 — Ground truth + scorer.** Checked-in source→target edge fixtures
-  (empaia first) + a precision/recall scorer reused verbatim in Phase 3.
-  *Files:* ground-truth fixtures; new scorer module.
+- **S0.2 — Ground truth + scorer.** *Done, but demoted (2026-06-29).*
+  Auto-derived oracle (`llm_enhance/oracle.rs`) joins `empaia-constants.json`
+  (identifier -> URL) with `empaia-config.json` (URL -> service) on host;
+  precision/recall scorer (`llm_enhance/scorer.rs`). **Demotion:** empaia has no
+  published dependency graph and hand-labeling is out, so the constants file is
+  the only automatic labeler — but it is *partial* (a residual is only scoreable
+  when its leftover operand is a `*_url` constant name). On the real `--scrape`
+  population only **11/152** residuals are scoreable; the curated-vs-scrape delta
+  caps it at ~24. So the oracle is a **small precision spot-check, not a
+  headline metric**, and is **not** a trustworthy basis for GATE B/C on empaia.
+  It is NOT a circular check (matcher resolves from names; oracle from URL
+  values). Kept as-is; do not invest in widening it. *Files:* `oracle.rs`,
+  `scorer.rs`.
 - **S0.3 — Baseline run.** Count buckets through the gate: `Enough` / `NeedsLLM`
   / `Junk` (split `empty` vs `non-empty-but-failed-lexical-gate`). Provisional
   (old lexical gate); re-taken at S1.4. *Files:* `pass3/restcalls.rs`,
@@ -469,6 +524,21 @@ the per-phase rule (§4): end green, committed, with results written to
 - **S1.4 — Re-run S0.3 + S0.4** under the new gate; compare `NeedsResolution`
   vs old `NeedsLLM`, and refresh the strong-vs-thin split on the real
   population.
+
+### Phase 1.5 — Residual edge hygiene (added 2026-06-29; see §4)
+
+- **S1.5 — Residual edge classifier.** Partition the `NeedsResolution` set into
+  genuine cross-service residuals vs `NonEdge` (DB/dict/intra-service `.get`
+  noise) by **target URL-nature** (operand hints url/uri/host/endpoint/base via
+  `ranking.rs::name_hints_url`, or `/`-path / `http` / config-service-host
+  token). Keep `NonEdge` a distinct state — never folded into `Junk` (empty).
+  *Files:* new classifier under `llm_enhance/`. *Measurement-first* (observe the
+  split; do not yet change what the matcher sees).
+- **S1.6 — Measure the split** on empaia + train-ticket via `baseline.rs`;
+  record the genuine-vs-non-edge counts. This is the real Phase 2 population.
+- **S1.7 — Enforce** (after the split is reviewed): exclude `NonEdge` from the
+  Phase 2 matcher / LLM. *Files:* the Phase 2 wiring (`query_builder.rs` /
+  `dispatch.rs`).
 
 ### Phase 2 — Service matcher
 
