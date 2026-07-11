@@ -19,7 +19,7 @@ pub type VarName = String;
 pub type VarType = Option<String>;
 type Env = HashMap<VarName, (VarType, Expr)>;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct AnalysisResult {
     pub return_value: Expr,
     pub final_env: Env,

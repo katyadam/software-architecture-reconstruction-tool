@@ -60,3 +60,37 @@ fn get_resolved_parts(template: &str, analysis_result: &AnalysisResult) -> Vec<R
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use statix::symbolic::AnalysisResult;
+
+    /// Mirrors the pass3 Err-branch path: no method env is available (default
+    /// analysis), but a fully-literal URL must still resolve with its quotes
+    /// stripped -- not survive as a quoted residual that fails the `http` gate.
+    #[test]
+    fn pure_literal_url_resolves_without_env() {
+        let uris =
+            generate_target_uris("\"http://ts-x-service:8000/api/v1\"", &AnalysisResult::default());
+        assert_eq!(uris, vec!["http://ts-x-service:8000/api/v1".to_string()]);
+    }
+
+    /// Concatenated literals (a common Java pattern) also resolve env-free.
+    #[test]
+    fn concatenated_literals_resolve_without_env() {
+        let uris = generate_target_uris(
+            "\"http://ts-x-service:8000/api/\" + \"items\"",
+            &AnalysisResult::default(),
+        );
+        assert_eq!(uris, vec!["http://ts-x-service:8000/api/items".to_string()]);
+    }
+
+    /// A variable with no binding (genuinely env-dependent) stays unresolved,
+    /// so the call remains a residual -- the fix must not over-resolve.
+    #[test]
+    fn unbound_variable_stays_unresolved() {
+        let uris = generate_target_uris("baseUrl", &AnalysisResult::default());
+        assert_eq!(uris, vec!["baseUrl".to_string()]);
+    }
+}

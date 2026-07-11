@@ -5,7 +5,7 @@ use models::{
     ParsedCallable, RestCall,
     ir::{language::Language, project::ProjectIR},
 };
-use statix::symbolic_evaluation_with_env;
+use statix::{symbolic::AnalysisResult, symbolic_evaluation_with_env};
 
 use crate::pipeline::{
     pass2::callables::mangle_callable_name,
@@ -129,11 +129,24 @@ fn evaluate_single_restcall(
             .map(|uri| restcall.clone_from_target_uri(&uri))
             .collect(),
         Err(_) => {
+            // Symbolic evaluation needs the enclosing callable's env; when that
+            // lookup fails (e.g. a Java test method absent from the callable map)
+            // we can still resolve any part of the template that is a pure string
+            // literal -- those need no env. Running `generate_uris` against an
+            // empty analysis strips inline-literal quotes and concatenates literal
+            // parts (so `"http://x/" + "y"` -> `http://x/y`), while genuinely
+            // env-dependent variables fall through unchanged and stay residual.
+            // This prevents a fully-known literal URL from being misfiled as an
+            // unresolved residual just because its quotes survived.
             info!(
-                "Symbolic Evaluation for REST call with target url: {} failed -- preserving raw REST call as-is",
+                "Symbolic Evaluation for REST call with target url: {} failed -- resolving literals only",
                 restcall.target_uri
             );
-            vec![restcall.clone()]
+            evaluator
+                .generate_uris(&restcall.target_uri, &AnalysisResult::default(), merged_enums)
+                .into_iter()
+                .map(|uri| restcall.clone_from_target_uri(&uri))
+                .collect()
         }
     }
 }
