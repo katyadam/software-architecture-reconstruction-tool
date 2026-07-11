@@ -3,8 +3,7 @@
 //! Decomposed into:
 //! - [`dispatch`]: orchestrator + concurrent Sage dispatch
 //! - [`query_builder`]: turning a [`models::RestCall`] into a [`sage::resolver::query::SageQuery`]
-//! - [`variables`]: the canonical variable map builder consumed by Pass 3
-//! - [`ranking`]: relevance ranking + secret redaction for variable maps
+//! - [`variables`]: file -> microservice resolution helper
 //! - [`tokens`]: shared identifier splitters (camel/snake)
 //! - [`matcher`]: deterministic identifier -> service matcher (Phase 2a)
 //! - [`oracle`]: auto-derived ground-truth oracle (S0.2)
@@ -16,7 +15,6 @@ mod dispatch;
 mod matcher;
 mod oracle;
 mod query_builder;
-mod ranking;
 mod residual_edge_filter;
 mod scorer;
 mod signals;
@@ -24,4 +22,3 @@ mod tokens;
 mod variables;
 
 pub use dispatch::evaluate_restcalls_with_llm;
-pub use variables::build_variable_map;

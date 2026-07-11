@@ -1,49 +1,48 @@
-use std::collections::HashMap;
-
 use models::{
-    ConfigurationData, RestCall, assignments::VariableAddress, configuration::ServiceDescription,
+    ConfigurationData, RestCall, configuration::ServiceDescription, ir::project::ProjectIR,
 };
-use sage::resolver::{
-    client::SageClient,
-    code::CodeSnippet,
-    facts::FactBundle,
-    query::{QueryKind, SageQuery},
-};
+use sage::resolver::query::{CandidateService, ClassifyContext, QueryKind, SageQuery};
 
-use crate::pipeline::{
-    pass1::decide_language,
-    pass3::llm_enhance::{ranking::rank_and_cap, variables::microservice_for_file},
-};
+use crate::pipeline::pass3::llm_enhance::signals;
 
+/// Build a closed-set classification query for a residual REST call.
+///
+/// Candidates are the configured services minus (a) the origin service (a call
+/// site is never a self-loop) and (b) any service carrying no URL (e.g. `models`
+/// -- not a runtime target). Returns `None` only when no candidate remains,
+/// leaving nothing for the LLM to classify.
 pub(super) fn build_query_for_restcall(
     rc: &RestCall,
-    variables: &HashMap<VariableAddress, String>,
     config: &ConfigurationData,
-    sage: &SageClient,
+    project_ir: &ProjectIR,
 ) -> Option<SageQuery> {
-    let snippet = build_snippet(rc)?;
-    let lookup_key = rc
-        .target_uri
-        .split('/')
-        .next()
-        .unwrap_or(&rc.target_uri)
-        .to_string();
-    let microservice = microservice_for_file(&rc.file_path, config);
-    let pruned = rank_and_cap(
-        variables,
-        &snippet.code,
-        snippet.language,
-        &microservice,
-        &rc.file_path,
-        sage.variables_budget(),
-    );
-    let bundle = FactBundle {
-        sites: vec![snippet],
+    let sig = signals::extract(rc, project_ir, config);
+
+    let candidates: Vec<CandidateService> = config
+        .service_descriptions
+        .iter()
+        .filter(|desc| desc.name != sig.origin_service && !desc.urls.is_empty())
+        .map(|desc| CandidateService {
+            name: desc.name.clone(),
+            url: desc.urls[0].clone(),
+        })
+        .collect();
+
+    if candidates.is_empty() {
+        return None;
+    }
+
+    let context = ClassifyContext {
+        origin_service: sig.origin_service,
+        client_class: sig.client_class,
+        imports: sig.imports,
+        expression: rc.target_uri.clone(),
+        operand_identifiers: sig.operand_identifiers,
     };
+
     Some(SageQuery {
-        bundle,
-        kind: QueryKind::ResolveLookup { lookup_key },
-        variables_map: pruned,
+        kind: QueryKind::ClassifyTargetService { candidates },
+        context,
     })
 }
 
@@ -88,16 +87,6 @@ pub(super) fn rewrite_target_uri_to_service(
         Some(base) => rewrite_onto_base(original_uri, base),
         None => original_uri.to_string(),
     }
-}
-
-fn build_snippet(rc: &RestCall) -> Option<CodeSnippet> {
-    let bytes = std::fs::read(&rc.file_path).ok()?;
-    let start = rc.source_span.start_byte as usize;
-    let end = rc.source_span.end_byte as usize;
-    let slice = bytes.get(start..end)?;
-    let code = String::from_utf8_lossy(slice).into_owned();
-    let language = decide_language(&rc.file_path);
-    Some(CodeSnippet { code, language })
 }
 
 #[cfg(test)]

@@ -393,7 +393,70 @@ happen.
   **self-sufficient for the bulk; LLM is a genuine minority fallback (10 of 43,
   23%)**, not deferrable (< 90%). The 109 non-edges are still excluded upstream by
   the edge filter; totals unchanged (577 → 425 ResolvedURL / 152 NeedsResolution).
-- **Post-LLM coverage** (after S2.7): _pending._
+- **Post-LLM coverage** (after S2.7): see Phase 2b below.
+
+---
+
+## Phase 2b — LLM closed-set classifier
+
+- **S2.4–S2.7 — Closed-set classifier built:** _done (2026-07-11)._ The LLM stops
+  GENERATING URLs and instead CHOOSES exactly one configured service (or null),
+  firing only on the deterministic tier's abstentions. Implemented via a Code
+  Writer subagent (report: `agents/reports/sage-phase2b-writer.md`); orchestrator
+  reviewed all core diffs + ran the end-to-end validation below.
+  - **`sage` crate reshaped.** `QueryKind` collapsed to one variant
+    `ClassifyTargetService { candidates: Vec<CandidateService{name,url}> }`;
+    `SageQuery { kind, context: ClassifyContext }` (retires `FactBundle` +
+    `variables_map`); `SageResponse { service: Option<String>, evidence,
+    reasoning }` (confidence DROPPED); `validate()` = membership (`service ∈
+    candidates ∪ {null}`) + evidence grounding (a cited token is a
+    case-insensitive substring of the call-site context); null service = valid
+    abstain. `prompt.rs` rewritten to §6.1/§6.2 (closed-set contract +
+    precedence-ordered CALL SITE / CANDIDATE SERVICES); `build_variables_message`
+    /prose hint deleted.
+  - **Structured-output enforcement.** `client.rs` sends async-openai 0.28
+    `ResponseFormat::JsonSchema` with the §6.3 schema constraining `service` to
+    the candidate-name enum + null (`strict: false` — Ollama rejects
+    strict+nullable-enum; `validate` enforces membership regardless).
+  - **Candidates exclude origin AND no-URL services** (`query_builder.rs`),
+    mirroring the matcher; `dispatch::apply_query_outcomes` maps the chosen
+    service name → `ServiceDescription` → `rewrite_target_uri_to_service`
+    (abstain/error/not-in-config all leave the residual untouched).
+  - **Cleanup pulled forward** (the migration orphaned them; project bans
+    `#[allow(unused)]`): deleted `sage/resolver/{facts,code}.rs`,
+    `llm_enhance/ranking.rs` (`rank_and_cap` + `build_snippet`), `variables.rs`'s
+    `build_variable_map`. `baseline/oracle/scorer` kept (removed in S3.3).
+  - **Green:** `cargo test -p sage` 13 pass (+2 ignored live-Ollama), `-p
+    extractor-runtime` 54 lib + 48 integration pass; clippy no NEW warnings (the
+    pre-existing `dispatch.rs &mut Vec` was fixed to `&mut [_]` in passing; only
+    the 2 extractor `as_bytes` warnings remain).
+
+- **End-to-end validation** (empaia `--scrape --llm`, live Ollama
+  `qwen2.5-coder:7b` — same model as the 0%-precision June run; measured
+  2026-07-11, `SAGE_TRACE`):
+
+  | metric | value |
+  |---|---|
+  | LLM queries dispatched (= deterministic abstentions) | 10 |
+  | **invalid JSON raw responses** | **0 / 10** |
+  | rejected (non-candidate / ungrounded) | 0 / 10 |
+  | chose a service | 1 |
+  | abstained (`null`) | 9 |
+
+  **The core mechanism works.** **0/10 invalid JSON vs 53% in June** — the
+  `response_format` json-schema enforcement eliminates the invalid-JSON failure
+  mode at the source. No hallucinated non-candidates (0 rejected). The one
+  resolution — expression `url` → `examination-service`, evidence
+  `["examination","models.v1.examinations"]` — is grounded on the file's import
+  and plausible (unscoreable by the thin oracle: bare `url` has no `*_url`
+  constant). The 9 abstentions are APPROPRIATE, not misses: the LLM tail is the
+  thin/infra/malformed residual set the deterministic matcher already couldn't
+  close — `{settings.vault_url}/...` (HashiCorp Vault, infra), `registry_image_url`
+  (Docker registry), `url"]"/alive` and `None/private/...` (extraction artifacts).
+  Conservative abstention on non-service targets is the precision-first behavior
+  the closed-set design intends. Empaia's low LLM yield is expected (§4 Phase 0:
+  strong-signal cases resolve deterministically; the thin tail has no value
+  path); **train-ticket is where the LLM must carry load** (Phase 3 / GATE C).
 
 ---
 

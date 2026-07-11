@@ -3,62 +3,44 @@ use async_openai::{
     config::OpenAIConfig,
     types::{
         ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
-        ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs,
+        ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs, ResponseFormat,
+        ResponseFormatJsonSchema,
     },
 };
 
-pub use crate::resolver::query::{QueryKind, SageQuery};
+pub use crate::resolver::query::{CandidateService, QueryKind, SageQuery};
 pub use crate::resolver::response::{SageError, SageResponse};
 
 use crate::resolver::{
-    prompt::{
-        build_facts_message, build_question_message, build_system_message, build_variables_message,
-    },
+    prompt::{build_context_message, build_system_message, context_grounding_string},
     response::{LlmJson, validate},
 };
 
-/// HTTP client that sends resolution queries to an Ollama-backed LLM.
+/// HTTP client that sends closed-set classification queries to an Ollama-backed LLM.
 #[derive(Debug)]
 pub struct SageClient {
     client: Client<OpenAIConfig>,
     model: String,
-    confidence_threshold: f32,
-    variables_budget: usize,
 }
 
 impl SageClient {
     /// Create a client pointing at `base_url` (e.g. `"http://localhost:11434/v1"`).
-    ///
-    /// `variables_budget` caps the number of variable entries included in each
-    /// query prompt. Callers should rank and prune the full variables map down
-    /// to at most this many entries before sending.
-    pub fn new(
-        base_url: &str,
-        model: &str,
-        confidence_threshold: f32,
-        variables_budget: usize,
-    ) -> Self {
+    pub fn new(base_url: &str, model: &str) -> Self {
         let config = OpenAIConfig::new()
             .with_api_base(base_url)
             .with_api_key("ollama");
         Self {
             client: Client::with_config(config),
             model: model.to_string(),
-            confidence_threshold,
-            variables_budget,
         }
     }
 
-    pub fn variables_budget(&self) -> usize {
-        self.variables_budget
-    }
-
-    /// Send a resolution query and return a validated response.
+    /// Send a classification query and return a validated response.
     pub async fn query(&self, query: SageQuery) -> Result<SageResponse, SageError> {
+        let QueryKind::ClassifyTargetService { candidates } = &query.kind;
+
         let system_msg = build_system_message();
-        let facts_msg = build_facts_message(&query.bundle);
-        let variables_msg = build_variables_message(query.variables_map.as_slice());
-        let question_msg = build_question_message(&query.kind);
+        let context_msg = build_context_message(&query.context, candidates);
 
         let messages: Vec<ChatCompletionRequestMessage> = vec![
             ChatCompletionRequestSystemMessageArgs::default()
@@ -67,17 +49,7 @@ impl SageClient {
                 .map_err(SageError::Network)?
                 .into(),
             ChatCompletionRequestUserMessageArgs::default()
-                .content(facts_msg)
-                .build()
-                .map_err(SageError::Network)?
-                .into(),
-            ChatCompletionRequestUserMessageArgs::default()
-                .content(variables_msg)
-                .build()
-                .map_err(SageError::Network)?
-                .into(),
-            ChatCompletionRequestUserMessageArgs::default()
-                .content(question_msg)
+                .content(context_msg)
                 .build()
                 .map_err(SageError::Network)?
                 .into(),
@@ -86,6 +58,7 @@ impl SageClient {
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.model)
             .messages(messages)
+            .response_format(classify_response_format(candidates))
             .build()
             .map_err(SageError::Network)?;
 
@@ -98,11 +71,13 @@ impl SageClient {
             .and_then(|c| c.message.content)
             .unwrap_or_default();
 
+        let grounding = context_grounding_string(&query.context);
+
         // Compute the outcome into a local Result so it can be traced even when
         // parsing or validation fails -- rejection cases are what we measure.
         let outcome = serde_json::from_str::<LlmJson>(text.trim())
             .map_err(SageError::from)
-            .and_then(|parsed| validate(parsed, self.confidence_threshold));
+            .and_then(|parsed| validate(parsed, candidates, &grounding));
 
         trace_query(&query, &text, &outcome);
 
@@ -110,17 +85,43 @@ impl SageClient {
     }
 }
 
-/// A short human-readable label for a query kind, e.g. `"ResolveLookup:user-service"`.
+/// Build the Ollama structured-output schema (plan §6.3): `service` constrained
+/// to the candidate names plus null, `evidence` an array of strings, `reasoning`
+/// a string. `strict` is `false` -- Ollama rejects `strict: true` with a nullable
+/// enum, and membership is enforced in `validate` regardless.
+fn classify_response_format(candidates: &[CandidateService]) -> ResponseFormat {
+    let mut service_enum: Vec<serde_json::Value> = candidates
+        .iter()
+        .map(|c| serde_json::Value::String(c.name.clone()))
+        .collect();
+    service_enum.push(serde_json::Value::Null);
+
+    let schema = serde_json::json!({
+        "type": "object",
+        "properties": {
+            "service": { "type": ["string", "null"], "enum": service_enum },
+            "evidence": { "type": "array", "items": { "type": "string" } },
+            "reasoning": { "type": "string" }
+        },
+        "required": ["service", "evidence"]
+    });
+
+    ResponseFormat::JsonSchema {
+        json_schema: ResponseFormatJsonSchema {
+            description: Some("Closed-set target-service classification".to_string()),
+            name: "target_service_classification".to_string(),
+            schema: Some(schema),
+            strict: Some(false),
+        },
+    }
+}
+
+/// A short human-readable label for a query kind, e.g. `"ClassifyTargetService:20"`.
 fn describe_kind(kind: &QueryKind) -> String {
     match kind {
-        QueryKind::ResolveEnvVar { var_name } => format!("ResolveEnvVar:{var_name}"),
-        QueryKind::ResolveBuilder { chain } => format!("ResolveBuilder:{chain}"),
-        QueryKind::ResolveLookup { lookup_key } => format!("ResolveLookup:{lookup_key}"),
-        QueryKind::ResolveFrameworkRoute { route_pattern } => {
-            format!("ResolveFrameworkRoute:{route_pattern}")
+        QueryKind::ClassifyTargetService { candidates } => {
+            format!("ClassifyTargetService:{}", candidates.len())
         }
-        QueryKind::ResolveReflective { target } => format!("ResolveReflective:{target}"),
-        QueryKind::ClassifyHttpCall { call_expr } => format!("ClassifyHttpCall:{call_expr}"),
     }
 }
 
@@ -134,18 +135,14 @@ fn trace_query(query: &SageQuery, raw_response: &str, outcome: &Result<SageRespo
         None => return,
     };
 
-    let snippet = query
-        .bundle
-        .sites
-        .first()
-        .map(|s| s.code.as_str())
-        .unwrap_or("");
+    let candidate_count = match &query.kind {
+        QueryKind::ClassifyTargetService { candidates } => candidates.len(),
+    };
 
     let outcome_json = match outcome {
         Ok(resp) => serde_json::json!({
             "status": "resolved",
-            "resolved": resp.resolved,
-            "confidence": resp.confidence,
+            "service": resp.service,
             "evidence": resp.evidence,
             "reasoning": resp.reasoning,
         }),
@@ -157,8 +154,8 @@ fn trace_query(query: &SageQuery, raw_response: &str, outcome: &Result<SageRespo
 
     let record = serde_json::json!({
         "kind": describe_kind(&query.kind),
-        "snippet": snippet,
-        "variables_offered": query.variables_map.len(),
+        "expression": query.context.expression,
+        "candidates": candidate_count,
         "raw_response": raw_response,
         "outcome": outcome_json,
     });

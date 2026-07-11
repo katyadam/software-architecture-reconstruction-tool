@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-
 use futures_util::stream::{self, StreamExt};
-use log::{info, warn};
-use models::{ConfigurationData, RestCall, assignments::VariableAddress, ir::project::ProjectIR};
+use log::{debug, info, warn};
+use models::{ConfigurationData, RestCall, ir::project::ProjectIR};
 use sage::resolver::{
     client::SageClient,
     query::SageQuery,
@@ -12,7 +10,7 @@ use sage::resolver::{
 use crate::pipeline::pass3::llm_enhance::{
     baseline::log_baseline_buckets,
     matcher::{build_index, deterministic_match},
-    query_builder::{build_query_for_restcall, rewrite_onto_base, rewrite_target_uri_to_service},
+    query_builder::{build_query_for_restcall, rewrite_target_uri_to_service},
     residual_edge_filter::{ResidualTriage, triage},
     signals,
 };
@@ -32,8 +30,7 @@ struct QueryOutcome {
 }
 
 pub async fn evaluate_restcalls_with_llm(
-    restcalls: &mut Vec<RestCall>,
-    variables: HashMap<VariableAddress, String>,
+    restcalls: &mut [RestCall],
     config: &ConfigurationData,
     sage: &SageClient,
     project_ir: &ProjectIR,
@@ -59,13 +56,13 @@ pub async fn evaluate_restcalls_with_llm(
 
     resolve_deterministically(restcalls, config, project_ir);
 
-    let pending = collect_pending_queries(restcalls, &variables, config, sage, project_ir);
+    let pending = collect_pending_queries(restcalls, config, project_ir);
     info!(
         "Number of REST calls to evaluate with LLM: {}",
         pending.len()
     );
     let outcomes = dispatch_queries_concurrently(pending, sage).await;
-    apply_query_outcomes(restcalls, outcomes);
+    apply_query_outcomes(restcalls, outcomes, config);
 }
 
 /// S2.3: deterministic identifier -> service resolution pass, run BEFORE the
@@ -102,9 +99,7 @@ fn resolve_deterministically(
 
 fn collect_pending_queries(
     restcalls: &[RestCall],
-    variables: &HashMap<VariableAddress, String>,
     config: &ConfigurationData,
-    sage: &SageClient,
     project_ir: &ProjectIR,
 ) -> Vec<PendingQuery> {
     restcalls
@@ -112,10 +107,10 @@ fn collect_pending_queries(
         .enumerate()
         .filter(|(_, rc)| triage(rc, project_ir, config) == ResidualTriage::NeedsResolution)
         .filter_map(|(index, rc)| {
-            let query = build_query_for_restcall(rc, variables, config, sage).or_else(|| {
+            let query = build_query_for_restcall(rc, config, project_ir).or_else(|| {
                 warn!(
-                    "sage: skipping {} — cannot read {}",
-                    rc.target_uri, rc.file_path
+                    "sage: skipping {} — no candidate services to classify",
+                    rc.target_uri
                 );
                 None
             })?;
@@ -146,15 +141,33 @@ async fn dispatch_queries_concurrently(
         .await
 }
 
-fn apply_query_outcomes(restcalls: &mut [RestCall], outcomes: Vec<QueryOutcome>) {
+/// Apply the LLM's closed-set choices. A chosen service is rewritten onto its
+/// canonical config URL via `rewrite_target_uri_to_service`; an abstain (`None`)
+/// or an error leaves the residual untouched.
+fn apply_query_outcomes(
+    restcalls: &mut [RestCall],
+    outcomes: Vec<QueryOutcome>,
+    config: &ConfigurationData,
+) {
     for outcome in outcomes {
         match outcome.result {
-            Ok(resp) => {
-                if let Some(resolved) = resp.resolved {
-                    restcalls[outcome.index].target_uri =
-                        rewrite_onto_base(&outcome.original_uri, &resolved);
+            Ok(resp) => match resp.service {
+                Some(name) => match config.service_descriptions.iter().find(|d| d.name == name) {
+                    Some(service) => {
+                        restcalls[outcome.index].target_uri =
+                            rewrite_target_uri_to_service(&outcome.original_uri, service);
+                    }
+                    None => {
+                        warn!(
+                            "sage: chosen service {name} not in config for {}",
+                            outcome.original_uri
+                        );
+                    }
+                },
+                None => {
+                    debug!("sage: abstained on {}", outcome.original_uri);
                 }
-            }
+            },
             Err(e) => {
                 warn!("sage: query for {} failed: {e}", outcome.original_uri);
             }

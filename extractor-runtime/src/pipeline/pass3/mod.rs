@@ -16,7 +16,7 @@ use models::{
 use sage::resolver::client::SageClient;
 
 use crate::pipeline::pass3::{
-    llm_enhance::{build_variable_map, evaluate_restcalls_with_llm},
+    llm_enhance::evaluate_restcalls_with_llm,
     pass_module::{MODULE_CALLABLE_NAME, PerFileModuleConsts},
 };
 
@@ -100,9 +100,7 @@ pub async fn evaluate_with_llm(
         per_file_module_consts,
     );
 
-    let variables = build_variable_map(config, &project_ir, per_file_attrs, per_file_module_consts);
-
-    evaluate_restcalls_with_llm(&mut restcalls, variables, config, sage, &project_ir).await;
+    evaluate_restcalls_with_llm(&mut restcalls, config, sage, &project_ir).await;
 
     let endpoints: Vec<Endpoint> = project_ir
         .files

@@ -1,9 +1,7 @@
 //! Shared identifier token splitters.
 //!
-//! `split_snake` and `split_camel` are reused by both the relevance ranking
-//! ([`super::ranking`]) and the deterministic service matcher
-//! ([`super::matcher`]). They live here so the matcher does not depend on the
-//! ranking module, which is removed in the Phase 3 cleanup.
+//! `split_snake` and `split_camel` are used by the deterministic service
+//! matcher ([`super::matcher`]).
 
 /// Receiver / self-reference keywords across the supported languages
 /// (`self` -> Python/Rust, `this` -> Java/JS). They are not service-name

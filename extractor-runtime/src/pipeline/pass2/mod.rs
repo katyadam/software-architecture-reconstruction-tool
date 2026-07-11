@@ -7,7 +7,8 @@ use statix::{class_hierarchy::build_class_hierarchy, import_graph::build_import_
 use crate::pipeline::pass2::{
     callables::{build_callables_by_file_hash, build_project_global_callables},
     constants::collect_constants,
-    entities::resolve_entity_fields, restcalls::re_identify_restcalls,
+    entities::resolve_entity_fields,
+    restcalls::re_identify_restcalls,
     type_inference::resolve_call_argument_types,
 };
 

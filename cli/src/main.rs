@@ -107,7 +107,7 @@ async fn main() -> Result<()> {
 
     let sage = args
         .llm
-        .then(|| SageClient::new(&args.llm_url, &args.llm_model, 0.7, 150));
+        .then(|| SageClient::new(&args.llm_url, &args.llm_model));
 
     let extraction = Instant::now();
     let all_code_elements = get_all_code_elements(
