@@ -462,9 +462,121 @@ happen.
 
 ## Phase 3 — Final evaluation
 
-- **Empaia** — precision / recall: _pending._
-- **Train-ticket** — precision / recall: _pending._
-- **GATE C verdict:** _pending._
+- **S3.1 — Scorer wired:** _done (2026-07-11)._ Added a `SAGE_SCORE=<constants-file>`
+  gate in `dispatch::evaluate_restcalls_with_llm` (snapshot each residual's operand
+  identifiers BEFORE rewrite; after deterministic + LLM resolution derive the final
+  chosen service from `service_for_url(target_uri)`; `score()` vs the auto-oracle).
+  Two `pub(super)` helpers in `oracle.rs` (`from_constants_file`, `service_for_url`).
+  Green: `-p extractor-runtime` build + clippy clean, 45 llm_enhance tests pass (2 new).
+  - **Redundancy discovered:** `baseline.rs::log_deterministic_coverage` ALREADY
+    scored via the oracle, gated on `SAGE_ORACLE_CONSTANTS`+`SAGE_ORACLE_CONFIG` —
+    but over the **deterministic-only** output (pre-LLM). The new `SAGE_SCORE` path
+    scores the **LLM-final** output and survives `baseline.rs`'s S3.3 removal. The
+    two env-var names must be reconciled in S3.3 (keep one scorer).
+
+- **S3.2 — End-to-end runs** (live Ollama `qwen2.5-coder:7b`, `--scrape --llm`,
+  relative `-p ../<corpus>` + `local-*-config.json`; measured 2026-07-11):
+
+  **Empaia** (577 restcalls):
+
+  | stage | count |
+  |---|---|
+  | ResolvedURL | 449 (77%) |
+  | NeedsResolution (residual) | 128 (22%); strong 127 / thin 1 |
+  | edge hygiene | 19 cross-service / 109 non-edge |
+  | deterministic resolved | **10 / 19 (52%)** |
+  | dispatched to LLM | 9 |
+  | LLM: chose / abstained / error / **invalid JSON** | 2 / 6 / 1 / **0** |
+  | **oracle score** | **0 scoreable** (13-edge oracle, 0 dropped) |
+
+  **Train-ticket** (641 Java/Py files):
+
+  | stage | count |
+  |---|---|
+  | NeedsResolution (residual) | 24; strong 24 / thin 0 |
+  | edge hygiene | 22 cross-service / 2 non-edge |
+  | deterministic resolved | **0 / 22 (0%)** |
+  | dispatched to LLM | 22 |
+  | LLM: chose / abstained / error / **invalid JSON** | 18 / 1 / 3 / **0** |
+  | spot-check on the 18 choices | **~16 grounded-correct, 2 wrong** |
+  | oracle score | N/A (no train-ticket constants file) |
+
+  Reconciliation vs Phase 2's 152/43/33 empaia figures: this run's `--scrape` over
+  `../empaia` statically resolved ~24 more URLs (449 vs 425 ResolvedURL), shrinking
+  the residual set (128 vs 152) and the cross-service tail (19 vs 43), leaving a
+  harder remainder — hence 52% deterministic, not 76%. Not a regression; the static
+  layer got MORE, the deterministic tier got the leftover.
+
+- **GATE C verdict (threshold: train-ticket precision < 0.7 → revisit §6.4):**
+  **soft-PASS, rigorous verdict DEFERRED.** The auto-oracle is **0 scoreable on both
+  corpora**, so it produces no scored precision (see finding 1). The train-ticket
+  spot-check on the 18 LLM choices is ~16/18 ≈ **0.89** grounded-correct — above 0.7
+  — but on a WEAK population (finding 2) and with 2 real candidate-confusion errors
+  (finding 3). Per the 2026-07-11 decision (auto-oracle both, extend later), the
+  rigorous verdict is deferred to a hand-labeled pass; the soft result does not
+  justify reopening §6.4 narrowing now, but the price-service confusion is the exact
+  failure mode narrowing would address if a labeled run confirms it.
+
+- **Findings (threats to validity — feed the eventual hand-labeled pass):**
+  1. **Auto-oracle structurally misses the current residual tail.** The oracle keys
+     on `*_url` constant NAMES (`mds_url`, `self._cds_url`); it looks them up against
+     each residual's `operand_identifiers`. But post-gate residual operands are path
+     params (`annotation_id`, `class_id`, bare `url`) — the discriminating token has
+     moved to `client_class`/`imports`, which the oracle does not index. So 0
+     scoreable even for empaia. Real precision needs hand-labeling (or an oracle that
+     joins on imports/class, not just operands).
+  2. **Train-ticket residual population is weak.** ≥6/22 are in `src/test/` files,
+     and most carry the full `http://ts-<name>-service:port/...` literal in the
+     expression — so the LLM largely READS the service name from the URL rather than
+     reasoning. Several arguably should be `ResolvedURL` (host already names the
+     service): a gate / symbolic-eval fold-gap worth a separate look.
+  3. **Validation gap: grounded ≠ correct.** For `http://ts-price-service:16579/...`
+     the LLM chose `ts-consign-price-service` (both are candidates) with evidence
+     citing `ts-price-service` — grounding passed because the cited token is in the
+     context, but it justifies a DIFFERENT service than the one chosen. `validate()`
+     checks token-in-context, not token-agrees-with-choice. 2/18 such errors.
+
+- **Extraction-artifact fix (root-cause of findings 2 & 3):** _done (2026-07-11)._
+  Traced the train-ticket residual population to a single defect: when
+  `symbolic_evaluation_with_env` fails for a REST call (e.g. a Java **test method**
+  whose mangled name is absent from the callable map — 20/20 train-ticket eval
+  failures), `pass3/restcalls.rs`'s `Err` branch **preserved the raw template
+  verbatim**, so a fully-literal `"http://ts-x-service:port/..."` kept its
+  surrounding quotes, failed the gate's `starts_with("http")`, and was misfiled
+  `NeedsResolution` → cross-service → LLM. Fix: the `Err` branch now runs
+  `generate_uris` against an empty `AnalysisResult` (pure literals need no method
+  env), stripping inline-literal quotes and concatenating literal parts; genuinely
+  env-dependent variables still fall through and stay residual.
+  - Changes: `Expr` derives `Default` (`Empty` is `#[default]`) in `models`;
+    `AnalysisResult` derives `Default` in `statix`; the `Err` branch in
+    `extractor-runtime/pass3/restcalls.rs`. 3 new `uri_generator` unit tests
+    (pure-literal + concatenated-literal resolve; unbound variable stays
+    unresolved). Green: build + clippy clean; `extractor-runtime` 56+48, `statix`
+    13+71, `java-extractor` 33 tests pass.
+  - **Effect on train-ticket** (re-run 2026-07-11):
+
+    | metric | before fix | after fix |
+    |---|---|---|
+    | ResolvedURL | 213 (89%) | **233 (98%)** |
+    | NeedsResolution | 24 | **4** |
+    | cross-service residuals | 22 | **2** |
+    | dispatched to LLM | **22** | **2** |
+
+    The 20 quote-wrapped literals now resolve **statically to the correct host**,
+    so the entire `ts-price-service`→`ts-consign-price-service` LLM error class
+    (finding 3) is eliminated at the source, and the LLM tail is the 2 genuinely
+    variable-based calls (`requestUrl` etc.) that *should* reach it — the first of
+    which the LLM abstained on, appropriately.
+  - **Empaia unaffected:** 13 `Err`-branch cases, **0 quoted-http** — the fix folds
+    none of them (they are variables/path params, not quoted literals); bucket
+    classification is unchanged, so no re-run was needed.
+  - **Bigger lesson for the paper:** train-ticket's raw "22 cross-service residuals"
+    were ~91% extraction artifacts. Evaluation populations must be built *after*
+    this fix; the true unresolved-call count is an order of magnitude smaller than
+    the raw gate output suggested. (Separate, still-open scoping question: whether
+    `src/test/` calls should contribute SDG edges at all — finding 2's other half.)
+
+- **S3.3 / S3.4:** pending (cleanup + final doc polish).
 
 ---
 
@@ -515,3 +627,18 @@ happen.
   Follow-up flagged (not yet done): exclude no-url non-services from the matcher
   index, then re-measure (can unmask real second-place matches, only raises
   resolution).
+- **2026-07-11 — Keep `src/test/` calls in the analysis (do NOT exclude).** The
+  goal includes analyzing tests for Regression Test Selection, so test-file REST
+  calls are wanted, not noise. The extraction-artifact fix now resolves their
+  literal URLs statically to the correct target service — exactly the test→service
+  mapping RTS needs. Open (deferred) design nuance: tag test-originated SDG edges
+  (origin `src/test/` vs `src/main/`) so they don't pollute the production
+  architecture view — same graph, extra attribute. Not implemented.
+- **2026-07-11 — Defer the `validate()` tightening (finding 3 / grounded ≠
+  correct).** The closed-set check grounds evidence in the call-site context but
+  does not require the evidence to point at the *chosen* service, so a grounded-
+  but-wrong pick (chose `ts-consign-price-service`, cited `ts-price-service`)
+  passes. A correct rule must mirror the matcher's acronym + token-subset logic
+  (a plain substring rule would over-reject valid non-lexical groundings like
+  `mds_url` -> `medical-data-service`). Deferred: the extraction-artifact fix
+  removed every observed instance, making this a low-stakes hardening item.

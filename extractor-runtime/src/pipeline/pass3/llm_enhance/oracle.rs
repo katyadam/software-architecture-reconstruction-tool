@@ -52,6 +52,19 @@ fn host_of(url: &str) -> Option<String> {
     (!host.is_empty()).then(|| host.to_string())
 }
 
+/// Map a (possibly rewritten) URL back to the config service it now targets:
+/// return the name of the service any of whose `urls` shares the same host as
+/// `url`. `None` when `url` has no host or no service matches. Used to turn a
+/// final `target_uri` into the service it points at for scoring.
+pub(super) fn service_for_url(url: &str, config: &ConfigurationData) -> Option<String> {
+    let host = host_of(url)?;
+    config
+        .service_descriptions
+        .iter()
+        .find(|svc| svc.urls.iter().any(|u| host_of(u).as_deref() == Some(&host)))
+        .map(|svc| svc.name.clone())
+}
+
 /// Normalize an identifier to its oracle/scorer join key: keep the last dotted
 /// segment (drops `settings.` / `self.` prefixes), strip leading underscores,
 /// lowercase. e.g. `settings.mps_url` -> `mps_url`, `_mds_url` -> `mds_url`.
@@ -116,6 +129,21 @@ impl ServiceOracle {
         let config: ConfigurationData = serde_json::from_str(&config_raw)
             .with_context(|| format!("parsing config {}", config_path.display()))?;
         Ok(Self::from_parts(&constants.constants, &config))
+    }
+
+    /// Load the oracle from a constants file on disk plus an in-memory config.
+    /// Unlike [`load`], the config is already held by the caller, so only the
+    /// constants file is read and parsed here.
+    pub(super) fn from_constants_file(
+        constants_path: impl AsRef<Path>,
+        config: &ConfigurationData,
+    ) -> anyhow::Result<Self> {
+        let constants_path = constants_path.as_ref();
+        let constants_raw = std::fs::read_to_string(constants_path)
+            .with_context(|| format!("reading constants {}", constants_path.display()))?;
+        let file: ConstantsFile = serde_json::from_str(&constants_raw)
+            .with_context(|| format!("parsing constants {}", constants_path.display()))?;
+        Ok(Self::from_parts(&file.constants, config))
     }
 
     /// The expected service for a set of operand identifiers: normalize each,
@@ -254,6 +282,48 @@ mod tests {
             oracle.expected_service(&["a_url".to_string(), "b_url".to_string()]),
             None,
         );
+    }
+
+    #[test]
+    fn service_for_url_matches_on_host() {
+        let config = ConfigurationData {
+            service_descriptions: vec![
+                svc("medical-data-service", &["http://medical-data-service:8000"]),
+                svc("clinical-data-service", &["http://clinical-data-service:8000"]),
+            ],
+        };
+        // Port/path differ from config but host matches -> hit.
+        assert_eq!(
+            service_for_url("http://medical-data-service:5000/v1", &config),
+            Some("medical-data-service".to_string())
+        );
+        // No configured service on this host -> miss.
+        assert_eq!(service_for_url("http://unknown-service:8000", &config), None);
+        // No host -> miss.
+        assert_eq!(service_for_url("", &config), None);
+    }
+
+    #[test]
+    fn from_constants_file_reads_only_constants() {
+        // Config held in memory; only the constants file is read from disk.
+        let config = ConfigurationData {
+            service_descriptions: vec![svc(
+                "medical-data-service",
+                &["http://medical-data-service:8000"],
+            )],
+        };
+        let oracle = ServiceOracle::from_constants_file(
+            manifest_relative("../config/constants/empaia-constants.json"),
+            &config,
+        )
+        .expect("empaia constants load");
+        // Only mds_url's host is in the in-memory config, so it resolves;
+        // constants for other hosts are dropped (partial oracle).
+        assert_eq!(
+            oracle.expected_service(&["mds_url".to_string()]),
+            Some("medical-data-service")
+        );
+        assert!(oracle.len() >= 1);
     }
 
     #[test]

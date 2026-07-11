@@ -227,6 +227,67 @@ matches, so it can only raise resolution.
    and 0.7 (GATE C) are committed decision rules — fine for execution
    discipline, but the paper should report the full numbers and curves, not
    the gate verdicts.
+9. **The Java residual population is partly an extraction artifact, and it
+   interacts with a validation gap.** (Discovered in the 2026-07-11 Phase 3
+   train-ticket run; full trace in `sage_rework_results.md` §Phase 3.)
+   **STATUS: the artifact is FIXED (2026-07-11)** — the `pass3/restcalls.rs`
+   `Err` branch now resolves pure literals env-free, dropping train-ticket's LLM
+   tail from 22 to 2 and eliminating the finding-3 error class at the source. The
+   analysis below is retained because it is the paper's story (artifact → wrong
+   population → downstream LLM error) and because the *validation gap* and the
+   *test-file scoping* question remain open.
+   Java string-literal call URLs retain their **surrounding double-quotes**
+   through symbolic evaluation (the Java *calls* extractor never strips them —
+   only the *endpoints* extractor does), so a fully-known target such as
+   `"http://ts-price-service:16579/api/v1/priceservice/prices"` has a
+   `target_uri` beginning with `"`, fails the gate's `target_uri.starts_with(
+   "http")` test (`pass3/restcalls.rs`), and is misclassified `NeedsResolution`
+   even though nothing is actually unresolved. Two consequences the paper must
+   control for:
+   - **Population contamination.** Most of train-ticket's 22 cross-service
+     "residuals" are these quote-wrapped literals (several also in `src/test/`
+     files) — not genuine unresolved calls. They inflate the LLM-tier
+     denominator and depress the apparent *static*-resolution recall on Java.
+     The honest protocol is to strip the quotes (fold literal URLs to
+     `ResolvedURL`), re-measure, and report the residual set that actually
+     survives — the true unresolved population is much smaller than the raw
+     count suggests. This is a corpus/pipeline artifact, not a property of the
+     resolver.
+   - **Grounded ≠ correct (a real closed-set failure mode).** Because these
+     resolved-but-mislabeled URLs reach the LLM, the classifier gets a chance
+     to err on inputs it should never see. For the `ts-price-service` URL the
+     model chose `ts-consign-price-service` (both are candidates) — in one of
+     the two cases *quoting `ts-price-service` in its own evidence* while
+     picking the other, reasoning it "aligns closest." The evidence-grounding
+     check passes (the cited token IS in the context) yet the choice
+     contradicts the evidence: `validate()` enforces token-in-context, not
+     token-supports-the-chosen-service. This is a concrete instance motivating
+     (a) candidate narrowing among near-duplicate names (§6.4) and (b) a
+     stricter validation rule (the chosen service's name-tokens must appear in
+     the cited evidence). 2/18 train-ticket choices failed this way. Report it
+     as a named failure mode, not just an error count.
+   - **Mechanism — associative, not lexical, matching.** The model is *not*
+     string-matching the URL host against the candidate list. It reasons
+     associatively: it sees a "price" endpoint and, among 45 candidates
+     containing two price services, picks the longer / more specific-sounding
+     `ts-consign-price-service`. In the second case it quotes `ts-price-service`
+     in its own evidence yet still chooses the other, calling it "aligns
+     closest" — choice contradicting evidence. This is characteristic of a small
+     coder model (qwen2.5-coder:7b) and predicts that (i) it worsens as
+     candidate sets grow and contain near-synonyms, and (ii) it would likely
+     vanish with a frontier model — making *model capacity* an ablation axis,
+     not a fixed condition.
+   - **Why structured output does not prevent it.** The `response_format`
+     json-schema enum constrains the answer to the *set* of candidate names
+     (and here `strict:false`, so Ollama does not even hard-enforce the set —
+     `validate()` does). It cannot express "the service whose name appears in
+     the URL," so both `ts-price-service` and `ts-consign-price-service` are
+     equally legal outputs. Structured output eliminates the *invalid-JSON /
+     hallucinated-non-candidate* failure mode (its actual contribution: 0/40
+     invalid across both corpora vs 53% in the June generation baseline) but is
+     orthogonal to *which* legal candidate gets chosen. The paper should draw
+     this line explicitly: schema constraints fix well-formedness and set
+     membership, not semantic correctness of the selection.
 
 ### Recommended evaluation protocol for the paper
 

@@ -10,8 +10,10 @@ use sage::resolver::{
 use crate::pipeline::pass3::llm_enhance::{
     baseline::log_baseline_buckets,
     matcher::{build_index, deterministic_match},
+    oracle::{ServiceOracle, service_for_url},
     query_builder::{build_query_for_restcall, rewrite_target_uri_to_service},
     residual_edge_filter::{ResidualTriage, triage},
+    scorer::{ProducedEdge, score},
     signals,
 };
 
@@ -54,6 +56,17 @@ pub async fn evaluate_restcalls_with_llm(
         "residual edge filter: excluded {excluded_non_edges} non-edge residual(s) from resolution"
     );
 
+    // S3.1: snapshot the residual population and its operand identifiers BEFORE
+    // any rewrite. The identifiers can shift meaning once `target_uri` is
+    // rewritten onto a canonical service base, so capture them now to score the
+    // final resolution against the auto-derived oracle.
+    let scored_residuals: Vec<(usize, Vec<String>)> = restcalls
+        .iter()
+        .enumerate()
+        .filter(|(_, rc)| triage(rc, project_ir, config) == ResidualTriage::NeedsResolution)
+        .map(|(i, rc)| (i, signals::extract(rc, project_ir, config).operand_identifiers))
+        .collect();
+
     resolve_deterministically(restcalls, config, project_ir);
 
     let pending = collect_pending_queries(restcalls, config, project_ir);
@@ -63,6 +76,39 @@ pub async fn evaluate_restcalls_with_llm(
     );
     let outcomes = dispatch_queries_concurrently(pending, sage).await;
     apply_query_outcomes(restcalls, outcomes, config);
+
+    score_run(&scored_residuals, restcalls, config);
+}
+
+/// S3.1: score the final resolution against the auto-derived oracle, gated on
+/// the `SAGE_SCORE` env var (a path to a constants file). Unset -> silent no-op,
+/// mirroring the `SAGE_TRACE` pattern. Scoring must never break a real run, so
+/// an oracle load failure only warns.
+fn score_run(residuals: &[(usize, Vec<String>)], restcalls: &[RestCall], config: &ConfigurationData) {
+    let Some(path) = std::env::var_os("SAGE_SCORE") else {
+        return;
+    };
+    let oracle = match ServiceOracle::from_constants_file(&path, config) {
+        Ok(oracle) => oracle,
+        Err(e) => {
+            warn!("scorer: failed to load oracle from {path:?}: {e:#}");
+            return;
+        }
+    };
+
+    let produced: Vec<ProducedEdge> = residuals
+        .iter()
+        .map(|(i, ids)| ProducedEdge {
+            identifiers: ids.clone(),
+            chosen_service: service_for_url(&restcalls[*i].target_uri, config),
+        })
+        .collect();
+
+    let s = score(&produced, &oracle);
+    info!(
+        "scorer: precision {:.3} recall {:.3} | correct {}/{} produced, {} scoreable | oracle {} edges ({} dropped)",
+        s.precision, s.recall, s.correct, s.produced, s.scoreable, oracle.len(), oracle.dropped()
+    );
 }
 
 /// S2.3: deterministic identifier -> service resolution pass, run BEFORE the
