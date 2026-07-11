@@ -28,10 +28,18 @@ pub(super) struct IndexedService<'a> {
 /// Build the per-service match index over the configured service set. Build it
 /// ONCE and reuse it across call sites -- [`deterministic_match`] takes the index
 /// rather than the config so the per-residual loop does not rebuild it.
+///
+/// Config entries with no URL (e.g. empaia's `models` -- a shared data-models
+/// package, `urls: []`, not a microservice) are excluded: they can never be a
+/// resolution target (the service->URL rewrite abstains on no-URL), and keeping
+/// them in the index only lets a generic token (`models`) shadow a real
+/// second-place match into a spurious `>1` ambiguous abstention. Dropping them
+/// can therefore only unmask real matches -- never lose one.
 pub(super) fn build_index(config: &ConfigurationData) -> Vec<IndexedService<'_>> {
     config
         .service_descriptions
         .iter()
+        .filter(|desc| !desc.urls.is_empty())
         .map(|desc| {
             let full = tokenize(&desc.name);
             let acronym: String = full
@@ -301,6 +309,29 @@ mod tests {
         );
         let hit = resolve(&s, &cfg).expect("import should match");
         assert_eq!(hit.name, "medical-data-service");
+    }
+
+    #[test]
+    fn no_url_service_excluded_from_index() {
+        // A no-URL config entry (a shared data-models package, not a service)
+        // whose token would otherwise match is excluded, so it neither resolves
+        // nor shadows a real match into an ambiguous abstention.
+        let cfg = ConfigurationData {
+            service_descriptions: vec![
+                svc("annotation-service"),
+                ServiceDescription {
+                    name: "annotation-models".to_string(),
+                    base_dir_path: "/proj/models".to_string(),
+                    urls: vec![],
+                },
+                svc("app-service"),
+            ],
+        };
+        // Without the no-URL exclusion, `annotation` would match BOTH
+        // annotation-service and annotation-models -> ambiguous -> None.
+        let s = signals("app-service", None, &[], &["annotation_url"]);
+        let hit = resolve(&s, &cfg).expect("no-URL entry excluded -> unique match");
+        assert_eq!(hit.name, "annotation-service");
     }
 
     #[test]

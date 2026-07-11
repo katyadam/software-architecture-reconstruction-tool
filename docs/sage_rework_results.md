@@ -370,6 +370,29 @@ happen.
   the matcher index. It cannot lift the 20 directly (those are already resolved),
   but it stops `models` shadowing a real second-place match into a >1 ambiguous
   abstention, so it can only raise real resolution — re-measure before finalizing.
+
+- **GATE B follow-up DONE — no-URL non-services excluded from the matcher index**
+  (empaia `--scrape`, measured 2026-07-11). `matcher.rs::build_index` now filters
+  `desc.urls.is_empty()`, dropping empaia's `models` (a shared data-models
+  package, `urls: []`, not a microservice). Re-measured:
+
+  | metric | before (2026-06-29) | after (2026-07-11) |
+  |---|---|---|
+  | det. hits on cross-service | 26/43 (60%) | **33/43 (76%)** |
+  | actually resolved (rewritten) | 20/43 (47%) | **33/43 (76%)** |
+  | LLM fallback population (abstentions) | 23 | **10** |
+  | oracle precision / recall (spot-check) | 0.667 / 0.182 | **0.909 / 0.909** (13 edges) |
+
+  **The unmasking was larger than predicted.** The flag expected the exclusion to
+  only prevent `models` shadowing; in fact **13** residuals (33 − 20) that were
+  previously abstaining — `models` collided them into a `>1` ambiguous group — now
+  resolve uniquely. The hit/resolve gap also closed (33 == 33): the 6 old
+  `models` hits that abstained on no-URL are gone from the index, so there is no
+  longer a hit-but-can't-rewrite class. Resolution **crossed the 60% GATE B bar
+  (47% → 76%)**, so the revised verdict is: deterministic tier is
+  **self-sufficient for the bulk; LLM is a genuine minority fallback (10 of 43,
+  23%)**, not deferrable (< 90%). The 109 non-edges are still excluded upstream by
+  the edge filter; totals unchanged (577 → 425 ResolvedURL / 152 NeedsResolution).
 - **Post-LLM coverage** (after S2.7): _pending._
 
 ---
