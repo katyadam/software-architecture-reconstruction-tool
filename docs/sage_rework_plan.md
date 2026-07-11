@@ -561,6 +561,14 @@ the per-phase rule (§4): end green, committed, with results written to
   candidates }`; `SageQuery` carries S2.0 signals (retire
   `FactBundle`/`variables_map`); `client.rs` sends the Ollama `format` enum
   schema (§6.3). *Files:* `sage/query.rs`, `sage/client.rs`.
+  - **MUST exclude the origin service from `candidates`.** A REST call site is
+    not a cross-service (IMCG) edge to its own service, so the closed-set the LLM
+    chooses from must drop `signals.origin_service` -- mirroring the deterministic
+    matcher's origin filter (`matcher.rs` `index[i].desc.name != origin_service`,
+    test `origin_service_hit_is_excluded`). Otherwise the LLM could pick a
+    self-loop the deterministic tier already refuses. Build `candidates` from
+    `config.service_descriptions` minus the origin (and arguably minus no-URL
+    non-services -- see the GATE B `models` follow-up).
 - **S2.5 — Query template (2b-i).** Rewrite `prompt.rs` to §6.1/6.2; delete
   `build_variables_message`; collapse the six question kinds. *Files:*
   `sage/prompt.rs`.

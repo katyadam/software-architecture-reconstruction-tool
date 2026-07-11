@@ -325,9 +325,51 @@ happen.
      job-service` was confirmed a **false edge** (`JobClient` is an asyncpg DB
      client). -> motivates **Phase 1.5 (residual edge hygiene)**.
 
-- **GATE B verdict** (is the LLM needed): _blocked — not measurable until the
-  residual population is cleaned (Phase 1.5). Coverage on a polluted set is
-  uninterpretable._
+- **S2.2 — Service->canonical-URL rewrite:** _done (2026-06-29)._
+  `query_builder.rs`. Fixed the `split('/')` bug: extraction of the path suffix
+  is now a shared `path_suffix` char-scan (first `/`-leading literal, stopped at
+  quote/whitespace/`+`, trailing quote trimmed) feeding `rewrite_onto_base(uri,
+  base) -> base.trim_end_matches('/') + suffix`. New `rewrite_target_uri_to_service
+  (uri, &ServiceDescription)` writes `<urls[0]><suffix>`; a no-url service returns
+  the uri UNCHANGED so the caller treats it as an abstain. The old free-text
+  `rewrite_target_uri_with_resolution` (LLM apply path) kept, now routed through
+  the same fixed `rewrite_onto_base`. 6 unit tests.
+
+- **S2.3 — Wire deterministic-only resolution:** _done (2026-06-29)._
+  `dispatch.rs`. A deterministic pass runs BEFORE the LLM: for each
+  `triage == NeedsResolution` residual, `signals::extract -> deterministic_match`;
+  on a hit rewrite `target_uri` in place via `rewrite_target_uri_to_service`,
+  applied only when `rewritten != original` (no-url match = no-op abstain). A
+  resolved uri then reads as `ResolvedURL`, so `collect_pending_queries` excludes
+  it from the LLM batch automatically; abstentions fall through to the LLM.
+
+- **MILESTONE M1 / GATE B — deterministic coverage** (empaia `--scrape`, measured
+  2026-06-29). Population: 577 total -> 425 ResolvedURL (73%) / 152 NeedsResolution
+  (26%) / 0 Junk. Edge hygiene splits the 152 into **43 cross-service (28%)** +
+  109 non-edges (71%, dropped before resolution).
+
+  | metric | value |
+  |---|---|
+  | cross-service residuals | 43 |
+  | matcher *hits* on cross-service | **26 / 43 (60%)** |
+  | actually *resolved* (rewritten to a canonical URL) | **20 / 43 (47%)** |
+  | LLM fallback population (abstentions) | **23** (= 43 − 20) |
+
+  **The 26-vs-20 gap is real and informative.** 6 of the 26 matcher hits resolve
+  to the config's `models` entry (`urls: []`, `base_dir_path: empaia/models`) —
+  a shared **data-models package, not a microservice**. The generic token
+  `models` (from `from empaia.models import ...` / `models.X`) token-subset
+  matches it. These 6 correctly abstain (no URL -> no rewrite) and fall to the
+  LLM, but they inflate the headline hit rate. The honest *resolution* rate is
+  **47%**, just below the GATE B "≥60%" bar.
+
+- **GATE B verdict** (is the LLM needed): **yes, as a fallback.** Deterministic
+  resolution lands 47% (20/43) on the clean cross-service set — short of the 60%
+  self-sufficiency bar — leaving 23 abstentions for the LLM closed-set classifier
+  (Phase 2b). Cheap follow-up flagged: exclude no-url non-services (`models`) from
+  the matcher index. It cannot lift the 20 directly (those are already resolved),
+  but it stops `models` shadowing a real second-place match into a >1 ambiguous
+  abstention, so it can only raise real resolution — re-measure before finalizing.
 - **Post-LLM coverage** (after S2.7): _pending._
 
 ---
@@ -378,3 +420,12 @@ happen.
   measurement-first (S1.5/S1.6), then enforce (S1.7). This is ground-truth-free
   — the right lever given the thin oracle. Resume by spawning a Code Writer for
   S1.5 (see plan §4 Phase 1.5 / §9 Phase 1.5).
+- **2026-06-29 — GATE B = LLM needed as fallback.** With the population clean
+  (43 cross-service), deterministic resolution lands 20/43 (47%), below the 60%
+  self-sufficiency bar -> keep the LLM closed-set fallback (Phase 2b) for the 23
+  abstentions. Finding: the matcher *hits* 26/43 but resolves only 20 — 6 hits go
+  to the config's `models` entry, a data-models package (`urls: []`,
+  `base_dir_path: empaia/models`), not a microservice; they abstain on no-url.
+  Follow-up flagged (not yet done): exclude no-url non-services from the matcher
+  index, then re-measure (can unmask real second-place matches, only raises
+  resolution).

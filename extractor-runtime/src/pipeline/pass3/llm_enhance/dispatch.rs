@@ -11,8 +11,10 @@ use sage::resolver::{
 
 use crate::pipeline::pass3::llm_enhance::{
     baseline::log_baseline_buckets,
-    query_builder::{build_query_for_restcall, rewrite_target_uri_with_resolution},
+    matcher::{build_index, deterministic_match},
+    query_builder::{build_query_for_restcall, rewrite_onto_base, rewrite_target_uri_to_service},
     residual_edge_filter::{ResidualTriage, triage},
+    signals,
 };
 
 const MAX_CONCURRENT_LLM_QUERIES: usize = 4;
@@ -55,6 +57,8 @@ pub async fn evaluate_restcalls_with_llm(
         "residual edge filter: excluded {excluded_non_edges} non-edge residual(s) from resolution"
     );
 
+    resolve_deterministically(restcalls, config, project_ir);
+
     let pending = collect_pending_queries(restcalls, &variables, config, sage, project_ir);
     info!(
         "Number of REST calls to evaluate with LLM: {}",
@@ -62,6 +66,38 @@ pub async fn evaluate_restcalls_with_llm(
     );
     let outcomes = dispatch_queries_concurrently(pending, sage).await;
     apply_query_outcomes(restcalls, outcomes);
+}
+
+/// S2.3: deterministic identifier -> service resolution pass, run BEFORE the
+/// LLM. For each cross-service residual the lexical matcher resolves
+/// unambiguously, rewrite its `target_uri` onto the matched service's canonical
+/// base in place. The rewritten uri then reads as `ResolvedURL`, so
+/// `collect_pending_queries` naturally excludes it from the LLM batch. A matched
+/// service with no configured URL leaves the uri unchanged -- the `!=` guard
+/// treats that as an abstain (no-op).
+fn resolve_deterministically(
+    restcalls: &mut [RestCall],
+    config: &ConfigurationData,
+    project_ir: &ProjectIR,
+) {
+    let index = build_index(config);
+    let mut resolved = 0usize;
+    let mut candidates = 0usize;
+    for rc in restcalls.iter_mut() {
+        if triage(rc, project_ir, config) != ResidualTriage::NeedsResolution {
+            continue;
+        }
+        candidates += 1;
+        let sig = signals::extract(rc, project_ir, config);
+        if let Some(service) = deterministic_match(&sig, &index) {
+            let rewritten = rewrite_target_uri_to_service(&rc.target_uri, &service);
+            if rewritten != rc.target_uri {
+                rc.target_uri = rewritten;
+                resolved += 1;
+            }
+        }
+    }
+    info!("deterministic resolver: resolved {resolved} of {candidates} cross-service residual(s)");
 }
 
 fn collect_pending_queries(
@@ -116,7 +152,7 @@ fn apply_query_outcomes(restcalls: &mut [RestCall], outcomes: Vec<QueryOutcome>)
             Ok(resp) => {
                 if let Some(resolved) = resp.resolved {
                     restcalls[outcome.index].target_uri =
-                        rewrite_target_uri_with_resolution(&outcome.original_uri, &resolved);
+                        rewrite_onto_base(&outcome.original_uri, &resolved);
                 }
             }
             Err(e) => {
