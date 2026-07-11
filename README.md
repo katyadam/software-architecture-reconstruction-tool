@@ -7,7 +7,7 @@ SAR Tool provides a unified workflow for analyzing distributed architecture syst
 ---
 
 ## Disclaimer
-First, this repository is currently anonymized. Second, `main` branch currently includes only single-pass SAR. Multi-pass SAR is in the development process on the branch `multi-pass`.
+First, this repository is currently anonymized. Second, `main` branch currently includes multi-pass SAR. Single-pass SAR is on the branch `single-pass`. Another version is the combination of multi-pass with LLM in order to achieve the most precise reconstruction. The combination is located on the branch `sage-rework`.
 
 ## Overview
 
