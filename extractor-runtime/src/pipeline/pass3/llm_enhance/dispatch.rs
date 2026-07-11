@@ -8,7 +8,6 @@ use sage::resolver::{
 };
 
 use crate::pipeline::pass3::llm_enhance::{
-    baseline::log_baseline_buckets,
     matcher::{build_index, deterministic_match},
     oracle::{ServiceOracle, service_for_url},
     query_builder::{build_query_for_restcall, rewrite_target_uri_to_service},
@@ -37,14 +36,6 @@ pub async fn evaluate_restcalls_with_llm(
     sage: &SageClient,
     project_ir: &ProjectIR,
 ) {
-    // TEMPORARY (S0.3) measurement: emit the baseline bucket breakdown under the
-    // current (old) lexical gate plus the S0.4 strong-vs-thin split over the
-    // residual population. Runs before any network call, so the summary is
-    // produced even when sage is unreachable. Remove once the Phase 1 gate
-    // rework lands. (Replaces the per-line S0.1 `log_residual_signals` dump;
-    // sample residual lines are still printed by the measurement itself.)
-    log_baseline_buckets(restcalls, config, project_ir);
-
     // S1.7: report how many residuals the unified triage drops as non-edges
     // (intra-service DB/dict/route reads the lexical identifier swept in) before
     // they would have reached the LLM. Cheap second pass; signals are lazy.
@@ -64,7 +55,12 @@ pub async fn evaluate_restcalls_with_llm(
         .iter()
         .enumerate()
         .filter(|(_, rc)| triage(rc, project_ir, config) == ResidualTriage::NeedsResolution)
-        .map(|(i, rc)| (i, signals::extract(rc, project_ir, config).operand_identifiers))
+        .map(|(i, rc)| {
+            (
+                i,
+                signals::extract(rc, project_ir, config).operand_identifiers,
+            )
+        })
         .collect();
 
     resolve_deterministically(restcalls, config, project_ir);
@@ -84,7 +80,11 @@ pub async fn evaluate_restcalls_with_llm(
 /// the `SAGE_SCORE` env var (a path to a constants file). Unset -> silent no-op,
 /// mirroring the `SAGE_TRACE` pattern. Scoring must never break a real run, so
 /// an oracle load failure only warns.
-fn score_run(residuals: &[(usize, Vec<String>)], restcalls: &[RestCall], config: &ConfigurationData) {
+fn score_run(
+    residuals: &[(usize, Vec<String>)],
+    restcalls: &[RestCall],
+    config: &ConfigurationData,
+) {
     let Some(path) = std::env::var_os("SAGE_SCORE") else {
         return;
     };
@@ -107,7 +107,13 @@ fn score_run(residuals: &[(usize, Vec<String>)], restcalls: &[RestCall], config:
     let s = score(&produced, &oracle);
     info!(
         "scorer: precision {:.3} recall {:.3} | correct {}/{} produced, {} scoreable | oracle {} edges ({} dropped)",
-        s.precision, s.recall, s.correct, s.produced, s.scoreable, oracle.len(), oracle.dropped()
+        s.precision,
+        s.recall,
+        s.correct,
+        s.produced,
+        s.scoreable,
+        oracle.len(),
+        oracle.dropped()
     );
 }
 

@@ -10,7 +10,6 @@
 //! - [`scorer`]: precision/recall scorer (S0.2)
 //! - [`residual_edge_filter`]: residual cross-service vs non-edge classifier (Phase 1.5)
 
-mod baseline;
 mod dispatch;
 mod matcher;
 mod oracle;

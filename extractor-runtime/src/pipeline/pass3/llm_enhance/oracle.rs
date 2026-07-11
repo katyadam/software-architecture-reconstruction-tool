@@ -61,7 +61,11 @@ pub(super) fn service_for_url(url: &str, config: &ConfigurationData) -> Option<S
     config
         .service_descriptions
         .iter()
-        .find(|svc| svc.urls.iter().any(|u| host_of(u).as_deref() == Some(&host)))
+        .find(|svc| {
+            svc.urls
+                .iter()
+                .any(|u| host_of(u).as_deref() == Some(&host))
+        })
         .map(|svc| svc.name.clone())
 }
 
@@ -78,8 +82,9 @@ pub(super) fn normalize(identifier: &str) -> String {
 }
 
 impl ServiceOracle {
-    /// Build the oracle from already-parsed parts. Used by both [`load`] and
-    /// the unit tests (so tests need no files on disk).
+    /// Build the oracle from already-parsed parts. Used by
+    /// [`from_constants_file`] and the unit tests (so tests need no files on
+    /// disk).
     pub(super) fn from_parts(constants: &[OracleConstant], config: &ConfigurationData) -> Self {
         // host -> set of service names (a host should map to one service).
         let mut host_to_services: HashMap<String, Vec<String>> = HashMap::new();
@@ -113,27 +118,9 @@ impl ServiceOracle {
         ServiceOracle { edges, dropped }
     }
 
-    /// Load the oracle from a constants file and a config file on disk.
-    pub(super) fn load(
-        constants_path: impl AsRef<Path>,
-        config_path: impl AsRef<Path>,
-    ) -> anyhow::Result<Self> {
-        let constants_path = constants_path.as_ref();
-        let config_path = config_path.as_ref();
-        let constants_raw = std::fs::read_to_string(constants_path)
-            .with_context(|| format!("reading constants {}", constants_path.display()))?;
-        let config_raw = std::fs::read_to_string(config_path)
-            .with_context(|| format!("reading config {}", config_path.display()))?;
-        let constants: ConstantsFile = serde_json::from_str(&constants_raw)
-            .with_context(|| format!("parsing constants {}", constants_path.display()))?;
-        let config: ConfigurationData = serde_json::from_str(&config_raw)
-            .with_context(|| format!("parsing config {}", config_path.display()))?;
-        Ok(Self::from_parts(&constants.constants, &config))
-    }
-
     /// Load the oracle from a constants file on disk plus an in-memory config.
-    /// Unlike [`load`], the config is already held by the caller, so only the
-    /// constants file is read and parsed here.
+    /// The config is already held by the caller, so only the constants file is
+    /// read and parsed here.
     pub(super) fn from_constants_file(
         constants_path: impl AsRef<Path>,
         config: &ConfigurationData,
@@ -288,8 +275,14 @@ mod tests {
     fn service_for_url_matches_on_host() {
         let config = ConfigurationData {
             service_descriptions: vec![
-                svc("medical-data-service", &["http://medical-data-service:8000"]),
-                svc("clinical-data-service", &["http://clinical-data-service:8000"]),
+                svc(
+                    "medical-data-service",
+                    &["http://medical-data-service:8000"],
+                ),
+                svc(
+                    "clinical-data-service",
+                    &["http://clinical-data-service:8000"],
+                ),
             ],
         };
         // Port/path differ from config but host matches -> hit.
@@ -298,7 +291,10 @@ mod tests {
             Some("medical-data-service".to_string())
         );
         // No configured service on this host -> miss.
-        assert_eq!(service_for_url("http://unknown-service:8000", &config), None);
+        assert_eq!(
+            service_for_url("http://unknown-service:8000", &config),
+            None
+        );
         // No host -> miss.
         assert_eq!(service_for_url("", &config), None);
     }
@@ -328,9 +324,15 @@ mod tests {
 
     #[test]
     fn empaia_known_edges_resolve() {
-        let oracle = ServiceOracle::load(
+        let config_raw = std::fs::read_to_string(manifest_relative(
+            "../config/configurations/empaia-config.json",
+        ))
+        .expect("read empaia config");
+        let config: ConfigurationData =
+            serde_json::from_str(&config_raw).expect("parse empaia config");
+        let oracle = ServiceOracle::from_constants_file(
             manifest_relative("../config/constants/empaia-constants.json"),
-            manifest_relative("../config/configurations/empaia-config.json"),
+            &config,
         )
         .expect("empaia fixtures load");
 

@@ -9,11 +9,10 @@
 //! which are cross-service HTTP edges. This module classifies a residual as a
 //! genuine cross-service call or a `NonEdge` by the URL-nature of its target.
 //!
-//! `classify_residual` is MEASUREMENT-ONLY (S1.5): it changes nothing the matcher
-//! or dispatch sees; `baseline.rs` consumes it for its `EDGE HYGIENE` block.
-//! Enforcement lives in [`triage`] (S1.7), which composes the gate with the edge
-//! filter and is what `dispatch.rs` uses to DROP `NonEdge`s before resolution.
-//! See plan §4 Phase 1.5.
+//! `classify_residual` is a pure helper (S1.5): on its own it changes nothing
+//! the matcher or dispatch sees. Enforcement lives in [`triage`] (S1.7), which
+//! composes the gate with the edge filter and is what `dispatch.rs` uses to DROP
+//! `NonEdge`s before resolution. See plan §4 Phase 1.5.
 
 use crate::pipeline::pass3::llm_enhance::signals::{self, CallSiteSignals};
 use crate::pipeline::pass3::restcalls::{EvalState, is_restcall_evaluated_enough};

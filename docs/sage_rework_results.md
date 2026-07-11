@@ -472,7 +472,8 @@ happen.
     scored via the oracle, gated on `SAGE_ORACLE_CONSTANTS`+`SAGE_ORACLE_CONFIG` —
     but over the **deterministic-only** output (pre-LLM). The new `SAGE_SCORE` path
     scores the **LLM-final** output and survives `baseline.rs`'s S3.3 removal. The
-    two env-var names must be reconciled in S3.3 (keep one scorer).
+    two env-var names were reconciled in S3.3 (see below): `SAGE_ORACLE_*` went away
+    with `baseline.rs`, leaving `SAGE_SCORE` as the single scorer path.
 
 - **S3.2 — End-to-end runs** (live Ollama `qwen2.5-coder:7b`, `--scrape --llm`,
   relative `-p ../<corpus>` + `local-*-config.json`; measured 2026-07-11):
@@ -576,7 +577,30 @@ happen.
     the raw gate output suggested. (Separate, still-open scoping question: whether
     `src/test/` calls should contribute SDG edges at all — finding 2's other half.)
 
-- **S3.3 / S3.4:** pending (cleanup + final doc polish).
+- **S3.3 — Cleanup:** _done (2026-07-11)._ The plan's literal dead-machinery list
+  (`ranking.rs::rank_and_cap`, dead `QueryKind`s, `FactBundle` snippet shape,
+  `variables_budget`, prose hint, `build_snippet`) was **already removed** across
+  Phases 1–2; a repo-wide grep confirms none survive. `QueryKind` is now an
+  intentional single-variant enum (the documented closed-set collapse), not dead.
+  What remained:
+  - **Removed `baseline.rs`** (293 lines, the TEMPORARY S0.3 instrumentation whose
+    own header slated it for S3.3 removal): the BASELINE-BUCKETS / STRONG-VS-THIN /
+    DETERMINISTIC-COVERAGE / EDGE-HYGIENE / ORACLE-SCORE log blocks. Their numbers
+    are already captured in this document; the permanent lightweight diagnostics
+    (`residual edge filter: excluded N`, `deterministic resolver: resolved X of Y`,
+    `scorer: precision … recall …`) live in `dispatch.rs` and stay.
+  - **Env-var unification:** `SAGE_ORACLE_CONSTANTS`/`SAGE_ORACLE_CONFIG` were used
+    only by `baseline.rs` and disappeared with it. `SAGE_SCORE=<constants-file>` (the
+    LLM-final scorer in `dispatch.rs`) is now the **single** scoring env var.
+  - **Orphan swept:** `ServiceOracle::load` (two-file disk loader) had `baseline.rs`
+    as its only non-test caller; removed it and re-pointed its test
+    (`empaia_known_edges_resolve`) at `from_constants_file` (parses the config in the
+    test, then joins). `from_constants_file` + `service_for_url` remain the load path.
+  - Stale doc comments referencing `baseline.rs` / `load` were fixed
+    (`residual_edge_filter.rs`, `oracle.rs`). Green: `-p extractor-runtime` build +
+    clippy clean, 56 unit + 48 integration tests pass.
+
+- **S3.4 — Final doc polish:** pending.
 
 ---
 

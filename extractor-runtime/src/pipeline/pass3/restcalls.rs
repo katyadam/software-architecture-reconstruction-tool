@@ -143,7 +143,11 @@ fn evaluate_single_restcall(
                 restcall.target_uri
             );
             evaluator
-                .generate_uris(&restcall.target_uri, &AnalysisResult::default(), merged_enums)
+                .generate_uris(
+                    &restcall.target_uri,
+                    &AnalysisResult::default(),
+                    merged_enums,
+                )
                 .into_iter()
                 .map(|uri| restcall.clone_from_target_uri(&uri))
                 .collect()
