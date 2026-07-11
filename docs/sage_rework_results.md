@@ -600,7 +600,17 @@ happen.
     (`residual_edge_filter.rs`, `oracle.rs`). Green: `-p extractor-runtime` build +
     clippy clean, 56 unit + 48 integration tests pass.
 
-- **S3.4 — Final doc polish:** pending.
+- **S3.4 — Final doc polish:** _done (2026-07-11)._ Reconciled the consolidated
+  knowledge report (`sage_rework_knowledge_report.md`) with the completed state:
+  status header updated to "code-complete through Phase 3", the stale "Remaining
+  work / Uncommitted" block replaced by built-Phase-2b + done-Phase-3 sections with
+  final metrics, §6 item 1's residual count corrected for the post-fix population
+  (~19 empaia + ~2 train-ticket, not the inflated 43+24), and §8 pointers updated
+  (`baseline.rs` row dropped; oracle/scorer relabeled as the `SAGE_SCORE` eval path).
+
+**Phase 3 complete.** The rework is code-complete through Phase 3 on `sage-rework`;
+the only remaining work is evaluation rigor (a hand-labeled ground-truth pass), not
+code — tracked as the deferred GATE C verdict and §6 threats-to-validity.
 
 ---
 

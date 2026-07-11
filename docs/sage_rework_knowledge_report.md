@@ -1,9 +1,16 @@
 # Sage Rework — Consolidated Knowledge Report
 
 Everything known about the sage REST-call target-resolution rework as of
-2026-07-02: history, architecture, measured results, design rationale,
+2026-07-11: history, architecture, measured results, design rationale,
 evaluation critique, and proposed future work. Written as the single
 catch-up document for a cold reader (or a paper draft).
+
+**Status: the rework is code-complete through Phase 3** (structural gate,
+edge hygiene, deterministic matcher, closed-set LLM classifier, service ->
+canonical-URL rewrite, and the pure-literal extraction fix all landed and
+committed on `sage-rework`). What remains is *evaluation rigor*, not code: a
+hand-labeled ground-truth pass to convert coverage numbers into defensible
+precision/recall (see §6). Final measured metrics are in §4 "Phase 3".
 
 - **Branch:** `sage-rework` (off `llm-sage`)
 - **Companion docs:** [`sage_rework_plan.md`](sage_rework_plan.md) (the plan),
@@ -139,18 +146,45 @@ fallback**. Flagged cheap follow-up (open): exclude no-URL non-services from
 the matcher index and re-measure; it can only unmask shadowed second-place
 matches, so it can only raise resolution.
 
-### Remaining work
-- Phase 2b — LLM closed-set classifier for the 23 abstentions:
-  `QueryKind::ClassifyTargetService { candidates }` plumbing (S2.4, candidates
-  must exclude origin), prompt rework (S2.5), answer contract = membership +
-  evidence grounding, confidence gate dropped (S2.6), dispatch wiring (S2.7).
-  Ollama `format` enum schema constrains the decode so an out-of-set answer
-  cannot be produced — this removes the 53%-invalid-JSON mode at the source.
-- Phase 3 / GATE C — final precision/recall on empaia + train-ticket; cleanup
-  (`ranking.rs::rank_and_cap`, dead `QueryKind`s, `baseline.rs`,
-  `variables_budget`).
-- Uncommitted at time of writing: S2.2/S2.3 changes in `dispatch.rs`,
-  `query_builder.rs`, and the two planning docs.
+### Phase 2b — LLM closed-set classifier _(built)_
+For the calls the deterministic matcher abstains on:
+`QueryKind::ClassifyTargetService { candidates }` plumbing (candidates exclude
+the origin service), prompt rework, answer contract = membership + evidence
+grounding, confidence gate dropped, dispatch wiring. Ollama `format` enum
+schema constrains the decode so an out-of-set answer cannot be produced — this
+removed the 53%-invalid-JSON mode at the source (**0/40 invalid across both
+corpora**, vs 53% in the June generation baseline).
+
+### Phase 3 — final evaluation + cleanup _(done, 2026-07-11)_
+
+Live runs (Ollama `qwen2.5-coder:7b`, `--scrape --llm`, relative `-p ../<corpus>`).
+
+**Empaia** (577 restcalls): ResolvedURL 449 (77%); residual 128 (22%); after
+hygiene 19 cross-service / 109 non-edge; deterministic resolved **10/19 (52%)**;
+9 dispatched to LLM (2 chose / 6 abstained / 1 error / **0 invalid JSON**).
+
+**Train-ticket** — *after* the pure-literal extraction fix (see item 9 / §Phase 3
+of the results log): ResolvedURL **233 (98%)**, residual **4**, cross-service **2**,
+LLM tail **2** (down from 22 pre-fix). ~91% of the raw "22 cross-service residuals"
+were quote-wrapped literal URLs — an extraction artifact, not genuine unresolved
+calls.
+
+**GATE C** (train-ticket precision < 0.7 -> revisit §6.4 candidate narrowing):
+**soft-PASS, rigorous verdict deferred.** The auto-oracle is 0-scoreable on both
+corpora (it keys on `*_url` operand names; the post-gate residual tail carries path
+params instead — the discriminating token moved to `client_class`/`imports`), so
+there is no scored precision yet. The train-ticket spot-check was ~16/18 ≈ 0.89
+grounded-correct, above 0.7, but on a weak population with 2 real candidate-
+confusion errors (the `ts-price` / `ts-consign-price` case, item 9). Per the
+2026-07-11 decision (auto-oracle both, hand-label later) the rigorous verdict waits
+for the labeled pass; the soft result does not justify reopening §6.4 now.
+
+**Cleanup (S3.3):** the plan's dead-machinery list (`rank_and_cap`, dead
+`QueryKind`s, `FactBundle` snippet, `variables_budget`, prose hint, `build_snippet`)
+was already gone from Phases 1-2; `baseline.rs` (temporary S0.3 instrumentation)
+and the redundant `SAGE_ORACLE_*` env vars were removed, leaving `SAGE_SCORE` as
+the single scorer path. `oracle.rs`/`scorer.rs` are retained — wired into dispatch,
+they are now the permanent LLM-final eval path, not just a spot-check helper.
 
 ## 5. Load-bearing design decisions
 
@@ -186,12 +220,16 @@ matches, so it can only raise resolution.
 ### Gaps that matter for publication (threats to validity)
 
 1. **Ground truth is the weakest link.** All headline numbers so far are
-   *coverage*, not *correctness*; the only precision signal is 2/3 on an
-   11-sample oracle. Hand-labeling was ruled out when the population was
-   unbounded — but the final population is **43 (empaia) + 24 (train-ticket)
-   = 67 residuals**. Hand-label all of them. Hours of work; converts every
-   coverage number into a real precision/recall number. Without it, GATE B/C
-   verdicts are not defensible in review.
+   *coverage*, not *correctness*; the only precision signal is a ~16/18
+   grounded-correct spot-check plus a 0-scoreable auto-oracle (it misses the
+   residual tail — see item 9 / §Phase 3). Hand-labeling was ruled out when the
+   population was unbounded — but after the extraction fix the final
+   cross-service population is small: **~19 (empaia) + ~2 (train-ticket)** genuine
+   residuals (the raw counts of 43 and 24 were inflated by the static layer
+   resolving fewer URLs and, on Java, by quote-wrapped literals). Hand-label all
+   of them — an afternoon of work that converts every coverage number into a real
+   precision/recall number. Without it, GATE B/C verdicts are not defensible in
+   review.
 2. **Hygiene-filter recall is unmeasured.** Rules 1-3 are lexical; a genuine
    cross-service call whose operand is blandly named (`path`, `target`) is
    silently dropped into the 109. Audit a random sample (~30) of the dropped
@@ -371,7 +409,6 @@ matches, so it can only raise resolution.
 | Triage + hygiene filter | `extractor-runtime/src/pipeline/pass3/llm_enhance/residual_edge_filter.rs` |
 | Signals | `.../llm_enhance/signals.rs` |
 | Deterministic matcher | `.../llm_enhance/matcher.rs` |
-| Oracle / scorer (spot-check only) | `.../llm_enhance/{oracle,scorer}.rs` |
+| Oracle / scorer (`SAGE_SCORE` eval path) | `.../llm_enhance/{oracle,scorer}.rs` |
 | Rewrite + dispatch wiring | `.../llm_enhance/{query_builder,dispatch}.rs` |
-| LLM client/prompt/contract (Phase 2b target) | `sage/src/resolver/{prompt,query,response,client}.rs` |
-| Temporary measurement (removed in S3.3) | `.../llm_enhance/baseline.rs` |
+| LLM client/prompt/contract (Phase 2b) | `sage/src/resolver/{prompt,query,response,client}.rs` |
