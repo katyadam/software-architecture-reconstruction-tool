@@ -5,7 +5,9 @@ use models::{CodeElementsAggregate, ConfigurationData};
 use sage::resolver::client::SageClient;
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+pub mod metadata;
 
 pub async fn get_all_code_elements(
     project_dir: &PathBuf,
@@ -68,6 +70,19 @@ pub async fn get_all_code_elements(
     };
 
     Ok(CodeElementsAggregate::from(evaluated_ir))
+}
+
+/// Serialize `data` to pretty JSON and write it to `<dir>/<filename>`.
+pub fn save_json<T: serde::Serialize>(dir: &Path, filename: &str, data: &T) -> Result<()> {
+    let path = dir.join(filename);
+
+    let json_data = serde_json::to_string_pretty(data)
+        .with_context(|| format!("Failed to serialize {}", filename))?;
+
+    fs::write(&path, json_data).with_context(|| format!("Failed to write file: {:?}", path))?;
+
+    println!("   📄 Generated: {}", filename);
+    Ok(())
 }
 
 pub fn collect_files(dir: &PathBuf) -> Result<Vec<PathBuf>> {

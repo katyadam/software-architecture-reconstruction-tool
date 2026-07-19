@@ -14,6 +14,7 @@ tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+chrono = { workspace = true }
 uuid = { workspace = true }
 env_logger = { workspace = true }
 env-scraper = { path = "../env-scraper" }

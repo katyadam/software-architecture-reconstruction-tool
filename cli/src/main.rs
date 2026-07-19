@@ -1,11 +1,12 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use cli::get_all_code_elements;
+use cli::metadata::{self, RunMetadataInput};
+use cli::{get_all_code_elements, save_json};
 use models::ConfigurationData;
 use sage::resolver::client::SageClient;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::{fs, time::Instant};
 use synthesizer::{
     connectors::dto::Constant, direct_cm_build, direct_imcg_build, direct_sdg_build,
@@ -141,22 +142,27 @@ async fn main() -> Result<()> {
     save_json(&args.output_dir, "sdg.json", &sdg)?;
     save_json(&args.output_dir, "imcg.json", &imcg)?;
 
+    // Emit run_metadata.json alongside the graphs.
+    metadata::write_run_metadata(RunMetadataInput {
+        output_dir: &args.output_dir,
+        project_dir: &args.project_dir,
+        config_file: &args.config_file,
+        constants_file: args.constants_file.as_deref(),
+        scrape_env: args.scrape,
+        llm_enabled: args.llm,
+        llm_model: &args.llm_model,
+        llm_url: &args.llm_url,
+        cm: &cm,
+        sdg: &sdg,
+        imcg: &imcg,
+        extraction_elapsed,
+        synthesis_elapsed,
+    })?;
+
     println!("✅ SAR complete! Results saved to: {:?}", args.output_dir);
     println!(
         "⏳ Total time:\n\tExtraction: {:?}\n\tSynthesis: {:?}",
         extraction_elapsed, synthesis_elapsed
     );
-    Ok(())
-}
-
-fn save_json<T: serde::Serialize>(dir: &Path, filename: &str, data: &T) -> Result<()> {
-    let path = dir.join(filename);
-
-    let json_data = serde_json::to_string_pretty(data)
-        .with_context(|| format!("Failed to serialize {}", filename))?;
-
-    fs::write(&path, json_data).with_context(|| format!("Failed to write file: {:?}", path))?;
-
-    println!("   📄 Generated: {}", filename);
     Ok(())
 }
