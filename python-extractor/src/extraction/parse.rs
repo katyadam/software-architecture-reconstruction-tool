@@ -15,6 +15,7 @@ use crate::extraction::{
     enums::identification::EnumIdentificator,
     extractor::{ExtractParams, Extractor},
     imports::extractor::ImportsExtractor,
+    message_edges::{kafka::KafkaIdentificationStrategy, rabbitmq::RabbitMqIdentificationStrategy},
     module::build_module_callable,
     restcalls::identification::{
         method_call::MethodCallIdentificationStrategy, strategy::IdentificationStrategy,
@@ -94,6 +95,18 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         .filter_map(|call| identification_strategy.identify_restcall(call, file_name))
         .collect();
 
+    let rabbitmq_strategy = RabbitMqIdentificationStrategy::new();
+    let kafka_strategy = KafkaIdentificationStrategy::new();
+    let mut raw_message_edges = calls
+        .iter()
+        .filter_map(|call| rabbitmq_strategy.identify_message_edge(call, file_name))
+        .collect::<Vec<_>>();
+    raw_message_edges.extend(
+        calls
+            .iter()
+            .flat_map(|call| kafka_strategy.identify_message_edges(call, file_name)),
+    );
+
     let call_statements = calls
         .into_iter()
         .map(PythonCallStatement::to_language_agnostic)
@@ -110,5 +123,6 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         assignments,
         enums,
         raw_restcalls,
+        raw_message_edges,
     })
 }

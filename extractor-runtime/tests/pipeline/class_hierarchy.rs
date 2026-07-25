@@ -38,6 +38,7 @@ fn make_file_record(file_path: &str, language: Language) -> FileRecord {
         assignments: HashMap::new(),
         enums: vec![],
         raw_restcalls: vec![],
+        raw_message_edges: vec![],
     }
 }
 

@@ -1,4 +1,4 @@
-use models::{Endpoint, RestCall};
+use models::{Endpoint, MessageEdge, RestCall};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -48,6 +48,9 @@ pub struct PostSDG {
         }
     ]))]
     pub restcalls: Vec<RestCall>,
+
+    #[serde(default)]
+    pub message_edges: Vec<MessageEdge>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema, Debug)]

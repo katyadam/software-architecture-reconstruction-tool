@@ -49,6 +49,7 @@ impl SdgRepository for SdgRepositoryImpl {
         let mut sdg = Sdg {
             services: Vec::new(),
             connections: Vec::new(),
+            message_connections: Vec::new(),
         };
 
         if let Some(record) = result.next().await? {

@@ -42,6 +42,7 @@ impl SdgService for SdgServiceImpl {
         let sdg = self.builder.build(
             &sdg_payload.endpoints,
             &sdg_payload.restcalls,
+            &sdg_payload.message_edges,
             &configuration_dto.configuration_data,
             &constants,
         )?;

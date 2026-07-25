@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, ParsedCallable, RestCall,
+    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, MessageEdge,
+    ParsedCallable, RestCall,
     enums::EnumDefinition,
     ir::{language::Language, syntax::FileRecord},
 };
@@ -28,6 +29,7 @@ pub struct TypedFileRecord {
 
     pub enums: Vec<EnumDefinition>,
     pub raw_restcalls: Vec<RestCall>,
+    pub raw_message_edges: Vec<MessageEdge>,
 }
 
 /// Maps (importer_file_path, codeword) pairs to their resolved definition.
@@ -93,6 +95,7 @@ impl From<FileRecord> for TypedFileRecord {
             assignments: r.assignments,
             enums: r.enums,
             raw_restcalls: r.raw_restcalls,
+            raw_message_edges: r.raw_message_edges,
         }
     }
 }

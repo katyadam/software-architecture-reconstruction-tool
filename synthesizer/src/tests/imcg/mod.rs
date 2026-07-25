@@ -24,6 +24,7 @@ mod tests {
             .build(
                 &endpoints,
                 &restcalls,
+                &[],
                 &ConfigurationData {
                     service_descriptions: service_descs.clone(),
                 },
