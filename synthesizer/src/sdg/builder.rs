@@ -11,7 +11,7 @@ use strsim::levenshtein;
 use crate::{
     connectors::dto::Constant,
     errors::builder::BuilderError,
-    sdg::interaction_kind::{InteractionKind, InteractionSignals, classify, host_of},
+    sdg::interaction_kind::{InteractionKind, InteractionSignals, classify, host_of, is_reflexive},
     sdg::model::{AssignedEndpoint, AssignedRestCall, Connection, Request, Sdg, Service},
     utils::assign_service_description_to_file,
 };
@@ -281,13 +281,20 @@ impl SdgBuilderImpl {
     ) -> Vec<(AssignedRestCall, AssignedEndpoint)> {
         let mut restcall_endpoint: Vec<(AssignedRestCall, AssignedEndpoint)> = Vec::new();
         for restcall in restcalls {
+            // A reflexive call (localhost, or the caller's own configured host)
+            // must resolve *inside* its own service. Without this the matcher
+            // skips own-service endpoints and fuzzy-matches a peer that happens
+            // to share a port -- the empaia mds -> app false positive.
+            let want_self =
+                is_reflexive(host_of(&restcall.data.target_uri), &restcall.service.urls);
+
             let mut matched_endpoint: Option<&AssignedEndpoint> = None;
             let mut min_dist = usize::MAX;
             let mut length_of_longest_str = 0;
             let mut was_matched_exactly = false;
             for endpoint in &endpoints {
                 if endpoint.data.http_method != restcall.data.http_method
-                    || endpoint.service.name == restcall.service.name
+                    || (endpoint.service.name == restcall.service.name) != want_self
                 {
                     continue;
                 }

@@ -233,4 +233,93 @@ mod tests {
             ],
         }
     }
+
+    #[test]
+    fn should_route_localhost_call_to_its_own_service() {
+        let builder = SdgBuilderImpl::new();
+        // Both services expose the same path, and app-service listens on the
+        // same port the localhost URL names -- this is the empaia shape that
+        // produced the mds -> app false positive.
+        let endpoints = vec![
+            Endpoint {
+                function_name: "get_fhir".to_string(),
+                http_method: HttpMethod::GET,
+                uri: "/fhir/Patient".to_string(),
+                file_path: "medical-data-service/app/api.py".to_string(),
+                ..Default::default()
+            },
+            Endpoint {
+                function_name: "get_fhir".to_string(),
+                http_method: HttpMethod::GET,
+                uri: "/fhir/Patient".to_string(),
+                file_path: "app-service/app/api.py".to_string(),
+                ..Default::default()
+            },
+        ];
+        let restcalls = vec![RestCall {
+            function_name: "read_patient".to_string(),
+            http_method: HttpMethod::GET,
+            target_uri: "http://localhost:8000/fhir/Patient".to_string(),
+            file_path: "medical-data-service/app/fhir_resources.py".to_string(),
+            ..Default::default()
+        }];
+        let configuration = ConfigurationData {
+            service_descriptions: vec![
+                ServiceDescription {
+                    name: "medical-data-service".to_string(),
+                    base_dir_path: "medical-data-service".to_string(),
+                    urls: vec![
+                        "http://localhost:8000".to_string(),
+                        "http://medical-data-service:8000".to_string(),
+                    ],
+                },
+                ServiceDescription {
+                    name: "app-service".to_string(),
+                    base_dir_path: "app-service".to_string(),
+                    urls: vec!["http://app-service:8000".to_string()],
+                },
+            ],
+        };
+
+        let sdg = builder
+            .build(&endpoints, &restcalls, &configuration, &[])
+            .expect("build must succeed");
+
+        assert!(
+            !sdg.connections
+                .iter()
+                .any(|c| c.source_id == "medical-data-service" && c.target_id == "app-service"),
+            "a localhost call must not become a cross-service edge"
+        );
+
+        let self_loop = sdg
+            .connections
+            .iter()
+            .find(|c| {
+                c.source_id == "medical-data-service" && c.target_id == "medical-data-service"
+            })
+            .expect("the localhost call must become a self-loop");
+        assert_eq!(self_loop.kind, InteractionKind::Reflexive);
+        assert_eq!(
+            self_loop.requests[0].endpoint.uri, "/fhir/Patient",
+            "the self-loop must carry the real matched endpoint, not a placeholder"
+        );
+    }
+
+    #[test]
+    fn non_reflexive_calls_still_never_match_their_own_service() {
+        // Guards the other half of the flip: a normal cross-service call must
+        // not start matching endpoints inside its own service.
+        let builder = SdgBuilderImpl::new();
+        let sample_data = sample_data();
+        let configuration = sample_configuration();
+        let sdg = builder
+            .build(&sample_data.0, &sample_data.1, &configuration, &vec![])
+            .expect("build must succeed");
+
+        assert!(
+            sdg.connections.iter().all(|c| c.source_id != c.target_id),
+            "no self-loops should appear in the plain cross-service sample"
+        );
+    }
 }
