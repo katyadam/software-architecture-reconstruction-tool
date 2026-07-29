@@ -344,13 +344,26 @@ Builder-level test:
    service that owns a matching endpoint produces one `S -> S` connection typed
    `Reflexive`, and no cross-service connection.
 
-Integration — re-run the synthesizer over the stored code elements and re-score:
+Integration — re-run and re-score. This is a synthesis-only *code* change, but
+the CLI has no synthesis-only entry point: `cli/src/main.rs` extracts and
+synthesizes in one command, so a re-run re-extracts. That matters differently
+for the two corpora:
 
-- train-ticket Java, no-LLM: business precision **1.0**, recall unchanged at 0.95.
-- empaia, LLM + constants + scrape: business FP **5 -> 3**, recall unchanged at
-  14 TP. The three survivors must be exactly the category-D edges.
-
-Re-extraction is not required for either corpus; this is a synthesis-only change.
+- **train-ticket Java, no-LLM** — extraction is deterministic and takes ~2.7s
+  (`results/train-ticket-java-nollm/run_metadata.json`). This is a **hard gate**:
+  business precision must be exactly **1.0** (89 connections, 2 of them typed
+  `TestOrigin`), recall unchanged at 0.95 (87 TP, 5 FN).
+- **empaia, LLM + constants + scrape** — a re-run re-invokes the LLM, so the
+  residual tail is nondeterministic and the 14 TP / 5 FP baseline will not
+  reproduce exactly. The acceptance criteria are therefore stated over the
+  *classification effect*, not over reproducing the baseline numbers:
+  1. the `mds -> event` FP is typed `HealthInfra`, not `Business`;
+  2. the `mds -> app` FP is gone, replaced by a `mds -> mds` edge typed `Reflexive`;
+  3. business TP count is still 14;
+  4. the surviving business FPs are exactly the three category-D edges.
+  If the LLM tail shifts other edges between runs, re-run before concluding
+  anything — a changed edge outside those four criteria is LLM variance, not a
+  regression in this change.
 
 ## Extension contract
 
