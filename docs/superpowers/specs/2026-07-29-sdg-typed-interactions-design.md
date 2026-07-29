@@ -153,7 +153,16 @@ two copies drift when a language is added.
 
 - the final path segment is one of `alive`, `health`, `healthz`, `ready`,
   `readiness`, `live`, `liveness`, `ping`; or
-- the path contains `/actuator` (Spring).
+- any whole path segment equals `actuator` (Spring).
+
+Both rules match whole segments, never substrings. An earlier draft of this
+spec said "the path contains `/actuator`", which also fired on `/actuator-config`
+and `/api/v1/actuatorish-metrics` — business paths that merely share a prefix.
+That direction of error is the costly one: a business edge typed `HealthInfra`
+leaves the business view entirely and reads as a false negative, and this graph
+treats a missing edge as unsafe. Corrected 2026-07-29 during implementation
+review; the same segment discipline already governs Component A's `test`/`tests`
+rule, which is why `latest/` does not match there.
 
 The path fed in is the matched `endpoint.uri`, falling back to the raw
 `restcall.target_uri` when that is empty. The last-segment rule works on a full
