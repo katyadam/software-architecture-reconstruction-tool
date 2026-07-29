@@ -1,3 +1,5 @@
+mod interaction_kind;
+
 #[cfg(test)]
 mod tests {
     use models::{
