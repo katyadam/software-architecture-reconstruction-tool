@@ -176,7 +176,7 @@ fn has_test_segment(path: &str) -> bool {
 /// last segment either way.
 fn is_health_path(path: &str) -> bool {
     let path = path.to_ascii_lowercase();
-    if path.contains("/actuator") {
+    if path.split('/').any(|seg| seg == "actuator") {
         return true;
     }
     let last = path

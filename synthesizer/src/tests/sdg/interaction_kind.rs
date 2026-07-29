@@ -147,6 +147,38 @@ mod tests {
     }
 
     #[test]
+    fn actuator_must_be_a_whole_segment() {
+        // Real Spring actuator paths stay health-infra.
+        for path in [
+            "/actuator/health",
+            "/actuator/info",
+            "http://svc:8080/actuator/health",
+        ] {
+            let s = InteractionSignals {
+                target_path: path,
+                ..business_signals()
+            };
+            assert_eq!(
+                classify(&s, &own_urls()),
+                InteractionKind::HealthInfra,
+                "{path} should be health-infra"
+            );
+        }
+        // A business path that merely starts with the same letters must not be.
+        for path in ["/actuator-config", "/api/v1/actuatorish-metrics"] {
+            let s = InteractionSignals {
+                target_path: path,
+                ..business_signals()
+            };
+            assert_eq!(
+                classify(&s, &own_urls()),
+                InteractionKind::Business,
+                "{path} is not a health probe"
+            );
+        }
+    }
+
+    #[test]
     fn reflexive_localhost() {
         let s = InteractionSignals {
             target_host: "localhost",
