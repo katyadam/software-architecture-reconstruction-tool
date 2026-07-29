@@ -256,16 +256,58 @@ Stated explicitly because each is a deliberate call, not an oversight:
 
 ```
 extraction (unchanged)
-  -> SdgBuilderImpl::build
-       create_endpoint_restcall_pairs
-         per restcall: is_reflexive(host_of(target_uri), caller.urls)
-                       -> match own-service endpoints, else cross-service
-       create_connections
-         per pair:       classify(signals, caller.urls) -> Request.kind
-         per connection: Connection.kind = requests.map(kind).min()
-  -> Sdg -> sdg.json (serde)  and  Neo4j (requests carry kind)
-  -> scoring: count kind == "Business" only
+  |
+  v
+SdgBuilderImpl::build
+  |
+  +-- create_endpoint_restcall_pairs          [C fires here, before matching]
+  |     per restcall:
+  |       host      = host_of(restcall.data.target_uri)
+  |       want_self = is_reflexive(host, restcall.service.urls)
+  |       -> if want_self: consider ONLY own-service endpoints
+  |          else:         consider ONLY cross-service endpoints (today's rule)
+  |       -> Vec<(AssignedRestCall, AssignedEndpoint)>
+  |
+  +-- create_connections                      [A and B fire here, after matching]
+        per (restcall, endpoint) pair:
+          signals = InteractionSignals {
+              caller_file: &restcall.data.file_path,          // -> A
+              target_path: if endpoint.data.uri.is_empty() {  // -> B
+                               &restcall.data.target_uri      //    fallback
+                           } else {
+                               &endpoint.data.uri             //    matched path
+                           },
+              target_host: host_of(&restcall.data.target_uri) // -> C
+          }
+          Request.kind = classify(&signals, &restcall.service.urls)
+                           |
+                           +-- is_test_path(Language::from_path(caller_file),
+                           |                caller_file)      -> TestOrigin
+                           +-- is_reflexive(target_host, own_urls)
+                           |                                  -> Reflexive
+                           +-- is_health_path(target_path)    -> HealthInfra
+                           +-- otherwise                      -> Business
+
+        per connection:
+          Connection.kind = requests.iter().map(|r| r.kind).min()
+                              // Business wins any tie (RTS-safe)
+  |
+  v
+Sdg -> sdg.json via serde        (Request.kind + Connection.kind both present)
+    -> Neo4j                     (requests carry kind; Connection.kind recomputed on read)
+  |
+  v
+scoring: count kind == "Business" only
 ```
+
+Two things this makes explicit that the prose alone did not. **The three
+components fire at two different points** — C must run inside
+`create_endpoint_restcall_pairs` because it decides *which* endpoints are
+eligible, while A and B run in `create_connections` because B needs the endpoint
+that matching produced. And `target_path` prefers the **matched** `endpoint.uri`
+over the raw `target_uri`, falling back only when the matched URI is empty; the
+last-segment health rule works on a full URL, so the fallback needs no separate
+path parser.
 
 ## Scoring changes
 
