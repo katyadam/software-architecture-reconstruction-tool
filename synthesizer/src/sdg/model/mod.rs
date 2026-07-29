@@ -1,5 +1,6 @@
 pub mod bolt;
 
+use crate::sdg::interaction_kind::InteractionKind;
 use models::{Endpoint, RestCall, configuration::ServiceDescription};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -22,12 +23,18 @@ pub struct Connection {
     pub source_id: String,
     pub target_id: String,
     pub requests: Vec<Request>,
+    /// Rollup over `requests` -- `Business` wins any tie. See [`InteractionKind`].
+    #[serde(default)]
+    pub kind: InteractionKind,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, PartialEq, Eq)]
 pub struct Request {
     pub endpoint: Endpoint,
     pub restcall: RestCall,
+    /// Which architectural view this single interaction belongs to.
+    #[serde(default)]
+    pub kind: InteractionKind,
 }
 
 #[derive(Debug, Clone)]

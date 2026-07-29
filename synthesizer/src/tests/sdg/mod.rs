@@ -8,6 +8,7 @@ mod tests {
     use strsim::levenshtein;
 
     use crate::sdg::builder::{SdgBuilder, SdgBuilderImpl};
+    use crate::sdg::interaction_kind::InteractionKind;
 
     #[test]
     fn should_create_simple_sdg() {
@@ -36,6 +37,111 @@ mod tests {
                     .all(|req| levenshtein(&req.endpoint.uri, &req.restcall.target_uri) == 24)
             }),
             "Not matching URIs between matched endpoint-restcall pair, should be matching or atleast similar"
+        );
+    }
+
+    #[test]
+    fn should_type_test_origin_and_health_requests() {
+        let builder = SdgBuilderImpl::new();
+        let endpoints = vec![
+            Endpoint {
+                function_name: "send_email".to_string(),
+                http_method: HttpMethod::POST,
+                uri: "/api/v1/notifyservice/notification".to_string(),
+                file_path: "ts-notification-service/src/main/java/Controller.java".to_string(),
+                ..Default::default()
+            },
+            Endpoint {
+                function_name: "alive".to_string(),
+                http_method: HttpMethod::GET,
+                uri: "/alive".to_string(),
+                file_path: "ts-notification-service/src/main/java/Health.java".to_string(),
+                ..Default::default()
+            },
+        ];
+        let restcalls = vec![
+            // Call site in test code -> TestOrigin.
+            RestCall {
+                function_name: "testSendEmail".to_string(),
+                http_method: HttpMethod::POST,
+                target_uri:
+                    "http://ts-notification-service:17853/api/v1/notifyservice/notification"
+                        .to_string(),
+                file_path: "ts-preserve-service/src/test/java/PreserveServiceImplTest.java"
+                    .to_string(),
+                ..Default::default()
+            },
+            // Production health probe -> HealthInfra.
+            RestCall {
+                function_name: "checkAlive".to_string(),
+                http_method: HttpMethod::GET,
+                target_uri: "http://ts-notification-service:17853/alive".to_string(),
+                file_path: "ts-preserve-service/src/main/java/Monitor.java".to_string(),
+                ..Default::default()
+            },
+        ];
+        // ConfigurationData has exactly one field and derives no Default.
+        let configuration = ConfigurationData {
+            service_descriptions: vec![
+                ServiceDescription {
+                    name: "ts-preserve-service".to_string(),
+                    base_dir_path: "ts-preserve-service".to_string(),
+                    urls: vec!["http://ts-preserve-service:14568".to_string()],
+                },
+                ServiceDescription {
+                    name: "ts-notification-service".to_string(),
+                    base_dir_path: "ts-notification-service".to_string(),
+                    urls: vec!["http://ts-notification-service:17853".to_string()],
+                },
+            ],
+        };
+
+        let sdg = builder
+            .build(&endpoints, &restcalls, &configuration, &[])
+            .expect("build must succeed");
+
+        let conn = sdg
+            .connections
+            .iter()
+            .find(|c| {
+                c.source_id == "ts-preserve-service" && c.target_id == "ts-notification-service"
+            })
+            .expect("the preserve -> notification connection must exist");
+
+        let kinds: Vec<InteractionKind> = conn.requests.iter().map(|r| r.kind).collect();
+        assert!(
+            kinds.contains(&InteractionKind::TestOrigin),
+            "the test-code call site must be TestOrigin, got {kinds:?}"
+        );
+        assert!(
+            kinds.contains(&InteractionKind::HealthInfra),
+            "the /alive call must be HealthInfra, got {kinds:?}"
+        );
+        assert!(
+            !kinds.contains(&InteractionKind::Business),
+            "neither request is business, got {kinds:?}"
+        );
+        assert_eq!(
+            conn.kind,
+            InteractionKind::TestOrigin,
+            "with no business request the rollup takes the highest precedence"
+        );
+    }
+
+    #[test]
+    fn connection_stays_business_if_any_request_is() {
+        let builder = SdgBuilderImpl::new();
+        let sample_data = sample_data();
+        let configuration = sample_configuration();
+        let sdg = builder
+            .build(&sample_data.0, &sample_data.1, &configuration, &vec![])
+            .expect("build must succeed");
+
+        assert!(
+            sdg.connections
+                .iter()
+                .all(|c| c.kind == InteractionKind::Business),
+            "the existing sample data is all business traffic"
         );
     }
 

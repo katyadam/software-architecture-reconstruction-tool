@@ -11,6 +11,7 @@ use strsim::levenshtein;
 use crate::{
     connectors::dto::Constant,
     errors::builder::BuilderError,
+    sdg::interaction_kind::{InteractionKind, InteractionSignals, classify, host_of},
     sdg::model::{AssignedEndpoint, AssignedRestCall, Connection, Request, Sdg, Service},
     utils::assign_service_description_to_file,
 };
@@ -182,6 +183,23 @@ impl SdgBuilderImpl {
         let mut connections_map: HashMap<String, Connection> = HashMap::new();
 
         for (restcall, endpoint) in restcall_endpoint {
+            // Prefer the matched endpoint's path; fall back to the raw target
+            // when matching produced none. The health rule reads the last
+            // segment, so it works on a full URL too.
+            let target_path = if endpoint.data.uri.is_empty() {
+                restcall.data.target_uri.as_str()
+            } else {
+                endpoint.data.uri.as_str()
+            };
+            let kind = classify(
+                &InteractionSignals {
+                    caller_file: &restcall.data.file_path,
+                    target_path,
+                    target_host: host_of(&restcall.data.target_uri),
+                },
+                &restcall.service.urls,
+            );
+
             connections_map
                 .entry(format!(
                     "{}__{}",
@@ -191,15 +209,26 @@ impl SdgBuilderImpl {
                     source_id: restcall.service.name.clone(),
                     target_id: endpoint.service.name.clone(),
                     requests: Vec::new(),
+                    kind: InteractionKind::default(),
                 })
                 .requests
                 .push(Request {
                     endpoint: endpoint.data.clone(),
                     restcall: restcall.data.clone(),
+                    kind,
                 });
         }
 
-        connections_map.into_values().collect()
+        let mut connections: Vec<Connection> = connections_map.into_values().collect();
+        for connection in &mut connections {
+            connection.kind = connection
+                .requests
+                .iter()
+                .map(|request| request.kind)
+                .min()
+                .unwrap_or_default();
+        }
+        connections
     }
 
     fn exact_match(&self, endpoint: &AssignedEndpoint, restcall: &AssignedRestCall) -> bool {

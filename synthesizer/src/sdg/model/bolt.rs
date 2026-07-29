@@ -2,6 +2,7 @@ use models::{Endpoint, RestCall};
 use neo4rs::{BoltList, BoltMap, BoltNode, BoltString, BoltType, DeError};
 use serde::de::Unexpected;
 
+use crate::sdg::interaction_kind::InteractionKind;
 use crate::sdg::model::{Connection, Request, Service};
 
 impl From<Service> for BoltType {
@@ -155,6 +156,7 @@ impl TryFrom<BoltMap> for Connection {
                     .unwrap_or(Request {
                         endpoint: Endpoint::default(),
                         restcall: RestCall::default(),
+                        kind: InteractionKind::default(),
                     })),
                     _ => Err(DeError::InvalidType {
                         received: Unexpected::Other("Non BoltString type").into(),
@@ -175,6 +177,13 @@ impl TryFrom<BoltMap> for Connection {
         Ok(Connection {
             source_id,
             target_id,
+            // Recomputed rather than stored: the Cypher in queries.rs persists
+            // only the requests, and each request carries its own kind.
+            kind: requests
+                .iter()
+                .map(|request| request.kind)
+                .min()
+                .unwrap_or_default(),
             requests,
         })
     }
@@ -240,6 +249,10 @@ impl TryFrom<BoltMap> for Request {
             }),
         }?;
 
-        Ok(Request { endpoint, restcall })
+        Ok(Request {
+            endpoint,
+            restcall,
+            kind: InteractionKind::default(),
+        })
     }
 }
