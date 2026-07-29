@@ -8,7 +8,10 @@
 
 use std::collections::BTreeSet;
 
-use models::{ConfigurationData, RestCall, callables::Namespace, ir::language::Language, ir::project::ProjectIR};
+use models::{
+    ConfigurationData, RestCall, callables::Namespace, ir::language::Language,
+    ir::project::ProjectIR,
+};
 
 use crate::pipeline::pass3::llm_enhance::variables::microservice_for_file;
 
