@@ -614,6 +614,69 @@ code — tracked as the deferred GATE C verdict and §6 threats-to-validity.
 
 ---
 
+## Phase 4 — SDG typed interactions (Component A/B/C)
+
+Design: `superpowers/specs/2026-07-21-sdg-precision-typed-edges-design.md`.
+Every SDG connection now carries an `InteractionKind` (`Business` /
+`TestOrigin` / `Reflexive` / `HealthInfra`); only `Business` connections are
+scored. See `sage_next_steps.md` item 1 (now DONE) for the shipped-work
+summary; this section is the measurement record.
+
+- **S4.1 — Typed-edge classification landed and measured** (`sdg-typed-edges`
+  branch; measured 2026-07-31).
+
+  **train-ticket, all-Java, no LLM** (`results/train-ticket-java-typed`), vs
+  the 92-edge oracle:
+
+  | metric | before | after |
+  |---|---|---|
+  | precision | 0.98 | **1.00** |
+  | recall | 0.95 | 0.95 |
+  | TP | 87 | 87 |
+  | FP | 2 | **0** |
+  | FN | 5 | 5 |
+
+  89 connections: 87 `Business` + 2 `TestOrigin`
+  (`ts-preserve-service -> ts-notification-service`,
+  `ts-preserve-other-service -> ts-notification-service`) — exactly the two
+  former false positives, now correctly typed and excluded from scoring.
+
+  **empaia, no LLM, constants + scrape**
+  (`results/empaia-typed-nollm-constants`), vs the 16-edge business oracle:
+
+  | metric | before | after |
+  |---|---|---|
+  | precision | 0.71 | **0.87** |
+  | recall | 0.75 | 0.81 |
+  | TP | 12 | 13 |
+  | FP | 5 | **2** |
+  | FN | 4 | 3 |
+
+  Zero true positives lost; one gained (`medical-data-service ->
+  clinical-data-service`). Four false positives removed —
+  `annotation-service -> loadtus-service`, `medical-data-service ->
+  app-service`, `medical-data-service -> loadtus-service`,
+  `medical-data-service -> wsi-service` (three of the four are listed in the
+  oracle's own `known_static_false_positives`) — against one false positive
+  added: `annotation-service -> clinical-data-service`. The two survivors are
+  exactly the predicted category-D misresolutions: `annotation-service ->
+  clinical-data-service` and `workbench-service -> app-service`. All 15
+  connections are `Business` — no non-business kinds. On empaia with
+  constants, Component C improved precision by *suppressing* bogus
+  cross-service matches rather than by emitting self-loops: those
+  localhost-targeted calls became reflexive, found no matching endpoint in
+  their own service, and produced no edge at all.
+
+  **Deferred: empaia LLM + constants + scrape re-run.** The published
+  headline (**0.74 / 0.88**, 14 TP / 5 FP / 2 FN) is from the LLM run and has
+  **not** been re-measured under the typed-edge change — it requires Ollama,
+  which is not running. The 0.87 / 0.81 figure above is the no-LLM run scored
+  against a no-LLM baseline; it is a different run with a different baseline
+  and must not be merged with, or presented as an update to, the 0.74 / 0.88
+  headline.
+
+---
+
 ## Decision log
 
 > Chronological record of decisions taken and why. One line each.
