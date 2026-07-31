@@ -681,8 +681,9 @@ summary; this section is the measurement record.
   headline (**0.74 / 0.88**, 14 TP / 5 FP / 2 FN) is from the LLM run and has
   **not** been re-measured under the typed-edge change — it requires Ollama,
   which is not running. The 0.87 / 0.81 figure above is the no-LLM run; it is
-  a different run against a different, smaller oracle slice and must not be
-  merged with, or presented as an update to, the 0.74 / 0.88 headline.
+  a different run with a different baseline and must not be merged with, or
+  presented as an update to, the 0.74 / 0.88 headline. Both are scored against
+  the same 16-edge oracle — the difference is the run, not the oracle.
 
 ---
 
