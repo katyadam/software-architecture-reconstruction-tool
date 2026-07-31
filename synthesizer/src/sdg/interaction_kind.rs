@@ -54,32 +54,39 @@ const HEALTH_SEGMENTS: &[&str] = &[
 
 /// The evidence `classify` decides on.
 ///
-/// Deliberately three `&str`s rather than `&RestCall` and `&Endpoint`: a new
+/// Deliberately `&str`s rather than `&RestCall` and `&Endpoint`: a new
 /// protocol (gRPC, message queues) types its interactions by filling this in
 /// from its own element types, with no edit to this module. gRPC puts its method
 /// in `target_path` (`/grpc.health.v1.Health/Check` types as `HealthInfra` under
-/// the existing rule); a queue puts the topic there and the broker in `target_host`.
+/// the existing rule); a queue puts the topic there and supplies a URI-shaped
+/// target (`amqp://broker:5672`) in `target_uri`.
 pub struct InteractionSignals<'a> {
     /// Path of the file the call site lives in.
     pub caller_file: &'a str,
     /// Resolved path, method, or topic. May be a full URL when no path is known.
     pub target_path: &'a str,
-    /// Resolved host. Empty when the target is relative.
-    pub target_host: &'a str,
+    /// The raw, unparsed target URI. May be relative, in which case it carries
+    /// no host or port and is never reflexive.
+    pub target_uri: &'a str,
 }
 
 /// Classify one interaction.
 ///
 /// `own_urls` is the *calling* service's configured URL list verbatim (e.g.
-/// `http://mds:8000`), not a pre-extracted host list -- `is_reflexive` parses
-/// the hosts itself so this module stays the only place that knows how.
+/// `http://mds:8000`); `all_urls` is every service's configured URL list
+/// flattened together. Both are passed through to `is_reflexive` verbatim --
+/// this module stays the only place that knows how to parse them.
 ///
 /// The early returns are in precedence order; see [`InteractionKind`].
-pub fn classify(s: &InteractionSignals, own_urls: &[String]) -> InteractionKind {
+pub fn classify(
+    s: &InteractionSignals,
+    own_urls: &[String],
+    all_urls: &[String],
+) -> InteractionKind {
     if is_test_path(Language::from_path(s.caller_file), s.caller_file) {
         return InteractionKind::TestOrigin;
     }
-    if is_reflexive(s.target_host, own_urls) {
+    if is_reflexive(s.target_uri, own_urls, all_urls) {
         return InteractionKind::Reflexive;
     }
     if is_health_path(s.target_path) {
@@ -88,30 +95,50 @@ pub fn classify(s: &InteractionSignals, own_urls: &[String]) -> InteractionKind 
     InteractionKind::Business
 }
 
-/// Does `host` denote the caller itself?
+/// Does `target_uri` resolve to the caller itself?
 ///
 /// Public because the builder needs this *before* matching, to decide whether a
 /// restcall may match its own service's endpoints.
-pub fn is_reflexive(host: &str, own_urls: &[String]) -> bool {
-    if host.is_empty() {
+///
+/// Ownership first, loopback as fallback -- a bare loopback host is not
+/// enough, because a *different* service can be configured on `localhost` at
+/// its own port (e.g. `loadtus-service` at `http://localhost:10005`), and
+/// blanket-matching loopback would swallow that real cross-service edge:
+///
+/// 1. `target_uri`'s authority (`host:port`) matches one of `own_urls` -> reflexive.
+/// 2. Else it matches an authority in `all_urls` (some other service owns it) -> not reflexive.
+/// 3. Else the host is a bare loopback address -> reflexive.
+/// 4. Else -> not reflexive.
+pub fn is_reflexive(target_uri: &str, own_urls: &[String], all_urls: &[String]) -> bool {
+    let authority = authority_of(target_uri);
+    if authority.is_empty() {
         return false;
     }
-    let host = host.to_ascii_lowercase();
-    REFLEXIVE_HOSTS.contains(&host.as_str())
-        || own_urls
-            .iter()
-            .any(|url| host_of(url).to_ascii_lowercase() == host)
+    let authority = authority.to_ascii_lowercase();
+
+    if own_urls
+        .iter()
+        .any(|url| authority_of(url).to_ascii_lowercase() == authority)
+    {
+        return true;
+    }
+    if all_urls
+        .iter()
+        .any(|url| authority_of(url).to_ascii_lowercase() == authority)
+    {
+        return false;
+    }
+    REFLEXIVE_HOSTS.contains(&host_of(target_uri).to_ascii_lowercase().as_str())
 }
 
-/// Extract the host from a URI, without the scheme, userinfo, port, or path.
+/// The `host:port` authority of a URI, with userinfo stripped, before the
+/// host/port split -- shared by [`host_of`] and [`authority_of`].
 ///
-/// Returns `""` for a relative URI, which is never reflexive -- so relative
-/// targets keep behaving exactly as they do today.
-pub fn host_of(uri: &str) -> &str {
+/// Returns `""` for a relative URI: only an authority-looking string (one
+/// with a scheme) can carry a host.
+fn authority_str(uri: &str) -> &str {
     let after_scheme = match uri.split_once("://") {
         Some((_, rest)) => rest,
-        // No scheme: only an authority-looking string can carry a host. A
-        // relative path must not be read as one.
         None => return "",
     };
 
@@ -119,10 +146,18 @@ pub fn host_of(uri: &str) -> &str {
         .split(['/', '?', '#'])
         .next()
         .unwrap_or_default();
-    let host_port = match authority.rsplit_once('@') {
+    match authority.rsplit_once('@') {
         Some((_userinfo, host_port)) => host_port,
         None => authority,
-    };
+    }
+}
+
+/// Extract the host from a URI, without the scheme, userinfo, port, or path.
+///
+/// Returns `""` for a relative URI, which is never reflexive -- so relative
+/// targets keep behaving exactly as they do today.
+pub fn host_of(uri: &str) -> &str {
+    let host_port = authority_str(uri);
 
     // An IPv6 literal is bracketed, and its colons are not port separators.
     if host_port.starts_with('[') {
@@ -136,6 +171,14 @@ pub fn host_of(uri: &str) -> &str {
         Some((host, _port)) => host,
         None => host_port,
     }
+}
+
+/// Extract the `host:port` authority from a URI (or just the host, when the
+/// URI carries no port), without the scheme, userinfo, or path.
+///
+/// Returns `""` for a relative URI, same as [`host_of`].
+pub fn authority_of(uri: &str) -> &str {
+    authority_str(uri)
 }
 
 /// Does this call site live in test code?

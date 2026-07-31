@@ -235,11 +235,13 @@ mod tests {
     }
 
     #[test]
-    fn should_route_localhost_call_to_its_own_service() {
+    fn should_not_emit_cross_service_edge_for_localhost_self_call() {
+        // The real empaia shape: mds is NOT configured on localhost anywhere,
+        // and app-service happens to share the port the localhost call names.
+        // This is the load-bearing assertion -- it must hold with no localhost
+        // in mds's config, i.e. purely from the ownership-first rule falling
+        // through to the loopback fallback (nobody owns localhost:8000).
         let builder = SdgBuilderImpl::new();
-        // Both services expose the same path, and app-service listens on the
-        // same port the localhost URL names -- this is the empaia shape that
-        // produced the mds -> app false positive.
         let endpoints = vec![
             Endpoint {
                 function_name: "get_fhir".to_string(),
@@ -268,10 +270,7 @@ mod tests {
                 ServiceDescription {
                     name: "medical-data-service".to_string(),
                     base_dir_path: "medical-data-service".to_string(),
-                    urls: vec![
-                        "http://localhost:8000".to_string(),
-                        "http://medical-data-service:8000".to_string(),
-                    ],
+                    urls: vec!["http://medical-data-service:5000".to_string()],
                 },
                 ServiceDescription {
                     name: "app-service".to_string(),
@@ -291,6 +290,54 @@ mod tests {
                 .any(|c| c.source_id == "medical-data-service" && c.target_id == "app-service"),
             "a localhost call must not become a cross-service edge"
         );
+    }
+
+    #[test]
+    fn should_emit_self_loop_when_own_url_matches() {
+        // mds *is* configured on localhost:8000 here, so ownership resolves
+        // directly (step 1) and the matcher can resolve inside its own service.
+        let builder = SdgBuilderImpl::new();
+        let endpoints = vec![
+            Endpoint {
+                function_name: "get_fhir".to_string(),
+                http_method: HttpMethod::GET,
+                uri: "/fhir/Patient".to_string(),
+                file_path: "medical-data-service/app/api.py".to_string(),
+                ..Default::default()
+            },
+            Endpoint {
+                function_name: "get_fhir".to_string(),
+                http_method: HttpMethod::GET,
+                uri: "/fhir/Patient".to_string(),
+                file_path: "app-service/app/api.py".to_string(),
+                ..Default::default()
+            },
+        ];
+        let restcalls = vec![RestCall {
+            function_name: "read_patient".to_string(),
+            http_method: HttpMethod::GET,
+            target_uri: "http://localhost:8000/fhir/Patient".to_string(),
+            file_path: "medical-data-service/app/fhir_resources.py".to_string(),
+            ..Default::default()
+        }];
+        let configuration = ConfigurationData {
+            service_descriptions: vec![
+                ServiceDescription {
+                    name: "medical-data-service".to_string(),
+                    base_dir_path: "medical-data-service".to_string(),
+                    urls: vec!["http://localhost:8000".to_string()],
+                },
+                ServiceDescription {
+                    name: "app-service".to_string(),
+                    base_dir_path: "app-service".to_string(),
+                    urls: vec!["http://app-service:8000".to_string()],
+                },
+            ],
+        };
+
+        let sdg = builder
+            .build(&endpoints, &restcalls, &configuration, &[])
+            .expect("build must succeed");
 
         let self_loop = sdg
             .connections
@@ -303,6 +350,59 @@ mod tests {
         assert_eq!(
             self_loop.requests[0].endpoint.uri, "/fhir/Patient",
             "the self-loop must carry the real matched endpoint, not a placeholder"
+        );
+    }
+
+    #[test]
+    fn should_not_treat_another_services_localhost_address_as_self() {
+        // The loadtus regression: a *different* service is configured on
+        // localhost at its own port. The caller's call to that address must
+        // resolve as a real cross-service edge, not get swallowed as self.
+        let builder = SdgBuilderImpl::new();
+        let endpoints = vec![Endpoint {
+            function_name: "list_files".to_string(),
+            http_method: HttpMethod::GET,
+            uri: "/v3/files".to_string(),
+            file_path: "loadtus-service/app/api.py".to_string(),
+            ..Default::default()
+        }];
+        let restcalls = vec![RestCall {
+            function_name: "list_uploaded_files".to_string(),
+            http_method: HttpMethod::GET,
+            target_uri: "http://localhost:10005/v3/files".to_string(),
+            file_path: "caller-service/app/client.py".to_string(),
+            ..Default::default()
+        }];
+        let configuration = ConfigurationData {
+            service_descriptions: vec![
+                ServiceDescription {
+                    name: "caller-service".to_string(),
+                    base_dir_path: "caller-service".to_string(),
+                    urls: vec!["http://caller-service:9000".to_string()],
+                },
+                ServiceDescription {
+                    name: "loadtus-service".to_string(),
+                    base_dir_path: "loadtus-service".to_string(),
+                    urls: vec!["http://localhost:10005".to_string()],
+                },
+            ],
+        };
+
+        let sdg = builder
+            .build(&endpoints, &restcalls, &configuration, &[])
+            .expect("build must succeed");
+
+        let conn = sdg
+            .connections
+            .iter()
+            .find(|c| c.source_id == "caller-service" && c.target_id == "loadtus-service")
+            .expect("the loadtus edge must survive, not resolve as a self-loop");
+        assert_eq!(conn.kind, InteractionKind::Business);
+        assert!(
+            !sdg.connections
+                .iter()
+                .any(|c| c.source_id == "caller-service" && c.target_id == "caller-service"),
+            "another service's localhost address must never read as self"
         );
     }
 

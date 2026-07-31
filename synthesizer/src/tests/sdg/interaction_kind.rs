@@ -59,7 +59,7 @@ mod tests {
         InteractionSignals {
             caller_file: "ts-order-service/src/main/java/OrderController.java",
             target_path: "/api/v1/travelservice/trips",
-            target_host: "ts-travel-service",
+            target_uri: "http://ts-travel-service:12346/api/v1/travelservice/trips",
         }
     }
 
@@ -67,10 +67,18 @@ mod tests {
         vec!["http://ts-order-service:12031".to_string()]
     }
 
+    /// Every service's configured URLs flattened -- the caller's own plus one
+    /// other service, enough to exercise the "someone else owns it" rule.
+    fn all_urls() -> Vec<String> {
+        let mut urls = own_urls();
+        urls.push("http://ts-travel-service:12346".to_string());
+        urls
+    }
+
     #[test]
     fn plain_call_is_business() {
         assert_eq!(
-            classify(&business_signals(), &own_urls()),
+            classify(&business_signals(), &own_urls(), &all_urls()),
             InteractionKind::Business
         );
     }
@@ -81,14 +89,20 @@ mod tests {
             caller_file: "ts-preserve-service/src/test/java/PreserveServiceImplTest.java",
             ..business_signals()
         };
-        assert_eq!(classify(&s, &own_urls()), InteractionKind::TestOrigin);
+        assert_eq!(
+            classify(&s, &own_urls(), &all_urls()),
+            InteractionKind::TestOrigin
+        );
 
         // File-name convention without the /src/test/ segment.
         let s = InteractionSignals {
             caller_file: "ts-preserve-service/java/FooIT.java",
             ..business_signals()
         };
-        assert_eq!(classify(&s, &own_urls()), InteractionKind::TestOrigin);
+        assert_eq!(
+            classify(&s, &own_urls(), &all_urls()),
+            InteractionKind::TestOrigin
+        );
     }
 
     #[test]
@@ -103,7 +117,7 @@ mod tests {
                 ..business_signals()
             };
             assert_eq!(
-                classify(&s, &own_urls()),
+                classify(&s, &own_urls(), &all_urls()),
                 InteractionKind::TestOrigin,
                 "{path} should be test-origin"
             );
@@ -117,7 +131,10 @@ mod tests {
             caller_file: "medical-data-service/app/latest/client.py",
             ..business_signals()
         };
-        assert_eq!(classify(&s, &own_urls()), InteractionKind::Business);
+        assert_eq!(
+            classify(&s, &own_urls(), &all_urls()),
+            InteractionKind::Business
+        );
     }
 
     #[test]
@@ -128,7 +145,7 @@ mod tests {
                 ..business_signals()
             };
             assert_eq!(
-                classify(&s, &own_urls()),
+                classify(&s, &own_urls(), &all_urls()),
                 InteractionKind::HealthInfra,
                 "{path} should be health-infra"
             );
@@ -143,7 +160,10 @@ mod tests {
             target_path: "http://auth-service/alive",
             ..business_signals()
         };
-        assert_eq!(classify(&s, &own_urls()), InteractionKind::HealthInfra);
+        assert_eq!(
+            classify(&s, &own_urls(), &all_urls()),
+            InteractionKind::HealthInfra
+        );
     }
 
     #[test]
@@ -159,7 +179,7 @@ mod tests {
                 ..business_signals()
             };
             assert_eq!(
-                classify(&s, &own_urls()),
+                classify(&s, &own_urls(), &all_urls()),
                 InteractionKind::HealthInfra,
                 "{path} should be health-infra"
             );
@@ -171,7 +191,7 @@ mod tests {
                 ..business_signals()
             };
             assert_eq!(
-                classify(&s, &own_urls()),
+                classify(&s, &own_urls(), &all_urls()),
                 InteractionKind::Business,
                 "{path} is not a health probe"
             );
@@ -180,21 +200,48 @@ mod tests {
 
     #[test]
     fn reflexive_localhost() {
+        // Nobody in all_urls owns localhost (no port), so this falls through
+        // to the loopback fallback (rule step 3).
         let s = InteractionSignals {
-            target_host: "localhost",
+            target_uri: "http://localhost/api/v1/travelservice/trips",
             ..business_signals()
         };
-        assert_eq!(classify(&s, &own_urls()), InteractionKind::Reflexive);
+        assert_eq!(
+            classify(&s, &own_urls(), &all_urls()),
+            InteractionKind::Reflexive
+        );
     }
 
     #[test]
     fn reflexive_own_config_url() {
         // own_urls holds full URLs, not bare hosts -- is_reflexive parses them.
+        // The authority (host:port) must match exactly, not just the host.
         let s = InteractionSignals {
-            target_host: "ts-order-service",
+            target_uri: "http://ts-order-service:12031/api/v1/travelservice/trips",
             ..business_signals()
         };
-        assert_eq!(classify(&s, &own_urls()), InteractionKind::Reflexive);
+        assert_eq!(
+            classify(&s, &own_urls(), &all_urls()),
+            InteractionKind::Reflexive
+        );
+    }
+
+    #[test]
+    fn another_services_configured_url_is_never_reflexive_even_on_loopback() {
+        // Ownership beats loopback: a different service configured on
+        // localhost at its own port is a real cross-service target, not self.
+        let all_urls = vec![
+            "http://ts-order-service:12031".to_string(),
+            "http://localhost:10005".to_string(),
+        ];
+        let s = InteractionSignals {
+            target_uri: "http://localhost:10005/v3/files",
+            ..business_signals()
+        };
+        assert_eq!(
+            classify(&s, &own_urls(), &all_urls),
+            InteractionKind::Business
+        );
     }
 
     #[test]
@@ -203,17 +250,23 @@ mod tests {
         let s = InteractionSignals {
             caller_file: "svc/src/test/java/AliveTest.java",
             target_path: "/alive",
-            target_host: "localhost",
+            target_uri: "http://localhost/alive",
         };
-        assert_eq!(classify(&s, &own_urls()), InteractionKind::TestOrigin);
+        assert_eq!(
+            classify(&s, &own_urls(), &all_urls()),
+            InteractionKind::TestOrigin
+        );
 
         // Drop the test origin: Reflexive beats HealthInfra.
         let s = InteractionSignals {
             caller_file: "svc/src/main/java/Alive.java",
             target_path: "/alive",
-            target_host: "localhost",
+            target_uri: "http://localhost/alive",
         };
-        assert_eq!(classify(&s, &own_urls()), InteractionKind::Reflexive);
+        assert_eq!(
+            classify(&s, &own_urls(), &all_urls()),
+            InteractionKind::Reflexive
+        );
     }
 
     #[test]
@@ -239,6 +292,6 @@ mod tests {
     fn relative_target_is_never_reflexive() {
         // Guards against a regression: today's behaviour for relative URIs must
         // not change, or every relative call becomes a self-loop.
-        assert!(!is_reflexive(host_of("/api/v1/trips"), &own_urls()));
+        assert!(!is_reflexive("/api/v1/trips", &own_urls(), &all_urls()));
     }
 }

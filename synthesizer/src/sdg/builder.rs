@@ -11,7 +11,7 @@ use strsim::levenshtein;
 use crate::{
     connectors::dto::Constant,
     errors::builder::BuilderError,
-    sdg::interaction_kind::{InteractionKind, InteractionSignals, classify, host_of, is_reflexive},
+    sdg::interaction_kind::{InteractionKind, InteractionSignals, classify, is_reflexive},
     sdg::model::{AssignedEndpoint, AssignedRestCall, Connection, Request, Sdg, Service},
     utils::assign_service_description_to_file,
 };
@@ -45,7 +45,18 @@ impl SdgBuilder for SdgBuilderImpl {
             self.get_assigned_restcalls(restcalls, &configuration.service_descriptions);
         self.substitute_constants_in_restcalls(&mut assigned_restcalls, constants)?;
 
-        let connections = self.create_connections(assigned_endpoints, assigned_restcalls);
+        // Every URL of every configured service, flattened -- lets is_reflexive
+        // tell "nobody claims this authority" (loopback fallback applies) apart
+        // from "another service owns this authority" (never reflexive), even
+        // when that other service happens to be configured on localhost.
+        let all_urls: Vec<String> = configuration
+            .service_descriptions
+            .iter()
+            .flat_map(|service| service.urls.iter().cloned())
+            .collect();
+
+        let connections =
+            self.create_connections(assigned_endpoints, assigned_restcalls, &all_urls);
         Ok(Sdg {
             services,
             connections,
@@ -176,9 +187,10 @@ impl SdgBuilderImpl {
         &self,
         endpoints: Vec<AssignedEndpoint>,
         restcalls: Vec<AssignedRestCall>,
+        all_urls: &[String],
     ) -> Vec<Connection> {
         let restcall_endpoint: Vec<(AssignedRestCall, AssignedEndpoint)> =
-            self.create_endpoint_restcall_pairs(endpoints, restcalls);
+            self.create_endpoint_restcall_pairs(endpoints, restcalls, all_urls);
 
         let mut connections_map: HashMap<String, Connection> = HashMap::new();
 
@@ -195,9 +207,10 @@ impl SdgBuilderImpl {
                 &InteractionSignals {
                     caller_file: &restcall.data.file_path,
                     target_path,
-                    target_host: host_of(&restcall.data.target_uri),
+                    target_uri: &restcall.data.target_uri,
                 },
                 &restcall.service.urls,
+                all_urls,
             );
 
             connections_map
@@ -278,6 +291,7 @@ impl SdgBuilderImpl {
         &self,
         endpoints: Vec<AssignedEndpoint>,
         restcalls: Vec<AssignedRestCall>,
+        all_urls: &[String],
     ) -> Vec<(AssignedRestCall, AssignedEndpoint)> {
         let mut restcall_endpoint: Vec<(AssignedRestCall, AssignedEndpoint)> = Vec::new();
         for restcall in restcalls {
@@ -286,7 +300,7 @@ impl SdgBuilderImpl {
             // skips own-service endpoints and fuzzy-matches a peer that happens
             // to share a port -- the empaia mds -> app false positive.
             let want_self =
-                is_reflexive(host_of(&restcall.data.target_uri), &restcall.service.urls);
+                is_reflexive(&restcall.data.target_uri, &restcall.service.urls, all_urls);
 
             let mut matched_endpoint: Option<&AssignedEndpoint> = None;
             let mut min_dist = usize::MAX;
