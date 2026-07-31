@@ -233,9 +233,7 @@ impl SdgBuilderImpl {
         }
 
         let mut connections: Vec<Connection> = connections_map.into_values().collect();
-        for connection in &mut connections {
-            connection.kind = InteractionKind::rollup(connection.requests.iter().map(|r| r.kind));
-        }
+        interaction_kind_rollup_connection(&mut connections);
         connections
     }
 
@@ -330,5 +328,11 @@ impl SdgBuilderImpl {
             }
         }
         restcall_endpoint
+    }
+}
+
+fn interaction_kind_rollup_connection(connections: &mut Vec<Connection>) {
+    for connection in connections {
+        connection.kind = InteractionKind::rollup(connection.requests.iter().map(|r| r.kind));
     }
 }
