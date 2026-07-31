@@ -2,7 +2,7 @@
 //!
 //! The SDG feeds change-impact analysis and regression test selection, where a
 //! missing edge is unsafe and a spurious edge is merely costly. So an edge that
-//! does not belong in the *business* view is never deleted -- it is tagged and
+//! does not belong in the *business* view is never deleted, it is tagged and
 //! excluded from business scoring while remaining in the graph.
 
 use serde::{Deserialize, Serialize};
@@ -19,8 +19,8 @@ use utoipa::ToSchema;
 ///    business request keeps the whole edge in the business view. This is the
 ///    RTS-safe direction.
 ///
-/// Reordering these variants changes the rollup (rule 2). Per-request
-/// precedence (rule 1) is a second, independent encoding -- the order of the
+/// Reordering these variants changes the `min()` rollup. Per-request
+/// precedence is a second, independent encoding -- the order of the
 /// early returns in [`classify`] -- and must be kept consistent with this
 /// ordering by hand; reordering here does not itself change `classify`.
 #[derive(
@@ -32,7 +32,7 @@ pub enum InteractionKind {
     Business,
     /// The call site lives in test code.
     TestOrigin,
-    /// A self-call -- localhost or the caller's own configured host. source == target.
+    /// A self-call -- localhost or the caller's own configured host.
     Reflexive,
     /// A liveness or health probe.
     HealthInfra,
@@ -51,7 +51,7 @@ use models::ir::language::Language;
 
 /// Hosts that always mean "the caller itself".
 ///
-/// No bare `"::1"` here: `host_of` splits an unbracketed authority at the
+/// No bare `"::1"` here: `host_of` splits an unbracketed base uri at the
 /// first colon, so a bare `::1` can never come out of it -- only the
 /// bracketed `"[::1]"` form is reachable. Adding `"::1"` back would be dead.
 const REFLEXIVE_HOSTS: &[&str] = &["localhost", "127.0.0.1", "0.0.0.0", "[::1]"];
@@ -121,50 +121,49 @@ pub fn classify(
 /// its own port (e.g. `loadtus-service` at `http://localhost:10005`), and
 /// blanket-matching loopback would swallow that real cross-service edge:
 ///
-/// 1. `target_uri`'s authority (`host:port`) matches one of `own_urls` -> reflexive.
-/// 2. Else it matches an authority in `all_urls` (some other service owns it) -> not reflexive.
+/// 1. `target_uri`'s base uri (`host:port`) matches one of `own_urls` -> reflexive.
+/// 2. Else it matches an base uri in `all_urls` (some other service owns it) -> not reflexive.
 /// 3. Else the host is a bare loopback address -> reflexive.
 /// 4. Else -> not reflexive.
 pub fn is_reflexive(target_uri: &str, own_urls: &[String], all_urls: &[String]) -> bool {
-    let authority = authority_of(target_uri);
-    if authority.is_empty() {
+    let base_uri = extract_base_uri(target_uri);
+    if base_uri.is_empty() {
         return false;
     }
-    let authority = authority.to_ascii_lowercase();
+    let base_uri = base_uri.to_ascii_lowercase();
 
     if own_urls
         .iter()
-        .any(|url| authority_of(url).to_ascii_lowercase() == authority)
+        .any(|url| extract_base_uri(url).to_ascii_lowercase() == base_uri)
     {
         return true;
     }
     if all_urls
         .iter()
-        .any(|url| authority_of(url).to_ascii_lowercase() == authority)
+        .any(|url| extract_base_uri(url).to_ascii_lowercase() == base_uri)
     {
         return false;
     }
     REFLEXIVE_HOSTS.contains(&host_of(target_uri).to_ascii_lowercase().as_str())
 }
 
-/// The `host:port` authority of a URI, with userinfo stripped, before the
-/// host/port split -- shared by [`host_of`] and [`authority_of`].
+/// Extract the `host:port` substring from a URI (or just the host, when the
+/// URI carries no port), without the scheme, userinfo, or path.
 ///
-/// Returns `""` for a relative URI: only an authority-looking string (one
-/// with a scheme) can carry a host.
-fn authority_str(uri: &str) -> &str {
+/// Returns `""` for a relative URI.
+fn extract_base_uri(uri: &str) -> &str {
     let after_scheme = match uri.split_once("://") {
         Some((_, rest)) => rest,
         None => return "",
     };
 
-    let authority = after_scheme
+    let base = after_scheme
         .split(['/', '?', '#'])
         .next()
         .unwrap_or_default();
-    match authority.rsplit_once('@') {
+    match base.rsplit_once('@') {
         Some((_userinfo, host_port)) => host_port,
-        None => authority,
+        None => base,
     }
 }
 
@@ -173,7 +172,7 @@ fn authority_str(uri: &str) -> &str {
 /// Returns `""` for a relative URI, which is never reflexive -- so relative
 /// targets keep behaving exactly as they do today.
 pub fn host_of(uri: &str) -> &str {
-    let host_port = authority_str(uri);
+    let host_port = extract_base_uri(uri);
 
     // An IPv6 literal is bracketed, and its colons are not port separators.
     if host_port.starts_with('[') {
@@ -187,14 +186,6 @@ pub fn host_of(uri: &str) -> &str {
         Some((host, _port)) => host,
         None => host_port,
     }
-}
-
-/// Extract the `host:port` authority from a URI (or just the host, when the
-/// URI carries no port), without the scheme, userinfo, or path.
-///
-/// Returns `""` for a relative URI, same as [`host_of`].
-pub fn authority_of(uri: &str) -> &str {
-    authority_str(uri)
 }
 
 /// Does this call site live in test code?
