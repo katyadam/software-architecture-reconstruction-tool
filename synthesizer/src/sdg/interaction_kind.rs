@@ -19,7 +19,10 @@ use utoipa::ToSchema;
 ///    business request keeps the whole edge in the business view. This is the
 ///    RTS-safe direction.
 ///
-/// Reordering these variants silently changes both rules.
+/// Reordering these variants changes the rollup (rule 2). Per-request
+/// precedence (rule 1) is a second, independent encoding -- the order of the
+/// early returns in [`classify`] -- and must be kept consistent with this
+/// ordering by hand; reordering here does not itself change `classify`.
 #[derive(
     Debug, Serialize, Deserialize, ToSchema, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default,
 )]
@@ -35,10 +38,23 @@ pub enum InteractionKind {
     HealthInfra,
 }
 
+impl InteractionKind {
+    /// Roll a connection's request kinds up to a single edge kind.
+    /// `Business` wins any tie, so one real business request keeps the whole
+    /// edge in the business view -- the RTS-safe direction.
+    pub fn rollup(kinds: impl Iterator<Item = Self>) -> Self {
+        kinds.min().unwrap_or_default()
+    }
+}
+
 use models::ir::language::Language;
 
 /// Hosts that always mean "the caller itself".
-const REFLEXIVE_HOSTS: &[&str] = &["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"];
+///
+/// No bare `"::1"` here: `host_of` splits an unbracketed authority at the
+/// first colon, so a bare `::1` can never come out of it -- only the
+/// bracketed `"[::1]"` form is reachable. Adding `"::1"` back would be dead.
+const REFLEXIVE_HOSTS: &[&str] = &["localhost", "127.0.0.1", "0.0.0.0", "[::1]"];
 
 /// Final path segments that mean a liveness or health probe.
 const HEALTH_SEGMENTS: &[&str] = &[

@@ -179,11 +179,7 @@ impl TryFrom<BoltMap> for Connection {
             target_id,
             // Recomputed rather than stored: the Cypher in queries.rs persists
             // only the requests, and each request carries its own kind.
-            kind: requests
-                .iter()
-                .map(|request| request.kind)
-                .min()
-                .unwrap_or_default(),
+            kind: InteractionKind::rollup(requests.iter().map(|r| r.kind)),
             requests,
         })
     }

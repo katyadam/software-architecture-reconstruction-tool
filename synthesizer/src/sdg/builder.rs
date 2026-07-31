@@ -234,12 +234,7 @@ impl SdgBuilderImpl {
 
         let mut connections: Vec<Connection> = connections_map.into_values().collect();
         for connection in &mut connections {
-            connection.kind = connection
-                .requests
-                .iter()
-                .map(|request| request.kind)
-                .min()
-                .unwrap_or_default();
+            connection.kind = InteractionKind::rollup(connection.requests.iter().map(|r| r.kind));
         }
         connections
     }

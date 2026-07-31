@@ -426,6 +426,19 @@ for the two corpora:
   anything — a changed edge outside those four criteria is LLM variance, not a
   regression in this change.
 
+**Measured reality (2026-07-31), no-LLM run.** The predicted 5 -> 3
+false-positive drop above does not happen on the no-LLM, constants + scrape
+run. A controlled A/B (parent `cb33e56` vs `6097d4f`, identical flags)
+produced byte-identical connection sets: same 15 connections, same 444
+requests, same 0.87 / 0.81 P/R, zero requests typed anything but `Business`.
+Reason: with constant substitution, empaia's localhost URLs already resolve
+to real hostnames *before* matching runs, so no call is reflexive and no
+call site lands in test code or a health path — there is nothing left for
+this classifier to reclassify on this corpus under these flags. The
+LLM + constants + scrape acceptance criteria above remain unmeasured
+(Ollama down); this note only corrects the no-LLM prediction. Full numbers:
+`sage_rework_results.md` S4.1, `sage_next_steps.md` item 2.
+
 ## Extension contract
 
 The three ways this code is expected to be extended, and what each costs:

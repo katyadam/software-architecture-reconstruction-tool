@@ -10,8 +10,9 @@ Baseline best results (business-edge P/R vs hand-verified oracle):
 - empaia (LLM + constants + scrape): **0.74 / 0.88** (14 TP, 5 FP, 2 FN) vs
   16-edge oracle. Not re-measured since the typed-edge change landed — the
   re-run is outstanding, blocked on Ollama (not running).
-- empaia (no LLM, constants + scrape, typed edges): **0.87 / 0.81** (13 TP,
-  2 FP, 3 FN) vs the 16-edge business oracle. Measured 2026-07-31.
+- empaia (no LLM, constants + scrape): **0.87 / 0.81** (13 TP, 2 FP, 3 FN) vs
+  the 16-edge business oracle. Measured 2026-07-31. Not attributable to typed
+  edges — see item 2, the typed-interaction change is a measured no-op here.
 - train-ticket Java: **1.00 / 0.95** (87 TP, 0 FP, 5 FN) vs 92-edge oracle.
 - train-ticket polyglot + LLM: **0.86 / 0.77** (71 TP, 12 FP, 21 FN).
 - Micrograal baseline on the same tree: 0.68 / 0.59.
@@ -21,8 +22,10 @@ Baseline best results (business-edge P/R vs hand-verified oracle):
 ## 1. Category D — remaining empaia FPs — DO FIRST (promoted 2026-07-31)
 
 Deferred no longer — A/B/C landed, this is next. All constant/host -> service
-misresolution (not classification). The no-LLM typed-edge run confirms 2 of
-the original 3 are still live: `annotation-service -> clinical-data-service`
+misresolution (not classification). The current no-LLM run (typed-edges
+branch, though the typed-interaction change is a no-op on empaia — see item
+2) confirms 2 of the original 3 are still live: `annotation-service ->
+clinical-data-service`
 (`slide_info_url`, should be mds) and `workbench-service -> app-service`
 (`frontends.py`/`data.py` host mismatch). `marketplace-service -> app-service`
 (`vault_client.py`) is unconfirmed — it does not appear in the no-LLM run's
@@ -49,15 +52,23 @@ TestOrigin; only Business connections are scored. Pure synthesizer change
   (`ts-preserve-service -> ts-notification-service`,
   `ts-preserve-other-service -> ts-notification-service`) — exactly the two
   former false positives.
-- **Measured — empaia, no LLM, constants + scrape**
-  (`results/empaia-typed-nollm-constants`), vs the 16-edge business oracle:
-  precision **0.71 -> 0.87**, recall 0.75 -> 0.81 (12 -> 13 TP, 5 -> **2** FP,
-  4 -> 3 FN). Zero TPs lost, one gained (`medical-data-service ->
-  clinical-data-service`). Four FPs removed (`annotation-service ->
-  loadtus-service`, `medical-data-service -> app-service`, `medical-data-service
-  -> loadtus-service`, `medical-data-service -> wsi-service`); one FP added
-  (`annotation-service -> clinical-data-service`). All 15 connections are
-  `Business` — no non-business kinds.
+- **Measured — empaia, no LLM, constants + scrape — is a no-op (corrected
+  2026-07-31).** The originally published 0.71 -> 0.87 comparison used
+  `results/empaia-nollm-baseline`, built 2026-07-19 at commit `168f757` from
+  a dirty tree with only 405 restcalls — not this branch's actual parent, and
+  invalid as a baseline. Retracted.
+
+  A controlled A/B (parent `cb33e56` in a worktree vs this branch's `6097d4f`,
+  identical flags) shows **identical** results: 0.87 / 0.81, 13 TP / 2 FP /
+  3 FN, 15 connections, 444 requests, on both sides. Every one of the 444
+  requests classifies `Business` — nothing is reflexive, test-origin, or
+  health, so there is nothing for the classifier to reclassify. With
+  constants substituted, empaia's localhost URLs already resolve to real
+  hostnames before matching runs.
+
+  The real 0.71 -> 0.87 / 0.75 -> 0.81 jump is genuine, but it happened in
+  earlier sage-rework commits between `168f757` and `cb33e56` — not from
+  Component A/B/C. Full numbers: `sage_rework_results.md` S4.1.
 - **Outstanding:** the empaia LLM + constants + scrape re-run has not been
   done — blocked on Ollama not running. The published 0.74 / 0.88 headline
   above is from that run; do not conflate it with the no-LLM figure.

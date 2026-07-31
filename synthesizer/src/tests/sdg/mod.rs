@@ -129,19 +129,54 @@ mod tests {
     }
 
     #[test]
-    fn connection_stays_business_if_any_request_is() {
+    fn connection_rolls_up_to_business_when_one_request_is_and_another_isnt() {
+        // A single connection carrying both a real business request and a
+        // non-business one (a health probe) must still roll up to Business --
+        // one real business request keeps the whole edge in the business view.
         let builder = SdgBuilderImpl::new();
-        let sample_data = sample_data();
+        let (mut endpoints, mut restcalls) = sample_data();
         let configuration = sample_configuration();
+
+        // Same source/target service pair as the business traffic above, so
+        // this lands in the *same* connection rather than a new one.
+        endpoints.push(Endpoint {
+            function_name: "health".to_string(),
+            http_method: HttpMethod::GET,
+            uri: "/health".to_string(),
+            file_path: "crm/user-service/src/api/controller.py".to_string(),
+            ..Default::default()
+        });
+        restcalls.push(RestCall {
+            function_name: "check_health".to_string(),
+            http_method: HttpMethod::GET,
+            target_uri: "http://user-service:8000/health".to_string(),
+            file_path: "crm/admin-user-service/src/api/user_connector.py".to_string(),
+            ..Default::default()
+        });
+
         let sdg = builder
-            .build(&sample_data.0, &sample_data.1, &configuration, &vec![])
+            .build(&endpoints, &restcalls, &configuration, &[])
             .expect("build must succeed");
 
+        let conn = sdg
+            .connections
+            .iter()
+            .find(|c| c.source_id == "admin-user-service" && c.target_id == "user-service")
+            .expect("the admin-user-service -> user-service connection must exist");
+
+        let kinds: Vec<InteractionKind> = conn.requests.iter().map(|r| r.kind).collect();
         assert!(
-            sdg.connections
-                .iter()
-                .all(|c| c.kind == InteractionKind::Business),
-            "the existing sample data is all business traffic"
+            kinds.contains(&InteractionKind::Business),
+            "must still carry the original business requests, got {kinds:?}"
+        );
+        assert!(
+            kinds.contains(&InteractionKind::HealthInfra),
+            "must carry the added health probe, got {kinds:?}"
+        );
+        assert_eq!(
+            conn.kind,
+            InteractionKind::Business,
+            "one business request must keep the whole connection Business, got requests {kinds:?}"
         );
     }
 

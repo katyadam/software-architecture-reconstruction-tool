@@ -641,39 +641,48 @@ summary; this section is the measurement record.
   `ts-preserve-other-service -> ts-notification-service`) — exactly the two
   former false positives, now correctly typed and excluded from scoring.
 
-  **empaia, no LLM, constants + scrape**
-  (`results/empaia-typed-nollm-constants`), vs the 16-edge business oracle:
+  **empaia, no LLM, constants + scrape — CORRECTED 2026-07-31.** The number
+  first published here (0.71 -> 0.87) came from `results/empaia-nollm-baseline`,
+  which is **not a valid baseline for this change**: it was produced
+  2026-07-19 at commit `168f757` (11 commits before this branch's parent),
+  from a dirty tree, and it saw only 405 restcalls where the current run sees
+  444. The comparison it fed was invalid and is retracted.
 
-  | metric | before | after |
-  |---|---|---|
-  | precision | 0.71 | **0.87** |
-  | recall | 0.75 | 0.81 |
-  | TP | 12 | 13 |
-  | FP | 5 | **2** |
-  | FN | 4 | 3 |
+  A true controlled A/B has since been run: parent commit `cb33e56` built in
+  a worktree, and `6097d4f` (this branch), both invoked with the identical
+  flags (`-p ../empaia -c config/configurations/local-empaia-config.json -f
+  config/constants/empaia-constants.json --scrape`), scored against the same
+  16-edge business oracle:
 
-  Zero true positives lost; one gained (`medical-data-service ->
-  clinical-data-service`). Four false positives removed —
-  `annotation-service -> loadtus-service`, `medical-data-service ->
-  app-service`, `medical-data-service -> loadtus-service`,
-  `medical-data-service -> wsi-service` (three of the four are listed in the
-  oracle's own `known_static_false_positives`) — against one false positive
-  added: `annotation-service -> clinical-data-service`. The two survivors are
-  exactly the predicted category-D misresolutions: `annotation-service ->
-  clinical-data-service` and `workbench-service -> app-service`. All 15
-  connections are `Business` — no non-business kinds. On empaia with
-  constants, Component C improved precision by *suppressing* bogus
-  cross-service matches rather than by emitting self-loops: those
-  localhost-targeted calls became reflexive, found no matching endpoint in
-  their own service, and produced no edge at all.
+  | | P | R | TP | FP | FN | connections | requests |
+  |---|---|---|---|---|---|---|---|
+  | baseline at `cb33e56` | 0.87 | 0.81 | 13 | 2 | 3 | 15 | 444 |
+  | typed at `6097d4f` | 0.87 | 0.81 | 13 | 2 | 3 | 15 | 444 |
+
+  The connection sets are **identical** — same 15 connections, same 444
+  requests, zero true positives lost, zero false positives removed, and every
+  one of the 444 requests classifies as `Business`. There is nothing for the
+  classifier to reclassify: with constants substituted, empaia's localhost
+  URLs resolve to real hostnames before matching ever runs, so no call is
+  reflexive, and no call site lands in test code or a health path either.
+
+  **Conclusion: on empaia (no-LLM, constants + scrape), the typed-interaction
+  change is a no-op.** The real 0.71 -> 0.87 / 0.75 -> 0.81 improvement is
+  real, but it happened in earlier sage-rework commits landed between
+  `168f757` and `cb33e56` — not in this branch, and not because of
+  `InteractionKind`. Do not credit Component A/B/C for it.
+
+  train-ticket is unaffected by this correction: its restcall multiset is
+  identical before and after this branch (225 both ways), so the
+  0.98 / 0.95 -> 1.00 / 0.95 result above **is** genuinely caused by this
+  change and remains the headline result for typed interactions.
 
   **Deferred: empaia LLM + constants + scrape re-run.** The published
   headline (**0.74 / 0.88**, 14 TP / 5 FP / 2 FN) is from the LLM run and has
   **not** been re-measured under the typed-edge change — it requires Ollama,
-  which is not running. The 0.87 / 0.81 figure above is the no-LLM run scored
-  against a no-LLM baseline; it is a different run with a different baseline
-  and must not be merged with, or presented as an update to, the 0.74 / 0.88
-  headline.
+  which is not running. The 0.87 / 0.81 figure above is the no-LLM run; it is
+  a different run against a different, smaller oracle slice and must not be
+  merged with, or presented as an update to, the 0.74 / 0.88 headline.
 
 ---
 
