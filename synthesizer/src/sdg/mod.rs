@@ -4,6 +4,7 @@ pub mod builder;
 pub mod controller;
 pub mod dto;
 pub mod health;
+pub mod interaction_kind;
 pub mod model;
 pub mod queries;
 pub(crate) mod repository;

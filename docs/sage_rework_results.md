@@ -614,6 +614,79 @@ code — tracked as the deferred GATE C verdict and §6 threats-to-validity.
 
 ---
 
+## Phase 4 — SDG typed interactions (Component A/B/C)
+
+Design: `superpowers/specs/2026-07-21-sdg-precision-typed-edges-design.md`.
+Every SDG connection now carries an `InteractionKind` (`Business` /
+`TestOrigin` / `Reflexive` / `HealthInfra`); only `Business` connections are
+scored. See `sage_next_steps.md` item 1 (now DONE) for the shipped-work
+summary; this section is the measurement record.
+
+- **S4.1 — Typed-edge classification landed and measured** (`sdg-typed-edges`
+  branch; measured 2026-07-31).
+
+  **train-ticket, all-Java, no LLM** (`results/train-ticket-java-typed`), vs
+  the 92-edge oracle:
+
+  | metric | before | after |
+  |---|---|---|
+  | precision | 0.98 | **1.00** |
+  | recall | 0.95 | 0.95 |
+  | TP | 87 | 87 |
+  | FP | 2 | **0** |
+  | FN | 5 | 5 |
+
+  89 connections: 87 `Business` + 2 `TestOrigin`
+  (`ts-preserve-service -> ts-notification-service`,
+  `ts-preserve-other-service -> ts-notification-service`) — exactly the two
+  former false positives, now correctly typed and excluded from scoring.
+
+  **empaia, no LLM, constants + scrape — CORRECTED 2026-07-31.** The number
+  first published here (0.71 -> 0.87) came from `results/empaia-nollm-baseline`,
+  which is **not a valid baseline for this change**: it was produced
+  2026-07-19 at commit `168f757` (11 commits before this branch's parent),
+  from a dirty tree, and it saw only 405 restcalls where the current run sees
+  444. The comparison it fed was invalid and is retracted.
+
+  A true controlled A/B has since been run: parent commit `cb33e56` built in
+  a worktree, and `6097d4f` (this branch), both invoked with the identical
+  flags (`-p ../empaia -c config/configurations/local-empaia-config.json -f
+  config/constants/empaia-constants.json --scrape`), scored against the same
+  16-edge business oracle:
+
+  | | P | R | TP | FP | FN | connections | requests |
+  |---|---|---|---|---|---|---|---|
+  | baseline at `cb33e56` | 0.87 | 0.81 | 13 | 2 | 3 | 15 | 444 |
+  | typed at `6097d4f` | 0.87 | 0.81 | 13 | 2 | 3 | 15 | 444 |
+
+  The connection sets are **identical** — same 15 connections, same 444
+  requests, zero true positives lost, zero false positives removed, and every
+  one of the 444 requests classifies as `Business`. There is nothing for the
+  classifier to reclassify: with constants substituted, empaia's localhost
+  URLs resolve to real hostnames before matching ever runs, so no call is
+  reflexive, and no call site lands in test code or a health path either.
+
+  **Conclusion: on empaia (no-LLM, constants + scrape), the typed-interaction
+  change is a no-op.** The real 0.71 -> 0.87 / 0.75 -> 0.81 improvement is
+  real, but it happened in earlier sage-rework commits landed between
+  `168f757` and `cb33e56` — not in this branch, and not because of
+  `InteractionKind`. Do not credit Component A/B/C for it.
+
+  train-ticket is unaffected by this correction: its restcall multiset is
+  identical before and after this branch (225 both ways), so the
+  0.98 / 0.95 -> 1.00 / 0.95 result above **is** genuinely caused by this
+  change and remains the headline result for typed interactions.
+
+  **Deferred: empaia LLM + constants + scrape re-run.** The published
+  headline (**0.74 / 0.88**, 14 TP / 5 FP / 2 FN) is from the LLM run and has
+  **not** been re-measured under the typed-edge change — it requires Ollama,
+  which is not running. The 0.87 / 0.81 figure above is the no-LLM run; it is
+  a different run with a different baseline and must not be merged with, or
+  presented as an update to, the 0.74 / 0.88 headline. Both are scored against
+  the same 16-edge oracle — the difference is the run, not the oracle.
+
+---
+
 ## Decision log
 
 > Chronological record of decisions taken and why. One line each.

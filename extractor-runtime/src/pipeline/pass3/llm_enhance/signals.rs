@@ -8,9 +8,11 @@
 
 use std::collections::BTreeSet;
 
-use models::{ConfigurationData, RestCall, callables::Namespace, ir::project::ProjectIR};
+use models::{
+    ConfigurationData, RestCall, callables::Namespace, ir::language::Language,
+    ir::project::ProjectIR,
+};
 
-use crate::pipeline::pass1::decide_language;
 use crate::pipeline::pass3::llm_enhance::variables::microservice_for_file;
 
 /// Evidence gathered around a single residual REST call site.
@@ -50,7 +52,7 @@ pub(super) fn extract(
         .map(|f| f.imports.iter().map(render_import).collect())
         .unwrap_or_default();
 
-    let language = decide_language(&rc.file_path);
+    let language = Language::from_path(&rc.file_path);
     let operand_identifiers: Vec<String> =
         statix::identifiers::identifiers_in_snippet(&rc.target_uri, language)
             .into_iter()

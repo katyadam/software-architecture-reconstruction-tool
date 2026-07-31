@@ -1,0 +1,34 @@
+{
+  "run_number": 5,
+  "timestamp": "2026-07-31T06:22:52Z",
+  "benchmark": {
+    "name": "empaia",
+    "commit_hash": null,
+    "dirty": false
+  },
+  "analyzer": {
+    "version": "0.1.0",
+    "commit_hash": "02f8459"
+  },
+  "config_file": "config/configurations/local-empaia-config.json",
+  "constants_file": "config/constants/empaia-constants.json",
+  "scrape_env": true,
+  "llm": {
+    "enabled": false,
+    "model": "qwen2.5-coder:7b",
+    "url": "http://localhost:11434/v1"
+  },
+  "timing": {
+    "extraction_ms": 12700,
+    "synthesis_ms": 980,
+    "total_ms": 13680
+  },
+  "results": {
+    "context_map_entities": 856,
+    "context_map_dependencies": 315,
+    "sdg_services": 17,
+    "sdg_connections": 15,
+    "imcg_callables": 4467,
+    "imcg_calls": 3140
+  }
+}
