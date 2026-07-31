@@ -29642,422 +29642,6 @@
   ],
   "dependencies": [
     {
-      "source_id": "org.empaia.runners.KeycloakConsistencyCheckRunner",
-      "target_id": "org.empaia.configs.ConsistencyCheckConfiguration",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/job-execution-service/job_execution_service/model.py/AppRequirements",
-      "target_id": "../empaia/job-execution-service/job_execution_service/model.py/AppType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "job-execution-service",
-      "target_ms": "job-execution-service"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/AppUiConfiguration",
-      "target_id": "../empaia/models/marketplace/app.py/AppUiIframeConfiguration",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.services.v2.UserServiceV2",
-      "target_id": "org.empaia.services.KeycloakService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/BaseQuestionnaireResponse",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Reference",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/slide.py/SlideInfo",
-      "target_id": "../empaia/models/v3/slide.py/SlideChannel",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/CustomerAppViewQuery",
-      "target_id": "../empaia/models/marketplace/app.py/ApiVersion",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/AppDetails",
-      "target_id": "../empaia/models/marketplace/app.py/TextTranslation",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/cases.py/CaseList",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/cases.py/Case",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "workbench-service",
-      "target_ms": "workbench-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/examination.py/ExaminationList",
-      "target_id": "../empaia/models/v3/examination.py/Examination",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.services.v2.OrganizationServiceV2",
-      "target_id": "org.empaia.services.KeycloakService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "org.empaia.controllers.v2.OrganizationControllerV2",
-      "target_id": "org.empaia.services.v2.MemberService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/ClosedPortalAppList",
-      "target_id": "../empaia/models/marketplace/app.py/ClosedPortalApp",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/BaseQuestionnaire",
-      "target_id": "../empaia/models/v3/fhir/commons.py/FHIRQuestionnaireStatus",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/primitives.py/PostPrimitveBase",
-      "target_id": "../empaia/models/v1/commons.py/DataCreatorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/job.py/PutJobValidationStatus",
-      "target_id": "../empaia/models/v3/job.py/JobValidationStatus",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.models.dto.v2.PostMembershipRequestEntity",
-      "target_id": "org.empaia.models.auth.KeycloakId",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/QuestionnaireResponse",
-      "target_id": "../empaia/models/v3/fhir/questionnaire_responses.py/QuestionnaireResponseItem",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/BaseQuestionnaireItem",
-      "target_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemAnswerOption",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.models.dto.v2.UserProfileEntity",
-      "target_id": "org.empaia.models.auth.KeycloakId",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/job-execution-service/job_execution_service/jobexecutor.py/JobRunner",
-      "target_id": "../empaia/job-execution-service/job_execution_service/database.py/ExecutionDbClient",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "job-execution-service",
-      "target_ms": "job-execution-service"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/PublicPortalAppList",
-      "target_id": "../empaia/models/marketplace/app.py/PublicPortalApp",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/annotations.py/PostAnnotationBase",
-      "target_id": "../empaia/models/v3/annotation/annotations.py/AnnotationReferenceType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/cases.py/Case",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/cases.py/PreprocessingProgress",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "workbench-service",
-      "target_ms": "workbench-service"
-    },
-    {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/slides.py/SlideList",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/slides.py/Slide",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "workbench-service",
-      "target_ms": "workbench-service"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/jobs.py/TreeNodeItemDetails",
-      "target_id": "../empaia/models/v1/annotation/jobs.py/NodeType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/AppUiTested",
-      "target_id": "../empaia/models/marketplace/app.py/Browser",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/tests/test_job_creator_type.py/ModelWithJobCreatorType",
-      "target_id": "../empaia/models/v1/job.py/JobCreatorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/collections.py/CollectionCore",
-      "target_id": "../empaia/models/v1/annotation/collections.py/CollectionItemType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/shout-out-service/shout_out_service/models.py/ShoutOutList",
-      "target_id": "../empaia/shout-out-service/shout_out_service/models.py/ShoutOut",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "shout-out-service",
-      "target_ms": "shout-out-service"
-    },
-    {
-      "source_id": "../empaia/job-execution-service/job_execution_service/jobexecutor.py/JobRunner",
-      "target_id": "../empaia/job-execution-service/job_execution_service/mps_client.py/MarketplaceClient",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "job-execution-service",
-      "target_ms": "job-execution-service"
-    },
-    {
-      "source_id": "org.empaia.services.v2.AdminService",
-      "target_id": "org.empaia.services.KeycloakService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/job-execution-service/job_execution_service/database.py/NewStatus",
-      "target_id": "../empaia/job-execution-service/job_execution_service/model.py/ExecStatus",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "job-execution-service",
-      "target_ms": "job-execution-service"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/Clearance",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ClearanceItem",
-      "source_multiplier": "2",
-      "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/Questionnaire",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Coding",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/clinical.py/ClinicalSlideList",
-      "target_id": "../empaia/models/v1/clinical.py/ClinicalSlide",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.security.organization.OrganizationRolesAuthorization",
-      "target_id": "org.empaia.services.KeycloakService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/commons.py/Identifier",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Period",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/collections.py/PostPointAnnotationItems",
-      "target_id": "../empaia/models/v3/annotation/annotations.py/PostPointAnnotation",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/annotations.py/PostLineAnnotations",
-      "target_id": "../empaia/models/v3/annotation/annotations.py/PostLineAnnotation",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/PublicActiveAppViews",
-      "target_id": "../empaia/models/marketplace/app.py/PublicAppView",
-      "source_multiplier": "3",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/selectors.py/SelectorList",
-      "target_id": "../empaia/models/v3/fhir/selectors.py/Selector",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/TagList",
-      "target_id": "../empaia/models/marketplace/app.py/AppTag",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/examination.py/ExaminationQuery",
-      "target_id": "../empaia/models/v3/examination.py/ExaminationCreatorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.models.dto.v2.DefaultActiveOrganizationEntity",
-      "target_id": "org.empaia.models.auth.KeycloakId",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v1/slide.py/SlideInfo",
-      "target_id": "../empaia/models/v1/slide.py/SlidePixelSizeNm",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/BaseQuestionnaireResponse",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Identifier",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItem",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Coding",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/PostAdminPortalApp",
-      "target_id": "../empaia/models/marketplace/app.py/PostActiveAdminApps",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/slide.py/SlideInfo",
-      "target_id": "../empaia/models/v1/slide.py/SlideLevel",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/NominalPixelmapCore",
-      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/NumberClassMapping",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/slides.py/JobSlideList",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/slides.py/Slide",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "workbench-service",
-      "target_ms": "workbench-service"
-    },
-    {
       "source_id": "../empaia/models/v3/annotation/collections.py/PostFloatPrimitivesItems",
       "target_id": "../empaia/models/v3/annotation/primitives.py/PostFloatPrimitive",
       "source_multiplier": "1",
@@ -30066,33 +29650,33 @@
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/marketplace/app.py/AdminPortalAppQuery",
-      "target_id": "../empaia/models/marketplace/app.py/AppStatus",
+      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/UpdateNominalPixelmap",
+      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/NumberClassMapping",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.services.v2.MyService",
+      "target_id": "org.empaia.services.KeycloakService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/PostQuestionnaireResponse",
+      "target_id": "../empaia/models/v3/fhir/questionnaire_responses.py/PostQuestionnaireResponseItem",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v1/job.py/PutJobStatus",
-      "target_id": "../empaia/models/v1/job.py/JobStatus",
+      "source_id": "../empaia/models/commons.py/ServiceStatus",
+      "target_id": "../empaia/models/commons.py/ServiceStatusEnum",
       "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/primitives.py/PrimitiveCore",
-      "target_id": "../empaia/models/v1/annotation/primitives.py/PrimitiveReferenceType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/slide.py/SlideInfo",
-      "target_id": "../empaia/models/v3/slide.py/SlideExtent",
-      "source_multiplier": "2",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
@@ -30107,88 +29691,16 @@
     },
     {
       "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ClearanceItem",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/InfoSourceContent",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/InfoProvider",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "marketplace-service",
       "target_ms": "marketplace-service"
     },
     {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemEnableWhen",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Coding",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/examination.py/PreprocessingRequestQuery",
-      "target_id": "../empaia/models/v3/examination.py/PreprocessingRequestState",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/collections.py/PostClassesItems",
-      "target_id": "../empaia/models/v3/annotation/classes.py/PostClass",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/examination.py/PreprocessingRequest",
-      "target_id": "../empaia/models/v3/examination.py/PreprocessingRequestState",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/licenses.py/PostOrganizationLicenseList",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/licenses.py/PostOrganizationLicense",
+      "source_id": "../empaia/models/v1/clinical.py/CaseList",
+      "target_id": "../empaia/models/v1/clinical.py/Case",
       "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/primitives.py/PostPrimitveBase",
-      "target_id": "../empaia/models/v3/commons.py/DataCreatorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/primitives.py/PostFloatPrimitives",
-      "target_id": "../empaia/models/v3/annotation/primitives.py/PostFloatPrimitive",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/MediaObjectCore",
-      "target_id": "../empaia/models/marketplace/app.py/TextTranslation",
-      "source_multiplier": "2",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/examination.py/Examination",
-      "target_id": "../empaia/models/v1/examination.py/ExaminationApp",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemAnswerOption",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Coding",
-      "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
@@ -30202,232 +29714,24 @@
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/resources.py/ContainerImageCore",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/resources.py/ContainerImageStatus",
+      "source_id": "../empaia/models/v3/job.py/PutJobValidationStatus",
+      "target_id": "../empaia/models/v3/job.py/JobValidationStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/PublicAggregatedClearance",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ExtendedTagList",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "marketplace-service",
       "target_ms": "marketplace-service"
     },
     {
-      "source_id": "org.empaia.validators.ClientUrisValidator",
-      "target_id": "org.empaia.services.v2.ConfidentialOrganizationService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "org.empaia.services.v2.MyUnapprovedOrganizationsService",
-      "target_id": "org.empaia.services.KeycloakService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/PostActiveAdminApps",
-      "target_id": "../empaia/models/marketplace/app.py/PostAdminApp",
-      "source_multiplier": "3",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/annotations.py/PostAnnotationBase",
-      "target_id": "../empaia/models/v1/commons.py/DataCreatorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/annotations.py/PostArrowAnnotations",
-      "target_id": "../empaia/models/v3/annotation/annotations.py/PostArrowAnnotation",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/clinical.py/CaseList",
-      "target_id": "../empaia/models/v3/clinical.py/Case",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/apps.py/AppList",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/apps.py/App",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "workbench-service",
-      "target_ms": "workbench-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/classes.py/PostClassList",
-      "target_id": "../empaia/models/v3/annotation/classes.py/PostClass",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/job.py/PostJob",
-      "target_id": "../empaia/models/v1/job.py/JobCreatorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/examinations.py/ExaminationList",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/examinations.py/Examination",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "workbench-service",
-      "target_ms": "workbench-service"
-    },
-    {
-      "source_id": "org.empaia.runners.UpgradeRunner",
-      "target_id": "org.empaia.configs.AuthServiceVersion",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/slide.py/SlideLevel",
-      "target_id": "../empaia/models/v3/slide.py/SlideExtent",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.runners.KeycloakMigrationRunner",
-      "target_id": "org.empaia.configs.ConsistencyCheckConfiguration",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ExtendedPostClearanceItem",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/InfoProvider",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/collections.py/PostCollection",
-      "target_id": "../empaia/models/v1/commons.py/DataCreatorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/primitives.py/PostBoolPrimitives",
-      "target_id": "../empaia/models/v3/annotation/primitives.py/PostBoolPrimitive",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/examination.py/PostExamination",
-      "target_id": "../empaia/models/v3/examination.py/ExaminationCreatorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.controllers.v2.MyController",
-      "target_id": "org.empaia.services.v2.MyService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/slide.py/SlideChannel",
-      "target_id": "../empaia/models/v3/slide.py/SlideColor",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/wsi-service/wsi_service/custom_models/service_status.py/WSIServiceStatus",
-      "target_id": "../empaia/wsi-service/wsi_service/custom_models/service_status.py/PluginInfo",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "wsi-service",
-      "target_ms": "wsi-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/slide.py/SlideInfo",
-      "target_id": "../empaia/models/v3/slide.py/SlideLevel",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.validators.ClientServiceAccountValidator",
-      "target_id": "org.empaia.services.v2.KeycloakClientService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/shout-out-service/shout_out_service/models.py/BaseMessage",
-      "target_id": "../empaia/shout-out-service/shout_out_service/models.py/MessageStatus",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "shout-out-service",
-      "target_ms": "shout-out-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/job.py/Job",
-      "target_id": "../empaia/models/v3/job.py/JobStatus",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/Clearance",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/EditorType",
-      "source_multiplier": "2",
-      "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
-    },
-    {
-      "source_id": "../empaia/models/v1/examination.py/ExaminationList",
-      "target_id": "../empaia/models/v1/examination.py/Examination",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/clinical.py/PostCase",
-      "target_id": "../empaia/models/v3/clinical.py/CaseCreatorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/collections.py/ItemQuery",
-      "target_id": "../empaia/models/v1/commons.py/Viewport",
+      "source_id": "../empaia/models/v3/examination.py/PostPreprocessingTrigger",
+      "target_id": "../empaia/models/v3/examination.py/ProprocessingTriggerCreatorType",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
@@ -30435,107 +29739,19 @@
     },
     {
       "source_id": "../empaia/models/v3/annotation/collections.py/PostCollectionBase",
-      "target_id": "../empaia/models/v3/commons.py/DataCreatorType",
+      "target_id": "../empaia/models/v3/annotation/collections.py/CollectionReferenceType",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "org.empaia.controllers.v2.ModeratorController",
-      "target_id": "org.empaia.services.v2.ModeratorService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "org.empaia.services.v2.KeycloakConsistencyCheckService",
+      "source_id": "org.empaia.services.v2.OrganizationServiceV2",
       "target_id": "org.empaia.services.KeycloakService",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "auth-service",
       "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v1/slide.py/SlideLevel",
-      "target_id": "../empaia/models/v1/slide.py/SlideExtent",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/app-service/app_service/api/v3/custom_models/response.py/Collection",
-      "target_id": "../empaia/app-service/app_service/api/v3/custom_models/response.py/CollectionItemType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "app-service",
-      "target_ms": "app-service"
-    },
-    {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/examinations.py/ExtendedPreprocessingTriggerList",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/examinations.py/ExtendedPreprocessingTrigger",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "workbench-service",
-      "target_ms": "workbench-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/collections.py/CollectionList",
-      "target_id": "../empaia/models/v3/annotation/collections.py/Collection",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/classes.py/ClassCore",
-      "target_id": "../empaia/models/v1/annotation/classes.py/ClassReferenceType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/PostQuestionnaireResponse",
-      "target_id": "../empaia/models/v3/fhir/questionnaire_responses.py/PostQuestionnaireResponseItem",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/PublicAppView",
-      "target_id": "../empaia/models/marketplace/app.py/MediaList",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/examination.py/PostPreprocessingRequest",
-      "target_id": "../empaia/models/v3/examination.py/PreprocessingRequestCreatorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/job.py/PutJobStatus",
-      "target_id": "../empaia/models/v3/job.py/JobStatus",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/clinical-data-service/wsi_format_plugins/utils/cds_plugin_utils/slide_worker.py/SlideWorker",
-      "target_id": "../empaia/clinical-data-service/wsi_format_plugins/utils/cds_plugin_utils/base_slide_instance.py/BaseSlideInstance",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "clinical-data-service",
-      "target_ms": "clinical-data-service"
     },
     {
       "source_id": "../empaia/models/v1/annotation/annotations.py/AnnotationBase",
@@ -30546,31 +29762,31 @@
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/collections.py/SlideItemList",
-      "target_id": "../empaia/models/v3/annotation/collections.py/SlideItem",
+      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/PixelmapSlideInfo",
+      "target_id": "../empaia/models/v3/slide.py/SlideExtent",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/annotations.py/PostCircleAnnotations",
+      "target_id": "../empaia/models/v3/annotation/annotations.py/PostCircleAnnotation",
       "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/examination.py/Examination",
-      "target_id": "../empaia/models/v3/examination.py/ExaminationState",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.models.dto.v2.UserProfileEntity",
-      "target_id": "org.empaia.models.dto.v2.ResizedPictureUrlsEntity",
+      "source_id": "org.empaia.validators.ClientUrisValidator",
+      "target_id": "org.empaia.configs.ConsistencyCheckConfiguration",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "auth-service",
       "target_ms": "auth-service"
     },
     {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemInitial",
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemEnableWhen",
       "target_id": "../empaia/models/v3/fhir/commons.py/Coding",
       "source_multiplier": "1",
       "target_multiplier": "0",
@@ -30578,15 +29794,127 @@
       "target_ms": "models"
     },
     {
-      "source_id": "org.empaia.models.dto.v2.OrganizationCategoryRequestEntity",
-      "target_id": "org.empaia.models.auth.KeycloakId",
-      "source_multiplier": "2",
+      "source_id": "../empaia/models/marketplace/app.py/Statistics",
+      "target_id": "../empaia/models/marketplace/app.py/StatisticsPage",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/CustomerAppViewQuery",
+      "target_id": "../empaia/models/marketplace/app.py/ApiVersion",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.controllers.v2.MyUnapprovedOrganizationsController",
+      "target_id": "org.empaia.services.v2.MyUnapprovedOrganizationsService",
+      "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "auth-service",
       "target_ms": "auth-service"
     },
     {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemEnableWhen",
+      "source_id": "org.empaia.services.v2.PublicOrganizationService",
+      "target_id": "org.empaia.services.KeycloakService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/Questionnaire",
+      "target_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItem",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/examinations.py/ExtendedPreprocessingTriggerList",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/examinations.py/ExtendedPreprocessingTrigger",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "workbench-service",
+      "target_ms": "workbench-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/BaseQuestionnaire",
+      "target_id": "../empaia/models/v3/fhir/commons.py/FHIRQuestionnaireStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/NominalPixelmapCore",
+      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/NominalPixelmapElementType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/annotation/primitives.py/PrimitiveCore",
+      "target_id": "../empaia/models/v1/annotation/primitives.py/PrimitiveReferenceType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/tests/test_job_creator_type.py/ModelWithJobCreatorType",
+      "target_id": "../empaia/models/v3/job.py/JobCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/clinical.py/PostCase",
+      "target_id": "../empaia/models/v1/clinical.py/CaseCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/cases.py/CaseList",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/cases.py/Case",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "workbench-service",
+      "target_ms": "workbench-service"
+    },
+    {
+      "source_id": "../empaia/models/v1/id_mapper.py/Mappings",
+      "target_id": "../empaia/models/v1/id_mapper.py/Mapping",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/selectors.py/SelectorQuery",
+      "target_id": "../empaia/models/v3/fhir/commons.py/FHIRResourceType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/PostAdminAppView",
+      "target_id": "../empaia/models/marketplace/app.py/PostAppDetails",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/QuestionnaireResponseItemAnswer",
       "target_id": "../empaia/models/v3/fhir/commons.py/Reference",
       "source_multiplier": "1",
       "target_multiplier": "0",
@@ -30594,60 +29922,124 @@
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/PostClearanceItem",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/PostInfoSourceContent",
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ExtendedPostClearanceItem",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/InfoProvider",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "marketplace-service",
       "target_ms": "marketplace-service"
     },
     {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/slides.py/Slide",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/slides.py/TagMapping",
-      "source_multiplier": "2",
-      "target_multiplier": "0",
-      "source_ms": "workbench-service",
-      "target_ms": "workbench-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/collections.py/PostPolygonAnnotationsItems",
-      "target_id": "../empaia/models/v3/annotation/annotations.py/PostPolygonAnnotation",
+      "source_id": "../empaia/models/v3/clinical.py/Case",
+      "target_id": "../empaia/models/v3/clinical.py/ClinicalSlide",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/fhir/selectors.py/SelectorTaggingList",
-      "target_id": "../empaia/models/v3/fhir/selectors.py/SelectorTagging",
+      "source_id": "../empaia/models/v1/slide.py/SlideLevel",
+      "target_id": "../empaia/models/v1/slide.py/SlideExtent",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/job-execution-service/job_execution_service/database.py/NewStatus",
+      "target_id": "../empaia/job-execution-service/job_execution_service/model.py/ExecStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "job-execution-service",
+      "target_ms": "job-execution-service"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/PostActiveAdminApps",
+      "target_id": "../empaia/models/marketplace/app.py/PostAdminApp",
+      "source_multiplier": "3",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/PostPixelmapBase",
+      "target_id": "../empaia/models/v3/commons.py/DataCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/resources.py/AppUICore",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/resources.py/AppUIStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
+    },
+    {
+      "source_id": "../empaia/models/v1/annotation/collections.py/CollectionCore",
+      "target_id": "../empaia/models/v1/annotation/collections.py/CollectionItemType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/annotations.py/PostAnnotationBase",
+      "target_id": "../empaia/models/v3/commons.py/DataCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/PortalAppQuery",
+      "target_id": "../empaia/models/marketplace/app.py/ApiVersion",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/PostAdminPortalApp",
+      "target_id": "../empaia/models/marketplace/app.py/PostActiveAdminApps",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/annotations.py/PostPolygonAnnotations",
+      "target_id": "../empaia/models/v3/annotation/annotations.py/PostPolygonAnnotation",
       "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/UpdateDiscretePixelmap",
-      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/NumberClassMapping",
+      "source_id": "../empaia/models/v3/annotation/collections.py/Collection",
+      "target_id": "../empaia/models/v3/annotation/collections.py/CollectionItemType",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ClearanceItemCore",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/DatePrecision",
-      "source_multiplier": "1",
+      "source_id": "../empaia/models/v3/examination.py/ScopeList",
+      "target_id": "../empaia/models/v3/examination.py/Scope",
+      "source_multiplier": "0..*",
       "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
+      "source_ms": "models",
+      "target_ms": "models"
     },
     {
-      "source_id": "org.empaia.models.dto.v2.OrganizationMember",
-      "target_id": "org.empaia.models.auth.KeycloakId",
-      "source_multiplier": "2",
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/BaseQuestionnaire",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Coding",
+      "source_multiplier": "1",
       "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
+      "source_ms": "models",
+      "target_ms": "models"
     },
     {
       "source_id": "../empaia/models/marketplace/app.py/PublicPortalApp",
@@ -30658,15 +30050,63 @@
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/job.py/PostJob",
-      "target_id": "../empaia/models/v3/job.py/JobCreatorType",
+      "source_id": "org.empaia.models.dto.v2.OrganizationDeploymentConfiguration",
+      "target_id": "org.empaia.models.auth.KeycloakId",
       "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/classes.py/ClassListResponse",
+      "target_id": "../empaia/models/v3/annotation/classes.py/Class",
+      "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "org.empaia.services.v2.ConfidentialOrganizationService",
+      "source_id": "../empaia/models/v1/annotation/jobs.py/TreeNodeSequence",
+      "target_id": "../empaia/models/v1/annotation/jobs.py/TreeNodeItemDetails",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/PublicActiveAppViews",
+      "target_id": "../empaia/models/marketplace/app.py/PublicAppView",
+      "source_multiplier": "3",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/primitives.py/PostStringPrimitives",
+      "target_id": "../empaia/models/v3/annotation/primitives.py/PostStringPrimitive",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/examinations.py/ExtendedPreprocessingTrigger",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/apps.py/App",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "workbench-service",
+      "target_ms": "workbench-service"
+    },
+    {
+      "source_id": "../empaia/models/v1/annotation/classes.py/ClassListResponse",
+      "target_id": "../empaia/models/v1/annotation/classes.py/Class",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.services.v2.ShoutOutService",
       "target_id": "org.empaia.services.KeycloakService",
       "source_multiplier": "1",
       "target_multiplier": "0",
@@ -30674,16 +30114,56 @@
       "target_ms": "auth-service"
     },
     {
-      "source_id": "../empaia/event-service/event_service/validation_emails.py/TokenValidator",
-      "target_id": "../empaia/event-service/event_service/settings.py/Settings",
+      "source_id": "org.empaia.models.dto.v2.UserProfileEntity",
+      "target_id": "org.empaia.models.dto.v2.ResizedPictureUrlsEntity",
       "source_multiplier": "1",
       "target_multiplier": "0",
-      "source_ms": "event-service",
-      "target_ms": "event-service"
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
     },
     {
-      "source_id": "../empaia/models/marketplace/app.py/ClosedAppView",
-      "target_id": "../empaia/models/marketplace/app.py/AppStatus",
+      "source_id": "../empaia/loadtus-service/loadtus_service/api/v1/integrations/default.py/Default",
+      "target_id": "../empaia/loadtus-service/loadtus_service/settings.py/Settings",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "loadtus-service",
+      "target_ms": "loadtus-service"
+    },
+    {
+      "source_id": "../empaia/models/v1/examination.py/PutExaminationState",
+      "target_id": "../empaia/models/v1/examination.py/ExaminationState",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/slide.py/SlideInfo",
+      "target_id": "../empaia/models/v3/slide.py/SlideLevel",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/AppTag",
+      "target_id": "../empaia/models/marketplace/app.py/TextTranslation",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.services.v2.PublicService",
+      "target_id": "org.empaia.services.KeycloakService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/slide.py/SlideInfo",
+      "target_id": "../empaia/models/v3/slide.py/SlideChannel",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
@@ -30698,12 +30178,476 @@
       "target_ms": "models"
     },
     {
+      "source_id": "../empaia/job-execution-service/job_execution_service/model.py/Execution",
+      "target_id": "../empaia/job-execution-service/job_execution_service/model.py/ExecStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "job-execution-service",
+      "target_ms": "job-execution-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/collections.py/SlideItemList",
+      "target_id": "../empaia/models/v3/annotation/collections.py/SlideItem",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/job.py/PostJob",
+      "target_id": "../empaia/models/v3/job.py/JobMode",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/BaseQuestionnaireResponse",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Reference",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/ClosedAppView",
+      "target_id": "../empaia/models/marketplace/app.py/AppStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/examination.py/PreprocessingRequest",
+      "target_id": "../empaia/models/v3/examination.py/AppJob",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/AppUiTested",
+      "target_id": "../empaia/models/marketplace/app.py/OS",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/PublicAppView",
+      "target_id": "../empaia/models/marketplace/app.py/MediaList",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/PostAdminPortalApp",
+      "target_id": "../empaia/models/marketplace/app.py/PostAppTag",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/examination.py/Examination",
+      "target_id": "../empaia/models/v1/examination.py/ExaminationApp",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/licenses.py/OrganizationLicenseList",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/licenses.py/OrganizationLicense",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
+    },
+    {
+      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/slides.py/SlideList",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/slides.py/Slide",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "workbench-service",
+      "target_ms": "workbench-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/job.py/PostJob",
+      "target_id": "../empaia/models/v3/job.py/JobCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.runners.KeycloakConsistencyCheckRunner",
+      "target_id": "org.empaia.services.v2.KeycloakConsistencyCheckService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/cases.py/Case",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/examinations.py/Examination",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "workbench-service",
+      "target_ms": "workbench-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemAnswerOption",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Coding",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.validators.PasswordConstraintValidator",
+      "target_id": "org.empaia.configs.PasswordComplexityConfiguration",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/BaseQuestionnaireItem",
+      "target_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemAnswerOption",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/event-service/event_service/validation_emails.py/TokenValidator",
+      "target_id": "../empaia/event-service/event_service/settings.py/Settings",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "event-service",
+      "target_ms": "event-service"
+    },
+    {
+      "source_id": "org.empaia.services.v2.KeycloakConsistencyCheckService",
+      "target_id": "org.empaia.configs.ConsistencyCheckConfiguration",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/event-service/event_service/models.py/NotificationList",
+      "target_id": "../empaia/event-service/event_service/models.py/Notification",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "event-service",
+      "target_ms": "event-service"
+    },
+    {
+      "source_id": "org.empaia.models.dto.v2.PostMembershipRequestEntity",
+      "target_id": "org.empaia.models.auth.KeycloakId",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v1/clinical.py/Case",
+      "target_id": "../empaia/models/v1/clinical.py/ClinicalSlide",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.services.v2.AdminService",
+      "target_id": "org.empaia.configs.EmpaiaConfiguration",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/MediaList",
+      "target_id": "../empaia/models/marketplace/app.py/MediaObject",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/annotations.py/PostPointAnnotations",
+      "target_id": "../empaia/models/v3/annotation/annotations.py/PostPointAnnotation",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.services.v2.UserServiceV2",
+      "target_id": "org.empaia.services.KeycloakService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/BaseQuestionnaireResponse",
+      "target_id": "../empaia/models/v3/fhir/commons.py/FHIRQuestionnaireResponseStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/examination.py/ExaminationList",
+      "target_id": "../empaia/models/v1/examination.py/Examination",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.services.v2.ManagerService",
+      "target_id": "org.empaia.services.KeycloakService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "org.empaia.models.dto.v2.CommonOrganizationProfileDataEntity",
+      "target_id": "org.empaia.models.auth.KeycloakId",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v1/annotation/annotations.py/AnnotationUniqueClassesQuery",
+      "target_id": "../empaia/models/v1/commons.py/Viewport",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.models.dto.v2.UnapprovedCommonOrganizationDataEntity",
+      "target_id": "org.empaia.models.auth.KeycloakId",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/BaseQuestionnaireItem",
+      "target_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemEnableWhen",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/NominalPixelmapCore",
+      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/NumberClassMapping",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
       "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/examinations.py/ExaminationList",
       "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/examinations.py/Examination",
       "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "workbench-service",
       "target_ms": "workbench-service"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/api/v1/integrations/empaia.py/Payload",
+      "target_id": "../empaia/marketplace-service/marketplace_service/api/v1/integrations/empaia.py/TokenPayload",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/AppUiTested",
+      "target_id": "../empaia/models/marketplace/app.py/Browser",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.controllers.v2.ModeratorController",
+      "target_id": "org.empaia.services.v2.ModeratorService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v1/annotation/annotations.py/AnnotationCore",
+      "target_id": "../empaia/models/v1/annotation/annotations.py/AnnotationReferenceType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/annotation/collections.py/PostCollection",
+      "target_id": "../empaia/models/v1/commons.py/DataCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/AppDetails",
+      "target_id": "../empaia/models/marketplace/app.py/TextTranslation",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/wsi-service/wsi_service/custom_models/service_status.py/WSIServiceStatus",
+      "target_id": "../empaia/wsi-service/wsi_service/custom_models/service_status.py/PluginInfo",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "wsi-service",
+      "target_ms": "wsi-service"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/AppUiConfiguration",
+      "target_id": "../empaia/models/marketplace/app.py/AppUiIframeConfiguration",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/PortalAppCore",
+      "target_id": "../empaia/models/marketplace/app.py/ListingStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/BaseQuestionnaireItem",
+      "target_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemInitial",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/collections.py/CollectionList",
+      "target_id": "../empaia/models/v3/annotation/collections.py/Collection",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/Clearance",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/EditorType",
+      "source_multiplier": "2",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
+    },
+    {
+      "source_id": "org.empaia.runners.UpgradeRunner",
+      "target_id": "org.empaia.services.KeycloakService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/Questionnaire",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Period",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/slide.py/SlideInfo",
+      "target_id": "../empaia/models/v1/slide.py/SlidePixelSizeNm",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/collections.py/PostIntegerPrimitivesItems",
+      "target_id": "../empaia/models/v3/annotation/primitives.py/PostIntegerPrimitive",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.services.v2.ModeratorService",
+      "target_id": "org.empaia.services.KeycloakService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/StatisticsList",
+      "target_id": "../empaia/models/marketplace/app.py/Statistics",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/job.py/Job",
+      "target_id": "../empaia/models/v1/job.py/JobStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/collections.py/PostLineAnnotationsItems",
+      "target_id": "../empaia/models/v3/annotation/annotations.py/PostLineAnnotation",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/apps.py/AppList",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/apps.py/App",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "workbench-service",
+      "target_ms": "workbench-service"
+    },
+    {
+      "source_id": "org.empaia.services.v2.PublicService",
+      "target_id": "org.empaia.configs.EmpaiaConfiguration",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/PublicAppView",
+      "target_id": "../empaia/models/marketplace/app.py/AppDetails",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
     },
     {
       "source_id": "org.empaia.controllers.v2.AdminController",
@@ -30722,15 +30666,95 @@
       "target_ms": "marketplace-service"
     },
     {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/cases.py/Case",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/examinations.py/Examination",
+      "source_id": "../empaia/models/v3/annotation/primitives.py/PostBoolPrimitives",
+      "target_id": "../empaia/models/v3/annotation/primitives.py/PostBoolPrimitive",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemInitial",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Reference",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.services.v2.ConfidentialOrganizationService",
+      "target_id": "org.empaia.services.KeycloakService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "org.empaia.models.dto.v2.AllowedAudiencesByOrganizationUserRoleEntity",
+      "target_id": "org.empaia.models.auth.KeycloakId",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "org.empaia.models.dto.v2.OrganizationMember",
+      "target_id": "org.empaia.models.auth.KeycloakId",
+      "source_multiplier": "2",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/slides.py/SlideList",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/slides.py/Slide",
       "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "workbench-service",
       "target_ms": "workbench-service"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/DiscretePixelmapCore",
+      "source_id": "../empaia/models/marketplace/app.py/MediaObjectCore",
+      "target_id": "../empaia/models/marketplace/app.py/ResizedMediaUrlsObject",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/examination.py/PutPreprocessingRequestUpdate",
+      "target_id": "../empaia/models/v3/examination.py/AppJob",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.models.dto.v2.RegisteredUserEntity",
+      "target_id": "org.empaia.models.auth.KeycloakId",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/PostAdminAppView",
+      "target_id": "../empaia/models/marketplace/app.py/PostAdminApp",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/collections.py/PostIdCollection",
+      "target_id": "../empaia/models/v3/annotation/collections.py/CollectionItemType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/UpdateDiscretePixelmap",
       "target_id": "../empaia/models/v3/annotation/pixelmaps.py/NumberClassMapping",
       "source_multiplier": "1",
       "target_multiplier": "0",
@@ -30738,24 +30762,24 @@
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/collections.py/PostSlideItems",
-      "target_id": "../empaia/models/v3/annotation/collections.py/SlideItem",
+      "source_id": "../empaia/job-execution-service/job_execution_service/jobexecutor.py/JobRunner",
+      "target_id": "../empaia/job-execution-service/job_execution_service/container_clients/__init__.py/JobContainerClient",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "job-execution-service",
+      "target_ms": "job-execution-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/collections.py/PostStringPrimitivesItems",
+      "target_id": "../empaia/models/v3/annotation/primitives.py/PostStringPrimitive",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/examination.py/PreprocessingTriggerList",
-      "target_id": "../empaia/models/v3/examination.py/PreprocessingTrigger",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/commons.py/Reference",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Identifier",
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemEnableWhen",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Reference",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
@@ -30770,199 +30794,23 @@
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v1/examination.py/PostExamination",
-      "target_id": "../empaia/models/v1/examination.py/ExaminationCreatorType",
+      "source_id": "../empaia/loadtus-service/loadtus_service/api/v1/integrations/disable_auth.py/DisableAuth",
+      "target_id": "../empaia/loadtus-service/loadtus_service/settings.py/Settings",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "loadtus-service",
+      "target_ms": "loadtus-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/job.py/PutJobStatus",
+      "target_id": "../empaia/models/v3/job.py/JobStatus",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/fhir/selectors.py/SelectorQuery",
-      "target_id": "../empaia/models/v3/fhir/commons.py/FHIRResourceType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ClearanceItem",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ExtendedTagList",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/job.py/JobList",
-      "target_id": "../empaia/models/v3/job.py/Job",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/MediaList",
-      "target_id": "../empaia/models/marketplace/app.py/MediaObject",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/PublicAggregatedClearanceList",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/PublicAggregatedClearance",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/PostQuestionnaire",
-      "target_id": "../empaia/models/v3/fhir/questionnaires.py/PostQuestionnaireItem",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/PostApp",
-      "target_id": "../empaia/models/marketplace/app.py/AppUiConfiguration",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/Questionnaire",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Period",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/examination.py/ScopeList",
-      "target_id": "../empaia/models/v3/examination.py/Scope",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/AppUiConfiguration",
-      "target_id": "../empaia/models/marketplace/app.py/AppUiCspConfiguration",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/slide.py/SlideInfo",
-      "target_id": "../empaia/models/v3/slide.py/SlidePixelSizeNm",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/slides.py/Slide",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/slides.py/TagMapping",
-      "source_multiplier": "2",
-      "target_multiplier": "0",
-      "source_ms": "workbench-service",
-      "target_ms": "workbench-service"
-    },
-    {
-      "source_id": "../empaia/models/v1/id_mapper.py/Mappings",
-      "target_id": "../empaia/models/v1/id_mapper.py/Mapping",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/AppTag",
-      "target_id": "../empaia/models/marketplace/app.py/TextTranslation",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/collections.py/PostArrowAnnotationsItems",
-      "target_id": "../empaia/models/v3/annotation/annotations.py/PostArrowAnnotation",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/classes.py/PostClass",
-      "target_id": "../empaia/models/v3/annotation/classes.py/ClassReferenceType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/job-execution-service/job_execution_service/model.py/Execution",
-      "target_id": "../empaia/job-execution-service/job_execution_service/model.py/ExecStatus",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "job-execution-service",
-      "target_ms": "job-execution-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/clinical.py/ClinicalSlideList",
-      "target_id": "../empaia/models/v3/clinical.py/ClinicalSlide",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/PublicAppView",
-      "target_id": "../empaia/models/marketplace/app.py/AppDetails",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/PostAdminPortalApp",
-      "target_id": "../empaia/models/marketplace/app.py/PostAppDetails",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/shout-out-service/shout_out_service/models.py/ShoutOut",
-      "target_id": "../empaia/shout-out-service/shout_out_service/models.py/ShoutOutStatus",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "shout-out-service",
-      "target_ms": "shout-out-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/BaseQuestionnaireItem",
-      "target_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemEnableWhen",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/annotations.py/PostPointAnnotations",
-      "target_id": "../empaia/models/v3/annotation/annotations.py/PostPointAnnotation",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.services.v2.MyService",
+      "source_id": "org.empaia.services.v2.OrganizationDeploymentConfigurationService",
       "target_id": "org.empaia.services.KeycloakService",
       "source_multiplier": "1",
       "target_multiplier": "0",
@@ -30970,84 +30818,44 @@
       "target_ms": "auth-service"
     },
     {
-      "source_id": "../empaia/models/marketplace/app.py/ClosedApp",
-      "target_id": "../empaia/models/marketplace/app.py/AppStatus",
+      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/DiscretePixelmapCore",
+      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/NumberClassMapping",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/annotations.py/AnnotationBase",
-      "target_id": "../empaia/models/v3/annotation/classes.py/Class",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/collections.py/SlideList",
-      "target_id": "../empaia/models/v1/annotation/collections.py/SlideItem",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/annotations.py/PostAnnotationBase",
-      "target_id": "../empaia/models/v3/commons.py/DataCreatorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/collections.py/CollectionCore",
-      "target_id": "../empaia/models/v1/annotation/collections.py/CollectionReferenceType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.models.dto.v2.OrganizationUserRoleRequestEntity",
+      "source_id": "org.empaia.models.dto.v2.UserProfileEntity",
       "target_id": "org.empaia.models.auth.KeycloakId",
-      "source_multiplier": "2",
+      "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "auth-service",
       "target_ms": "auth-service"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/collections.py/PostCircleAnnotationsItems",
-      "target_id": "../empaia/models/v3/annotation/annotations.py/PostCircleAnnotation",
+      "source_id": "../empaia/models/v3/fhir/commons.py/Identifier",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Period",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "org.empaia.runners.KeycloakConsistencyCheckRunner",
-      "target_id": "org.empaia.services.v2.KeycloakConsistencyCheckService",
+      "source_id": "../empaia/models/marketplace/app.py/PostAdminAppView",
+      "target_id": "../empaia/models/marketplace/app.py/PostAppTag",
       "source_multiplier": "1",
       "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
+      "source_ms": "models",
+      "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v1/annotation/jobs.py/TreeNodeSequence",
-      "target_id": "../empaia/models/v1/annotation/jobs.py/TreeNodeItemDetails",
+      "source_id": "../empaia/models/v3/annotation/annotations.py/PostArrowAnnotations",
+      "target_id": "../empaia/models/v3/annotation/annotations.py/PostArrowAnnotation",
       "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ClearanceItemCore",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/InfoSourceType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
     },
     {
       "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/PostClearance",
@@ -31058,135 +30866,7 @@
       "target_ms": "marketplace-service"
     },
     {
-      "source_id": "org.empaia.validators.ClientScopeValidator",
-      "target_id": "org.empaia.services.v2.KeycloakClientService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/annotations.py/AnnotationUniqueClassesQuery",
-      "target_id": "../empaia/models/v1/commons.py/Viewport",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemInitial",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Reference",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/classes.py/ClassListResponse",
-      "target_id": "../empaia/models/v1/annotation/classes.py/Class",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/PublicAggregatedClearance",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ExtendedTagList",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/PixelmapSlideInfo",
-      "target_id": "../empaia/models/v3/slide.py/SlidePixelSizeNm",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/resources.py/AppUICore",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/resources.py/AppUIStatus",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
-    },
-    {
-      "source_id": "../empaia/models/v1/examination.py/PutExaminationState",
-      "target_id": "../empaia/models/v1/examination.py/ExaminationState",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/job.py/JobList",
-      "target_id": "../empaia/models/v1/job.py/Job",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/QuestionnaireResponse",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Reference",
-      "source_multiplier": "5",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/annotations.py/AnnotationUniqueClassesQuery",
-      "target_id": "../empaia/models/v3/commons.py/Viewport",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/ContinuousPixelmapCore",
-      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/ContinuousPixelmapElementType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/ClosedAppView",
-      "target_id": "../empaia/models/marketplace/app.py/ApiVersion",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.models.dto.v2.OrganizationDeploymentConfiguration",
-      "target_id": "org.empaia.models.auth.KeycloakId",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/storage.py/PutSlideStorage",
-      "target_id": "../empaia/models/v3/storage.py/StorageAddress",
-      "source_multiplier": "2",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/collections.py/PostCollectionBase",
-      "target_id": "../empaia/models/v3/annotation/collections.py/CollectionReferenceType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.services.v2.KeycloakClientService",
+      "source_id": "org.empaia.services.v2.MemberService",
       "target_id": "org.empaia.services.KeycloakService",
       "source_multiplier": "1",
       "target_multiplier": "0",
@@ -31202,64 +30882,440 @@
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemAnswerOption",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Reference",
+      "source_id": "../empaia/models/v3/annotation/annotations.py/AnnotationBase",
+      "target_id": "../empaia/models/v3/annotation/classes.py/Class",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/NominalPixelmapCore",
-      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/NominalPixelmapElementType",
+      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/DiscretePixelmapCore",
+      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/DiscretePixelmapElementType",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/marketplace/app.py/PostAdminAppView",
-      "target_id": "../empaia/models/marketplace/app.py/PostAppTag",
+      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/ContinuousPixelmapCore",
+      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/ContinuousPixelmapElementType",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "org.empaia.validators.PasswordConstraintValidator",
-      "target_id": "org.empaia.configs.PasswordComplexityConfiguration",
+      "source_id": "../empaia/models/v3/annotation/annotations.py/PostAnnotationBase",
+      "target_id": "../empaia/models/v3/annotation/annotations.py/AnnotationReferenceType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/slide.py/SlideChannel",
+      "target_id": "../empaia/models/v1/slide.py/SlideColor",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ClearanceItem",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/EditorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/examination.py/PreprocessingTriggerList",
+      "target_id": "../empaia/models/v3/examination.py/PreprocessingTrigger",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.services.KeycloakService",
+      "target_id": "org.empaia.configs.KeycloakInstanceConfiguration",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "auth-service",
       "target_ms": "auth-service"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/annotations.py/PostCircleAnnotations",
-      "target_id": "../empaia/models/v3/annotation/annotations.py/PostCircleAnnotation",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/commons.py/ServiceStatus",
-      "target_id": "../empaia/models/commons.py/ServiceStatusEnum",
+      "source_id": "../empaia/models/v3/annotation/collections.py/ItemQuery",
+      "target_id": "../empaia/models/v3/commons.py/Viewport",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/event-service/event_service/models.py/NotificationList",
-      "target_id": "../empaia/event-service/event_service/models.py/Notification",
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemInitial",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Coding",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.controllers.v2.OrganizationControllerV2",
+      "target_id": "org.empaia.services.v2.MemberService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/selectors.py/SelectorList",
+      "target_id": "../empaia/models/v3/fhir/selectors.py/Selector",
       "source_multiplier": "0..*",
       "target_multiplier": "0",
-      "source_ms": "event-service",
-      "target_ms": "event-service"
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/annotation/jobs.py/TreeNodeItemDetails",
+      "target_id": "../empaia/models/v1/annotation/jobs.py/NodeType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/annotations.py/AnnotationUniqueClassesQuery",
+      "target_id": "../empaia/models/v3/commons.py/Viewport",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/annotation/classes.py/PostClass",
+      "target_id": "../empaia/models/v1/commons.py/DataCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/examination.py/PreprocessingRequestList",
+      "target_id": "../empaia/models/v3/examination.py/PreprocessingRequest",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/examination.py/PreprocessingRequestQuery",
+      "target_id": "../empaia/models/v3/examination.py/PreprocessingRequestState",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/UpdatePixelmapCore",
+      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/NumberClassMapping",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.runners.KeycloakMigrationRunner",
+      "target_id": "org.empaia.services.v2.KeycloakConsistencyCheckService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/QuestionnaireResponse",
+      "target_id": "../empaia/models/v3/fhir/questionnaire_responses.py/QuestionnaireResponseItem",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/PostAdminPortalApp",
+      "target_id": "../empaia/models/marketplace/app.py/PostAppDetails",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/clinical.py/PostCase",
+      "target_id": "../empaia/models/v3/clinical.py/CaseCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.services.v2.KeycloakConsistencyCheckService",
+      "target_id": "org.empaia.services.KeycloakService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ClearanceItemCore",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/InfoSourceType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
+    },
+    {
+      "source_id": "../empaia/models/v1/slide.py/SlideInfo",
+      "target_id": "../empaia/models/v1/slide.py/SlideExtent",
+      "source_multiplier": "2",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/job.py/JobList",
+      "target_id": "../empaia/models/v1/job.py/Job",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.security.organization.OrganizationRolesAuthorization",
+      "target_id": "org.empaia.services.v2.MemberService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "org.empaia.controllers.v2.MyController",
+      "target_id": "org.empaia.services.v2.MyService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/slide.py/SlideInfo",
+      "target_id": "../empaia/models/v3/slide.py/SlideExtent",
+      "source_multiplier": "2",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/PixelmapCore",
+      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/NumberClassMapping",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/slide.py/SlideInfo",
+      "target_id": "../empaia/models/v1/slide.py/SlideLevel",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.models.dto.v2.MemberProfileEntity",
+      "target_id": "org.empaia.models.auth.KeycloakId",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "org.empaia.controllers.v2.PublicController",
+      "target_id": "org.empaia.services.v2.PublicService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/collections.py/PostRectangleAnnotationsItems",
+      "target_id": "../empaia/models/v3/annotation/annotations.py/PostRectangleAnnotation",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/annotations.py/PostLineAnnotations",
+      "target_id": "../empaia/models/v3/annotation/annotations.py/PostLineAnnotation",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.validators.ClientScopeValidator",
+      "target_id": "org.empaia.services.v2.KeycloakClientService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/job-execution-service/job_execution_service/jobexecutor.py/JobRunner",
+      "target_id": "../empaia/job-execution-service/job_execution_service/database.py/ExecutionDbClient",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "job-execution-service",
+      "target_ms": "job-execution-service"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/PostApp",
+      "target_id": "../empaia/models/marketplace/app.py/AppUiConfiguration",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/QuestionnaireResponse",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Reference",
+      "source_multiplier": "5",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
     },
     {
       "source_id": "../empaia/models/v3/annotation/primitives.py/PostPrimitveBase",
       "target_id": "../empaia/models/v3/annotation/primitives.py/PrimitiveReferenceType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.validators.ClientUrisValidator",
+      "target_id": "org.empaia.services.v2.ConfidentialOrganizationService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v1/annotation/classes.py/PostClassList",
+      "target_id": "../empaia/models/v1/annotation/classes.py/PostClass",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/slides.py/JobSlideList",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/slides.py/Slide",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "workbench-service",
+      "target_ms": "workbench-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/clinical.py/CaseList",
+      "target_id": "../empaia/models/v3/clinical.py/Case",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/PixelmapCore",
+      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/PixelmapReferenceType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/resources.py/ContainerImageCore",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/resources.py/ContainerImageStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
+    },
+    {
+      "source_id": "org.empaia.models.dto.v2.ExtendedUserDetailsEntity",
+      "target_id": "org.empaia.models.auth.KeycloakId",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/examination.py/Examination",
+      "target_id": "../empaia/models/v3/examination.py/ExaminationState",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/cases.py/CaseList",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/cases.py/Case",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "workbench-service",
+      "target_ms": "workbench-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/primitives.py/PostFloatPrimitives",
+      "target_id": "../empaia/models/v3/annotation/primitives.py/PostFloatPrimitive",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/shout-out-service/shout_out_service/models.py/ShoutOut",
+      "target_id": "../empaia/shout-out-service/shout_out_service/models.py/ShoutOutStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "shout-out-service",
+      "target_ms": "shout-out-service"
+    },
+    {
+      "source_id": "org.empaia.runners.KeycloakConsistencyCheckRunner",
+      "target_id": "org.empaia.configs.ConsistencyCheckConfiguration",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/slide.py/SlideChannel",
+      "target_id": "../empaia/models/v3/slide.py/SlideColor",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/annotation/annotations.py/PostAnnotationBase",
+      "target_id": "../empaia/models/v1/commons.py/DataCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/classes.py/PostClass",
+      "target_id": "../empaia/models/v3/commons.py/DataCreatorType",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
@@ -31274,95 +31330,47 @@
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/loadtus-service/loadtus_service/api/v1/integrations/default.py/Default",
-      "target_id": "../empaia/loadtus-service/loadtus_service/settings.py/Settings",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "loadtus-service",
-      "target_ms": "loadtus-service"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/PublicAggregatedClearance",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/InfoSourceContent",
-      "source_multiplier": "1",
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/PublicAggregatedClearanceList",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/PublicAggregatedClearance",
+      "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "marketplace-service",
       "target_ms": "marketplace-service"
     },
     {
-      "source_id": "org.empaia.services.v2.AdminService",
-      "target_id": "org.empaia.configs.EmpaiaConfiguration",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "org.empaia.runners.UpgradeRunner",
-      "target_id": "org.empaia.services.v2.ModeratorService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v1/slide.py/SlideInfo",
-      "target_id": "../empaia/models/v1/slide.py/SlideChannel",
+      "source_id": "../empaia/models/v3/annotation/collections.py/PostPolygonAnnotationsItems",
+      "target_id": "../empaia/models/v3/annotation/annotations.py/PostPolygonAnnotation",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/Questionnaire",
-      "target_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItem",
+      "source_id": "../empaia/models/v3/annotation/collections.py/PostCircleAnnotationsItems",
+      "target_id": "../empaia/models/v3/annotation/annotations.py/PostCircleAnnotation",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/id_mapper.py/Mappings",
-      "target_id": "../empaia/models/v3/id_mapper.py/Mapping",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/PixelmapCore",
-      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/NumberClassMapping",
+      "source_id": "../empaia/models/v1/annotation/classes.py/ClassCore",
+      "target_id": "../empaia/models/v1/annotation/classes.py/ClassReferenceType",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/examination.py/PostPreprocessingTrigger",
-      "target_id": "../empaia/models/v3/examination.py/ProprocessingTriggerCreatorType",
+      "source_id": "../empaia/models/v1/examination.py/Examination",
+      "target_id": "../empaia/models/v1/examination.py/ExaminationState",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/marketplace/app.py/TextTranslation",
-      "target_id": "../empaia/models/marketplace/app.py/Language",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/annotations.py/PostRectangleAnnotations",
-      "target_id": "../empaia/models/v3/annotation/annotations.py/PostRectangleAnnotation",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.services.v2.ModeratorService",
+      "source_id": "org.empaia.services.v2.KeycloakClientService",
       "target_id": "org.empaia.services.KeycloakService",
       "source_multiplier": "1",
       "target_multiplier": "0",
@@ -31378,41 +31386,57 @@
       "target_ms": "clinical-data-service"
     },
     {
-      "source_id": "org.empaia.models.dto.v2.ExtendedUserDetailsEntity",
-      "target_id": "org.empaia.models.auth.KeycloakId",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/ClosedAppView",
-      "target_id": "../empaia/models/marketplace/app.py/ClosedApp",
-      "source_multiplier": "1",
+      "source_id": "../empaia/models/marketplace/app.py/PublicPortalAppList",
+      "target_id": "../empaia/models/marketplace/app.py/PublicPortalApp",
+      "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/slides.py/JobSlideList",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/slides.py/Slide",
+      "source_id": "../empaia/models/v1/annotation/collections.py/CollectionList",
+      "target_id": "../empaia/models/v1/annotation/collections.py/Collection",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/examinations.py/ExaminationList",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/examinations.py/Examination",
       "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "workbench-service",
       "target_ms": "workbench-service"
     },
     {
-      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/BaseQuestionnaireResponse",
-      "target_id": "../empaia/models/v3/fhir/commons.py/FHIRQuestionnaireResponseStatus",
-      "source_multiplier": "1",
+      "source_id": "../empaia/models/v3/examination.py/ExaminationList",
+      "target_id": "../empaia/models/v3/examination.py/Examination",
+      "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/QuestionnaireResponseItemAnswer",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Reference",
+      "source_id": "org.empaia.models.dto.v2.OrganizationUserRoleRequestEntity",
+      "target_id": "org.empaia.models.auth.KeycloakId",
+      "source_multiplier": "2",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "org.empaia.runners.UpgradeRunner",
+      "target_id": "org.empaia.configs.AuthServiceVersion",
       "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireList",
+      "target_id": "../empaia/models/v3/fhir/questionnaires.py/Questionnaire",
+      "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
@@ -31426,39 +31450,47 @@
       "target_ms": "models"
     },
     {
-      "source_id": "org.empaia.security.organization.OrganizationRolesAuthorization",
-      "target_id": "org.empaia.services.v2.MemberService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/collections.py/PostBoolPrimitivesItems",
-      "target_id": "../empaia/models/v3/annotation/primitives.py/PostBoolPrimitive",
+      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/BaseQuestionnaireResponse",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Identifier",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "org.empaia.validators.ClientUrisValidator",
-      "target_id": "org.empaia.services.v2.OrganizationDeploymentConfigurationService",
+      "source_id": "../empaia/models/v3/annotation/collections.py/PostArrowAnnotationsItems",
+      "target_id": "../empaia/models/v3/annotation/annotations.py/PostArrowAnnotation",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/MediaObjectCore",
+      "target_id": "../empaia/models/marketplace/app.py/TextTranslation",
+      "source_multiplier": "2",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/app-service/app_service/api/v3/custom_models/response.py/Collection",
+      "target_id": "../empaia/app-service/app_service/api/v3/custom_models/response.py/CollectionItemType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "app-service",
+      "target_ms": "app-service"
+    },
+    {
+      "source_id": "org.empaia.services.v2.MyUnapprovedOrganizationsService",
+      "target_id": "org.empaia.services.KeycloakService",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "auth-service",
       "target_ms": "auth-service"
     },
     {
-      "source_id": "org.empaia.models.dto.v2.CommonOrganizationProfileDataEntity",
-      "target_id": "org.empaia.models.auth.KeycloakId",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "org.empaia.validators.ClientUrisValidator",
+      "source_id": "org.empaia.runners.KeycloakMigrationRunner",
       "target_id": "org.empaia.configs.ConsistencyCheckConfiguration",
       "source_multiplier": "1",
       "target_multiplier": "0",
@@ -31466,208 +31498,64 @@
       "target_ms": "auth-service"
     },
     {
-      "source_id": "org.empaia.models.dto.v2.UnapprovedCommonOrganizationDataEntity",
-      "target_id": "org.empaia.models.auth.KeycloakId",
+      "source_id": "../empaia/models/marketplace/app.py/ClosedAppView",
+      "target_id": "../empaia/models/marketplace/app.py/ApiVersion",
       "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "org.empaia.services.v2.PublicService",
-      "target_id": "org.empaia.services.KeycloakService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/collections.py/CollectionList",
-      "target_id": "../empaia/models/v1/annotation/collections.py/Collection",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.models.dto.v2.MemberProfileEntity",
-      "target_id": "org.empaia.models.auth.KeycloakId",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/MediaObjectCore",
-      "target_id": "../empaia/models/marketplace/app.py/ResizedMediaUrlsObject",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.controllers.v2.PublicController",
-      "target_id": "org.empaia.services.v2.PublicService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "org.empaia.services.v2.ManagerService",
-      "target_id": "org.empaia.services.KeycloakService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/BaseQuestionnaireItem",
-      "target_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemInitial",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/collections.py/ItemQuery",
-      "target_id": "../empaia/models/v3/commons.py/Viewport",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/api/v1/integrations/empaia.py/Payload",
-      "target_id": "../empaia/marketplace-service/marketplace_service/api/v1/integrations/empaia.py/TokenPayload",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/primitives.py/PostStringPrimitives",
-      "target_id": "../empaia/models/v3/annotation/primitives.py/PostStringPrimitive",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/clinical.py/Case",
-      "target_id": "../empaia/models/v1/clinical.py/ClinicalSlide",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.controllers.v2.MyUnapprovedOrganizationsController",
-      "target_id": "org.empaia.services.v2.MyUnapprovedOrganizationsService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/Statistics",
-      "target_id": "../empaia/models/marketplace/app.py/StatisticsPage",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireList",
-      "target_id": "../empaia/models/v3/fhir/questionnaires.py/Questionnaire",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/annotation/classes.py/PostClass",
-      "target_id": "../empaia/models/v1/commons.py/DataCreatorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/examination.py/PutPreprocessingRequestUpdate",
-      "target_id": "../empaia/models/v3/examination.py/AppJob",
-      "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
       "source_id": "../empaia/models/v3/annotation/pixelmaps.py/PixelmapSlideInfo",
-      "target_id": "../empaia/models/v3/slide.py/SlideExtent",
+      "target_id": "../empaia/models/v3/slide.py/SlidePixelSizeNm",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/collections.py/PostRectangleAnnotationsItems",
-      "target_id": "../empaia/models/v3/annotation/annotations.py/PostRectangleAnnotation",
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/BaseQuestionnaire",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Identifier",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/marketplace/app.py/PortalAppCore",
-      "target_id": "../empaia/models/marketplace/app.py/ListingStatus",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/licenses.py/OrganizationLicenseList",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/licenses.py/OrganizationLicense",
+      "source_id": "../empaia/models/marketplace/app.py/TagList",
+      "target_id": "../empaia/models/marketplace/app.py/AppTag",
       "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ClearanceItem",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/InfoSourceContent",
+      "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "marketplace-service",
       "target_ms": "marketplace-service"
     },
     {
-      "source_id": "../empaia/models/v3/job.py/PostJob",
-      "target_id": "../empaia/models/v3/job.py/JobMode",
+      "source_id": "../empaia/models/v3/slide.py/SlideInfo",
+      "target_id": "../empaia/models/v3/slide.py/SlidePixelSizeNm",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/UpdateNominalPixelmap",
-      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/NumberClassMapping",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/PostAdminAppView",
-      "target_id": "../empaia/models/marketplace/app.py/PostAdminApp",
+      "source_id": "../empaia/models/v3/annotation/collections.py/PostSlideItems",
+      "target_id": "../empaia/models/v3/annotation/collections.py/SlideItem",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "org.empaia.services.v2.PublicService",
-      "target_id": "org.empaia.configs.EmpaiaConfiguration",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v1/clinical.py/PostCase",
-      "target_id": "../empaia/models/v1/clinical.py/CaseCreatorType",
+      "source_id": "../empaia/models/marketplace/app.py/TextTranslation",
+      "target_id": "../empaia/models/marketplace/app.py/Language",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
@@ -31682,8 +31570,32 @@
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/tests/test_job_creator_type.py/ModelWithJobCreatorType",
-      "target_id": "../empaia/models/v3/job.py/JobCreatorType",
+      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/slides.py/Slide",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/slides.py/TagMapping",
+      "source_multiplier": "2",
+      "target_multiplier": "0",
+      "source_ms": "workbench-service",
+      "target_ms": "workbench-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/primitives.py/PostIntegerPrimitives",
+      "target_id": "../empaia/models/v3/annotation/primitives.py/PostIntegerPrimitive",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/clinical.py/ClinicalSlideList",
+      "target_id": "../empaia/models/v3/clinical.py/ClinicalSlide",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/QuestionnaireResponseItemAnswer",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Coding",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
@@ -31698,8 +31610,152 @@
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/marketplace/app.py/AppUiTested",
-      "target_id": "../empaia/models/marketplace/app.py/OS",
+      "source_id": "../empaia/models/v3/annotation/primitives.py/PostPrimitveBase",
+      "target_id": "../empaia/models/v3/commons.py/DataCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ClearanceItemCore",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/DatePrecision",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
+    },
+    {
+      "source_id": "../empaia/models/v1/clinical.py/ClinicalSlideList",
+      "target_id": "../empaia/models/v1/clinical.py/ClinicalSlide",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/ClosedApp",
+      "target_id": "../empaia/models/marketplace/app.py/AppStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.validators.ClientUrisValidator",
+      "target_id": "org.empaia.services.v2.OrganizationDeploymentConfigurationService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/AppUiConfiguration",
+      "target_id": "../empaia/models/marketplace/app.py/AppUiTested",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/tests/test_job_creator_type.py/ModelWithJobCreatorType",
+      "target_id": "../empaia/models/v1/job.py/JobCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/PublicAggregatedClearance",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/InfoSourceContent",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/commons.py/Reference",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Identifier",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.models.dto.v2.DefaultActiveOrganizationEntity",
+      "target_id": "org.empaia.models.auth.KeycloakId",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "org.empaia.validators.ClientServiceAccountValidator",
+      "target_id": "org.empaia.services.v2.KeycloakClientService",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/v1/storage.py/PutSlideStorage",
+      "target_id": "../empaia/models/v1/storage.py/StorageAddress",
+      "source_multiplier": "2",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/annotations.py/PostRectangleAnnotations",
+      "target_id": "../empaia/models/v3/annotation/annotations.py/PostRectangleAnnotation",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/collections.py/PostPointAnnotationItems",
+      "target_id": "../empaia/models/v3/annotation/annotations.py/PostPointAnnotation",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ExtendedPostClearance",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ExtendedPostClearanceItem",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ClearanceItem",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ExtendedTagList",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/PostClearanceItem",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/PostInfoSourceContent",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/id_mapper.py/Mappings",
+      "target_id": "../empaia/models/v3/id_mapper.py/Mapping",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/annotation/collections.py/CollectionCore",
+      "target_id": "../empaia/models/v1/annotation/collections.py/CollectionReferenceType",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
@@ -31714,12 +31770,28 @@
       "target_ms": "workbench-service"
     },
     {
-      "source_id": "org.empaia.models.dto.v2.RegisteredUserEntity",
-      "target_id": "org.empaia.models.auth.KeycloakId",
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/Clearance",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ClearanceItem",
+      "source_multiplier": "2",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
+    },
+    {
+      "source_id": "../empaia/job-execution-service/job_execution_service/jobexecutor.py/JobRunner",
+      "target_id": "../empaia/job-execution-service/job_execution_service/mps_client.py/MarketplaceClient",
       "source_multiplier": "1",
       "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
+      "source_ms": "job-execution-service",
+      "target_ms": "job-execution-service"
+    },
+    {
+      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/cases.py/Case",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/cases.py/PreprocessingProgress",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "workbench-service",
+      "target_ms": "workbench-service"
     },
     {
       "source_id": "../empaia/models/v3/annotation/pixelmaps.py/PixelmapSlideInfo",
@@ -31730,12 +31802,92 @@
       "target_ms": "models"
     },
     {
-      "source_id": "org.empaia.services.v2.MemberService",
+      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/apps.py/AppList",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/apps.py/App",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "workbench-service",
+      "target_ms": "workbench-service"
+    },
+    {
+      "source_id": "../empaia/models/v1/annotation/primitives.py/PostPrimitveBase",
+      "target_id": "../empaia/models/v1/commons.py/DataCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/collections.py/PostCollectionBase",
+      "target_id": "../empaia/models/v3/commons.py/DataCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.services.v2.AdminService",
       "target_id": "org.empaia.services.KeycloakService",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "auth-service",
       "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/AppUiConfiguration",
+      "target_id": "../empaia/models/marketplace/app.py/AppUiCspConfiguration",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/clinical-data-service/wsi_format_plugins/utils/cds_plugin_utils/slide_worker.py/SlideWorker",
+      "target_id": "../empaia/clinical-data-service/wsi_format_plugins/utils/cds_plugin_utils/base_slide_instance.py/BaseSlideInstance",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "clinical-data-service",
+      "target_ms": "clinical-data-service"
+    },
+    {
+      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/slides.py/Slide",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/slides.py/TagMapping",
+      "source_multiplier": "2",
+      "target_multiplier": "0",
+      "source_ms": "workbench-service",
+      "target_ms": "workbench-service"
+    },
+    {
+      "source_id": "../empaia/models/v1/slide.py/SlideInfo",
+      "target_id": "../empaia/models/v1/slide.py/SlideChannel",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/job.py/Job",
+      "target_id": "../empaia/models/v3/job.py/JobStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/Questionnaire",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Coding",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/examination.py/PreprocessingRequest",
+      "target_id": "../empaia/models/v3/examination.py/PreprocessingRequestState",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
     },
     {
       "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/QuestionnaireResponseList",
@@ -31746,143 +31898,31 @@
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/classes.py/PostClass",
-      "target_id": "../empaia/models/v3/commons.py/DataCreatorType",
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItem",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Coding",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v1/slide.py/SlideInfo",
-      "target_id": "../empaia/models/v1/slide.py/SlideExtent",
-      "source_multiplier": "2",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/collections.py/PostIntegerPrimitivesItems",
-      "target_id": "../empaia/models/v3/annotation/primitives.py/PostIntegerPrimitive",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/PostAdminAppView",
-      "target_id": "../empaia/models/marketplace/app.py/PostAppDetails",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/collections.py/PostStringPrimitivesItems",
-      "target_id": "../empaia/models/v3/annotation/primitives.py/PostStringPrimitive",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/cases.py/CaseList",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/cases.py/Case",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "workbench-service",
-      "target_ms": "workbench-service"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ExtendedPostClearance",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ExtendedPostClearanceItem",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
-    },
-    {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ClearanceItem",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/InfoProvider",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/StatisticsList",
-      "target_id": "../empaia/models/marketplace/app.py/Statistics",
+      "source_id": "../empaia/models/v3/job.py/JobList",
+      "target_id": "../empaia/models/v3/job.py/Job",
       "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "org.empaia.models.dto.v2.AllowedAudiencesByOrganizationUserRoleEntity",
-      "target_id": "org.empaia.models.auth.KeycloakId",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "org.empaia.services.v2.KeycloakConsistencyCheckService",
-      "target_id": "org.empaia.configs.ConsistencyCheckConfiguration",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/PixelmapCore",
-      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/PixelmapReferenceType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/examinations.py/ExtendedPreprocessingTrigger",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v3/custom_models/apps.py/App",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "workbench-service",
-      "target_ms": "workbench-service"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/AppUiConfiguration",
-      "target_id": "../empaia/models/marketplace/app.py/AppUiTested",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/classes.py/ClassListResponse",
-      "target_id": "../empaia/models/v3/annotation/classes.py/Class",
+      "source_id": "../empaia/models/marketplace/app.py/ClosedPortalAppList",
+      "target_id": "../empaia/models/marketplace/app.py/ClosedPortalApp",
       "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/BaseQuestionnaire",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Identifier",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/slides.py/SlideList",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/slides.py/Slide",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "workbench-service",
-      "target_ms": "workbench-service"
-    },
-    {
-      "source_id": "org.empaia.services.v2.PublicOrganizationService",
+      "source_id": "org.empaia.security.organization.OrganizationRolesAuthorization",
       "target_id": "org.empaia.services.KeycloakService",
       "source_multiplier": "1",
       "target_multiplier": "0",
@@ -31890,9 +31930,41 @@
       "target_ms": "auth-service"
     },
     {
-      "source_id": "../empaia/models/v1/annotation/annotations.py/AnnotationCore",
-      "target_id": "../empaia/models/v1/annotation/annotations.py/AnnotationReferenceType",
+      "source_id": "../empaia/models/v1/annotation/collections.py/ItemQuery",
+      "target_id": "../empaia/models/v1/commons.py/Viewport",
       "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/examination.py/PostExamination",
+      "target_id": "../empaia/models/v3/examination.py/ExaminationCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/slide.py/SlideLevel",
+      "target_id": "../empaia/models/v3/slide.py/SlideExtent",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/slides.py/JobSlideList",
+      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/slides.py/Slide",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "workbench-service",
+      "target_ms": "workbench-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/selectors.py/SelectorTaggingList",
+      "target_id": "../empaia/models/v3/fhir/selectors.py/SelectorTagging",
+      "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
@@ -31906,92 +31978,164 @@
       "target_ms": "auth-service"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/collections.py/Collection",
-      "target_id": "../empaia/models/v3/annotation/collections.py/CollectionItemType",
+      "source_id": "../empaia/models/v3/annotation/collections.py/PostClassesItems",
+      "target_id": "../empaia/models/v3/annotation/classes.py/PostClass",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/examination.py/PreprocessingRequest",
-      "target_id": "../empaia/models/v3/examination.py/AppJob",
+      "source_id": "../empaia/models/marketplace/app.py/AdminPortalAppQuery",
+      "target_id": "../empaia/models/marketplace/app.py/AppStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/classes.py/PostClass",
+      "target_id": "../empaia/models/v3/annotation/classes.py/ClassReferenceType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/shout-out-service/shout_out_service/models.py/ShoutOutList",
+      "target_id": "../empaia/shout-out-service/shout_out_service/models.py/ShoutOut",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "shout-out-service",
+      "target_ms": "shout-out-service"
+    },
+    {
+      "source_id": "../empaia/shout-out-service/shout_out_service/models.py/BaseMessage",
+      "target_id": "../empaia/shout-out-service/shout_out_service/models.py/MessageStatus",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "shout-out-service",
+      "target_ms": "shout-out-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/examination.py/ExaminationQuery",
+      "target_id": "../empaia/models/v3/examination.py/ExaminationCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/annotation/collections.py/SlideList",
+      "target_id": "../empaia/models/v1/annotation/collections.py/SlideItem",
       "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/ClearanceItem",
-      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/clearances.py/EditorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "marketplace-service",
-      "target_ms": "marketplace-service"
-    },
-    {
-      "source_id": "org.empaia.services.KeycloakService",
-      "target_id": "org.empaia.configs.KeycloakInstanceConfiguration",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v1/examination.py/Examination",
-      "target_id": "../empaia/models/v1/examination.py/ExaminationState",
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/QuestionnaireItemAnswerOption",
+      "target_id": "../empaia/models/v3/fhir/commons.py/Reference",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "org.empaia.runners.UpgradeRunner",
-      "target_id": "org.empaia.services.KeycloakService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/UpdatePixelmapCore",
-      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/NumberClassMapping",
+      "source_id": "../empaia/models/v3/examination.py/PostPreprocessingRequest",
+      "target_id": "../empaia/models/v3/examination.py/PreprocessingRequestCreatorType",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v1/annotation/classes.py/PostClassList",
-      "target_id": "../empaia/models/v1/annotation/classes.py/PostClass",
+      "source_id": "../empaia/models/v1/examination.py/PostExamination",
+      "target_id": "../empaia/models/v1/examination.py/ExaminationCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/fhir/questionnaires.py/PostQuestionnaire",
+      "target_id": "../empaia/models/v3/fhir/questionnaires.py/PostQuestionnaireItem",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/marketplace/app.py/ClosedAppView",
+      "target_id": "../empaia/models/marketplace/app.py/ClosedApp",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/job-execution-service/job_execution_service/model.py/AppRequirements",
+      "target_id": "../empaia/job-execution-service/job_execution_service/model.py/AppType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "job-execution-service",
+      "target_ms": "job-execution-service"
+    },
+    {
+      "source_id": "../empaia/models/v3/annotation/classes.py/PostClassList",
+      "target_id": "../empaia/models/v3/annotation/classes.py/PostClass",
       "source_multiplier": "0..*",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/annotations.py/PostPolygonAnnotations",
-      "target_id": "../empaia/models/v3/annotation/annotations.py/PostPolygonAnnotation",
-      "source_multiplier": "0..*",
+      "source_id": "../empaia/models/v3/annotation/collections.py/PostBoolPrimitivesItems",
+      "target_id": "../empaia/models/v3/annotation/primitives.py/PostBoolPrimitive",
+      "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
     },
     {
-      "source_id": "../empaia/models/v3/annotation/primitives.py/PostIntegerPrimitives",
-      "target_id": "../empaia/models/v3/annotation/primitives.py/PostIntegerPrimitive",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/job.py/Job",
+      "source_id": "../empaia/models/v1/job.py/PutJobStatus",
       "target_id": "../empaia/models/v1/job.py/JobStatus",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "models",
       "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v1/job.py/PostJob",
+      "target_id": "../empaia/models/v1/job.py/JobCreatorType",
+      "source_multiplier": "1",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "../empaia/models/v3/storage.py/PutSlideStorage",
+      "target_id": "../empaia/models/v3/storage.py/StorageAddress",
+      "source_multiplier": "2",
+      "target_multiplier": "0",
+      "source_ms": "models",
+      "target_ms": "models"
+    },
+    {
+      "source_id": "org.empaia.models.dto.v2.OrganizationCategoryRequestEntity",
+      "target_id": "org.empaia.models.auth.KeycloakId",
+      "source_multiplier": "2",
+      "target_multiplier": "0",
+      "source_ms": "auth-service",
+      "target_ms": "auth-service"
+    },
+    {
+      "source_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/licenses.py/PostOrganizationLicenseList",
+      "target_id": "../empaia/marketplace-service/marketplace_service/custom_models/v1/licenses.py/PostOrganizationLicense",
+      "source_multiplier": "0..*",
+      "target_multiplier": "0",
+      "source_ms": "marketplace-service",
+      "target_ms": "marketplace-service"
     },
     {
       "source_id": "org.empaia.models.dto.v2.MembershipRequestEntity",
@@ -32002,100 +32146,12 @@
       "target_ms": "auth-service"
     },
     {
-      "source_id": "../empaia/models/v1/storage.py/PutSlideStorage",
-      "target_id": "../empaia/models/v1/storage.py/StorageAddress",
-      "source_multiplier": "2",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/loadtus-service/loadtus_service/api/v1/integrations/disable_auth.py/DisableAuth",
-      "target_id": "../empaia/loadtus-service/loadtus_service/settings.py/Settings",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "loadtus-service",
-      "target_ms": "loadtus-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/examination.py/PreprocessingRequestList",
-      "target_id": "../empaia/models/v3/examination.py/PreprocessingRequest",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/clinical.py/Case",
-      "target_id": "../empaia/models/v3/clinical.py/ClinicalSlide",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/PortalAppQuery",
-      "target_id": "../empaia/models/marketplace/app.py/ApiVersion",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.services.v2.ShoutOutService",
-      "target_id": "org.empaia.services.KeycloakService",
+      "source_id": "org.empaia.runners.UpgradeRunner",
+      "target_id": "org.empaia.services.v2.ModeratorService",
       "source_multiplier": "1",
       "target_multiplier": "0",
       "source_ms": "auth-service",
       "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/collections.py/PostLineAnnotationsItems",
-      "target_id": "../empaia/models/v3/annotation/annotations.py/PostLineAnnotation",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaire_responses.py/QuestionnaireResponseItemAnswer",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Coding",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/collections.py/PostIdCollection",
-      "target_id": "../empaia/models/v3/annotation/collections.py/CollectionItemType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.services.v2.OrganizationDeploymentConfigurationService",
-      "target_id": "org.empaia.services.KeycloakService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/marketplace/app.py/PostAdminPortalApp",
-      "target_id": "../empaia/models/marketplace/app.py/PostAppTag",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v1/slide.py/SlideChannel",
-      "target_id": "../empaia/models/v1/slide.py/SlideColor",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
     },
     {
       "source_id": "org.empaia.services.v2.OrganizationUserRoleRequestService",
@@ -32104,62 +32160,6 @@
       "target_multiplier": "0",
       "source_ms": "auth-service",
       "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/models/v1/clinical.py/CaseList",
-      "target_id": "../empaia/models/v1/clinical.py/Case",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/fhir/questionnaires.py/BaseQuestionnaire",
-      "target_id": "../empaia/models/v3/fhir/commons.py/Coding",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "org.empaia.runners.KeycloakMigrationRunner",
-      "target_id": "org.empaia.services.v2.KeycloakConsistencyCheckService",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "auth-service",
-      "target_ms": "auth-service"
-    },
-    {
-      "source_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/apps.py/AppList",
-      "target_id": "../empaia/workbench-service/workbench_service/api/v2/custom_models/apps.py/App",
-      "source_multiplier": "0..*",
-      "target_multiplier": "0",
-      "source_ms": "workbench-service",
-      "target_ms": "workbench-service"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/PostPixelmapBase",
-      "target_id": "../empaia/models/v3/commons.py/DataCreatorType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/models/v3/annotation/pixelmaps.py/DiscretePixelmapCore",
-      "target_id": "../empaia/models/v3/annotation/pixelmaps.py/DiscretePixelmapElementType",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "models",
-      "target_ms": "models"
-    },
-    {
-      "source_id": "../empaia/job-execution-service/job_execution_service/jobexecutor.py/JobRunner",
-      "target_id": "../empaia/job-execution-service/job_execution_service/container_clients/__init__.py/JobContainerClient",
-      "source_multiplier": "1",
-      "target_multiplier": "0",
-      "source_ms": "job-execution-service",
-      "target_ms": "job-execution-service"
     }
   ]
 }
