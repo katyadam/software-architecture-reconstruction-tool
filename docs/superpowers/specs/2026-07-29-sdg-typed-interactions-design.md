@@ -180,10 +180,39 @@ the health-infra view alone.
 
 ## Component C — reflexive, as a matcher filter flip
 
-`is_reflexive` tests the host against `localhost`, `127.0.0.1`, `0.0.0.0`,
-`::1`, `[::1]`, plus `host_of` each URL configured for the **calling** service.
-`own_urls` needs no plumbing — `AssignedRestCall.service.urls` is already in
-scope at both call sites.
+`is_reflexive` resolves **service ownership first**, and falls back to a
+loopback rule only for an address no service claims. Matching is on the
+**authority** (`host:port`), never the host alone — the port is the whole
+discriminator. In order:
+
+1. The authority matches one of the **caller's own** configured URLs -> reflexive.
+2. Otherwise it matches **another service's** configured URL -> **not** reflexive;
+   resolve it normally as a cross-service call.
+3. Otherwise the host is loopback (`localhost`, `127.0.0.1`, `0.0.0.0`, `::1`,
+   `[::1]`) and no service claims the address -> reflexive.
+4. Otherwise -> not reflexive.
+
+An earlier draft of this spec treated any loopback host as self
+unconditionally. That is wrong on the live corpus: empaia configures
+`loadtus-service` at `http://localhost:10005`, and `empaia/docker-compose.yml`
+hands that address to other services as `US_URL` and `LS_HOST` — genuine
+cross-service call targets that the `--scrape` path consumes. Under the
+unconditional rule those calls were classified self, resolved only against the
+caller's own endpoints, and the real `X -> loadtus-service` edge was **lost**.
+Losing an edge is the failure mode this whole design exists to avoid, so
+ownership has to win over the loopback heuristic. Corrected 2026-07-29 during
+implementation review. train-ticket is unaffected — no service there is
+configured on a loopback address.
+
+On empaia the corrected rule still delivers Component C's precision gain:
+nothing is configured at `localhost:8000`, so mds's self-call is reflexive and
+the `mds -> app-service` false positive still dies.
+
+`is_reflexive` therefore takes the raw target URI (it needs the port), the
+caller's own URLs, and the flat list of every configured service URL. The
+caller's URLs need no plumbing — `AssignedRestCall.service.urls` is already in
+scope at both call sites — and the flat all-services list is built once in
+`build()` from `ConfigurationData`.
 
 `host_of` strips the scheme at `://`, takes everything before the first `/`,
 `?`, or `#`, drops any `user@` prefix, and strips the port (respecting an IPv6
@@ -204,11 +233,22 @@ if (endpoint.service.name == restcall.service.name) != want_self {
 ```
 
 Reflexive restcalls then match *within* their own service and reuse the entire
-existing levenshtein machinery, so empaia's `mds -> app` (from
-`http://localhost:8000/...`) becomes a real `mds -> mds` self-loop carrying a
-real endpoint. No `Option<Endpoint>`, no placeholder `Endpoint::default()`, no
-duplicated matching logic. Non-reflexive restcalls still never see own-service
-endpoints, so no accidental self-loops appear.
+existing levenshtein machinery. No `Option<Endpoint>`, no placeholder
+`Endpoint::default()`, no duplicated matching logic. Non-reflexive restcalls
+still never see own-service endpoints, so no accidental self-loops appear.
+
+Whether a reflexive call becomes a self-loop or simply disappears depends on
+whether the matcher can bridge the gap between the literal target and the
+service's configured URL. empaia's `mds -> app` false positive dies either way
+— that is the precision result Component C exists for — but the follow-on
+`mds -> mds` self-loop only materialises when a configured URL is close enough
+for the levenshtein matcher to accept. mds is configured at
+`http://medical-data-service:5000` while the call names
+`http://localhost:8000/...`, which is too far apart, so on the real corpus that
+call yields **no edge at all** rather than a self-loop. An earlier draft
+asserted the self-loop unconditionally; that only holds when the loopback
+address is itself a configured URL of the service. Do not treat the self-loop
+as a guaranteed outcome when scoring.
 
 ## Consequences and assumptions
 
@@ -224,9 +264,14 @@ Stated explicitly because each is a deliberate call, not an oversight:
   cross-service edge, and RTS already covers intra-service impact through the
   service node. This is the one case where information is lost rather than
   reclassified.
-- **`localhost` is assumed to mean self.** True on empaia and train-ticket.
-  It would be wrong in a dev-mode compose setup where `localhost` reaches a
-  sibling container.
+- **`localhost` means self only when no service claims the address.** The
+  dev-mode-compose worry in the earlier draft turned out to be real and present
+  in empaia rather than hypothetical, which is why ownership now takes
+  precedence (see Component C). The residual assumption is narrower: a loopback
+  address that appears in no service's configured URLs is the caller's own. That
+  still fails for a service reachable on a loopback port the configuration never
+  records — the fix there is to configure it, and the classifier now rewards
+  doing so.
 - **A service calling itself through its own public URL is `Reflexive`,** even
   if the call is business logic. Correct for a dependency graph: a self-loop is
   not a cross-service dependency.
@@ -367,7 +412,14 @@ for the two corpora:
   reproduce exactly. The acceptance criteria are therefore stated over the
   *classification effect*, not over reproducing the baseline numbers:
   1. the `mds -> event` FP is typed `HealthInfra`, not `Business`;
-  2. the `mds -> app` FP is gone, replaced by a `mds -> mds` edge typed `Reflexive`;
+  2. the `mds -> app` FP is gone — either replaced by a `mds -> mds` edge typed
+     `Reflexive`, or absent entirely because no own-service endpoint matched.
+     Both outcomes satisfy this criterion; see Component C on why the self-loop
+     is not guaranteed;
+  2a. every edge to `loadtus-service` that the pre-change run found is still
+     present. It is configured at `http://localhost:10005`, so it is the
+     regression canary for the ownership-before-loopback rule — if these edges
+     vanish, the reflexive check has swallowed real cross-service calls;
   3. business TP count is still 14;
   4. the surviving business FPs are exactly the three category-D edges.
   If the LLM tail shifts other edges between runs, re-run before concluding
