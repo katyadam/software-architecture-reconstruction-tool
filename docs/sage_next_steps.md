@@ -20,7 +20,7 @@ Baseline best results (business-edge P/R vs hand-verified oracle):
 
 ## 1. Category D — remaining empaia FPs — DO FIRST (promoted 2026-07-31)
 
-Deferred no longer — A/B/C landed, this is next. All constant/host → service
+Deferred no longer — A/B/C landed, this is next. All constant/host -> service
 misresolution (not classification). The no-LLM typed-edge run confirms 2 of
 the original 3 are still live: `annotation-service -> clinical-data-service`
 (`slide_info_url`, should be mds) and `workbench-service -> app-service`
@@ -39,20 +39,20 @@ TestOrigin; only Business connections are scored. Pure synthesizer change
 - **A — test-origin tagging:** marks requests whose `file_path` is test code
   (Java `/src/test/`, `*Test.java`; Python `test_*.py`, `conftest.py`).
 - **B — health-infra typing:** marks `/alive`, `/health`, `/actuator/*`, etc.
-- **C — reflexive rewrite:** `localhost`/`127.0.0.1`/own-config-host → self-loop
+- **C — reflexive rewrite:** `localhost`/`127.0.0.1`/own-config-host -> self-loop
   edge instead of matching another service.
 - **Scoring:** `ground_sdg.py` / `ground_empaia.py` count only `kind==Business`;
   legacy SDGs default to Business (backward compatible).
 - **Measured — train-ticket, all-Java, no LLM** (`results/train-ticket-java-typed`),
-  vs the 92-edge oracle: precision **0.98 → 1.00**, recall 0.95 → 0.95
-  (87 TP, 2 → **0** FP, 5 FN). 89 connections: 87 `Business` + 2 `TestOrigin`
+  vs the 92-edge oracle: precision **0.98 -> 1.00**, recall 0.95 -> 0.95
+  (87 TP, 2 -> **0** FP, 5 FN). 89 connections: 87 `Business` + 2 `TestOrigin`
   (`ts-preserve-service -> ts-notification-service`,
   `ts-preserve-other-service -> ts-notification-service`) — exactly the two
   former false positives.
 - **Measured — empaia, no LLM, constants + scrape**
   (`results/empaia-typed-nollm-constants`), vs the 16-edge business oracle:
-  precision **0.71 → 0.87**, recall 0.75 → 0.81 (12 → 13 TP, 5 → **2** FP,
-  4 → 3 FN). Zero TPs lost, one gained (`medical-data-service ->
+  precision **0.71 -> 0.87**, recall 0.75 -> 0.81 (12 -> 13 TP, 5 -> **2** FP,
+  4 -> 3 FN). Zero TPs lost, one gained (`medical-data-service ->
   clinical-data-service`). Four FPs removed (`annotation-service ->
   loadtus-service`, `medical-data-service -> app-service`, `medical-data-service
   -> loadtus-service`, `medical-data-service -> wsi-service`); one FP added
@@ -64,9 +64,9 @@ TestOrigin; only Business connections are scored. Pure synthesizer change
 
 ## 3. Hand-labeled ground-truth pass (paper blocker)
 
-Auto-oracle is 0-scoreable on the current residual tail → GATE C is only
+Auto-oracle is 0-scoreable on the current residual tail -> GATE C is only
 soft-passed. Post extraction-fix the residual set is tiny (~19 empaia + ~2
-train-ticket). Hand-label all of them → real precision/recall per tier.
+train-ticket). Hand-label all of them -> real precision/recall per tier.
 
 ## 4. Polyglot gaps (the 0.86 / 0.77 story)
 
@@ -74,7 +74,7 @@ train-ticket). Hand-label all of them → real precision/recall per tier.
   most of the 21 misses. Biggest recall lever.
 - **Tighten LLM `validate()`** — target-substitution added most of the 12 FPs;
   require the chosen service to be supported by the cited evidence (the deferred
-  grounded ≠ correct fix; `ts-price` → `ts-consign-price` failure mode).
+  grounded ≠ correct fix; `ts-price` -> `ts-consign-price` failure mode).
 
 ## 5. Paper hardening (lower urgency)
 
