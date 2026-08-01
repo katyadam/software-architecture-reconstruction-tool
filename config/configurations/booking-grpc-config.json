@@ -1,0 +1,19 @@
+{
+  "service_descriptions": [
+    {
+      "name": "booking-service",
+      "urls": [],
+      "base_dir_path": "src/services/booking"
+    },
+    {
+      "name": "flight-service",
+      "urls": [],
+      "base_dir_path": "src/services/flight"
+    },
+    {
+      "name": "passenger-service",
+      "urls": [],
+      "base_dir_path": "src/services/passenger"
+    }
+  ]
+}

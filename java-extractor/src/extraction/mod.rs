@@ -25,6 +25,7 @@ mod enclosing_lookup;
 pub mod endpoints;
 pub mod entities;
 pub mod extractor;
+pub mod grpc;
 pub mod imports;
 mod queries;
 pub mod restcalls;
@@ -85,10 +86,15 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
 
     // Identification-only: no symbolic evaluation or URI resolution
     let identification_strategy = SpringIdentificationStrategy::new();
-    let raw_restcalls = calls
+    let raw_restcalls: Vec<models::RestCall> = calls
         .iter()
         .filter_map(|call| identification_strategy.identify_restcall(call, file_name))
         .collect();
+    let (grpc_endpoints, grpc_calls) = grpc::extract(code, &tree, file_name, &calls);
+    let mut endpoints = endpoints;
+    endpoints.extend(grpc_endpoints);
+    let mut raw_restcalls = raw_restcalls;
+    raw_restcalls.extend(grpc_calls);
 
     Ok(FileRecord {
         file_path: file_name.to_string(),
