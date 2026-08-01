@@ -89,10 +89,15 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
 
     // Identification-only: no symbolic evaluation or URI resolution
     let identification_strategy = MethodCallIdentificationStrategy::new();
-    let raw_restcalls = calls
+    let raw_restcalls: Vec<models::RestCall> = calls
         .iter()
         .filter_map(|call| identification_strategy.identify_restcall(call, file_name))
         .collect();
+    let (grpc_endpoints, grpc_calls) = crate::extraction::grpc::extract(code, &tree, file_name, &calls.iter().map(|call| &call.call_statement).cloned().collect::<Vec<_>>());
+    let mut endpoints = endpoints;
+    endpoints.extend(grpc_endpoints);
+    let mut raw_restcalls = raw_restcalls;
+    raw_restcalls.extend(grpc_calls);
 
     let call_statements = calls
         .into_iter()

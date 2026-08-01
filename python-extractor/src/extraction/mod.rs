@@ -6,6 +6,7 @@ pub mod endpoints;
 pub mod entities;
 pub mod enums;
 pub mod extractor;
+pub mod grpc;
 pub mod imports;
 pub mod module;
 pub mod parse;

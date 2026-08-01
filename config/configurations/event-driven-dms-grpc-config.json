@@ -1,0 +1,14 @@
+{
+  "service_descriptions": [
+    {
+      "name": "signature-service",
+      "urls": [],
+      "base_dir_path": "services/signature"
+    },
+    {
+      "name": "document-service",
+      "urls": [],
+      "base_dir_path": "services/document"
+    }
+  ]
+}
