@@ -1,0 +1,34 @@
+{
+  "service_descriptions": [
+    {
+      "name": "datasource-client",
+      "urls": [],
+      "base_dir_path": "../benchmark/python/kafka-ml/datasources"
+    },
+    {
+      "name": "kafka-control-logger",
+      "urls": [],
+      "base_dir_path": "../benchmark/python/kafka-ml/kafka_control_logger"
+    },
+    {
+      "name": "backend",
+      "urls": [],
+      "base_dir_path": "../benchmark/python/kafka-ml/backend"
+    },
+    {
+      "name": "tfexecutor",
+      "urls": [],
+      "base_dir_path": "../benchmark/python/kafka-ml/mlcode_executor/tfexecutor"
+    },
+    {
+      "name": "pthexecutor",
+      "urls": [],
+      "base_dir_path": "../benchmark/python/kafka-ml/mlcode_executor/pthexecutor"
+    },
+    {
+      "name": "federated-backend",
+      "urls": [],
+      "base_dir_path": "../benchmark/python/kafka-ml/federated-module/federated_backend"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "service_descriptions": [
+    {
+      "name": "gateway-service",
+      "urls": [],
+      "base_dir_path": "../benchmark/python/microservices-python/src/gateway"
+    },
+    {
+      "name": "converter-service",
+      "urls": [],
+      "base_dir_path": "../benchmark/python/microservices-python/src/converter-service"
+    },
+    {
+      "name": "notification-service",
+      "urls": [],
+      "base_dir_path": "../benchmark/python/microservices-python/src/notification-service"
+    }
+  ]
+}
