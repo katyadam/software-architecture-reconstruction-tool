@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, ParsedCallable, RestCall,
-    enums::EnumDefinition, ir::language::Language,
+    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, ParsedCallable,
+    ProtoService, RestCall, enums::EnumDefinition, ir::language::Language,
 };
 
 /// Pass 1 output: one per source file.
@@ -22,6 +22,8 @@ pub struct FileRecord {
     pub enums: Vec<EnumDefinition>,
     // Pre-identified REST call candidates (before URI resolution)
     pub raw_restcalls: Vec<RestCall>,
+    /// Protobuf contracts declared by this file. Populated only for `.proto` files.
+    pub proto_services: Vec<ProtoService>,
 }
 
 pub struct SyntacticIR {

@@ -39,6 +39,10 @@ pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
 
     let constants = collect_constants(&files);
     let callable_map = build_project_global_callables(&files);
+    let proto_services = files
+        .iter()
+        .flat_map(|file| file.proto_services.clone())
+        .collect();
 
     ProjectIR {
         files,
@@ -46,5 +50,6 @@ pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
         class_hierarchy,
         constants,
         callable_map,
+        proto_services,
     }
 }

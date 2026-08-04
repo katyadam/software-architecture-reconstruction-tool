@@ -93,7 +93,6 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         .iter()
         .filter_map(|call| identification_strategy.identify_restcall(call, file_name))
         .collect();
-
     let call_statements = calls
         .into_iter()
         .map(PythonCallStatement::to_language_agnostic)
@@ -110,5 +109,6 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         assignments,
         enums,
         raw_restcalls,
+        proto_services: vec![],
     })
 }
