@@ -12,7 +12,10 @@ class DocumentServiceClient:
 "#;
     let record = extract_syntactic(code, "grpc_client.py").unwrap();
     assert_eq!(record.raw_restcalls.len(), 1);
-    assert_eq!(record.raw_restcalls[0].target_uri, "grpc://DocumentService/GetDocument");
+    assert_eq!(
+        record.raw_restcalls[0].target_uri,
+        "grpc://DocumentService/GetDocument"
+    );
 }
 
 #[test]
@@ -24,5 +27,8 @@ class DocumentServicer(document_service_pb2_grpc.DocumentServiceServicer):
 "#;
     let record = extract_syntactic(code, "grpc_servicer.py").unwrap();
     assert_eq!(record.endpoints.len(), 1);
-    assert_eq!(record.endpoints[0].uri, "grpc://DocumentService/GetDocument");
+    assert_eq!(
+        record.endpoints[0].uri,
+        "grpc://DocumentService/GetDocument"
+    );
 }
