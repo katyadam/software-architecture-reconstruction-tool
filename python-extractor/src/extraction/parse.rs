@@ -93,7 +93,16 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         .iter()
         .filter_map(|call| identification_strategy.identify_restcall(call, file_name))
         .collect();
-    let (grpc_endpoints, grpc_calls) = crate::extraction::grpc::extract(code, &tree, file_name, &calls.iter().map(|call| &call.call_statement).cloned().collect::<Vec<_>>());
+    let (grpc_endpoints, grpc_calls) = crate::extraction::grpc::extract(
+        code,
+        &tree,
+        file_name,
+        &calls
+            .iter()
+            .map(|call| &call.call_statement)
+            .cloned()
+            .collect::<Vec<_>>(),
+    );
     let mut endpoints = endpoints;
     endpoints.extend(grpc_endpoints);
     let mut raw_restcalls = raw_restcalls;
@@ -115,5 +124,6 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         assignments,
         enums,
         raw_restcalls,
+        proto_services: vec![],
     })
 }

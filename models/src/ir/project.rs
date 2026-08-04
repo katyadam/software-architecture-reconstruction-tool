@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, ParsedCallable, RestCall,
+    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, ParsedCallable,
+    ProtoService, RestCall,
     enums::EnumDefinition,
     ir::{language::Language, syntax::FileRecord},
 };
@@ -12,6 +13,7 @@ pub struct ProjectIR {
     pub class_hierarchy: ClassHierarchy,
     pub constants: HashMap<String, ConstantValue>,
     pub callable_map: HashMap<String, ParsedCallable>,
+    pub proto_services: Vec<ProtoService>,
 }
 
 /// A FileRecord with resolved types.
@@ -28,6 +30,7 @@ pub struct TypedFileRecord {
 
     pub enums: Vec<EnumDefinition>,
     pub raw_restcalls: Vec<RestCall>,
+    pub proto_services: Vec<ProtoService>,
 }
 
 /// Maps (importer_file_path, codeword) pairs to their resolved definition.
@@ -93,6 +96,7 @@ impl From<FileRecord> for TypedFileRecord {
             assignments: r.assignments,
             enums: r.enums,
             raw_restcalls: r.raw_restcalls,
+            proto_services: r.proto_services,
         }
     }
 }

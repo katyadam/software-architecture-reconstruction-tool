@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use extractor_runtime::pipeline::pass1::dispatch_syntactic;
 use extractor_runtime::pipeline::{build_project_ir, evaluate};
 use java_extractor::extraction::extract_syntactic as java_extract;
 use models::{HttpMethod, RestCall};
@@ -21,6 +22,42 @@ fn java_restcall(function_name: &str, target_uri: &str, file_path: &str) -> Rest
         target_uri: target_uri.to_string(),
         file_path: file_path.to_string(),
     }
+}
+
+#[test]
+fn proto_contract_filters_undeclared_grpc_operations() {
+    let client = python_extract(
+        r#"
+import document_service_pb2_grpc
+class Client:
+    def __init__(self, channel):
+        self.stub = document_service_pb2_grpc.DocumentServiceStub(channel)
+    async def load(self, request):
+        return await self.stub.GetDocument(request)
+    async def invalid(self, request):
+        return await self.stub.DoesNotExist(request)
+"#,
+        "client.py",
+    )
+    .expect("Python extraction should succeed");
+    let contract = dispatch_syntactic(
+        "service DocumentService { rpc GetDocument (Request) returns (Document); }",
+        "document.proto",
+    )
+    .unwrap()
+    .expect("protobuf extraction should succeed");
+
+    let evaluated = evaluate(
+        build_project_ir(vec![client, contract]),
+        &HashMap::new(),
+        &HashMap::new(),
+        &HashMap::new(),
+    );
+    assert_eq!(evaluated.restcalls.len(), 1);
+    assert_eq!(
+        evaluated.restcalls[0].target_uri,
+        "grpc://DocumentService/GetDocument"
+    );
 }
 
 // ── Java tests ────────────────────────────────────────────────────────────────
