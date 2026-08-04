@@ -26,20 +26,17 @@ fn java_restcall(function_name: &str, target_uri: &str, file_path: &str) -> Rest
 
 #[test]
 fn proto_contract_filters_undeclared_grpc_operations() {
-    let client = python_extract(
+    let client = java_extract(
         r#"
-import document_service_pb2_grpc
-class Client:
-    def __init__(self, channel):
-        self.stub = document_service_pb2_grpc.DocumentServiceStub(channel)
-    async def load(self, request):
-        return await self.stub.GetDocument(request)
-    async def invalid(self, request):
-        return await self.stub.DoesNotExist(request)
+class Client {
+    DocumentServiceGrpc.DocumentServiceBlockingStub stub;
+    void load(Request request) { stub.getDocument(request); }
+    void invalid(Request request) { stub.doesNotExist(request); }
+}
 "#,
-        "client.py",
+        "Client.java",
     )
-    .expect("Python extraction should succeed");
+    .expect("Java extraction should succeed");
     let contract = dispatch_syntactic(
         "service DocumentService { rpc GetDocument (Request) returns (Document); }",
         "document.proto",
