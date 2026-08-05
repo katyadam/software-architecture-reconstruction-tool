@@ -13,6 +13,7 @@ use crate::pipeline::pass3::{
     pass_module::PerFileModuleConsts,
 };
 
+/// Resolves all message edges using project-wide and per-file constant environments.
 pub(super) fn evaluate_message_edges(
     project_ir: &ProjectIR,
     external_constants: &HashMap<String, String>,
@@ -41,6 +42,7 @@ pub(super) fn evaluate_message_edges(
         .collect()
 }
 
+/// Resolves an edge's fields and derives its final destination from its role and transport data.
 fn evaluate_single_edge(edge: &MessageEdge, file: &TypedFileRecord, env: &Env) -> MessageEdge {
     let exchange = edge
         .exchange
@@ -102,6 +104,7 @@ fn evaluate_single_edge(edge: &MessageEdge, file: &TypedFileRecord, env: &Env) -
     }
 }
 
+/// Resolves a value through the supported sources in precedence order.
 fn resolve_value(raw: &str, file: &TypedFileRecord, env: &Env) -> String {
     let cleaned = statix::strings::clean_python_string(raw.trim());
     if cleaned.is_empty() {
@@ -115,6 +118,7 @@ fn resolve_value(raw: &str, file: &TypedFileRecord, env: &Env) -> String {
         .unwrap_or(cleaned)
 }
 
+/// Resolves `self.*` references assigned in the class initializer.
 fn resolve_self_attr(raw: &str, file: &TypedFileRecord, env: &Env) -> Option<String> {
     if !raw.starts_with("self.") {
         return None;
@@ -134,16 +138,19 @@ fn resolve_self_attr(raw: &str, file: &TypedFileRecord, env: &Env) -> Option<Str
     None
 }
 
+/// Extracts and resolves the fallback branch of a conditional expression.
 fn resolve_conditional_fallback(raw: &str, file: &TypedFileRecord, env: &Env) -> Option<String> {
     let (_condition, fallback) = raw.split_once(" else ")?;
     Some(resolve_value(fallback, file, env))
 }
 
+/// Resolves an exact name from the evaluated environment.
 fn resolve_from_env(raw: &str, env: &Env) -> Option<String> {
     let (_, expr) = env.get(raw)?;
     expr_to_string(expr)
 }
 
+/// Resolves an attribute by matching environment names and preferring the local service.
 fn resolve_from_env_by_attr(raw: &str, file_path: &str, env: &Env) -> Option<String> {
     let attr = raw.rsplit('.').next().unwrap_or(raw).to_ascii_uppercase();
     if attr.is_empty() {
@@ -173,6 +180,7 @@ fn resolve_from_env_by_attr(raw: &str, file_path: &str, env: &Env) -> Option<Str
     candidates.into_iter().next().map(|(_, value)| value)
 }
 
+/// Scores how strongly an environment name matches the service path.
 fn service_name_score(env_name: &str, file_path: &str) -> usize {
     let env_name = env_name.to_ascii_lowercase();
     file_path
@@ -181,6 +189,7 @@ fn service_name_score(env_name: &str, file_path: &str) -> usize {
         .count()
 }
 
+/// Converts statically evaluable expressions into strings.
 fn expr_to_string(expr: &Expr) -> Option<String> {
     match expr {
         Expr::Literal(value) => Some(value.clone()),

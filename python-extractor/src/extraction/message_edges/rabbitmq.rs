@@ -6,10 +6,12 @@ use crate::extraction::calls::PythonCallStatement;
 pub struct RabbitMqIdentificationStrategy;
 
 impl RabbitMqIdentificationStrategy {
+    /// Creates a RabbitMQ message-edge identification strategy.
     pub fn new() -> Self {
         Self {}
     }
 
+    /// Identifies supported RabbitMQ calls by their method names.
     pub fn identify_message_edge(
         &self,
         call: &PythonCallStatement,
@@ -24,6 +26,7 @@ impl RabbitMqIdentificationStrategy {
         }
     }
 
+    /// Extracts an exchange and routing key from a publish call.
     fn identify_publish(&self, call: &PythonCallStatement, file_path: &str) -> Option<MessageEdge> {
         let exchange = get_arg(&call.call_statement.arguments, "exchange", 0)
             .map(clean_value)
@@ -58,6 +61,7 @@ impl RabbitMqIdentificationStrategy {
         ))
     }
 
+    /// Extracts the queue and callback from a consumer call.
     fn identify_consume(&self, call: &PythonCallStatement, file_path: &str) -> Option<MessageEdge> {
         let queue = get_arg(&call.call_statement.arguments, "queue", 0).map(clean_value)?;
         let handler =
@@ -76,6 +80,7 @@ impl RabbitMqIdentificationStrategy {
         ))
     }
 
+    /// Extracts the queue declared by a queue-declaration call.
     fn identify_queue_declare(
         &self,
         call: &PythonCallStatement,
@@ -96,6 +101,7 @@ impl RabbitMqIdentificationStrategy {
         ))
     }
 
+    /// Builds a RabbitMQ message edge with call-site metadata.
     fn edge(
         &self,
         role: MessageRole,
@@ -134,6 +140,7 @@ impl RabbitMqIdentificationStrategy {
     }
 }
 
+/// Finds a named argument, falling back to its positional index.
 fn get_arg<'a>(arguments: &'a [Argument], name: &str, index: usize) -> Option<&'a str> {
     arguments
         .iter()
@@ -142,6 +149,7 @@ fn get_arg<'a>(arguments: &'a [Argument], name: &str, index: usize) -> Option<&'
         .map(|arg| arg.value.as_str())
 }
 
+/// Removes Python string syntax from a RabbitMQ value.
 fn clean_value(raw: &str) -> String {
     statix::strings::clean_python_string(raw)
 }

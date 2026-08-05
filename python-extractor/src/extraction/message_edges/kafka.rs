@@ -6,10 +6,12 @@ use crate::extraction::calls::PythonCallStatement;
 pub struct KafkaIdentificationStrategy;
 
 impl KafkaIdentificationStrategy {
+    /// Creates a Kafka message-edge identification strategy.
     pub fn new() -> Self {
         Self {}
     }
 
+    /// Identifies Kafka producer and consumer calls by their method names.
     pub fn identify_message_edges(
         &self,
         call: &PythonCallStatement,
@@ -39,6 +41,7 @@ impl KafkaIdentificationStrategy {
         }
     }
 
+    /// Extracts a topic from a Kafka producer call.
     fn identify_producer(
         &self,
         call: &PythonCallStatement,
@@ -58,6 +61,7 @@ impl KafkaIdentificationStrategy {
         ))
     }
 
+    /// Extracts one or more topics from a subscription call.
     fn identify_consumer_topic_arg(
         &self,
         call: &PythonCallStatement,
@@ -80,6 +84,7 @@ impl KafkaIdentificationStrategy {
             .collect()
     }
 
+    /// Extracts positional topics from a Kafka consumer constructor.
     fn identify_consumer_constructor(
         &self,
         call: &PythonCallStatement,
@@ -104,6 +109,7 @@ impl KafkaIdentificationStrategy {
             .collect()
     }
 
+    /// Extracts the topic consumed by a Quix topic call.
     fn identify_quix_topic(
         &self,
         call: &PythonCallStatement,
@@ -123,6 +129,7 @@ impl KafkaIdentificationStrategy {
         ))
     }
 
+    /// Builds a Kafka message edge with call-site metadata.
     fn edge(
         &self,
         role: MessageRole,
@@ -158,6 +165,7 @@ impl KafkaIdentificationStrategy {
     }
 }
 
+/// Finds a named argument, falling back to its positional index.
 fn get_arg<'a>(arguments: &'a [Argument], name: &str, index: usize) -> Option<&'a str> {
     arguments
         .iter()
@@ -166,6 +174,7 @@ fn get_arg<'a>(arguments: &'a [Argument], name: &str, index: usize) -> Option<&'
         .map(|arg| arg.value.as_str())
 }
 
+/// Splits a topic list while preserving nested Python expressions.
 fn clean_topics(raw: &str) -> Vec<String> {
     let cleaned = raw.trim();
     if cleaned.starts_with('[') && cleaned.ends_with(']') {
@@ -182,10 +191,12 @@ fn clean_topics(raw: &str) -> Vec<String> {
     vec![clean_topic(cleaned)]
 }
 
+/// Removes Python string syntax from a topic value.
 fn clean_topic(raw: &str) -> String {
     statix::strings::clean_python_string(raw)
 }
 
+/// Filters out common payload names that are unlikely to be topic values.
 fn topic_is_payloadish(topic: &str) -> bool {
     matches!(
         topic,
