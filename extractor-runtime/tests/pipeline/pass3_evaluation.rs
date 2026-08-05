@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use extractor_runtime::pipeline::{build_project_ir, evaluate};
 use java_extractor::extraction::extract_syntactic as java_extract;
-use models::{HttpMethod, RestCall};
+use models::{HttpMethod, MessageDestinationKind, RestCall};
 use python_extractor::extraction::parse::extract_syntactic as python_extract;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -21,6 +21,38 @@ fn java_restcall(function_name: &str, target_uri: &str, file_path: &str) -> Rest
         target_uri: target_uri.to_string(),
         file_path: file_path.to_string(),
     }
+}
+
+/// Python: an exchange that resolves to an empty value uses queue semantics.
+#[test]
+fn python_empty_resolved_exchange_is_a_queue() {
+    let code = r#"
+EXCHANGE = ""
+
+class Publisher:
+    def publish(self, message):
+        self.channel.basic_publish(
+            exchange=EXCHANGE,
+            routing_key="orders",
+            body=message,
+        )
+"#;
+
+    let record = python_extract(code, "publisher.py").expect("Python extraction should succeed");
+    let evaluated = evaluate(
+        build_project_ir(vec![record]),
+        &HashMap::new(),
+        &HashMap::new(),
+        &HashMap::new(),
+    );
+
+    let edge = evaluated
+        .message_edges
+        .iter()
+        .find(|edge| edge.role == models::MessageRole::Producer)
+        .expect("producer edge should be present");
+    assert_eq!(edge.destination_kind, MessageDestinationKind::Queue);
+    assert_eq!(edge.destination, "orders");
 }
 
 // ── Java tests ────────────────────────────────────────────────────────────────

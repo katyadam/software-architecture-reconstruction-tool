@@ -91,12 +91,17 @@ fn evaluate_single_edge(edge: &MessageEdge, file: &TypedFileRecord, env: &Env) -
             .unwrap_or_else(|| edge.destination.clone()),
     };
 
-    let destination_kind = if matches!(edge.role, MessageRole::Producer)
-        && exchange.as_ref().is_some_and(|value| !value.is_empty())
-    {
-        MessageDestinationKind::ExchangeRoutingKey
-    } else {
-        edge.destination_kind.clone()
+    let destination_kind = match edge.role {
+        MessageRole::Producer
+            if !matches!(edge.destination_kind, MessageDestinationKind::Topic) =>
+        {
+            if exchange.as_ref().is_some_and(|value| !value.is_empty()) {
+                MessageDestinationKind::ExchangeRoutingKey
+            } else {
+                MessageDestinationKind::Queue
+            }
+        }
+        _ => edge.destination_kind.clone(),
     };
 
     MessageEdge {
