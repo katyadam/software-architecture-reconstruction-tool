@@ -2,6 +2,12 @@ use models::{Argument, CommunicationProtocol, MessageDestinationKind, MessageEdg
 
 use crate::extraction::calls::PythonCallStatement;
 
+const KAFKA_PRODUCER_METHODS: &[&str] = &["produce", "send", "send_and_wait", "publisher"];
+const KAFKA_SUBSCRIPTION_METHODS: &[&str] = &["subscribe", "subscriber"];
+const KAFKA_CONSUMER_CONSTRUCTORS: &[&str] = &["KafkaConsumer", "AIOKafkaConsumer"];
+const KAFKA_TOPIC_METHOD: &str = "topic";
+const PAYLOADISH_TOPIC_NAMES: &[&str] = &["data", "message", "payload", "value", "body", "label"];
+
 #[derive(Default)]
 pub struct KafkaIdentificationStrategy;
 
@@ -21,19 +27,17 @@ impl KafkaIdentificationStrategy {
         let method = function_name.split('.').last().unwrap_or(function_name);
 
         match method {
-            "produce" | "send" | "send_and_wait" => self
+            method if KAFKA_PRODUCER_METHODS.contains(&method) => self
                 .identify_producer(call, file_path)
                 .into_iter()
                 .collect(),
-            "subscribe" | "subscriber" => self.identify_consumer_topic_arg(call, file_path),
-            "publisher" => self
-                .identify_producer(call, file_path)
-                .into_iter()
-                .collect(),
-            "KafkaConsumer" | "AIOKafkaConsumer" => {
+            method if KAFKA_SUBSCRIPTION_METHODS.contains(&method) => {
+                self.identify_consumer_topic_arg(call, file_path)
+            }
+            method if KAFKA_CONSUMER_CONSTRUCTORS.contains(&method) => {
                 self.identify_consumer_constructor(call, file_path)
             }
-            "topic" => self
+            KAFKA_TOPIC_METHOD => self
                 .identify_quix_topic(call, file_path)
                 .into_iter()
                 .collect(),
@@ -198,8 +202,5 @@ fn clean_topic(raw: &str) -> String {
 
 /// Filters out common payload names that are unlikely to be topic values.
 fn topic_is_payloadish(topic: &str) -> bool {
-    matches!(
-        topic,
-        "data" | "message" | "payload" | "value" | "body" | "label"
-    )
+    PAYLOADISH_TOPIC_NAMES.contains(&topic)
 }

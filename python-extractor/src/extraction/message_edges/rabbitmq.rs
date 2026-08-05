@@ -2,6 +2,10 @@ use models::{Argument, CommunicationProtocol, MessageDestinationKind, MessageEdg
 
 use crate::extraction::calls::PythonCallStatement;
 
+const RABBITMQ_PUBLISH_METHOD: &str = "basic_publish";
+const RABBITMQ_CONSUME_METHOD: &str = "basic_consume";
+const RABBITMQ_QUEUE_DECLARE_METHOD: &str = "queue_declare";
+
 #[derive(Default)]
 pub struct RabbitMqIdentificationStrategy;
 
@@ -19,9 +23,9 @@ impl RabbitMqIdentificationStrategy {
     ) -> Option<MessageEdge> {
         let method = call.call_statement.function_name.split('.').last()?;
         match method {
-            "basic_publish" => self.identify_publish(call, file_path),
-            "basic_consume" => self.identify_consume(call, file_path),
-            "queue_declare" => self.identify_queue_declare(call, file_path),
+            RABBITMQ_PUBLISH_METHOD => self.identify_publish(call, file_path),
+            RABBITMQ_CONSUME_METHOD => self.identify_consume(call, file_path),
+            RABBITMQ_QUEUE_DECLARE_METHOD => self.identify_queue_declare(call, file_path),
             _ => None,
         }
     }
