@@ -108,23 +108,11 @@ fn resolve_value(raw: &str, file: &TypedFileRecord, env: &Env) -> String {
         return cleaned;
     }
 
-    if let Some(value) = resolve_from_env(&cleaned, env) {
-        return value;
-    }
-
-    if let Some(value) = resolve_self_attr(&cleaned, file, env) {
-        return value;
-    }
-
-    if let Some(value) = resolve_from_env_by_attr(&cleaned, &file.file_path, env) {
-        return value;
-    }
-
-    if let Some(value) = resolve_conditional_fallback(&cleaned, file, env) {
-        return value;
-    }
-
-    cleaned
+    resolve_from_env(&cleaned, env)
+        .or_else(|| resolve_self_attr(&cleaned, file, env))
+        .or_else(|| resolve_from_env_by_attr(&cleaned, &file.file_path, env))
+        .or_else(|| resolve_conditional_fallback(&cleaned, file, env))
+        .unwrap_or(cleaned)
 }
 
 fn resolve_self_attr(raw: &str, file: &TypedFileRecord, env: &Env) -> Option<String> {
