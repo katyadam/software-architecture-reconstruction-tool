@@ -13,6 +13,14 @@ use crate::pipeline::pass3::{
     pass_module::PerFileModuleConsts,
 };
 
+const DESTINATION_SEPARATOR: &str = ":";
+const SELF_ATTRIBUTE_PREFIX: &str = "self.";
+const INITIALIZER_FUNCTION_PREFIX: &str = "__init__(";
+const CONDITIONAL_FALLBACK_SEPARATOR: &str = " else ";
+const ATTRIBUTE_SEPARATOR: char = '.';
+const SERVICE_PATH_SEPARATORS: &[char] = &['/', '\\', '-', '_'];
+const ENVIRONMENT_NAME_SEPARATOR: &str = "_";
+
 /// Resolves all message edges using project-wide and per-file constant environments.
 pub(super) fn evaluate_message_edges(
     project_ir: &ProjectIR,
@@ -71,7 +79,7 @@ fn evaluate_single_edge(edge: &MessageEdge, file: &TypedFileRecord, env: &Env) -
                 topic.clone().unwrap_or_else(|| edge.destination.clone())
             }
             (Some(exchange), Some(routing_key)) if !exchange.is_empty() => {
-                format!("{exchange}:{routing_key}")
+                format!("{exchange}{DESTINATION_SEPARATOR}{routing_key}")
             }
             (_, Some(routing_key)) => routing_key.clone(),
             (Some(exchange), _) => exchange.clone(),
@@ -120,7 +128,7 @@ fn resolve_value(raw: &str, file: &TypedFileRecord, env: &Env) -> String {
 
 /// Resolves `self.*` references assigned in the class initializer.
 fn resolve_self_attr(raw: &str, file: &TypedFileRecord, env: &Env) -> Option<String> {
-    if !raw.starts_with("self.") {
+    if !raw.starts_with(SELF_ATTRIBUTE_PREFIX) {
         return None;
     }
 
@@ -128,7 +136,8 @@ fn resolve_self_attr(raw: &str, file: &TypedFileRecord, env: &Env) -> Option<Str
         if key.variable_name != raw {
             continue;
         }
-        if !matches!(&key.scope, Scope::Function(name) if name.starts_with("__init__(")) {
+        if !matches!(&key.scope, Scope::Function(name) if name.starts_with(INITIALIZER_FUNCTION_PREFIX))
+        {
             continue;
         }
 
@@ -140,7 +149,7 @@ fn resolve_self_attr(raw: &str, file: &TypedFileRecord, env: &Env) -> Option<Str
 
 /// Extracts and resolves the fallback branch of a conditional expression.
 fn resolve_conditional_fallback(raw: &str, file: &TypedFileRecord, env: &Env) -> Option<String> {
-    let (_condition, fallback) = raw.split_once(" else ")?;
+    let (_condition, fallback) = raw.split_once(CONDITIONAL_FALLBACK_SEPARATOR)?;
     Some(resolve_value(fallback, file, env))
 }
 
@@ -152,7 +161,11 @@ fn resolve_from_env(raw: &str, env: &Env) -> Option<String> {
 
 /// Resolves an attribute by matching environment names and preferring the local service.
 fn resolve_from_env_by_attr(raw: &str, file_path: &str, env: &Env) -> Option<String> {
-    let attr = raw.rsplit('.').next().unwrap_or(raw).to_ascii_uppercase();
+    let attr = raw
+        .rsplit(ATTRIBUTE_SEPARATOR)
+        .next()
+        .unwrap_or(raw)
+        .to_ascii_uppercase();
     if attr.is_empty() {
         return None;
     }
@@ -161,7 +174,9 @@ fn resolve_from_env_by_attr(raw: &str, file_path: &str, env: &Env) -> Option<Str
         .iter()
         .filter_map(|(name, (_, expr))| {
             let upper_name = name.to_ascii_uppercase();
-            if upper_name == attr || upper_name.ends_with(&format!("_{attr}")) {
+            if upper_name == attr
+                || upper_name.ends_with(&format!("{ENVIRONMENT_NAME_SEPARATOR}{attr}"))
+            {
                 expr_to_string(expr).map(|value| (name.as_str(), value))
             } else {
                 None
@@ -184,7 +199,7 @@ fn resolve_from_env_by_attr(raw: &str, file_path: &str, env: &Env) -> Option<Str
 fn service_name_score(env_name: &str, file_path: &str) -> usize {
     let env_name = env_name.to_ascii_lowercase();
     file_path
-        .split(['/', '\\', '-', '_'])
+        .split(SERVICE_PATH_SEPARATORS)
         .filter(|part| part.len() > 2 && env_name.contains(&part.to_ascii_lowercase()))
         .count()
 }

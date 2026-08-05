@@ -7,6 +7,9 @@ const KAFKA_SUBSCRIPTION_METHODS: &[&str] = &["subscribe", "subscriber"];
 const KAFKA_CONSUMER_CONSTRUCTORS: &[&str] = &["KafkaConsumer", "AIOKafkaConsumer"];
 const KAFKA_TOPIC_METHOD: &str = "topic";
 const PAYLOADISH_TOPIC_NAMES: &[&str] = &["data", "message", "payload", "value", "body", "label"];
+const METHOD_SEPARATOR: char = '.';
+const TOPIC_ARGUMENT: &str = "topic";
+const TOPICS_ARGUMENT: &str = "topics";
 
 #[derive(Default)]
 pub struct KafkaIdentificationStrategy;
@@ -24,7 +27,10 @@ impl KafkaIdentificationStrategy {
         file_path: &str,
     ) -> Vec<MessageEdge> {
         let function_name = call.call_statement.function_name.as_str();
-        let method = function_name.split('.').last().unwrap_or(function_name);
+        let method = function_name
+            .split(METHOD_SEPARATOR)
+            .last()
+            .unwrap_or(function_name);
 
         match method {
             method if KAFKA_PRODUCER_METHODS.contains(&method) => self
@@ -51,7 +57,7 @@ impl KafkaIdentificationStrategy {
         call: &PythonCallStatement,
         file_path: &str,
     ) -> Option<MessageEdge> {
-        let topic = get_arg(&call.call_statement.arguments, "topic", 0).map(clean_topic)?;
+        let topic = get_arg(&call.call_statement.arguments, TOPIC_ARGUMENT, 0).map(clean_topic)?;
         if topic.is_empty() || topic_is_payloadish(&topic) {
             return None;
         }
@@ -71,8 +77,8 @@ impl KafkaIdentificationStrategy {
         call: &PythonCallStatement,
         file_path: &str,
     ) -> Vec<MessageEdge> {
-        get_arg(&call.call_statement.arguments, "topics", 0)
-            .or_else(|| get_arg(&call.call_statement.arguments, "topic", 0))
+        get_arg(&call.call_statement.arguments, TOPICS_ARGUMENT, 0)
+            .or_else(|| get_arg(&call.call_statement.arguments, TOPIC_ARGUMENT, 0))
             .into_iter()
             .flat_map(clean_topics)
             .map(|topic| {
@@ -119,7 +125,7 @@ impl KafkaIdentificationStrategy {
         call: &PythonCallStatement,
         file_path: &str,
     ) -> Option<MessageEdge> {
-        let topic = get_arg(&call.call_statement.arguments, "topic", 0).map(clean_topic)?;
+        let topic = get_arg(&call.call_statement.arguments, TOPIC_ARGUMENT, 0).map(clean_topic)?;
         if topic.is_empty() {
             return None;
         }

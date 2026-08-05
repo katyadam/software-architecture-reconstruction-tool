@@ -5,6 +5,12 @@ use crate::extraction::calls::PythonCallStatement;
 const RABBITMQ_PUBLISH_METHOD: &str = "basic_publish";
 const RABBITMQ_CONSUME_METHOD: &str = "basic_consume";
 const RABBITMQ_QUEUE_DECLARE_METHOD: &str = "queue_declare";
+const METHOD_SEPARATOR: char = '.';
+const DESTINATION_SEPARATOR: &str = ":";
+const EXCHANGE_ARGUMENT: &str = "exchange";
+const ROUTING_KEY_ARGUMENT: &str = "routing_key";
+const QUEUE_ARGUMENT: &str = "queue";
+const MESSAGE_CALLBACK_ARGUMENT: &str = "on_message_callback";
 
 #[derive(Default)]
 pub struct RabbitMqIdentificationStrategy;
@@ -21,7 +27,11 @@ impl RabbitMqIdentificationStrategy {
         call: &PythonCallStatement,
         file_path: &str,
     ) -> Option<MessageEdge> {
-        let method = call.call_statement.function_name.split('.').last()?;
+        let method = call
+            .call_statement
+            .function_name
+            .split(METHOD_SEPARATOR)
+            .last()?;
         match method {
             RABBITMQ_PUBLISH_METHOD => self.identify_publish(call, file_path),
             RABBITMQ_CONSUME_METHOD => self.identify_consume(call, file_path),
@@ -32,11 +42,11 @@ impl RabbitMqIdentificationStrategy {
 
     /// Extracts an exchange and routing key from a publish call.
     fn identify_publish(&self, call: &PythonCallStatement, file_path: &str) -> Option<MessageEdge> {
-        let exchange = get_arg(&call.call_statement.arguments, "exchange", 0)
+        let exchange = get_arg(&call.call_statement.arguments, EXCHANGE_ARGUMENT, 0)
             .map(clean_value)
             .filter(|v| !v.is_empty());
         let routing_key =
-            get_arg(&call.call_statement.arguments, "routing_key", 1).map(clean_value);
+            get_arg(&call.call_statement.arguments, ROUTING_KEY_ARGUMENT, 1).map(clean_value);
 
         let is_default_exchange = exchange.is_none();
         let destination_kind = if is_default_exchange {
@@ -46,7 +56,9 @@ impl RabbitMqIdentificationStrategy {
         };
 
         let destination = match (&exchange, &routing_key) {
-            (Some(exchange), Some(routing_key)) => format!("{exchange}:{routing_key}"),
+            (Some(exchange), Some(routing_key)) => {
+                format!("{exchange}{DESTINATION_SEPARATOR}{routing_key}")
+            }
             (Some(exchange), None) => exchange.clone(),
             (None, Some(routing_key)) => routing_key.clone(),
             (None, None) => return None,
@@ -67,9 +79,9 @@ impl RabbitMqIdentificationStrategy {
 
     /// Extracts the queue and callback from a consumer call.
     fn identify_consume(&self, call: &PythonCallStatement, file_path: &str) -> Option<MessageEdge> {
-        let queue = get_arg(&call.call_statement.arguments, "queue", 0).map(clean_value)?;
+        let queue = get_arg(&call.call_statement.arguments, QUEUE_ARGUMENT, 0).map(clean_value)?;
         let handler =
-            get_arg(&call.call_statement.arguments, "on_message_callback", 1).map(clean_value);
+            get_arg(&call.call_statement.arguments, MESSAGE_CALLBACK_ARGUMENT, 1).map(clean_value);
 
         Some(self.edge(
             MessageRole::Consumer,
@@ -90,7 +102,7 @@ impl RabbitMqIdentificationStrategy {
         call: &PythonCallStatement,
         file_path: &str,
     ) -> Option<MessageEdge> {
-        let queue = get_arg(&call.call_statement.arguments, "queue", 0).map(clean_value)?;
+        let queue = get_arg(&call.call_statement.arguments, QUEUE_ARGUMENT, 0).map(clean_value)?;
 
         Some(self.edge(
             MessageRole::QueueDeclaration,
