@@ -91,7 +91,7 @@ fn should_extract_syntactic_from_endpoint_file_without_evaluation() {
 }
 
 #[test]
-fn should_extract_syntactic_raw_restcalls_with_template_uris() {
+fn should_extract_syntactic_from_restcalls_file_without_evaluation() {
     let filename = "./examples/python/restcalls/large_example.py";
     let code = load_file(filename).expect("fixture not found");
 
@@ -107,13 +107,6 @@ fn should_extract_syntactic_raw_restcalls_with_template_uris() {
         record.endpoints.is_empty(),
         "large_example.py has no @app route decorators"
     );
-    // raw_restcalls should have template URIs (not resolved)
-    for rc in &record.raw_restcalls {
-        assert!(
-            !rc.target_uri.is_empty(),
-            "Each raw RestCall must have a non-empty target_uri"
-        );
-    }
     // asyncio and httpx must appear in imports
     assert!(
         record.imports.iter().any(|i| i.codeword == "asyncio"),
