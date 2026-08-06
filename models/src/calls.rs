@@ -20,16 +20,10 @@ pub struct CallStatement {
     pub is_self_invoke: bool,
     pub is_super_invoke: bool,
     pub invoked_on: Option<String>,
+
     /// True when this call sits inside a decorator/annotation rather than
     /// executable code -- e.g. Python's `@app.get("/items")`. Such calls are
     /// route declarations, not outbound calls.
-    ///
-    /// `#[serde(default)]`: IMCG chunks persisted to MinIO before this field
-    /// existed lack the key entirely. Without a default, deserializing those
-    /// old blobs fails with "missing field is_decorator". Keep this even if
-    /// the field looks unused elsewhere -- it is consumed entirely inside
-    /// Pass 2 and never read downstream, but old blobs still need to load.
-    #[serde(default)]
     pub is_decorator: bool,
 }
 
@@ -75,31 +69,5 @@ impl Display for Argument {
         } else {
             write!(f, "{} = {}", self.assigned_variable, self.value)
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// IMCG chunks persisted to MinIO before `is_decorator` existed lack the
-    /// key entirely. `#[serde(default)]` must let those old blobs still
-    /// deserialize, defaulting the missing field to `false`.
-    #[test]
-    fn call_statement_deserializes_without_is_decorator_field() {
-        let json = r#"{
-            "function_name": "get",
-            "arguments": [],
-            "enclosing_function_name": null,
-            "enclosing_class_name": null,
-            "enclosing_function_hash": null,
-            "is_self_invoke": false,
-            "is_super_invoke": false,
-            "invoked_on": null
-        }"#;
-
-        let call: CallStatement =
-            serde_json::from_str(json).expect("missing is_decorator must not fail deserialization");
-        assert!(!call.is_decorator);
     }
 }
