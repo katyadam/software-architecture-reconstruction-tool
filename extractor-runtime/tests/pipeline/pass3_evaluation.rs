@@ -9,8 +9,10 @@ use python_extractor::extraction::parse::extract_syntactic as python_extract;
 
 /// Minimal Java RestCall for pass 3 testing.
 ///
-/// These tests call `evaluate` on hand-built records that skip Pass 2
-/// identification, so they add RestCalls manually instead.
+/// These tests exercise hand-written Java that has no real Spring/RestTemplate
+/// shape for Pass 2 to identify, so they add the RestCall by hand onto the
+/// `TypedFileRecord` after `build_project_ir` has run, to target Pass 3's
+/// symbolic evaluation in isolation.
 fn java_restcall(function_name: &str, target_uri: &str, file_path: &str) -> RestCall {
     RestCall {
         function_name: function_name.to_string(),
@@ -74,12 +76,14 @@ class UserClient {
 }
 "#;
 
-    let mut record = java_extract(code, "UserClient.java").expect("Java extraction should succeed");
-    record
-        .raw_restcalls
-        .push(java_restcall("void fetchUsers()", "url", "UserClient.java"));
+    let record = java_extract(code, "UserClient.java").expect("Java extraction should succeed");
 
-    let project_ir = build_project_ir(vec![record]);
+    let mut project_ir = build_project_ir(vec![record]);
+    project_ir.files[0].raw_restcalls.push(java_restcall(
+        "void fetchUsers()",
+        "url",
+        "UserClient.java",
+    ));
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -124,13 +128,15 @@ class UserClient {
 
     let base_record =
         java_extract(base_code, "BaseService.java").expect("BaseService.java should parse");
-    let mut client_record =
+    let client_record =
         java_extract(client_code, "UserClient.java").expect("UserClient.java should parse");
-    client_record
-        .raw_restcalls
-        .push(java_restcall("void fetchUsers()", "url", "UserClient.java"));
 
-    let project_ir = build_project_ir(vec![base_record, client_record]);
+    let mut project_ir = build_project_ir(vec![base_record, client_record]);
+    project_ir.files[1].raw_restcalls.push(java_restcall(
+        "void fetchUsers()",
+        "url",
+        "UserClient.java",
+    ));
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -177,15 +183,15 @@ class LocalClient {
 
     let global_record =
         java_extract(global_code, "GlobalService.java").expect("GlobalService.java should parse");
-    let mut local_record =
+    let local_record =
         java_extract(local_code, "LocalClient.java").expect("LocalClient.java should parse");
-    local_record.raw_restcalls.push(java_restcall(
+
+    let mut project_ir = build_project_ir(vec![global_record, local_record]);
+    project_ir.files[1].raw_restcalls.push(java_restcall(
         "void fetchItems()",
         "url",
         "LocalClient.java",
     ));
-
-    let project_ir = build_project_ir(vec![global_record, local_record]);
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -333,10 +339,10 @@ def fetch_items():
     );
 }
 
-/// Files with no raw_restcalls produce no output and do not panic.
+/// Files with no identifiable REST calls produce no output and do not panic.
 ///
 /// A Python file containing only a helper function (no `requests.*` calls)
-/// has an empty `raw_restcalls` list. Pass 3 must short-circuit and produce
+/// has nothing for Pass 2 to identify. Pass 3 must short-circuit and produce
 /// zero RestCalls rather than attempting symbolic evaluation on an empty set.
 #[test]
 fn empty_raw_restcalls_produces_no_output() {
@@ -346,12 +352,6 @@ def helper():
 "#;
 
     let record = python_extract(code, "helper.py").expect("helper.py should parse");
-    // raw_restcalls is empty — no requests.get/post/etc. calls in the file
-    assert!(
-        record.raw_restcalls.is_empty(),
-        "helper.py should have no raw_restcalls, got: {:?}",
-        record.raw_restcalls
-    );
 
     let project_ir = build_project_ir(vec![record]);
     let evaluated = evaluate(

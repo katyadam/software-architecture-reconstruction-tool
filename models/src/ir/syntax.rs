@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 
 use crate::{
-    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, MessageEdge,
-    ParsedCallable, RestCall, enums::EnumDefinition, ir::language::Language,
+    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, ParsedCallable,
+    enums::EnumDefinition, ir::language::Language,
 };
 
 /// Pass 1 output: one per source file.
+///
+/// Carries syntax only. REST calls and message edges are identified in Pass 2,
+/// once types are resolved, and live on `TypedFileRecord`.
 pub struct FileRecord {
     pub file_path: String,
     pub language: Language,
@@ -20,10 +23,6 @@ pub struct FileRecord {
 
     // Identified enums (Python: from entities, Java: from enum declarations)
     pub enums: Vec<EnumDefinition>,
-    // Pre-identified REST call candidates (before URI resolution)
-    pub raw_restcalls: Vec<RestCall>,
-    // Pre-identified non-REST message communication candidates.
-    pub raw_message_edges: Vec<MessageEdge>,
 }
 
 pub struct SyntacticIR {

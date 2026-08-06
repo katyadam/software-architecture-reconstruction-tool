@@ -22,10 +22,6 @@ fn should_return_empty_file_record_for_empty_java_file() {
         "Empty file should have no endpoints"
     );
     assert!(
-        record.raw_restcalls.is_empty(),
-        "Empty file should have no raw REST calls"
-    );
-    assert!(
         record.callables.is_empty(),
         "Empty file should have no callables"
     );
@@ -55,10 +51,6 @@ fn should_extract_syntactic_from_spring_controller_without_evaluation() {
         "FoodController should have 10 ParsedCallables"
     );
     assert!(
-        record.raw_restcalls.is_empty(),
-        "Controller should have no outbound REST calls"
-    );
-    assert!(
         !record.imports.is_empty(),
         "FoodController should have imports"
     );
@@ -72,7 +64,7 @@ fn should_extract_syntactic_from_spring_controller_without_evaluation() {
 }
 
 #[test]
-fn should_extract_syntactic_raw_restcalls_with_template_uris() {
+fn should_extract_syntactic_from_restcalls_file_without_evaluation() {
     let filename = s!("./examples/CancelServiceImpl.java");
     let code = load_file(&filename).expect("CancelServiceImpl.java fixture not found");
 
@@ -87,9 +79,8 @@ fn should_extract_syntactic_raw_restcalls_with_template_uris() {
         !record.callables.is_empty(),
         "CancelServiceImpl should have callables"
     );
-    // raw_restcalls: Spring identification without evaluate_invocations won't resolve
-    // invoked_on, so RestTemplate calls won't be identified — this is expected for Pass 1.
-    // The call_statements still capture the raw HTTP method calls.
+    // Identification (Spring RestTemplate -> RestCall) is a Pass 2 stage, so at
+    // Pass 1 the raw HTTP method calls are only visible as call statements.
     assert!(
         !record.call_statements.is_empty(),
         "CancelServiceImpl should have call statements"
@@ -143,11 +134,6 @@ fn should_parse_spring_controller_and_populate_aggregate_correctly() {
             .any(|e| e.http_method == HttpMethod::DELETE)
     );
     assert!(order_by_id.iter().any(|e| e.http_method == HttpMethod::GET));
-
-    assert!(
-        record.raw_restcalls.is_empty(),
-        "Controller makes no outbound REST calls"
-    );
 }
 
 #[test]
@@ -168,7 +154,7 @@ fn should_parse_restcall_service_and_populate_aggregate_correctly() {
     );
 
     // All 7 restTemplate.exchange() invocations must be captured as call statements.
-    // Identification is a Pass 2 stage, so raw_restcalls is empty at Pass 1.
+    // Identification (Pass 2) turns these into RestCalls on TypedFileRecord.
     let exchange_calls: Vec<_> = record
         .call_statements
         .iter()
@@ -178,10 +164,5 @@ fn should_parse_restcall_service_and_populate_aggregate_correctly() {
         exchange_calls.len(),
         7,
         "CancelServiceImpl has 7 restTemplate.exchange() calls"
-    );
-
-    assert!(
-        record.raw_restcalls.is_empty(),
-        "identification runs in Pass 2 — raw_restcalls must be empty at Pass 1"
     );
 }

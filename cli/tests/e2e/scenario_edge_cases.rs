@@ -11,7 +11,6 @@ fn empty_java_file_produces_no_elements() {
     let is_empty = result
         .map(|record| {
             record.endpoints.is_empty()
-                && record.raw_restcalls.is_empty()
                 && record.entities.is_empty()
                 && record.callables.is_empty()
                 && record.call_statements.is_empty()
@@ -26,7 +25,6 @@ fn empty_python_file_produces_no_elements() {
     let is_empty = result
         .map(|record| {
             record.endpoints.is_empty()
-                && record.raw_restcalls.is_empty()
                 && record.entities.is_empty()
                 && record.call_statements.is_empty()
                 // synthetic <module>() callable is always emitted; exclude it

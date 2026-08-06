@@ -94,8 +94,8 @@ impl From<FileRecord> for TypedFileRecord {
             call_statements: r.call_statements,
             assignments: r.assignments,
             enums: r.enums,
-            raw_restcalls: r.raw_restcalls,
-            raw_message_edges: r.raw_message_edges,
+            raw_restcalls: vec![],
+            raw_message_edges: vec![],
         }
     }
 }

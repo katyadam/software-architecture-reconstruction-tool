@@ -22,10 +22,6 @@ fn should_return_empty_file_record_for_empty_python_file() {
         record.endpoints.is_empty(),
         "no endpoints expected for empty file"
     );
-    assert!(
-        record.raw_restcalls.is_empty(),
-        "no raw restcalls expected for empty file"
-    );
     assert_eq!(
         record.callables.len(),
         1,
@@ -63,10 +59,6 @@ fn should_extract_syntactic_from_endpoint_file_without_evaluation() {
         record.callables.len(),
         12,
         "endpoints.py defines 9 endpoint functions + 2 Item2 methods + 1 synthetic <module>"
-    );
-    assert!(
-        record.raw_restcalls.is_empty(),
-        "endpoints.py contains no outbound HTTP calls"
     );
     // All callables must have proper metadata
     for pc in &record.callables {
