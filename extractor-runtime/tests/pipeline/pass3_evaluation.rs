@@ -9,9 +9,8 @@ use python_extractor::extraction::parse::extract_syntactic as python_extract;
 
 /// Minimal Java RestCall for pass 3 testing.
 ///
-/// Java `extract_syntactic` does not run `evaluate_invocations`, so `invoked_on`
-/// is never set and `SpringIdentificationStrategy` produces no raw_restcalls.
-/// Tests add them manually instead.
+/// These tests call `evaluate` on hand-built records that skip Pass 2
+/// identification, so they add RestCalls manually instead.
 fn java_restcall(function_name: &str, target_uri: &str, file_path: &str) -> RestCall {
     RestCall {
         function_name: function_name.to_string(),

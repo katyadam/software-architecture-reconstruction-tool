@@ -1,7 +1,7 @@
 use models::{
     CallStatement, ParsedCallable,
     api::ExtractionError,
-    ir::{ast::CallableAst, language::Language, syntax::FileRecord},
+    ir::{ast::CallableAst, language::Language, project::TypedFileRecord, syntax::FileRecord},
 };
 use statix::parse_python;
 use tree_sitter::Parser;
@@ -93,25 +93,6 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         .map(PythonCallStatement::to_language_agnostic)
         .collect::<Vec<CallStatement>>();
 
-    // Identification-only: no symbolic evaluation or URI resolution
-    let identification_strategy = MethodCallIdentificationStrategy::new();
-    let raw_restcalls = call_statements
-        .iter()
-        .filter_map(|call| identification_strategy.identify_restcall(call, file_name))
-        .collect();
-
-    let rabbitmq_strategy = RabbitMqIdentificationStrategy::new();
-    let kafka_strategy = KafkaIdentificationStrategy::new();
-    let mut raw_message_edges = call_statements
-        .iter()
-        .filter_map(|call| rabbitmq_strategy.identify_message_edge(call, file_name))
-        .collect::<Vec<_>>();
-    raw_message_edges.extend(
-        call_statements
-            .iter()
-            .flat_map(|call| kafka_strategy.identify_message_edges(call, file_name)),
-    );
-
     Ok(FileRecord {
         file_path: file_name.to_string(),
         language: Language::Python,
@@ -122,7 +103,39 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         call_statements,
         assignments,
         enums,
-        raw_restcalls,
-        raw_message_edges,
+        raw_restcalls: vec![],
+        raw_message_edges: vec![],
     })
+}
+
+/// Pass 2: identify Python REST calls and message edges from type-resolved
+/// call statements.
+///
+/// Runs at Pass 2 rather than Pass 1 so that identification is one stage for
+/// every language. Python's strategies do not need resolved types, but Java's
+/// do, and a single stage is worth more than the earlier result.
+pub fn identify(file: &mut TypedFileRecord) {
+    let restcall_strategy = MethodCallIdentificationStrategy::new();
+    let rabbitmq_strategy = RabbitMqIdentificationStrategy::new();
+    let kafka_strategy = KafkaIdentificationStrategy::new();
+
+    let restcalls: Vec<_> = file
+        .call_statements
+        .iter()
+        .filter_map(|call| restcall_strategy.identify_restcall(call, &file.file_path))
+        .collect();
+
+    let mut message_edges: Vec<_> = file
+        .call_statements
+        .iter()
+        .filter_map(|call| rabbitmq_strategy.identify_message_edge(call, &file.file_path))
+        .collect();
+    message_edges.extend(
+        file.call_statements
+            .iter()
+            .flat_map(|call| kafka_strategy.identify_message_edges(call, &file.file_path)),
+    );
+
+    file.raw_restcalls.extend(restcalls);
+    file.raw_message_edges.extend(message_edges);
 }

@@ -98,12 +98,6 @@ fn should_extract_syntactic_raw_restcalls_with_template_uris() {
     let record = extract_syntactic(&code, filename)
         .expect("extract_syntactic() must not error on large_example.py");
 
-    // Python identification uses function name suffix — works without evaluate_invocations
-    assert_eq!(
-        record.raw_restcalls.len(),
-        6,
-        "large_example.py has 6 outbound HTTP calls identified by method name"
-    );
     assert_eq!(
         record.callables.len(),
         8,

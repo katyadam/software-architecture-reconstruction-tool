@@ -168,7 +168,7 @@ fn should_parse_restcall_service_and_populate_aggregate_correctly() {
     );
 
     // All 7 restTemplate.exchange() invocations must be captured as call statements.
-    // Spring identification requires resolved types (Pass 2), so raw_restcalls is empty here.
+    // Identification is a Pass 2 stage, so raw_restcalls is empty at Pass 1.
     let exchange_calls: Vec<_> = record
         .call_statements
         .iter()
@@ -182,6 +182,6 @@ fn should_parse_restcall_service_and_populate_aggregate_correctly() {
 
     assert!(
         record.raw_restcalls.is_empty(),
-        "Spring identification requires type resolution — raw_restcalls must be empty at Pass 1"
+        "identification runs in Pass 2 — raw_restcalls must be empty at Pass 1"
     );
 }
