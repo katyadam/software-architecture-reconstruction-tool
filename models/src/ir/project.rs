@@ -28,7 +28,11 @@ pub struct TypedFileRecord {
     pub assignments: HashMap<AssignmentKey, Assignment>,
 
     pub enums: Vec<EnumDefinition>,
+    // Identified in Pass 2 (see extractor-runtime/src/pipeline/pass2/identification.rs)
+    // and consumed in Pass 3.
     pub raw_restcalls: Vec<RestCall>,
+    // Identified in Pass 2 (see extractor-runtime/src/pipeline/pass2/identification.rs)
+    // and consumed in Pass 3.
     pub raw_message_edges: Vec<MessageEdge>,
 }
 

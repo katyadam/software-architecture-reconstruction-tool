@@ -108,5 +108,5 @@ pub fn identify(file: &mut TypedFileRecord) {
         .iter()
         .filter_map(|call| strategy.identify_restcall(call, &file.file_path))
         .collect();
-    file.raw_restcalls.extend(identified);
+    file.raw_restcalls = identified;
 }

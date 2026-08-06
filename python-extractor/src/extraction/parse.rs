@@ -134,6 +134,6 @@ pub fn identify(file: &mut TypedFileRecord) {
             .flat_map(|call| kafka_strategy.identify_message_edges(call, &file.file_path)),
     );
 
-    file.raw_restcalls.extend(restcalls);
-    file.raw_message_edges.extend(message_edges);
+    file.raw_restcalls = restcalls;
+    file.raw_message_edges = message_edges;
 }
