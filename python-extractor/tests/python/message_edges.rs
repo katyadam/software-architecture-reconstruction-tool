@@ -1,7 +1,7 @@
 use models::{CommunicationProtocol, MessageDestinationKind, MessageRole};
 use python_extractor::{
     extraction::{
-        calls::extractor::CallsExtractor,
+        calls::{PythonCallStatement, extractor::CallsExtractor},
         extractor::{ExtractParams, Extractor},
         message_edges::{
             kafka::KafkaIdentificationStrategy, rabbitmq::RabbitMqIdentificationStrategy,
@@ -30,7 +30,11 @@ class RabbitMQSubscriber:
         self.channel.basic_consume(queue=self.queue_name, on_message_callback=self.callback)
 "#;
     let tree = get_tree(code);
-    let calls = CallsExtractor.extract(ExtractParams::new(&tree, code));
+    let calls = CallsExtractor
+        .extract(ExtractParams::new(&tree, code))
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .collect::<Vec<_>>();
     let strategy = RabbitMqIdentificationStrategy::new();
     let edges = calls
         .iter()
@@ -71,7 +75,11 @@ async def aio(settings):
     await producer.send_and_wait(settings.output_topic, value=b"payload")
 "#;
     let tree = get_tree(code);
-    let calls = CallsExtractor.extract(ExtractParams::new(&tree, code));
+    let calls = CallsExtractor
+        .extract(ExtractParams::new(&tree, code))
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .collect::<Vec<_>>();
     let strategy = KafkaIdentificationStrategy::new();
     let edges = calls
         .iter()

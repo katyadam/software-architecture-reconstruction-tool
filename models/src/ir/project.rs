@@ -28,7 +28,11 @@ pub struct TypedFileRecord {
     pub assignments: HashMap<AssignmentKey, Assignment>,
 
     pub enums: Vec<EnumDefinition>,
+    // Identified in Pass 2 (see extractor-runtime/src/pipeline/pass2/identification.rs)
+    // and consumed in Pass 3.
     pub raw_restcalls: Vec<RestCall>,
+    // Identified in Pass 2 (see extractor-runtime/src/pipeline/pass2/identification.rs)
+    // and consumed in Pass 3.
     pub raw_message_edges: Vec<MessageEdge>,
 }
 
@@ -94,8 +98,8 @@ impl From<FileRecord> for TypedFileRecord {
             call_statements: r.call_statements,
             assignments: r.assignments,
             enums: r.enums,
-            raw_restcalls: r.raw_restcalls,
-            raw_message_edges: r.raw_message_edges,
+            raw_restcalls: vec![],
+            raw_message_edges: vec![],
         }
     }
 }

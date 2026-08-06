@@ -17,8 +17,6 @@ fn make_file_record(file_path: &str, language: Language) -> FileRecord {
         call_statements: vec![],
         assignments: HashMap::new(),
         enums: vec![],
-        raw_restcalls: vec![],
-        raw_message_edges: vec![],
     }
 }
 
@@ -45,6 +43,7 @@ fn make_call_statement(
         is_self_invoke: false,
         is_super_invoke: false,
         invoked_on: None,
+        is_decorator: false,
     }
 }
 

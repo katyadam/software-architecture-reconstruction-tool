@@ -1,6 +1,7 @@
-use models::{Argument, CommunicationProtocol, MessageDestinationKind, MessageEdge, MessageRole};
-
-use crate::extraction::calls::PythonCallStatement;
+use models::{
+    Argument, CallStatement, CommunicationProtocol, MessageDestinationKind, MessageEdge,
+    MessageRole,
+};
 
 const RABBITMQ_PUBLISH_METHOD: &str = "basic_publish";
 const RABBITMQ_CONSUME_METHOD: &str = "basic_consume";
@@ -24,14 +25,10 @@ impl RabbitMqIdentificationStrategy {
     /// Identifies supported RabbitMQ calls by their method names.
     pub fn identify_message_edge(
         &self,
-        call: &PythonCallStatement,
+        call: &CallStatement,
         file_path: &str,
     ) -> Option<MessageEdge> {
-        let method = call
-            .call_statement
-            .function_name
-            .split(METHOD_SEPARATOR)
-            .last()?;
+        let method = call.function_name.split(METHOD_SEPARATOR).last()?;
         match method {
             RABBITMQ_PUBLISH_METHOD => self.identify_publish(call, file_path),
             RABBITMQ_CONSUME_METHOD => self.identify_consume(call, file_path),
@@ -41,12 +38,11 @@ impl RabbitMqIdentificationStrategy {
     }
 
     /// Extracts an exchange and routing key from a publish call.
-    fn identify_publish(&self, call: &PythonCallStatement, file_path: &str) -> Option<MessageEdge> {
-        let exchange = get_arg(&call.call_statement.arguments, EXCHANGE_ARGUMENT, 0)
+    fn identify_publish(&self, call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
+        let exchange = get_arg(&call.arguments, EXCHANGE_ARGUMENT, 0)
             .map(clean_value)
             .filter(|v| !v.is_empty());
-        let routing_key =
-            get_arg(&call.call_statement.arguments, ROUTING_KEY_ARGUMENT, 1).map(clean_value);
+        let routing_key = get_arg(&call.arguments, ROUTING_KEY_ARGUMENT, 1).map(clean_value);
 
         let is_default_exchange = exchange.is_none();
         let destination_kind = if is_default_exchange {
@@ -78,10 +74,9 @@ impl RabbitMqIdentificationStrategy {
     }
 
     /// Extracts the queue and callback from a consumer call.
-    fn identify_consume(&self, call: &PythonCallStatement, file_path: &str) -> Option<MessageEdge> {
-        let queue = get_arg(&call.call_statement.arguments, QUEUE_ARGUMENT, 0).map(clean_value)?;
-        let handler =
-            get_arg(&call.call_statement.arguments, MESSAGE_CALLBACK_ARGUMENT, 1).map(clean_value);
+    fn identify_consume(&self, call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
+        let queue = get_arg(&call.arguments, QUEUE_ARGUMENT, 0).map(clean_value)?;
+        let handler = get_arg(&call.arguments, MESSAGE_CALLBACK_ARGUMENT, 1).map(clean_value);
 
         Some(self.edge(
             MessageRole::Consumer,
@@ -97,12 +92,8 @@ impl RabbitMqIdentificationStrategy {
     }
 
     /// Extracts the queue declared by a queue-declaration call.
-    fn identify_queue_declare(
-        &self,
-        call: &PythonCallStatement,
-        file_path: &str,
-    ) -> Option<MessageEdge> {
-        let queue = get_arg(&call.call_statement.arguments, QUEUE_ARGUMENT, 0).map(clean_value)?;
+    fn identify_queue_declare(&self, call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
+        let queue = get_arg(&call.arguments, QUEUE_ARGUMENT, 0).map(clean_value)?;
 
         Some(self.edge(
             MessageRole::QueueDeclaration,
@@ -127,7 +118,7 @@ impl RabbitMqIdentificationStrategy {
         routing_key: Option<String>,
         queue: Option<String>,
         handler: Option<String>,
-        call: &PythonCallStatement,
+        call: &CallStatement,
         file_path: &str,
     ) -> MessageEdge {
         MessageEdge {
@@ -140,17 +131,9 @@ impl RabbitMqIdentificationStrategy {
             routing_key,
             queue,
             handler,
-            function_name: call
-                .call_statement
-                .enclosing_function_name
-                .clone()
-                .unwrap_or_default(),
-            function_hash: call
-                .call_statement
-                .enclosing_function_hash
-                .clone()
-                .unwrap_or_default(),
-            call_arguments: call.call_statement.arguments.clone(),
+            function_name: call.enclosing_function_name.clone().unwrap_or_default(),
+            function_hash: call.enclosing_function_hash.clone().unwrap_or_default(),
+            call_arguments: call.arguments.clone(),
             file_path: file_path.to_string(),
         }
     }

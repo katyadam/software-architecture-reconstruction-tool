@@ -146,7 +146,7 @@ impl Extractor for CallsExtractor {
                 }
             });
 
-            let call_statement = CallStatement {
+            let mut call_statement = CallStatement {
                 function_name: function_name.clone(),
                 arguments,
                 enclosing_function_name,
@@ -155,9 +155,13 @@ impl Extractor for CallsExtractor {
                 is_self_invoke: function_name.starts_with("self"),
                 is_super_invoke: false,
                 invoked_on: None,
+                is_decorator: false,
             };
 
             if let Some(node) = call_node {
+                call_statement.is_decorator = node
+                    .parent()
+                    .is_some_and(|parent| parent.kind() == "decorator");
                 call_statements.push(PythonCallStatement {
                     call_statement,
                     node,
