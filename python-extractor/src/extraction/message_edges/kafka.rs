@@ -1,6 +1,7 @@
-use models::{Argument, CommunicationProtocol, MessageDestinationKind, MessageEdge, MessageRole};
-
-use crate::extraction::calls::PythonCallStatement;
+use models::{
+    Argument, CallStatement, CommunicationProtocol, MessageDestinationKind, MessageEdge,
+    MessageRole,
+};
 
 const KAFKA_PRODUCER_METHODS: &[&str] = &["produce", "send", "send_and_wait", "publisher"];
 const KAFKA_SUBSCRIPTION_METHODS: &[&str] = &["subscribe", "subscriber"];
@@ -23,10 +24,10 @@ impl KafkaIdentificationStrategy {
     /// Identifies Kafka producer and consumer calls by their method names.
     pub fn identify_message_edges(
         &self,
-        call: &PythonCallStatement,
+        call: &CallStatement,
         file_path: &str,
     ) -> Vec<MessageEdge> {
-        let function_name = call.call_statement.function_name.as_str();
+        let function_name = call.function_name.as_str();
         let method = function_name
             .split(METHOD_SEPARATOR)
             .last()
@@ -52,12 +53,8 @@ impl KafkaIdentificationStrategy {
     }
 
     /// Extracts a topic from a Kafka producer call.
-    fn identify_producer(
-        &self,
-        call: &PythonCallStatement,
-        file_path: &str,
-    ) -> Option<MessageEdge> {
-        let topic = get_arg(&call.call_statement.arguments, TOPIC_ARGUMENT, 0).map(clean_topic)?;
+    fn identify_producer(&self, call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
+        let topic = get_arg(&call.arguments, TOPIC_ARGUMENT, 0).map(clean_topic)?;
         if topic.is_empty() || topic_is_payloadish(&topic) {
             return None;
         }
@@ -74,11 +71,11 @@ impl KafkaIdentificationStrategy {
     /// Extracts one or more topics from a subscription call.
     fn identify_consumer_topic_arg(
         &self,
-        call: &PythonCallStatement,
+        call: &CallStatement,
         file_path: &str,
     ) -> Vec<MessageEdge> {
-        get_arg(&call.call_statement.arguments, TOPICS_ARGUMENT, 0)
-            .or_else(|| get_arg(&call.call_statement.arguments, TOPIC_ARGUMENT, 0))
+        get_arg(&call.arguments, TOPICS_ARGUMENT, 0)
+            .or_else(|| get_arg(&call.arguments, TOPIC_ARGUMENT, 0))
             .into_iter()
             .flat_map(clean_topics)
             .map(|topic| {
@@ -97,11 +94,10 @@ impl KafkaIdentificationStrategy {
     /// Extracts positional topics from a Kafka consumer constructor.
     fn identify_consumer_constructor(
         &self,
-        call: &PythonCallStatement,
+        call: &CallStatement,
         file_path: &str,
     ) -> Vec<MessageEdge> {
-        call.call_statement
-            .arguments
+        call.arguments
             .iter()
             .take_while(|arg| arg.assigned_variable.is_empty())
             .flat_map(|arg| clean_topics(arg.value.as_str()))
@@ -120,12 +116,8 @@ impl KafkaIdentificationStrategy {
     }
 
     /// Extracts the topic consumed by a Quix topic call.
-    fn identify_quix_topic(
-        &self,
-        call: &PythonCallStatement,
-        file_path: &str,
-    ) -> Option<MessageEdge> {
-        let topic = get_arg(&call.call_statement.arguments, TOPIC_ARGUMENT, 0).map(clean_topic)?;
+    fn identify_quix_topic(&self, call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
+        let topic = get_arg(&call.arguments, TOPIC_ARGUMENT, 0).map(clean_topic)?;
         if topic.is_empty() {
             return None;
         }
@@ -146,7 +138,7 @@ impl KafkaIdentificationStrategy {
         destination: String,
         handler: Option<String>,
         topic: Option<String>,
-        call: &PythonCallStatement,
+        call: &CallStatement,
         file_path: &str,
     ) -> MessageEdge {
         MessageEdge {
@@ -159,17 +151,9 @@ impl KafkaIdentificationStrategy {
             routing_key: None,
             queue: None,
             handler,
-            function_name: call
-                .call_statement
-                .enclosing_function_name
-                .clone()
-                .unwrap_or_default(),
-            function_hash: call
-                .call_statement
-                .enclosing_function_hash
-                .clone()
-                .unwrap_or_default(),
-            call_arguments: call.call_statement.arguments.clone(),
+            function_name: call.enclosing_function_name.clone().unwrap_or_default(),
+            function_hash: call.enclosing_function_hash.clone().unwrap_or_default(),
+            call_arguments: call.arguments.clone(),
             file_path: file_path.to_string(),
         }
     }
