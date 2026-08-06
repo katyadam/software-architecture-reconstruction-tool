@@ -62,6 +62,13 @@ def fetch():
 
 /// The decorator exclusion must survive the move to Pass 2. This is the one
 /// place where behaviour could silently drift.
+///
+/// The decorated function must stay nested inside `add_routes`. At module level
+/// the decorator call has no enclosing function or class, and
+/// `MethodCallIdentificationStrategy` rejects it on that ground alone -- the
+/// test would then pass even with the `is_decorator` guard deleted, proving
+/// nothing. Nesting gives the call an `enclosing_function_name`, so
+/// `is_decorator` is the only thing standing between it and identification.
 #[test]
 fn python_fastapi_route_decorator_is_not_a_restcall() {
     let code = r#"
@@ -69,9 +76,10 @@ from fastapi import FastAPI
 
 app = FastAPI()
 
-@app.get("/items")
-def read_items():
-    return []
+def add_routes(app):
+    @app.get("/items")
+    def read_items():
+        return []
 "#;
 
     let record = python_extract(code, "api.py").expect("Python extraction should succeed");
