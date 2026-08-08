@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, ParsedCallable, RestCall,
+    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, MessageEdge,
+    ParsedCallable, RestCall,
     enums::EnumDefinition,
     ir::{language::Language, syntax::FileRecord},
 };
@@ -27,7 +28,12 @@ pub struct TypedFileRecord {
     pub assignments: HashMap<AssignmentKey, Assignment>,
 
     pub enums: Vec<EnumDefinition>,
+    // Identified in Pass 2 (see extractor-runtime/src/pipeline/pass2/identification.rs)
+    // and consumed in Pass 3.
     pub raw_restcalls: Vec<RestCall>,
+    // Identified in Pass 2 (see extractor-runtime/src/pipeline/pass2/identification.rs)
+    // and consumed in Pass 3.
+    pub raw_message_edges: Vec<MessageEdge>,
 }
 
 /// Maps (importer_file_path, codeword) pairs to their resolved definition.
@@ -92,7 +98,8 @@ impl From<FileRecord> for TypedFileRecord {
             call_statements: r.call_statements,
             assignments: r.assignments,
             enums: r.enums,
-            raw_restcalls: r.raw_restcalls,
+            raw_restcalls: vec![],
+            raw_message_edges: vec![],
         }
     }
 }

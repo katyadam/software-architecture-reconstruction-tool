@@ -1,7 +1,7 @@
 use models::{
     ParsedCallable,
     api::ExtractionError,
-    ir::{language::Language, syntax::FileRecord},
+    ir::{language::Language, project::TypedFileRecord, syntax::FileRecord},
 };
 use statix::parse_java;
 use tree_sitter::Parser;
@@ -83,13 +83,6 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         })
         .collect();
 
-    // Identification-only: no symbolic evaluation or URI resolution
-    let identification_strategy = SpringIdentificationStrategy::new();
-    let raw_restcalls = calls
-        .iter()
-        .filter_map(|call| identification_strategy.identify_restcall(call, file_name))
-        .collect();
-
     Ok(FileRecord {
         file_path: file_name.to_string(),
         language: Language::Java,
@@ -100,6 +93,20 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         call_statements: calls,
         assignments,
         enums: vec![],
-        raw_restcalls,
     })
+}
+
+/// Pass 2: identify Spring REST calls from type-resolved call statements.
+///
+/// `SpringIdentificationStrategy` requires `CallStatement::invoked_on`, which is
+/// populated by `calls::evaluator::evaluate_invocations` during Pass 2. Running
+/// this at Pass 1 would always find nothing.
+pub fn identify(file: &mut TypedFileRecord) {
+    let strategy = SpringIdentificationStrategy::new();
+    let identified: Vec<_> = file
+        .call_statements
+        .iter()
+        .filter_map(|call| strategy.identify_restcall(call, &file.file_path))
+        .collect();
+    file.raw_restcalls = identified;
 }

@@ -3,7 +3,7 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{CallStatement, Callable, Endpoint, Entity, Import, RestCall};
+use crate::{CallStatement, Callable, Endpoint, Entity, Import, MessageEdge, RestCall};
 
 #[derive(Debug, Default)]
 pub struct CodeElementsAggregate {
@@ -11,6 +11,7 @@ pub struct CodeElementsAggregate {
     pub entities: Vec<Entity>,
     pub endpoints: Vec<Endpoint>,
     pub restcalls: Vec<RestCall>,
+    pub message_edges: Vec<MessageEdge>,
     pub callables: Vec<Callable>,
     pub call_statements: Vec<CallStatement>,
 }
@@ -21,6 +22,7 @@ impl CodeElementsAggregate {
         entities: Vec<Entity>,
         endpoints: Vec<Endpoint>,
         restcalls: Vec<RestCall>,
+        message_edges: Vec<MessageEdge>,
         callables: Vec<Callable>,
         call_statements: Vec<CallStatement>,
     ) -> Self {
@@ -29,6 +31,7 @@ impl CodeElementsAggregate {
             entities,
             endpoints,
             restcalls,
+            message_edges,
             callables,
             call_statements,
         }

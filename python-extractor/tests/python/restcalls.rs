@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use python_extractor::{
     extraction::{
         assignments::map::get_assignments_map,
-        calls::extractor::CallsExtractor,
+        calls::{PythonCallStatement, extractor::CallsExtractor},
         enums::map::get_enums_map,
         extractor::{ExtractParams, Extractor},
         restcalls::{
@@ -25,7 +25,11 @@ use tree_sitter::Tree;
 use crate::python::utils::{get_tree, load_file, parse_file};
 
 fn restcalls(code: &str, tree: &Tree, file_name: &str) -> Vec<RestCall> {
-    let calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
+    let calls = CallsExtractor
+        .extract(ExtractParams::new(&tree, &code))
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .collect::<Vec<_>>();
     let function_asts = parse_python(&tree, &code);
     MethodCallSelector::new(
         MethodCallIdentificationStrategy::new(),
@@ -473,7 +477,11 @@ fn should_correctly_generate_multiple_restcalls_with_resolved_enums() {
     let filename = "./examples/python/restcalls/enum_in_restcall_uri.py";
     let code = load_file(filename).unwrap();
     let tree = get_tree(&code);
-    let calls = CallsExtractor.extract(ExtractParams::new(&tree, &code));
+    let calls = CallsExtractor
+        .extract(ExtractParams::new(&tree, &code))
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .collect::<Vec<_>>();
     let function_asts = parse_python(&tree, &code);
     let mut restcalls = MethodCallSelector::new(
         MethodCallIdentificationStrategy::new(),

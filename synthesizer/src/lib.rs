@@ -38,6 +38,7 @@ pub fn direct_sdg_build(
         .build(
             &all_code_elements.endpoints,
             &all_code_elements.restcalls,
+            &all_code_elements.message_edges,
             configuration,
             constants,
         )
