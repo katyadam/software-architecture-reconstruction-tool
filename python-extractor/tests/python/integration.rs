@@ -22,10 +22,6 @@ fn should_return_empty_file_record_for_empty_python_file() {
         record.endpoints.is_empty(),
         "no endpoints expected for empty file"
     );
-    assert!(
-        record.raw_restcalls.is_empty(),
-        "no raw restcalls expected for empty file"
-    );
     assert_eq!(
         record.callables.len(),
         1,
@@ -64,10 +60,6 @@ fn should_extract_syntactic_from_endpoint_file_without_evaluation() {
         12,
         "endpoints.py defines 9 endpoint functions + 2 Item2 methods + 1 synthetic <module>"
     );
-    assert!(
-        record.raw_restcalls.is_empty(),
-        "endpoints.py contains no outbound HTTP calls"
-    );
     // All callables must have proper metadata
     for pc in &record.callables {
         assert!(
@@ -91,19 +83,13 @@ fn should_extract_syntactic_from_endpoint_file_without_evaluation() {
 }
 
 #[test]
-fn should_extract_syntactic_raw_restcalls_with_template_uris() {
+fn should_extract_syntactic_from_restcalls_file_without_evaluation() {
     let filename = "./examples/python/restcalls/large_example.py";
     let code = load_file(filename).expect("fixture not found");
 
     let record = extract_syntactic(&code, filename)
         .expect("extract_syntactic() must not error on large_example.py");
 
-    // Python identification uses function name suffix — works without evaluate_invocations
-    assert_eq!(
-        record.raw_restcalls.len(),
-        6,
-        "large_example.py has 6 outbound HTTP calls identified by method name"
-    );
     assert_eq!(
         record.callables.len(),
         8,
@@ -113,13 +99,6 @@ fn should_extract_syntactic_raw_restcalls_with_template_uris() {
         record.endpoints.is_empty(),
         "large_example.py has no @app route decorators"
     );
-    // raw_restcalls should have template URIs (not resolved)
-    for rc in &record.raw_restcalls {
-        assert!(
-            !rc.target_uri.is_empty(),
-            "Each raw RestCall must have a non-empty target_uri"
-        );
-    }
     // asyncio and httpx must appear in imports
     assert!(
         record.imports.iter().any(|i| i.codeword == "asyncio"),

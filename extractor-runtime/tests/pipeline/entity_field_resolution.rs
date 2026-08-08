@@ -47,7 +47,6 @@ fn make_file_record(file_path: &str, language: Language) -> FileRecord {
         call_statements: vec![],
         assignments: HashMap::new(),
         enums: vec![],
-        raw_restcalls: vec![],
     }
 }
 

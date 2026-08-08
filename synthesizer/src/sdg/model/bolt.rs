@@ -2,7 +2,7 @@ use models::{Endpoint, RestCall};
 use neo4rs::{BoltList, BoltMap, BoltNode, BoltString, BoltType, DeError};
 use serde::de::Unexpected;
 
-use crate::sdg::model::{Connection, Request, Service};
+use crate::sdg::model::{Connection, MessageConnection, MessageRequest, Request, Service};
 
 impl From<Service> for BoltType {
     fn from(value: Service) -> Self {
@@ -176,6 +176,77 @@ impl TryFrom<BoltMap> for Connection {
             source_id,
             target_id,
             requests,
+        })
+    }
+}
+
+impl From<MessageConnection> for BoltType {
+    fn from(value: MessageConnection) -> Self {
+        let mut map = BoltMap::new();
+        map.put("source_id".into(), value.source_id.into());
+        map.put("target_id".into(), value.target_id.into());
+        let serialized_messages: BoltType = BoltType::List(BoltList {
+            value: value
+                .messages
+                .into_iter()
+                .map(|message| {
+                    let message_json = serde_json::to_string(&message).unwrap();
+                    BoltType::String(BoltString::new(&message_json))
+                })
+                .collect(),
+        });
+        map.put("messages".into(), serialized_messages);
+        BoltType::Map(map)
+    }
+}
+
+impl TryFrom<BoltMap> for MessageConnection {
+    type Error = DeError;
+
+    fn try_from(node: BoltMap) -> Result<Self, Self::Error> {
+        let source_id = match node.get("source") {
+            Ok(BoltType::String(s)) => s.value,
+            Ok(BoltType::Null(_)) => {
+                return Err(DeError::Other("Source is NULL!".to_string()));
+            }
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
+        let target_id = match node.get("target") {
+            Ok(BoltType::String(s)) => s.value,
+            Ok(BoltType::Null(_)) => {
+                return Err(DeError::Other("Target is NULL!".to_string()));
+            }
+            _ => return Err(DeError::NoSuchProperty),
+        };
+
+        let messages = match node.get("messages") {
+            Ok(BoltType::List(l)) => l
+                .value
+                .into_iter()
+                .map(|message| match message {
+                    BoltType::String(json_field) => {
+                        serde_json::from_str::<MessageRequest>(json_field.value.as_str())
+                            .map_err(|error| DeError::Other(error.to_string()))
+                    }
+                    _ => Err(DeError::InvalidType {
+                        received: Unexpected::Other("Non BoltString type").into(),
+                        expected: "BoltString".to_string(),
+                    }),
+                })
+                .collect::<Result<Vec<MessageRequest>, DeError>>()?,
+            Err(e) => return Err(DeError::Other(e.to_string())),
+            _ => {
+                return Err(DeError::Other(
+                    "Messages argument not present in MessageConnection".to_string(),
+                ));
+            }
+        };
+
+        Ok(MessageConnection {
+            source_id,
+            target_id,
+            messages,
         })
     }
 }

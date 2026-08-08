@@ -1,11 +1,9 @@
 use std::str::FromStr;
 
-use models::{Argument, HttpMethod, RestCall};
-use tree_sitter::Node;
+use models::{Argument, CallStatement, HttpMethod, RestCall};
 
-use crate::extraction::{
-    calls::PythonCallStatement,
-    restcalls::identification::{HTTP_METHODS, strategy::IdentificationStrategy},
+use crate::extraction::restcalls::identification::{
+    HTTP_METHODS, strategy::IdentificationStrategy,
 };
 
 #[derive(Default)]
@@ -38,45 +36,24 @@ impl MethodCallIdentificationStrategy {
         }
         Some(uri)
     }
-
-    // FastAPI uses @app.http_method to denote endpoint, therefore we want to omit that here
-    fn is_part_of_decorator(&self, call_statement_node: Node) -> bool {
-        if let Some(parent_node) = call_statement_node.parent() {
-            return parent_node.kind() == "decorator";
-        }
-        false
-    }
 }
 
 impl IdentificationStrategy for MethodCallIdentificationStrategy {
     // To recognize REST call we just need the function_name to end with any HTTP method
-    fn identify_restcall(
-        &self,
-        call: &PythonCallStatement,
-        file_path: &str,
-    ) -> Option<models::RestCall> {
-        let http_method = self.identify_http_method(&call.call_statement.function_name)?;
-        let target_uri = self.identify_target_uri(&call.call_statement.arguments)?;
-        if self.is_part_of_decorator(call.node) {
+    fn identify_restcall(&self, call: &CallStatement, file_path: &str) -> Option<RestCall> {
+        let http_method = self.identify_http_method(&call.function_name)?;
+        let target_uri = self.identify_target_uri(&call.arguments)?;
+        // FastAPI uses @app.<method> to declare an endpoint — not an outbound call.
+        if call.is_decorator {
             return None;
         }
-        if call.call_statement.enclosing_function_name.is_none()
-            && call.call_statement.enclosing_class_name.is_none()
-        {
+        if call.enclosing_function_name.is_none() && call.enclosing_class_name.is_none() {
             return None;
         }
         Some(RestCall {
-            function_name: call
-                .call_statement
-                .enclosing_function_name
-                .clone()
-                .unwrap_or_default(),
-            function_hash: call
-                .call_statement
-                .enclosing_function_hash
-                .clone()
-                .unwrap_or_default(),
-            call_arguments: call.call_statement.arguments.clone(),
+            function_name: call.enclosing_function_name.clone().unwrap_or_default(),
+            function_hash: call.enclosing_function_hash.clone().unwrap_or_default(),
+            call_arguments: call.arguments.clone(),
             http_method,
             target_uri,
             file_path: file_path.to_string(),
