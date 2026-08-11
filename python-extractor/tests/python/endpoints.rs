@@ -215,3 +215,69 @@ fn test_endpoint_edge_cases() {
     assert_eq!(search_ep.parameters[0].datatype, Some(s!("Optional[str]")));
     assert_eq!(search_ep.parameters[0].initial_value, Some(s!("None")));
 }
+
+#[test]
+fn extracts_fastapi_flask_and_django_endpoint_styles() {
+    let filename = "framework_endpoints.py";
+    let code = r#"
+from flask import Flask
+from fastapi import FastAPI
+from django.urls import path
+
+app = FastAPI()
+flask_app = Flask(__name__)
+
+@app.get("/items/{item_id}")
+def fastapi_get_item(item_id: int):
+    pass
+
+@flask_app.route("/orders/<int:order_id>", methods=["GET", "POST"])
+def flask_order(order_id):
+    pass
+
+@flask_app.route("/health")
+def flask_health():
+    pass
+
+urlpatterns = [
+    path("products/", views.get_products),
+    path("products/id=<int:id>/", views.get_product),
+    path("ignored/", include("nested.urls")),
+]
+"#;
+    let tree = get_tree(code);
+    let endpoints = EndpointsExtractor.extract(ExtractParams::new(&tree, code).file_name(filename));
+
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "fastapi_get_item"
+            && endpoint.http_method == HttpMethod::GET
+            && endpoint.uri == "/items/{item_id}"
+            && endpoint.router_variable.as_deref() == Some("app")
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "flask_order"
+            && endpoint.http_method == HttpMethod::GET
+            && endpoint.uri == "/orders/{order_id}"
+            && endpoint.router_variable.as_deref() == Some("flask_app")
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "flask_order"
+            && endpoint.http_method == HttpMethod::POST
+            && endpoint.uri == "/orders/{order_id}"
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "flask_health"
+            && endpoint.http_method == HttpMethod::GET
+            && endpoint.uri == "/health"
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "get_products"
+            && endpoint.http_method == HttpMethod::GET
+            && endpoint.uri == "products/"
+            && endpoint.router_variable.as_deref() == Some("urlpatterns")
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "get_product" && endpoint.uri == "products/id={id}/"
+    }));
+    assert!(endpoints.iter().all(|endpoint| endpoint.uri != "ignored/"));
+}
