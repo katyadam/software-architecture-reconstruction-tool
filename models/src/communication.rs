@@ -14,12 +14,14 @@ pub enum MessageRole {
     Producer,
     Consumer,
     QueueDeclaration,
+    TopicDeclaration,
+    Binding,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema, Clone)]
 pub enum MessageDestinationKind {
-    Topic,
     Queue,
+    Topic,
     ExchangeRoutingKey,
     Unknown,
 }
@@ -30,10 +32,10 @@ pub struct MessageEdge {
     pub role: MessageRole,
     pub destination_kind: MessageDestinationKind,
     pub destination: String,
-    pub topic: Option<String>,
     pub exchange: Option<String>,
     pub routing_key: Option<String>,
     pub queue: Option<String>,
+    pub topic: Option<String>,
     pub handler: Option<String>,
     pub function_name: String,
     pub function_hash: String,

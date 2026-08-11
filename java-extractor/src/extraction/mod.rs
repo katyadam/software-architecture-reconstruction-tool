@@ -14,6 +14,8 @@ use crate::extraction::{
     entities::extractor::EntitiesExtractor,
     extractor::Extractor,
     imports::extractor::ImportsExtractor,
+    message_edges::kafka::KafkaIdentificationStrategy,
+    message_edges::rabbitmq::RabbitMqIdentificationStrategy,
     restcalls::identification::{
         spring::SpringIdentificationStrategy, strategy::IdentificationStrategy,
     },
@@ -21,11 +23,13 @@ use crate::extraction::{
 pub mod assignments;
 pub mod callables;
 pub mod calls;
+pub mod config;
 mod enclosing_lookup;
 pub mod endpoints;
 pub mod entities;
 pub mod extractor;
 pub mod imports;
+pub mod message_edges;
 mod queries;
 pub mod restcalls;
 
@@ -83,6 +87,16 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         })
         .collect();
 
+    let rabbitmq_strategy = RabbitMqIdentificationStrategy::new();
+    let mut raw_message_edges = rabbitmq_strategy.identify_from_calls(&calls, file_name);
+    raw_message_edges.extend(rabbitmq_strategy.identify_from_annotations(code, &tree, file_name));
+    raw_message_edges
+        .extend(rabbitmq_strategy.identify_from_message_handlers(code, &tree, file_name));
+    let kafka_strategy = KafkaIdentificationStrategy::new();
+    raw_message_edges.extend(kafka_strategy.identify_from_calls(&calls, code, file_name));
+    raw_message_edges.extend(kafka_strategy.identify_stream_chain_outputs(&calls, code, file_name));
+    raw_message_edges.extend(kafka_strategy.identify_from_annotations(code, &tree, file_name));
+
     Ok(FileRecord {
         file_path: file_name.to_string(),
         language: Language::Java,
@@ -93,6 +107,7 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         call_statements: calls,
         assignments,
         enums: vec![],
+        raw_message_edges,
     })
 }
 

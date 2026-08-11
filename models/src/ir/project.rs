@@ -99,7 +99,7 @@ impl From<FileRecord> for TypedFileRecord {
             assignments: r.assignments,
             enums: r.enums,
             raw_restcalls: vec![],
-            raw_message_edges: vec![],
+            raw_message_edges: r.raw_message_edges,
         }
     }
 }

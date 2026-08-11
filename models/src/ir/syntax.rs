@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, ParsedCallable,
-    enums::EnumDefinition, ir::language::Language,
+    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, MessageEdge,
+    ParsedCallable, enums::EnumDefinition, ir::language::Language,
 };
 
 /// Pass 1 output: one per source file.
@@ -23,6 +23,10 @@ pub struct FileRecord {
 
     // Identified enums (Python: from entities, Java: from enum declarations)
     pub enums: Vec<EnumDefinition>,
+
+    // Java message extraction currently includes annotation- and interface-based
+    // candidates that require the source tree and therefore remain Pass 1 data.
+    pub raw_message_edges: Vec<MessageEdge>,
 }
 
 pub struct SyntacticIR {
