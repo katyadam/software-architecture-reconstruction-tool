@@ -539,7 +539,9 @@ fn clean_java_value(raw: &str) -> String {
 }
 
 fn value_placeholders(code: &str) -> HashMap<String, String> {
-    let value_re = Regex::new(VALUE_ANNOTATION_PATTERN).expect("valid @Value regex");
+    static VALUE_RE: OnceLock<Regex> = OnceLock::new();
+    let value_re =
+        VALUE_RE.get_or_init(|| Regex::new(VALUE_ANNOTATION_PATTERN).expect("valid @Value regex"));
 
     value_re
         .captures_iter(code)
