@@ -85,7 +85,10 @@ fn evaluate_single_edge(edge: &MessageEdge, file: &TypedFileRecord, env: &Env) -
             (Some(exchange), _) => exchange.clone(),
             _ => edge.destination.clone(),
         },
-        MessageRole::Consumer | MessageRole::QueueDeclaration => topic
+        MessageRole::Consumer
+        | MessageRole::QueueDeclaration
+        | MessageRole::TopicDeclaration
+        | MessageRole::Binding => topic
             .clone()
             .or_else(|| queue.clone())
             .unwrap_or_else(|| edge.destination.clone()),
@@ -130,7 +133,6 @@ fn resolve_value(raw: &str, file: &TypedFileRecord, env: &Env) -> String {
         .or_else(|| resolve_conditional_fallback(&cleaned, file, env))
         .unwrap_or(cleaned)
 }
-
 /// Resolves `self.*` references assigned in the class initializer.
 fn resolve_self_attr(raw: &str, file: &TypedFileRecord, env: &Env) -> Option<String> {
     if !raw.starts_with(SELF_ATTRIBUTE_PREFIX) {

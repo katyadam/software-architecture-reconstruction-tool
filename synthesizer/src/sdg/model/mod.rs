@@ -63,6 +63,12 @@ pub struct AssignedRestCall {
     pub service: ServiceDescription,
 }
 
+impl AssignedRestCall {
+    pub fn new(data: RestCall, service: ServiceDescription) -> Self {
+        Self { data, service }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct AssignedMessageEdge {
     pub data: MessageEdge,
@@ -71,12 +77,6 @@ pub struct AssignedMessageEdge {
 
 impl AssignedMessageEdge {
     pub fn new(data: MessageEdge, service: ServiceDescription) -> Self {
-        Self { data, service }
-    }
-}
-
-impl AssignedRestCall {
-    pub fn new(data: RestCall, service: ServiceDescription) -> Self {
         Self { data, service }
     }
 }

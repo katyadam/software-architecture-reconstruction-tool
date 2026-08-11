@@ -14,6 +14,9 @@ pub fn dispatch_syntactic(
         Some("py") => {
             python_extractor::extraction::parse::extract_syntactic(text, file_path).map(Some)
         }
+        Some("yml") | Some("yaml") | Some("properties") => Ok(
+            java_extractor::extraction::config::extract_syntactic(text, file_path),
+        ),
         _ => Ok(None),
     }
 }
