@@ -113,7 +113,7 @@ fn nested_test() {
 #[test]
 fn classes_test() {
     let filename = "./examples/python/callgraph/classes.py";
-    let code = load_file(&filename).unwrap();
+    let code = load_file(filename).unwrap();
     let tree = get_tree(&code);
     let callables =
         CallablesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));
@@ -206,7 +206,7 @@ fn classes_test() {
 #[test]
 fn classes_imports_test() {
     let filename = "./examples/python/callgraph/classes-imports.py";
-    let code = load_file(&filename).unwrap();
+    let code = load_file(filename).unwrap();
     let tree = get_tree(&code);
     let callables =
         CallablesExtractor.extract(ExtractParams::new(&tree, &code).file_name(&s!(filename)));

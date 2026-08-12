@@ -6,7 +6,7 @@ use statix::{class_hierarchy::build_class_hierarchy, import_graph::build_import_
 
 use crate::pipeline::pass2::{
     callables::build_project_global_callables, constants::collect_constants,
-    entities::resolve_entity_fields, restcalls::re_identify_restcalls,
+    entities::resolve_entity_fields, identification::identify_edges,
     type_inference::resolve_call_argument_types,
 };
 
@@ -14,7 +14,7 @@ mod assignments;
 pub mod callables;
 mod constants;
 mod entities;
-mod restcalls;
+mod identification;
 mod type_inference;
 
 /// Pass 2: Produce a `ProjectIR` from all `FileRecord`s collected in Pass 1.
@@ -23,6 +23,7 @@ mod type_inference;
 ///   - Import graph construction (cross-file symbol resolution)
 ///   - Entity field type resolution (`Field.datatype_signature` population)
 ///   - Call type inference (`CallStatement.invoked_on` and `Argument.datatype` population)
+///   - REST call and message edge identification (per-language, see `identification`)
 ///   - Class hierarchy building (`ClassHierarchy.parents` and `.children` population)
 pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
     let import_graph = build_import_graph(&file_records);
@@ -34,7 +35,7 @@ pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
 
     resolve_entity_fields(&mut files, &import_graph);
     resolve_call_argument_types(&mut files);
-    re_identify_restcalls(&mut files);
+    identify_edges(&mut files);
     let class_hierarchy = build_class_hierarchy(&files, &import_graph);
 
     let constants = collect_constants(&files);

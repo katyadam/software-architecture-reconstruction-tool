@@ -2,6 +2,7 @@ pub(crate) mod callables;
 mod constants;
 mod env;
 pub(crate) mod language_backend;
+mod message_edges;
 pub mod pass_attr;
 pub mod pass_module;
 mod restcalls;
@@ -45,6 +46,12 @@ pub fn evaluate(
     .into_iter()
     .filter(|restcall| grpc_operation_is_declared(&restcall.target_uri, &project_ir))
     .collect();
+    let message_edges = message_edges::evaluate_message_edges(
+        &project_ir,
+        external_constants,
+        per_file_attrs,
+        per_file_module_consts,
+    );
 
     let endpoints: Vec<Endpoint> = project_ir
         .files
@@ -76,6 +83,7 @@ pub fn evaluate(
         entities,
         endpoints,
         restcalls,
+        message_edges,
         callables,
         call_statements,
     }

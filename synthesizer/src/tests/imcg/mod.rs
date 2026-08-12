@@ -24,10 +24,11 @@ mod tests {
             .build(
                 &endpoints,
                 &restcalls,
+                &[],
                 &ConfigurationData {
                     service_descriptions: service_descs.clone(),
                 },
-                &vec![],
+                &[],
             )
             .expect("SDG in IMCG tests should be valid and buildable!");
 
@@ -114,6 +115,7 @@ mod tests {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            is_decorator: false,
         }]
     }
 

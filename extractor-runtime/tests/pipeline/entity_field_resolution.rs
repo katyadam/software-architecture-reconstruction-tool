@@ -49,6 +49,7 @@ fn make_file_record(file_path: &str, language: Language) -> FileRecord {
         enums: vec![],
         raw_restcalls: vec![],
         proto_services: vec![],
+        raw_message_edges: vec![],
     }
 }
 

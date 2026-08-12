@@ -13,8 +13,18 @@ fn identifies_generated_blocking_stub_operations() {
     "#;
 
     let record = extract_syntactic(code, "BookingHandler.java").unwrap();
-    let uris: Vec<_> = record.raw_restcalls.iter().map(|call| call.target_uri.as_str()).collect();
-    assert_eq!(uris, vec!["grpc://FlightService/GetById", "grpc://FlightService/ReserveSeat"]);
+    let uris: Vec<_> = record
+        .raw_restcalls
+        .iter()
+        .map(|call| call.target_uri.as_str())
+        .collect();
+    assert_eq!(
+        uris,
+        vec![
+            "grpc://FlightService/GetById",
+            "grpc://FlightService/ReserveSeat"
+        ]
+    );
 }
 
 #[test]
@@ -28,6 +38,16 @@ fn identifies_grpc_service_methods_as_operations() {
     "#;
 
     let record = extract_syntactic(code, "FlightServiceGrpcImpl.java").unwrap();
-    let uris: Vec<_> = record.endpoints.iter().map(|endpoint| endpoint.uri.as_str()).collect();
-    assert_eq!(uris, vec!["grpc://FlightService/GetById", "grpc://FlightService/ReserveSeat"]);
+    let uris: Vec<_> = record
+        .endpoints
+        .iter()
+        .map(|endpoint| endpoint.uri.as_str())
+        .collect();
+    assert_eq!(
+        uris,
+        vec![
+            "grpc://FlightService/GetById",
+            "grpc://FlightService/ReserveSeat"
+        ]
+    );
 }

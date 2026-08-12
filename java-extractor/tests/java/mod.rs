@@ -7,5 +7,6 @@ mod grpc;
 mod import_graph;
 mod imports;
 mod integration;
+mod message_edges;
 mod restcalls;
 pub mod utils;

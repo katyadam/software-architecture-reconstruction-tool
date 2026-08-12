@@ -22,6 +22,9 @@ pub fn dispatch_syntactic(
             python_extractor::extraction::parse::extract_syntactic(text, file_path).map(Some)
         }
         Some("proto") => Ok(Some(extract_proto_syntactic(text, file_path))),
+        Some("yml") | Some("yaml") | Some("properties") => Ok(
+            java_extractor::extraction::config::extract_syntactic(text, file_path),
+        ),
         _ => Ok(None),
     }
 }
@@ -45,6 +48,7 @@ fn extract_proto_syntactic(text: &str, file_path: &str) -> FileRecord {
         assignments: HashMap::new(),
         enums: vec![],
         raw_restcalls: vec![],
+        raw_message_edges: vec![],
         proto_services: service_re
             .captures_iter(text)
             .map(|service| ProtoService {

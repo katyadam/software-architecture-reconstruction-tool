@@ -1,7 +1,7 @@
 use models::{
     ParsedCallable,
     api::ExtractionError,
-    ir::{language::Language, syntax::FileRecord},
+    ir::{language::Language, project::TypedFileRecord, syntax::FileRecord},
 };
 use statix::parse_java;
 use tree_sitter::Parser;
@@ -14,6 +14,8 @@ use crate::extraction::{
     entities::extractor::EntitiesExtractor,
     extractor::Extractor,
     imports::extractor::ImportsExtractor,
+    message_edges::kafka::KafkaIdentificationStrategy,
+    message_edges::rabbitmq::RabbitMqIdentificationStrategy,
     restcalls::identification::{
         spring::SpringIdentificationStrategy, strategy::IdentificationStrategy,
     },
@@ -21,12 +23,14 @@ use crate::extraction::{
 pub mod assignments;
 pub mod callables;
 pub mod calls;
+pub mod config;
 mod enclosing_lookup;
 pub mod endpoints;
 pub mod entities;
 pub mod extractor;
 pub mod grpc;
 pub mod imports;
+pub mod message_edges;
 mod queries;
 pub mod restcalls;
 
@@ -84,17 +88,18 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         })
         .collect();
 
-    // Identification-only: no symbolic evaluation or URI resolution
-    let identification_strategy = SpringIdentificationStrategy::new();
-    let raw_restcalls: Vec<models::RestCall> = calls
-        .iter()
-        .filter_map(|call| identification_strategy.identify_restcall(call, file_name))
-        .collect();
     let (grpc_endpoints, grpc_calls) = grpc::extract(code, &tree, file_name, &calls);
     let mut endpoints = endpoints;
     endpoints.extend(grpc_endpoints);
-    let mut raw_restcalls = raw_restcalls;
-    raw_restcalls.extend(grpc_calls);
+    let rabbitmq_strategy = RabbitMqIdentificationStrategy::new();
+    let mut raw_message_edges = rabbitmq_strategy.identify_from_calls(&calls, file_name);
+    raw_message_edges.extend(rabbitmq_strategy.identify_from_annotations(code, &tree, file_name));
+    raw_message_edges
+        .extend(rabbitmq_strategy.identify_from_message_handlers(code, &tree, file_name));
+    let kafka_strategy = KafkaIdentificationStrategy::new();
+    raw_message_edges.extend(kafka_strategy.identify_from_calls(&calls, code, file_name));
+    raw_message_edges.extend(kafka_strategy.identify_stream_chain_outputs(&calls, code, file_name));
+    raw_message_edges.extend(kafka_strategy.identify_from_annotations(code, &tree, file_name));
 
     Ok(FileRecord {
         file_path: file_name.to_string(),
@@ -106,7 +111,25 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         call_statements: calls,
         assignments,
         enums: vec![],
-        raw_restcalls,
+        raw_restcalls: grpc_calls,
+        raw_message_edges,
         proto_services: vec![],
     })
+}
+
+/// Pass 2: identify Spring REST calls from type-resolved call statements.
+///
+/// `SpringIdentificationStrategy` requires `CallStatement::invoked_on`, which is
+/// populated by `calls::evaluator::evaluate_invocations` during Pass 2. Running
+/// this at Pass 1 would always find nothing.
+pub fn identify(file: &mut TypedFileRecord) {
+    let strategy = SpringIdentificationStrategy::new();
+    let mut identified = file.raw_restcalls.clone();
+    identified.extend(
+        file.call_statements
+            .iter()
+            .filter_map(|call| strategy.identify_restcall(call, &file.file_path))
+            .collect::<Vec<_>>(),
+    );
+    file.raw_restcalls = identified;
 }
