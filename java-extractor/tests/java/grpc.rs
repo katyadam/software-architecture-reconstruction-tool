@@ -1,5 +1,10 @@
 use java_extractor::extraction::extract_syntactic;
 
+const EXPECTED_FLIGHT_SERVICE_URIS: [&str; 2] = [
+    "grpc://FlightService/GetById",
+    "grpc://FlightService/ReserveSeat",
+];
+
 #[test]
 fn identifies_generated_blocking_stub_operations() {
     let code = r#"
@@ -18,13 +23,7 @@ fn identifies_generated_blocking_stub_operations() {
         .iter()
         .map(|call| call.target_uri.as_str())
         .collect();
-    assert_eq!(
-        uris,
-        vec![
-            "grpc://FlightService/GetById",
-            "grpc://FlightService/ReserveSeat"
-        ]
-    );
+    assert_eq!(uris, EXPECTED_FLIGHT_SERVICE_URIS.to_vec());
 }
 
 #[test]
@@ -43,11 +42,5 @@ fn identifies_grpc_service_methods_as_operations() {
         .iter()
         .map(|endpoint| endpoint.uri.as_str())
         .collect();
-    assert_eq!(
-        uris,
-        vec![
-            "grpc://FlightService/GetById",
-            "grpc://FlightService/ReserveSeat"
-        ]
-    );
+    assert_eq!(uris, EXPECTED_FLIGHT_SERVICE_URIS.to_vec());
 }
