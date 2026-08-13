@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use cli::get_all_code_elements;
-use models::ConfigurationData;
+use models::{ConfigurationData, TestImpactMap, classify_unified_diff};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -28,6 +28,10 @@ struct Cli {
 
     #[arg(long, default_value_t = false)]
     scrape: bool,
+
+    /// Optional unified PR diff used to produce a change-aware test list.
+    #[arg(long, value_name = "FILE")]
+    diff_file: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
@@ -119,6 +123,16 @@ async fn main() -> Result<()> {
     save_json(&args.output_dir, "context_map.json", &cm)?;
     save_json(&args.output_dir, "sdg.json", &sdg)?;
     save_json(&args.output_dir, "imcg.json", &imcg)?;
+
+    let impact_map = TestImpactMap::from_aggregate(&all_code_elements);
+    save_json(&args.output_dir, "test_impact_map.json", &impact_map)?;
+    if let Some(diff_path) = &args.diff_file {
+        let diff = fs::read_to_string(diff_path)
+            .with_context(|| format!("Failed to read diff file: {:?}", diff_path))?;
+        let changed_files = classify_unified_diff(&diff);
+        let selected_tests = impact_map.select_tests(&Default::default(), &changed_files);
+        save_json(&args.output_dir, "selected_tests.json", &selected_tests)?;
+    }
 
     println!("✅ SAR complete! Results saved to: {:?}", args.output_dir);
     println!(

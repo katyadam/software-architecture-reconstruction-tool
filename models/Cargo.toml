@@ -11,3 +11,6 @@ serde_json = { workspace = true }
 neo4rs = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-java = { workspace = true }
+tree-sitter-python = { workspace = true }
