@@ -18,6 +18,7 @@ pub fn extract(
     )
 }
 
+#[allow(clippy::unnecessary_filter_map)]
 fn extract_client_calls(code: &str, file_name: &str, calls: &[CallStatement]) -> Vec<RestCall> {
     let stub_re =
         Regex::new(r"\b[A-Za-z_][A-Za-z0-9_]*\.(?P<service>[A-Za-z_][A-Za-z0-9_]*)Stub\s*\(")

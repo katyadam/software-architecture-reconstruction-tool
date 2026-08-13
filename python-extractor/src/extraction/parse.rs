@@ -1,7 +1,7 @@
 use models::{
     CallStatement, ParsedCallable,
     api::ExtractionError,
-    ir::{ast::CallableAst, language::Language, syntax::FileRecord},
+    ir::{ast::CallableAst, language::Language, project::TypedFileRecord, syntax::FileRecord},
 };
 use statix::parse_python;
 use tree_sitter::Parser;
@@ -15,6 +15,7 @@ use crate::extraction::{
     enums::identification::EnumIdentificator,
     extractor::{ExtractParams, Extractor},
     imports::extractor::ImportsExtractor,
+    message_edges::{kafka::KafkaIdentificationStrategy, rabbitmq::RabbitMqIdentificationStrategy},
     module::build_module_callable,
     restcalls::identification::{
         method_call::MethodCallIdentificationStrategy, strategy::IdentificationStrategy,
@@ -88,26 +89,21 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
     parsed_callables.push(build_module_callable(&tree, code, file_name));
 
     // Identification-only: no symbolic evaluation or URI resolution
+    let language_calls = calls
+        .iter()
+        .map(|call| call.call_statement.clone())
+        .collect::<Vec<_>>();
     let identification_strategy = MethodCallIdentificationStrategy::new();
-    let raw_restcalls: Vec<models::RestCall> = calls
+    let raw_restcalls: Vec<models::RestCall> = language_calls
         .iter()
         .filter_map(|call| identification_strategy.identify_restcall(call, file_name))
         .collect();
-    let (grpc_endpoints, grpc_calls) = crate::extraction::grpc::extract(
-        code,
-        &tree,
-        file_name,
-        &calls
-            .iter()
-            .map(|call| &call.call_statement)
-            .cloned()
-            .collect::<Vec<_>>(),
-    );
+    let (grpc_endpoints, grpc_calls) =
+        crate::extraction::grpc::extract(code, &tree, file_name, &language_calls);
     let mut endpoints = endpoints;
     endpoints.extend(grpc_endpoints);
     let mut raw_restcalls = raw_restcalls;
     raw_restcalls.extend(grpc_calls);
-
     let call_statements = calls
         .into_iter()
         .map(PythonCallStatement::to_language_agnostic)
@@ -125,5 +121,47 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         enums,
         raw_restcalls,
         proto_services: vec![],
+        raw_message_edges: vec![],
     })
+}
+
+/// Pass 2: identify Python REST calls and message edges from type-resolved
+/// call statements.
+///
+/// Runs at Pass 2 rather than Pass 1 so that identification is one stage for
+/// every language. Python's strategies do not need resolved types, but Java's
+/// do, and a single stage is worth more than the earlier result.
+pub fn identify(file: &mut TypedFileRecord) {
+    let restcall_strategy = MethodCallIdentificationStrategy::new();
+    let rabbitmq_strategy = RabbitMqIdentificationStrategy::new();
+    let kafka_strategy = KafkaIdentificationStrategy::new();
+
+    // Preserve only syntactically identified gRPC calls; ordinary Python REST
+    // calls are re-identified here after Pass 2 type resolution.
+    let mut restcalls = file
+        .raw_restcalls
+        .iter()
+        .filter(|call| call.target_uri.starts_with("grpc://"))
+        .cloned()
+        .collect::<Vec<_>>();
+    restcalls.extend(
+        file.call_statements
+            .iter()
+            .filter_map(|call| restcall_strategy.identify_restcall(call, &file.file_path))
+            .collect::<Vec<_>>(),
+    );
+
+    let mut message_edges: Vec<_> = file
+        .call_statements
+        .iter()
+        .filter_map(|call| rabbitmq_strategy.identify_message_edge(call, &file.file_path))
+        .collect();
+    message_edges.extend(
+        file.call_statements
+            .iter()
+            .flat_map(|call| kafka_strategy.identify_message_edges(call, &file.file_path)),
+    );
+
+    file.raw_restcalls = restcalls;
+    file.raw_message_edges = message_edges;
 }

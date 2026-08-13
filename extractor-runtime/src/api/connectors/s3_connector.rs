@@ -20,7 +20,7 @@ impl S3Connector {
     ) -> Result<(), S3ClientError> {
         self.s3_client.save_context_map(&ir.entities, path).await?;
         self.s3_client
-            .save_sdg(&ir.endpoints, &ir.restcalls, path)
+            .save_sdg(&ir.endpoints, &ir.restcalls, &ir.message_edges, path)
             .await?;
         self.s3_client
             .save_imcg(&ir.callables, &ir.call_statements, path)
