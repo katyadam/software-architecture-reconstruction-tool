@@ -88,22 +88,21 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
 
     parsed_callables.push(build_module_callable(&tree, code, file_name));
 
-    // Identification-only: no symbolic evaluation or URI resolution
-    let language_calls = calls
+    // Convert the Python-specific call records once for language-agnostic
+    // gRPC extraction. Ordinary REST calls are deliberately not identified in
+    // Pass 1; that belongs to the shared Pass 2 identification stage.
+    let language_calls: Vec<CallStatement> = calls
         .iter()
         .map(|call| call.call_statement.clone())
-        .collect::<Vec<_>>();
-    let identification_strategy = MethodCallIdentificationStrategy::new();
-    let raw_restcalls: Vec<models::RestCall> = language_calls
-        .iter()
-        .filter_map(|call| identification_strategy.identify_restcall(call, file_name))
         .collect();
+
+    // gRPC extraction is syntactic: generated stubs and servicers can be
+    // recognized before cross-file resolution, so those candidates are kept
+    // for Pass 2/Pass 3 contract processing.
     let (grpc_endpoints, grpc_calls) =
         crate::extraction::grpc::extract(code, &tree, file_name, &language_calls);
     let mut endpoints = endpoints;
     endpoints.extend(grpc_endpoints);
-    let mut raw_restcalls = raw_restcalls;
-    raw_restcalls.extend(grpc_calls);
     let call_statements = calls
         .into_iter()
         .map(PythonCallStatement::to_language_agnostic)
@@ -119,7 +118,7 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         call_statements,
         assignments,
         enums,
-        raw_restcalls,
+        raw_restcalls: grpc_calls,
         proto_services: vec![],
         raw_message_edges: vec![],
     })
