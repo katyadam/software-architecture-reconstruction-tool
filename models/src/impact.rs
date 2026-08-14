@@ -509,6 +509,10 @@ fn has_test_annotation(node: Node<'_>, code: &str) -> bool {
         .unwrap_or(prefix);
     let node_end = node.end_byte().min(code.len());
     let node_text = &code[node.start_byte()..node_end];
+    let declaration = node_text
+        .split_once('{')
+        .map(|(head, _)| head)
+        .unwrap_or(node_text.lines().next().unwrap_or(node_text));
     [
         "@Test",
         "@ParameterizedTest",
@@ -518,7 +522,7 @@ fn has_test_annotation(node: Node<'_>, code: &str) -> bool {
         "@unittest",
     ]
     .iter()
-    .any(|annotation| relevant.contains(annotation) || node_text.contains(annotation))
+    .any(|annotation| relevant.contains(annotation) || declaration.contains(annotation))
 }
 
 fn is_test_callable(callable: &Callable) -> bool {
@@ -801,5 +805,20 @@ mod tests {
         let mut nodes = Vec::new();
         collect_callable_nodes(tree.root_node(), &mut nodes);
         assert!(has_test_annotation(nodes[0], code));
+    }
+
+    #[test]
+    fn annotation_text_inside_method_body_is_not_a_test_marker() {
+        let code = "class C { void runs() { String value = \"@Test\"; } }";
+        let tree = {
+            let mut parser = Parser::new();
+            parser
+                .set_language(&tree_sitter_java::LANGUAGE.into())
+                .unwrap();
+            parser.parse(code, None).unwrap()
+        };
+        let mut nodes = Vec::new();
+        collect_callable_nodes(tree.root_node(), &mut nodes);
+        assert!(!has_test_annotation(nodes[0], code));
     }
 }
