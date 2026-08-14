@@ -498,13 +498,15 @@ fn range_for_node(node: Node<'_>) -> SourceRange {
 fn is_test_callable(callable: &Callable) -> bool {
     let file = callable.file_path.replace('\\', "/");
     let name = callable.name.to_ascii_lowercase();
-    file.split('/')
+    let test_path = file
+        .split('/')
         .any(|part| part == "tests" || part == "test")
         || file.rsplit('/').next().is_some_and(|f| {
             f.starts_with("test_") || f.ends_with("_test.py") || f.ends_with("Test.java")
-        })
+        });
+    test_path
         || name.starts_with("test_")
-        || name.contains("test") && callable.namespace.to_string().contains("Test")
+        || name.starts_with("test") && callable.namespace.to_string().contains("Test")
 }
 
 fn test_selector(callable: &Callable) -> String {
@@ -515,6 +517,13 @@ fn test_selector(callable: &Callable) -> String {
             file,
             callable.name.split('(').next().unwrap_or(&callable.name)
         )
+    } else if file.ends_with(".java") {
+        let class = callable
+            .signature
+            .strip_prefix("class:")
+            .and_then(|value| value.split('/').next())
+            .unwrap_or("UnknownTestClass");
+        format!("{}#{}", class, callable_base_name(&callable.name))
     } else {
         callable.signature.clone()
     }
@@ -719,5 +728,21 @@ mod tests {
             Some("OrderService".into())
         );
         assert_eq!(callable_class_name("module:service/save(Order)"), None);
+    }
+
+    #[test]
+    fn java_test_selector_is_framework_usable() {
+        let callable = Callable {
+            name: "void savesOrder(Order)".into(),
+            signature: "class:OrderServiceTest/void savesOrder(Order)".into(),
+            namespace: crate::Namespace::Class("OrderServiceTest".into()),
+            parameters: vec![],
+            return_type: Some("void".into()),
+            is_async: false,
+            is_constructor: false,
+            hash: "hash".into(),
+            file_path: "src/test/java/OrderServiceTest.java".into(),
+        };
+        assert_eq!(test_selector(&callable), "OrderServiceTest#savesOrder");
     }
 }
