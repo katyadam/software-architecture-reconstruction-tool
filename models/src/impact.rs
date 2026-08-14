@@ -12,7 +12,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tree_sitter::{Language as TsLanguage, Node, Parser};
 
-use crate::{Callable, CodeElementsAggregate};
+use crate::{Callable, CodeElementsAggregate, MessageRole};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourcePosition {
@@ -159,6 +159,8 @@ impl TestImpactMap {
                 resolution,
             });
         }
+        add_rest_edges(aggregate, &by_hash, &mut edges);
+        add_message_edges(aggregate, &by_hash, &mut edges);
         populate_source_ranges(&mut symbols);
         Self { symbols, edges }
     }
@@ -259,6 +261,67 @@ impl TestImpactMap {
 
 fn symbol_id(callable: &Callable) -> String {
     format!("{}:{}", callable.file_path, callable.signature)
+}
+
+fn add_rest_edges(
+    aggregate: &CodeElementsAggregate,
+    by_hash: &HashMap<String, String>,
+    edges: &mut Vec<ImpactEdge>,
+) {
+    for restcall in &aggregate.restcalls {
+        let Some(caller_id) = by_hash.get(&restcall.function_hash) else {
+            continue;
+        };
+        for endpoint in &aggregate.endpoints {
+            if endpoint.uri == restcall.target_uri {
+                let Some(callee_id) = by_hash.get(&endpoint.function_hash) else {
+                    continue;
+                };
+                edges.push(ImpactEdge {
+                    caller_id: caller_id.clone(),
+                    callee_id: Some(callee_id.clone()),
+                    raw_name: format!("REST {:?} {}", restcall.http_method, restcall.target_uri),
+                    resolution: Resolution::Exact,
+                });
+            }
+        }
+    }
+}
+
+fn add_message_edges(
+    aggregate: &CodeElementsAggregate,
+    by_hash: &HashMap<String, String>,
+    edges: &mut Vec<ImpactEdge>,
+) {
+    for producer in aggregate
+        .message_edges
+        .iter()
+        .filter(|edge| edge.role == MessageRole::Producer)
+    {
+        let Some(caller_id) = by_hash.get(&producer.function_hash) else {
+            continue;
+        };
+        for consumer in aggregate
+            .message_edges
+            .iter()
+            .filter(|edge| edge.role == MessageRole::Consumer)
+            .filter(|edge| {
+                edge.protocol == producer.protocol
+                    && !producer.destination.is_empty()
+                    && edge.destination == producer.destination
+            })
+        {
+            let Some(callee_id) = by_hash.get(&consumer.function_hash) else {
+                continue;
+            };
+            edges.push(ImpactEdge {
+                caller_id: caller_id.clone(),
+                callee_id: Some(callee_id.clone()),
+                raw_name: format!("MESSAGE {}", producer.destination),
+                resolution: Resolution::Exact,
+            });
+        }
+    }
 }
 
 fn normalized_path(path: &str) -> String {
