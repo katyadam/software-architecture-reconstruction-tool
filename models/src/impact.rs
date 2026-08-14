@@ -316,10 +316,13 @@ fn populate_source_ranges(symbols: &mut [ImpactSymbol]) {
         collect_callable_nodes(tree.root_node(), &mut nodes);
         for index in indices {
             let wanted = callable_base_name(&symbols[index].name);
-            if let Some(node) = nodes
-                .iter()
-                .find(|node| node_name(**node, &code).as_deref() == Some(wanted.as_str()))
-            {
+            let wanted_params = callable_parameter_count(&symbols[index].name);
+            let wanted_class = callable_class_name(&symbols[index].signature);
+            if let Some(node) = nodes.iter().find(|node| {
+                node_name(**node, &code).as_deref() == Some(wanted.as_str())
+                    && node_parameter_count(**node) == wanted_params
+                    && wanted_class.as_deref() == node_class_name(**node, &code).as_deref()
+            }) {
                 symbols[index].source_range = Some(range_for_node(*node));
             }
         }
@@ -354,6 +357,29 @@ fn node_name(node: Node<'_>, code: &str) -> Option<String> {
         .map(|name| code[name.byte_range()].to_string())
 }
 
+fn node_parameter_count(node: Node<'_>) -> usize {
+    node.child_by_field_name("parameters")
+        .map(|parameters| parameters.named_child_count())
+        .unwrap_or(0)
+}
+
+fn node_class_name(mut node: Node<'_>, code: &str) -> Option<String> {
+    while let Some(parent) = node.parent() {
+        if matches!(
+            parent.kind(),
+            "class_definition"
+                | "class_declaration"
+                | "interface_declaration"
+                | "record_declaration"
+                | "enum_declaration"
+        ) {
+            return node_name(parent, code);
+        }
+        node = parent;
+    }
+    None
+}
+
 fn callable_base_name(name: &str) -> String {
     let before_params = name.split('(').next().unwrap_or(name).trim();
     before_params
@@ -361,6 +387,36 @@ fn callable_base_name(name: &str) -> String {
         .last()
         .unwrap_or(before_params)
         .to_string()
+}
+
+fn callable_parameter_count(name: &str) -> usize {
+    let Some(start) = name.find('(') else {
+        return 0;
+    };
+    let Some(end) = name.rfind(')') else {
+        return 0;
+    };
+    let params = name[start + 1..end].trim();
+    if params.is_empty() {
+        return 0;
+    }
+
+    let mut depth = 0usize;
+    let mut count = 1usize;
+    for character in params.chars() {
+        match character {
+            '(' | '[' | '<' => depth += 1,
+            ')' | ']' | '>' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => count += 1,
+            _ => {}
+        }
+    }
+    count
+}
+
+fn callable_class_name(signature: &str) -> Option<String> {
+    let namespace = signature.strip_prefix("class:")?.split('/').next()?;
+    Some(namespace.to_string())
 }
 
 fn range_for_node(node: Node<'_>) -> SourceRange {
@@ -586,5 +642,19 @@ mod tests {
         );
         assert_eq!(selected.len(), 1);
         assert!(selected[0].reasons[0].contains("fallback"));
+    }
+
+    #[test]
+    fn callable_matching_uses_parameters_and_namespace() {
+        assert_eq!(callable_base_name("void save(Order order)"), "save");
+        assert_eq!(
+            callable_parameter_count("void save(Order order, int retry)"),
+            2
+        );
+        assert_eq!(
+            callable_class_name("class:OrderService/void save(Order)"),
+            Some("OrderService".into())
+        );
+        assert_eq!(callable_class_name("module:service/save(Order)"), None);
     }
 }
