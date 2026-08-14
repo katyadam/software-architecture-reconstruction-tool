@@ -387,6 +387,11 @@ fn populate_source_ranges(symbols: &mut [ImpactSymbol]) {
                     && wanted_class.as_deref() == node_class_name(**node, &code).as_deref()
             }) {
                 symbols[index].source_range = Some(range_for_node(*node));
+                if has_test_annotation(*node, &code) {
+                    let selector = test_selector_for_symbol(&symbols[index]);
+                    symbols[index].kind = SymbolKind::Test;
+                    symbols[index].test_selector = Some(selector);
+                }
             }
         }
     }
@@ -495,6 +500,27 @@ fn range_for_node(node: Node<'_>) -> SourceRange {
     }
 }
 
+fn has_test_annotation(node: Node<'_>, code: &str) -> bool {
+    let annotation_window_start = node.start_byte().saturating_sub(512);
+    let prefix = &code[annotation_window_start..node.start_byte()];
+    let relevant = prefix
+        .rsplit_once('}')
+        .map(|(_, tail)| tail)
+        .unwrap_or(prefix);
+    let node_end = node.end_byte().min(code.len());
+    let node_text = &code[node.start_byte()..node_end];
+    [
+        "@Test",
+        "@ParameterizedTest",
+        "@RepeatedTest",
+        "@TestFactory",
+        "@pytest",
+        "@unittest",
+    ]
+    .iter()
+    .any(|annotation| relevant.contains(annotation) || node_text.contains(annotation))
+}
+
 fn is_test_callable(callable: &Callable) -> bool {
     let file = callable.file_path.replace('\\', "/");
     let name = callable.name.to_ascii_lowercase();
@@ -526,6 +552,22 @@ fn test_selector(callable: &Callable) -> String {
         format!("{}#{}", class, callable_base_name(&callable.name))
     } else {
         callable.signature.clone()
+    }
+}
+
+fn test_selector_for_symbol(symbol: &ImpactSymbol) -> String {
+    if symbol.file_path.ends_with(".py") {
+        format!(
+            "{}::{}",
+            normalized_path(&symbol.file_path),
+            callable_base_name(&symbol.name)
+        )
+    } else if symbol.file_path.ends_with(".java") {
+        let class =
+            callable_class_name(&symbol.signature).unwrap_or_else(|| "UnknownTestClass".into());
+        format!("{}#{}", class, callable_base_name(&symbol.name))
+    } else {
+        symbol.signature.clone()
     }
 }
 
@@ -744,5 +786,20 @@ mod tests {
             file_path: "src/test/java/OrderServiceTest.java".into(),
         };
         assert_eq!(test_selector(&callable), "OrderServiceTest#savesOrder");
+    }
+
+    #[test]
+    fn framework_annotations_are_recognized() {
+        let code = "class C { @ParameterizedTest void runs() {} }";
+        let tree = {
+            let mut parser = Parser::new();
+            parser
+                .set_language(&tree_sitter_java::LANGUAGE.into())
+                .unwrap();
+            parser.parse(code, None).unwrap()
+        };
+        let mut nodes = Vec::new();
+        collect_callable_nodes(tree.root_node(), &mut nodes);
+        assert!(has_test_annotation(nodes[0], code));
     }
 }
