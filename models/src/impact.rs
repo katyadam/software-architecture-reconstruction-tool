@@ -144,7 +144,8 @@ impl TestImpactMap {
             let matches: Vec<&(String, String, String)> = callable_ids
                 .iter()
                 .filter(|(_, name, signature)| {
-                    name.starts_with(target_name) || signature.contains(&format!("/{target_name}"))
+                    callable_base_name(name) == target_name
+                        || signature.contains(&format!("/{target_name}("))
                 })
                 .collect();
             let (callee_id, resolution) = match matches.as_slice() {
@@ -199,17 +200,32 @@ impl TestImpactMap {
         }
 
         let mut result = Vec::new();
+        let code_files_without_range_match: HashSet<&str> = changed_files
+            .iter()
+            .filter(|file| file.kind == ChangeKind::Code)
+            .filter(|file| {
+                !self.symbols.iter().any(|symbol| {
+                    path_matches(&symbol.file_path, &file.path)
+                        && symbol.source_range.is_some_and(|range| {
+                            file.changed_lines
+                                .iter()
+                                .any(|line| *line >= range.start.line && *line <= range.end.line)
+                        })
+                })
+            })
+            .map(|file| file.path.as_str())
+            .collect();
         for symbol in &self.symbols {
             if symbol.kind != SymbolKind::Test {
                 continue;
             }
             let file_changed = changed_files.iter().any(|f| {
-                f.path == symbol.file_path
+                path_matches(&symbol.file_path, &f.path)
                     && f.kind == ChangeKind::Code
                     && f.changed_lines.is_empty()
             });
             let range_changed = changed_files.iter().any(|f| {
-                f.path == symbol.file_path
+                path_matches(&symbol.file_path, &f.path)
                     && f.kind == ChangeKind::Code
                     && symbol.source_range.is_some_and(|range| {
                         f.changed_lines
@@ -217,7 +233,10 @@ impl TestImpactMap {
                             .any(|line| *line >= range.start.line && *line <= range.end.line)
                     })
             });
-            if impacted.contains(&symbol.id) || file_changed || range_changed {
+            let fallback_changed = code_files_without_range_match
+                .iter()
+                .any(|path| same_parent(path, &symbol.file_path));
+            if impacted.contains(&symbol.id) || file_changed || range_changed || fallback_changed {
                 result.push(SelectedTest {
                     test_id: symbol.id.clone(),
                     selector: symbol
@@ -226,6 +245,8 @@ impl TestImpactMap {
                         .unwrap_or_else(|| symbol.signature.clone()),
                     reasons: if impacted.contains(&symbol.id) {
                         vec!["reaches a changed symbol".to_string()]
+                    } else if fallback_changed {
+                        vec!["conservative module fallback for an unresolved change".to_string()]
                     } else {
                         vec!["test file contains executable changes".to_string()]
                     },
@@ -238,6 +259,35 @@ impl TestImpactMap {
 
 fn symbol_id(callable: &Callable) -> String {
     format!("{}:{}", callable.file_path, callable.signature)
+}
+
+fn normalized_path(path: &str) -> String {
+    path.replace('\\', "/")
+        .trim_start_matches("./")
+        .trim_start_matches('/')
+        .to_string()
+}
+
+fn path_matches(symbol_path: &str, changed_path: &str) -> bool {
+    let symbol = normalized_path(symbol_path);
+    let changed = normalized_path(changed_path);
+    symbol == changed
+        || symbol.ends_with(&format!("/{changed}"))
+        || changed.ends_with(&format!("/{symbol}"))
+}
+
+fn same_parent(left: &str, right: &str) -> bool {
+    let left = normalized_path(left);
+    let right = normalized_path(right);
+    let left_parent = left
+        .rsplit_once('/')
+        .map(|(parent, _)| parent)
+        .unwrap_or("");
+    let right_parent = right
+        .rsplit_once('/')
+        .map(|(parent, _)| parent)
+        .unwrap_or("");
+    left_parent == right_parent
 }
 
 fn populate_source_ranges(symbols: &mut [ImpactSymbol]) {
@@ -483,5 +533,58 @@ mod tests {
         };
         let selected = map.select_tests(&HashSet::from(["prod".to_string()]), &[]);
         assert_eq!(selected[0].selector, "tests/test_service.py::test_save");
+    }
+
+    #[test]
+    fn relative_diff_path_matches_absolute_symbol_path() {
+        let map = TestImpactMap {
+            symbols: vec![ImpactSymbol {
+                id: "test".into(),
+                name: "test_save()".into(),
+                signature: "module::test_save()".into(),
+                file_path: "/workspace/project/tests/test_service.py".into(),
+                body_hash: "t".into(),
+                kind: SymbolKind::Test,
+                test_selector: Some("tests/test_service.py::test_save".into()),
+                source_range: None,
+            }],
+            edges: vec![],
+        };
+        let selected = map.select_tests(
+            &HashSet::new(),
+            &[ChangedFile {
+                path: "tests/test_service.py".into(),
+                kind: ChangeKind::Code,
+                changed_lines: vec![],
+            }],
+        );
+        assert_eq!(selected.len(), 1);
+    }
+
+    #[test]
+    fn unresolved_module_change_selects_tests_in_same_directory() {
+        let map = TestImpactMap {
+            symbols: vec![ImpactSymbol {
+                id: "test".into(),
+                name: "test_save()".into(),
+                signature: "module::test_save()".into(),
+                file_path: "src/tests/test_service.py".into(),
+                body_hash: "t".into(),
+                kind: SymbolKind::Test,
+                test_selector: Some("src/tests/test_service.py::test_save".into()),
+                source_range: None,
+            }],
+            edges: vec![],
+        };
+        let selected = map.select_tests(
+            &HashSet::new(),
+            &[ChangedFile {
+                path: "src/tests/service.py".into(),
+                kind: ChangeKind::Code,
+                changed_lines: vec![1],
+            }],
+        );
+        assert_eq!(selected.len(), 1);
+        assert!(selected[0].reasons[0].contains("fallback"));
     }
 }
