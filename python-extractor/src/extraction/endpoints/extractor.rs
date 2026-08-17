@@ -2,15 +2,29 @@ use std::sync::OnceLock;
 
 use crate::extraction::callables::parser::parse_parameters;
 use crate::extraction::calls::extractor::CallsExtractor;
+use crate::extraction::endpoints::{EndpointStrategy, PythonEndpointStrategy};
 use crate::extraction::extractor::{ExtractParams, Extractor};
 use crate::extraction::queries::ENDPOINTS_QUERY;
 use models::{Endpoint, HttpMethod};
 use tree_sitter::StreamingIterator;
 use tree_sitter::{Query, QueryCursor};
 
+/// Backwards-compatible facade for callers that used the original extractor.
 pub struct EndpointsExtractor;
 
 impl Extractor for EndpointsExtractor {
+    type Item<'a> = Endpoint;
+
+    fn query(&self) -> &'static Query {
+        PythonEndpointStrategy.query()
+    }
+
+    fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Self::Item<'a>> {
+        Extractor::extract(&PythonEndpointStrategy, params)
+    }
+}
+
+impl Extractor for PythonEndpointStrategy {
     type Item<'a> = Endpoint;
 
     fn query(&self) -> &'static Query {
@@ -74,6 +88,12 @@ impl Extractor for EndpointsExtractor {
 
         endpoints.extend(extract_django_urlpatterns(params));
         endpoints
+    }
+}
+
+impl EndpointStrategy for PythonEndpointStrategy {
+    fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Endpoint> {
+        <Self as Extractor>::extract(self, params)
     }
 }
 

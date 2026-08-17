@@ -1,6 +1,6 @@
 use python_extractor::{
     extraction::{
-        endpoints::extractor::EndpointsExtractor,
+        endpoints::{EndpointStrategy, PythonEndpointStrategy, extractor::EndpointsExtractor},
         extractor::{ExtractParams, Extractor},
     },
     s,
@@ -161,6 +161,40 @@ fn base_test() {
     ];
 
     assert_eq!(endpoints, expected);
+}
+
+#[test]
+fn python_endpoint_strategy_handles_framework_routes() {
+    let code = r#"
+from fastapi import FastAPI
+from flask import Flask
+
+api = FastAPI()
+app = Flask(__name__)
+
+@api.post("/items")
+def create_item():
+    pass
+
+@app.route("/orders", methods=["GET", "PATCH"])
+def update_order():
+    pass
+"#;
+    let tree = get_tree(code);
+    let endpoints = EndpointStrategy::extract(
+        &PythonEndpointStrategy,
+        ExtractParams::new(&tree, code).file_name("frameworks.py"),
+    );
+
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "create_item" && endpoint.http_method == HttpMethod::POST
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "update_order" && endpoint.http_method == HttpMethod::GET
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "update_order" && endpoint.http_method == HttpMethod::PATCH
+    }));
 }
 
 #[test]

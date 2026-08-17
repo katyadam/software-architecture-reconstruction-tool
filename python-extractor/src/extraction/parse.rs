@@ -10,7 +10,7 @@ use crate::extraction::{
     assignments::map::get_assignments_map,
     callables::extractor::CallablesExtractor,
     calls::{PythonCallStatement, extractor::CallsExtractor},
-    endpoints::extractor::EndpointsExtractor,
+    endpoints::{EndpointStrategy, PythonEndpointStrategy},
     entities::extractor::EntitiesExtractor,
     enums::identification::EnumIdentificator,
     extractor::{ExtractParams, Extractor},
@@ -44,7 +44,10 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
     rayon::scope(|s| {
         s.spawn(|_| assignments = Some(get_assignments_map(&tree, code)));
         s.spawn(|_| imports = Some(ImportsExtractor.extract(params)));
-        s.spawn(|_| endpoints = Some(EndpointsExtractor.extract(params)));
+        s.spawn(|_| {
+            let endpoint_strategy = PythonEndpointStrategy;
+            endpoints = Some(EndpointStrategy::extract(&endpoint_strategy, params));
+        });
         s.spawn(|_| entities = Some(EntitiesExtractor.extract(params)));
         s.spawn(|_| callables = Some(CallablesExtractor.extract(params)));
         s.spawn(|_| calls = Some(CallsExtractor.extract(ExtractParams::new(&tree, code))));

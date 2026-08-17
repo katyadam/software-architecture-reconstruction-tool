@@ -13,6 +13,7 @@ use crate::pipeline::pass2::{
 mod assignments;
 pub mod callables;
 mod constants;
+mod endpoints;
 mod entities;
 mod identification;
 mod type_inference;
@@ -36,7 +37,7 @@ pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
     resolve_entity_fields(&mut files, &import_graph);
     resolve_call_argument_types(&mut files);
     identify_edges(&mut files);
-    python_extractor::extraction::post_process(&mut files);
+    endpoints::post_process_endpoints(&mut files);
     let class_hierarchy = build_class_hierarchy(&files, &import_graph);
 
     let constants = collect_constants(&files);
