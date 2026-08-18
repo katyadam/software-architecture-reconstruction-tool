@@ -95,6 +95,9 @@ impl TestImpactMap {
         let mut symbols = Vec::new();
         let mut by_hash = HashMap::new();
 
+        // Phase 1: every extracted callable becomes an impact symbol. At this
+        // point we only know what the aggregate already exported directly:
+        // callable identity, signature, file, and body hash.
         for callable in &aggregate.callables {
             let is_test = is_test_callable(callable);
             let id = symbol_id(callable);
@@ -119,6 +122,10 @@ impl TestImpactMap {
             });
         }
 
+        // Phase 2: build a lightweight lookup for call resolution. The graph is
+        // intentionally conservative: plain call statements are matched mostly by
+        // base name/signature shape, while protocol-specific links are added
+        // separately below from richer extracted datasets.
         let callable_ids: Vec<(String, String, String)> = symbols
             .iter()
             .map(|s| (s.id.clone(), s.name.clone(), s.signature.clone()))
@@ -134,6 +141,8 @@ impl TestImpactMap {
                 continue;
             };
             let raw_name = call.function_name.clone();
+            // Strip receiver/argument syntax so `svc.save(x)` and `save(x)` both
+            // resolve against the callable base name `save`.
             let target_name = raw_name
                 .split('(')
                 .next()
@@ -141,6 +150,8 @@ impl TestImpactMap {
                 .rsplit('.')
                 .next()
                 .unwrap_or(raw_name.as_str());
+            // Only unambiguous single matches become graph edges. Multiple
+            // potential targets remain unresolved instead of guessing.
             let matches: Vec<&(String, String, String)> = callable_ids
                 .iter()
                 .filter(|(_, name, signature)| {
@@ -159,8 +170,12 @@ impl TestImpactMap {
                 resolution,
             });
         }
+        // Phase 3: add higher-confidence inter-service and messaging links from
+        // dedicated extracted structures rather than name matching.
         add_rest_edges(aggregate, &by_hash, &mut edges);
         add_message_edges(aggregate, &by_hash, &mut edges);
+        // Phase 4: recover source ranges from the file on disk so diff line
+        // numbers can be mapped back to symbols later during test selection.
         populate_source_ranges(&mut symbols);
         Self { symbols, edges }
     }
@@ -193,6 +208,8 @@ impl TestImpactMap {
 
         let mut impacted = changed_symbol_ids.clone();
         let mut queue: VecDeque<String> = changed_symbol_ids.iter().cloned().collect();
+        // Walk backwards through the call graph so a changed production symbol
+        // marks all reachable callers as impacted, including tests.
         while let Some(symbol) = queue.pop_front() {
             for caller in reverse.get(symbol.as_str()).into_iter().flatten() {
                 if impacted.insert((*caller).to_string()) {
@@ -206,6 +223,9 @@ impl TestImpactMap {
             .iter()
             .filter(|file| file.kind == ChangeKind::Code)
             .filter(|file| {
+                // If a changed executable line cannot be assigned to any known
+                // symbol in that file, the selector falls back to a broader
+                // same-directory heuristic later.
                 !self.symbols.iter().any(|symbol| {
                     path_matches(&symbol.file_path, &file.path)
                         && symbol.source_range.is_some_and(|range| {
@@ -273,6 +293,8 @@ fn add_rest_edges(
             continue;
         };
         for endpoint in &aggregate.endpoints {
+            // REST edges are exact only when the extracted outgoing URI matches
+            // an extracted endpoint URI and both sides can be tied to functions.
             if endpoint.uri == restcall.target_uri {
                 let Some(callee_id) = by_hash.get(&endpoint.function_hash) else {
                     continue;
@@ -292,7 +314,7 @@ fn add_message_edges(
     aggregate: &CodeElementsAggregate,
     by_hash: &HashMap<String, String>,
     edges: &mut Vec<ImpactEdge>,
-) {
+    ) {
     for producer in aggregate
         .message_edges
         .iter()
@@ -306,6 +328,9 @@ fn add_message_edges(
             .iter()
             .filter(|edge| edge.role == MessageRole::Consumer)
             .filter(|edge| {
+                // Producer/consumer links are built only within the same
+                // protocol and destination, which keeps this exact rather than
+                // inferred from callable names.
                 edge.protocol == producer.protocol
                     && !producer.destination.is_empty()
                     && edge.destination == producer.destination
@@ -378,6 +403,9 @@ fn populate_source_ranges(symbols: &mut [ImpactSymbol]) {
         let mut nodes = Vec::new();
         collect_callable_nodes(tree.root_node(), &mut nodes);
         for index in indices {
+            // Reconcile aggregate symbols with syntax-tree nodes by base name,
+            // parameter count, and owning class. This is approximate but avoids
+            // changing the extractor contract just to recover ranges.
             let wanted = callable_base_name(&symbols[index].name);
             let wanted_params = callable_parameter_count(&symbols[index].name);
             let wanted_class = callable_class_name(&symbols[index].signature);
@@ -387,6 +415,9 @@ fn populate_source_ranges(symbols: &mut [ImpactSymbol]) {
                     && wanted_class.as_deref() == node_class_name(**node, &code).as_deref()
             }) {
                 symbols[index].source_range = Some(range_for_node(*node));
+                // Tree-sitter can also refine test detection from annotations
+                // even if the original aggregate did not classify this callable
+                // as a test by path/name heuristics alone.
                 if has_test_annotation(*node, &code) {
                     let selector = test_selector_for_symbol(&symbols[index]);
                     symbols[index].kind = SymbolKind::Test;
@@ -590,6 +621,8 @@ pub fn classify_unified_diff(diff: &str) -> Vec<ChangedFile> {
             continue;
         }
         if line.starts_with("@@") {
+            // Track line numbers on the "new" side of the diff because those
+            // are what later get matched against source ranges in the workspace.
             new_line = parse_new_line(line).unwrap_or(0);
             continue;
         }
@@ -604,6 +637,8 @@ pub fn classify_unified_diff(diff: &str) -> Vec<ChangedFile> {
         };
         let comment = content.trim().is_empty() || is_comment_line(content);
         if line.starts_with('+') {
+            // Added executable lines are recorded precisely. Comment-only adds
+            // keep the file in a weaker state unless later upgraded to Code.
             if comment {
                 if files
                     .get(path)
@@ -618,6 +653,8 @@ pub fn classify_unified_diff(diff: &str) -> Vec<ChangedFile> {
             }
             new_line += 1;
         } else if line.starts_with('-') && !comment {
+            // Removed executable lines still mean "code changed", but there is
+            // no surviving new-file line to record.
             files.get_mut(path).unwrap().0 = ChangeKind::Code;
         }
     }
