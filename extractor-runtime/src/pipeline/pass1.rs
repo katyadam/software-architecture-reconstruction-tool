@@ -14,6 +14,7 @@ pub fn dispatch_syntactic(
         Some("py") => {
             python_extractor::extraction::parse::extract_syntactic(text, file_path).map(Some)
         }
+        Some("go") => go_extractor::extraction::extract_syntactic(text, file_path).map(Some),
         _ => Ok(None),
     }
 }
