@@ -4,6 +4,7 @@ use java_extractor::extraction::restcalls::evaluation::uri_generator::generate_t
 use models::ir::language::Language;
 use python_extractor::extraction::restcalls::evaluation::uri_generator::generate_target_uris as python_generate_target_uris;
 use statix::{
+    go::matcher::GoCallableMatcher,
     java::matcher::JavaCallableMatcher, matcher::CallableMatcher,
     python::matcher::PythonCallableMatcher, symbolic::AnalysisResult,
 };
@@ -26,6 +27,7 @@ pub(crate) trait LanguageSpecificEvaluator {
 
 struct JavaEvaluator;
 struct PythonEvaluator;
+struct GoEvaluator;
 
 impl LanguageSpecificEvaluator for JavaEvaluator {
     fn matcher(&self) -> Box<dyn CallableMatcher> {
@@ -57,12 +59,29 @@ impl LanguageSpecificEvaluator for PythonEvaluator {
     }
 }
 
+impl LanguageSpecificEvaluator for GoEvaluator {
+    fn matcher(&self) -> Box<dyn CallableMatcher> {
+        Box::new(GoCallableMatcher::new())
+    }
+
+    fn generate_uris(
+        &self,
+        template: &str,
+        _analysis: &AnalysisResult,
+        _enums: &HashMap<String, Vec<String>>,
+    ) -> Vec<String> {
+        vec![template.to_string()]
+    }
+}
+
 static JAVA_EVALUATOR: JavaEvaluator = JavaEvaluator;
 static PYTHON_EVALUATOR: PythonEvaluator = PythonEvaluator;
+static GO_EVALUATOR: GoEvaluator = GoEvaluator;
 
 pub(crate) fn evaluation_for(language: Language) -> &'static dyn LanguageSpecificEvaluator {
     match language {
         Language::Java => &JAVA_EVALUATOR,
         Language::Python => &PYTHON_EVALUATOR,
+        Language::Go => &GO_EVALUATOR,
     }
 }

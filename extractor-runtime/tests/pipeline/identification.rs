@@ -1,4 +1,5 @@
 use extractor_runtime::pipeline::build_project_ir;
+use go_extractor::extraction::extract_syntactic as go_extract;
 use java_extractor::extraction::extract_syntactic as java_extract;
 use python_extractor::extraction::parse::extract_syntactic as python_extract;
 
@@ -110,4 +111,58 @@ class Publisher:
         "Pass 2 must identify the basic_publish call, got: {:?}",
         ir.files[0].raw_message_edges
     );
+}
+
+#[test]
+fn go_train_ticket_restcall_is_identified_in_pass2() {
+    let code = r#"
+package clients
+
+import (
+    "net/http"
+    "net/url"
+)
+
+const routeServiceName = "ts-route-service"
+
+func (c *RouteClient) RoutesBetween(start, end string) {
+    path := "/api/v1/routeservice/routes/" + url.PathEscape(start) + "/" + url.PathEscape(end)
+    _ = c.transport.exchange(ctx, routeServiceName, http.MethodGet, path, nil, &response)
+}
+"#;
+
+    let record = go_extract(code, "route_client.go").expect("Go extraction should succeed");
+    let ir = build_project_ir(vec![record]);
+
+    let restcalls = &ir.files[0].raw_restcalls;
+    assert_eq!(
+        restcalls.len(),
+        1,
+        "Pass 2 must identify the transport.exchange call, got: {restcalls:?}"
+    );
+    assert_eq!(
+        restcalls[0].target_uri,
+        "http://ts-route-service/api/v1/routeservice/routes/{start}/{end}"
+    );
+}
+
+#[test]
+fn go_endpoint_is_extracted_from_net_http_handlefunc() {
+    let code = r#"
+package api
+
+import "net/http"
+
+const basePath = "/api/v1/stationservice"
+
+func NewRouter() http.Handler {
+    mux := http.NewServeMux()
+    mux.HandleFunc("GET "+basePath+"/stations", handler)
+    return mux
+}
+"#;
+
+    let record = go_extract(code, "router.go").expect("Go extraction should succeed");
+    assert_eq!(record.endpoints.len(), 1);
+    assert_eq!(record.endpoints[0].uri, "/api/v1/stationservice/stations");
 }

@@ -55,11 +55,17 @@ impl ImcgBuilderImpl {
         sdg: &Sdg,
         callables_map: &HashMap<String, ServiceCallable>,
     ) -> Result<Vec<Call>, BuilderError> {
-        sdg.connections
-            .iter()
-            .flat_map(|conn| conn.requests.iter())
-            .map(|rq| self.create_call_from_request(rq, callables_map))
-            .collect()
+        let mut calls = Vec::new();
+        for request in sdg.connections.iter().flat_map(|conn| conn.requests.iter()) {
+            if request.endpoint.function_hash.is_empty() || request.restcall.function_hash.is_empty()
+            {
+                continue;
+            }
+            if let Ok(call) = self.create_call_from_request(request, callables_map) {
+                calls.push(call);
+            }
+        }
+        Ok(calls)
     }
 
     fn create_call_from_request(
