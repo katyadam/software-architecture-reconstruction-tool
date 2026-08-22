@@ -1,104 +1,47 @@
-use std::{collections::{HashMap, HashSet}, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
 use models::{
-    Assignment, AssignmentKey, Callable, Endpoint, HttpMethod, Namespace, ParsedCallable,
-    RestCall, Scope,
+    Argument, Assignment, AssignmentKey, CallStatement, Callable, Endpoint, HttpMethod, Namespace,
+    ParsedCallable, RestCall, Scope,
     api::ExtractionError,
-    ir::{
-        ast::CallableAst,
-        language::Language,
-        project::TypedFileRecord,
-        syntax::FileRecord,
-    },
+    ir::{ast::CallableAst, language::Language, project::TypedFileRecord, syntax::FileRecord},
 };
-use once_cell::sync::Lazy;
-use regex::Regex;
-use statix::strings::hash_text;
-
-static SIMPLE_CONST_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?m)^\s*const\s+([A-Za-z_]\w*)\s*(?:[A-Za-z_][\w\[\]\*]*)?\s*=\s*("([^"\\]|\\.)*")\s*$"#)
-        .expect("valid const regex")
-});
-static CONST_BLOCK_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"(?s)const\s*\((.*?)\)"#).expect("valid const block regex"));
-static BLOCK_CONST_ENTRY_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?m)^\s*([A-Za-z_]\w*)\s*(?:[A-Za-z_][\w\[\]\*]*)?\s*=\s*("([^"\\]|\\.)*")\s*$"#)
-        .expect("valid const block entry regex")
-});
-static FUNC_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r#"func\s*(?:\(([^)]*)\)\s*)?([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?:\([^)]*\)|[\w\.\*\[\]]+)?\s*\{"#,
-    )
-    .expect("valid function regex")
-});
-static FUNC_NAME_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"func\s*(?:\([^)]*\)\s*)?([A-Za-z_]\w*)"#).expect("valid function name regex")
-});
-static LOCAL_ASSIGN_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"^\s*(?:var\s+)?([A-Za-z_]\w*)\s*(?::=|=)\s*(.+?)\s*$"#)
-        .expect("valid local assignment regex")
-});
-static WEB_METHOD_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"web\.(Get|Post|Put|Delete)\("#).expect("valid web route regex")
-});
-static EXCHANGE_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?s)\.exchange\(\s*[^,]+,\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*([^,]+?)\s*,"#)
-        .expect("valid exchange regex")
-});
-static HTTP_GET_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"http\.Get\(\s*(.+?)\s*\)"#).expect("valid http get regex"));
-static HTTP_POST_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"http\.Post\(\s*(.+?)\s*,\s*[^,]+,\s*.+?\)"#).expect("valid http post regex")
-});
-static HTTP_NEW_REQUEST_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(
-        r#"http\.NewRequest(?:WithContext)?\(\s*(?:[^,]+,\s*)?([^,]+?)\s*,\s*(.+?)\s*,\s*.+?\)"#,
-    )
-    .expect("valid new request regex")
-});
-static HTTP_METHOD_CONST_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"http\.Method(Get|Post|Put|Delete|Patch)"#).expect("valid method const regex")
-});
-static STRING_LITERAL_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"^"((?:[^"\\]|\\.)*)"$"#).expect("valid string regex"));
-static URL_PATH_ESCAPE_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"url\.PathEscape\(\s*([A-Za-z_]\w*)\s*\)"#).expect("valid path escape regex")
-});
-static PATH_VALUE_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?:request\.)?PathValue\(\s*"([^"]+)"\s*\)"#).expect("valid path value regex")
-});
-static TRIM_RIGHT_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"strings\.TrimRight\(\s*([^,]+?)\s*,\s*"/"\s*\)"#).expect("valid trim right regex")
-});
-
-const GO_SOURCE_SENTINEL: &str = "__go_source__";
+use statix::strings::{hash_text, normalize_whitespace, strip_quotes};
+use tree_sitter::{Node, Parser, Tree};
 
 pub fn extract_syntactic(text: &str, file_path: &str) -> Result<FileRecord, ExtractionError> {
-    let globals = collect_string_bindings(text);
-    let mut callables = extract_callables(text, file_path);
-    let callable_index = build_callable_index(&callables);
-    let mut synthetic_callables = Vec::new();
-    let endpoints = extract_endpoints(
+    let tree = parse_go_tree(text)?;
+    let root = tree.root_node();
+
+    let mut callables = Vec::new();
+    let mut callable_lookup = HashMap::new();
+    let mut call_statements = Vec::new();
+    let mut assignments = HashMap::new();
+
+    collect_global_assignments(root, text, &mut assignments);
+    collect_callable_ir(
+        root,
         text,
         file_path,
-        &globals,
-        &callable_index,
+        &mut callables,
+        &mut callable_lookup,
+        &mut call_statements,
+        &mut assignments,
+    );
+
+    let mut synthetic_callables = Vec::new();
+    let endpoints = collect_endpoints(
+        root,
+        text,
+        file_path,
+        &assignments,
+        &callable_lookup,
         &mut synthetic_callables,
     );
     callables.extend(synthetic_callables);
-
-    let mut assignments = HashMap::new();
-    assignments.insert(
-        AssignmentKey {
-            scope: Scope::Global,
-            variable_name: GO_SOURCE_SENTINEL.to_string(),
-        },
-        Assignment {
-            variable_name: GO_SOURCE_SENTINEL.to_string(),
-            variable_type: "string".to_string(),
-            value: text.to_string(),
-        },
-    );
 
     Ok(FileRecord {
         file_path: file_path.to_string(),
@@ -107,433 +50,502 @@ pub fn extract_syntactic(text: &str, file_path: &str) -> Result<FileRecord, Extr
         entities: vec![],
         endpoints,
         callables,
-        call_statements: vec![],
+        call_statements,
         assignments,
         enums: vec![],
         raw_message_edges: vec![],
     })
 }
 
-pub fn identify(file: &mut TypedFileRecord, code: &str) {
-    let globals = collect_string_bindings(code);
-    let callables = build_callable_index(&file.callables);
-    file.raw_restcalls = extract_restcalls(code, &file.file_path, &globals, &callables);
+pub fn identify(file: &mut TypedFileRecord) {
+    file.raw_restcalls = file
+        .call_statements
+        .iter()
+        .filter_map(|call| identify_restcall(file, call))
+        .collect();
 }
 
-pub fn source_from_assignments(file: &TypedFileRecord) -> Option<&str> {
-    file.assignments
-        .get(&AssignmentKey {
-            scope: Scope::Global,
-            variable_name: GO_SOURCE_SENTINEL.to_string(),
-        })
-        .map(|assignment| assignment.value.as_str())
+fn parse_go_tree(code: &str) -> Result<Tree, ExtractionError> {
+    let mut parser = Parser::new();
+    parser
+        .set_language(&tree_sitter_go::LANGUAGE.into())
+        .map_err(|err| ExtractionError::Process(format!("failed to load Go grammar: {err}")))?;
+    parser
+        .parse(code, None)
+        .ok_or_else(|| ExtractionError::Process("failed to parse Go source".to_string()))
 }
 
-fn extract_callables(code: &str, file_path: &str) -> Vec<ParsedCallable> {
-    find_functions(code)
+fn collect_global_assignments(
+    root: Node,
+    code: &str,
+    assignments: &mut HashMap<AssignmentKey, Assignment>,
+) {
+    for child in root.named_children(&mut root.walk()) {
+        match child.kind() {
+            "const_declaration" | "var_declaration" => {
+                collect_declaration_assignments(child, code, Scope::Global, assignments);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn collect_callable_ir(
+    root: Node,
+    code: &str,
+    file_path: &str,
+    callables: &mut Vec<ParsedCallable>,
+    callable_lookup: &mut HashMap<String, Callable>,
+    call_statements: &mut Vec<CallStatement>,
+    assignments: &mut HashMap<AssignmentKey, Assignment>,
+) {
+    for child in root.named_children(&mut root.walk()) {
+        if !matches!(child.kind(), "function_declaration" | "method_declaration") {
+            continue;
+        }
+
+        let callable = build_callable(child, code, file_path);
+        let metadata = callable.metadata.clone();
+        register_callable_aliases(&metadata, callable_lookup);
+
+        if let Some(body) = child.child_by_field_name("body") {
+            collect_local_assignments(body, code, &metadata.signature, assignments);
+            collect_call_statements(body, code, &metadata, call_statements);
+        }
+
+        callables.push(callable);
+    }
+}
+
+fn build_callable(node: Node, code: &str, file_path: &str) -> ParsedCallable {
+    let signature = callable_signature(node, code);
+    let function_name = node
+        .child_by_field_name("name")
+        .map(|name| node_text(name, code).to_string())
+        .unwrap_or_else(|| signature.clone());
+    let body_hash = hash_text(node_text(node, code));
+    let namespace = if node.kind() == "method_declaration" {
+        Namespace::Class(
+            receiver_type(
+                node.child_by_field_name("receiver")
+                    .map(|receiver| node_text(receiver, code))
+                    .unwrap_or_default(),
+            )
+            .unwrap_or_else(|| file_path.to_string()),
+        )
+    } else {
+        Namespace::Module(file_path.to_string())
+    };
+
+    ParsedCallable {
+        metadata: Callable {
+            name: function_name,
+            signature,
+            namespace,
+            parameters: vec![],
+            return_type: None,
+            is_async: false,
+            is_constructor: false,
+            hash: body_hash,
+            file_path: file_path.to_string(),
+        },
+        ast: CallableAst {
+            statements: vec![],
+            nested: vec![],
+        },
+    }
+}
+
+fn callable_signature(node: Node, code: &str) -> String {
+    if let Some(body) = node.child_by_field_name("body") {
+        return normalize_whitespace(code[node.start_byte()..body.start_byte()].trim());
+    }
+    normalize_whitespace(node_text(node, code))
+}
+
+fn receiver_type(receiver_text: &str) -> Option<String> {
+    receiver_text
+        .trim()
+        .trim_start_matches('(')
+        .trim_end_matches(')')
+        .split_whitespace()
+        .next_back()
+        .map(|value| value.trim_start_matches('*').to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn register_callable_aliases(callable: &Callable, lookup: &mut HashMap<String, Callable>) {
+    lookup.insert(callable.signature.clone(), callable.clone());
+    lookup.insert(callable.name.clone(), callable.clone());
+    if let Some(simple) = simple_callable_name(&callable.signature) {
+        lookup.insert(simple, callable.clone());
+    }
+}
+
+fn collect_declaration_assignments(
+    node: Node,
+    code: &str,
+    scope: Scope,
+    assignments: &mut HashMap<AssignmentKey, Assignment>,
+) {
+    for child in node.named_children(&mut node.walk()) {
+        if matches!(child.kind(), "const_spec" | "var_spec") {
+            collect_spec_assignments(child, code, scope.clone(), assignments);
+        }
+    }
+}
+
+fn collect_spec_assignments(
+    spec: Node,
+    code: &str,
+    scope: Scope,
+    assignments: &mut HashMap<AssignmentKey, Assignment>,
+) {
+    let mut identifiers = Vec::new();
+    let mut values = Vec::new();
+
+    for child in spec.named_children(&mut spec.walk()) {
+        match child.kind() {
+            "identifier" => identifiers.push(child),
+            "expression_list" => {
+                values.extend(child.named_children(&mut child.walk()));
+            }
+            "interpreted_string_literal"
+            | "raw_string_literal"
+            | "binary_expression"
+            | "call_expression"
+            | "selector_expression"
+            | "parenthesized_expression" => values.push(child),
+            _ => {}
+        }
+    }
+
+    let mut scope_values = scope_bindings(assignments, &scope);
+    scope_values.extend(scope_bindings(assignments, &Scope::Global));
+
+    for (index, ident) in identifiers.into_iter().enumerate() {
+        let variable_name = node_text(ident, code).to_string();
+        let value = values
+            .get(index)
+            .map(|value_node| evaluate_expression_node(*value_node, code, &scope_values))
+            .unwrap_or_default();
+        let assignment = Assignment {
+            variable_name: variable_name.clone(),
+            variable_type: "".to_string(),
+            value: value.clone(),
+        };
+        assignments.insert(
+            AssignmentKey {
+                scope: scope.clone(),
+                variable_name: variable_name.clone(),
+            },
+            assignment,
+        );
+        scope_values.insert(variable_name, value);
+    }
+}
+
+fn collect_local_assignments(
+    body: Node,
+    code: &str,
+    function_signature: &str,
+    assignments: &mut HashMap<AssignmentKey, Assignment>,
+) {
+    let scope = Scope::Function(function_signature.to_string());
+    let mut scope_values = scope_bindings(assignments, &Scope::Global);
+    walk_named(body, &mut |node| match node.kind() {
+        "short_var_declaration" | "assignment_statement" => {
+            let pairs = assignment_pairs(node, code);
+            for (name, value_node) in pairs {
+                let value = evaluate_expression_node(value_node, code, &scope_values);
+                assignments.insert(
+                    AssignmentKey {
+                        scope: scope.clone(),
+                        variable_name: name.clone(),
+                    },
+                    Assignment {
+                        variable_name: name.clone(),
+                        variable_type: "".to_string(),
+                        value: value.clone(),
+                    },
+                );
+                scope_values.insert(name, value);
+            }
+        }
+        "const_declaration" | "var_declaration" => {
+            collect_declaration_assignments(node, code, scope.clone(), assignments);
+            scope_values.extend(scope_bindings(assignments, &scope));
+        }
+        _ => {}
+    });
+}
+
+fn assignment_pairs<'a>(node: Node<'a>, code: &'a str) -> Vec<(String, Node<'a>)> {
+    let mut left_values = Vec::new();
+    let mut right_values = Vec::new();
+    let mut seen_right = false;
+
+    for child in node.named_children(&mut node.walk()) {
+        match child.kind() {
+            "expression_list" => {
+                let values: Vec<Node> = child.named_children(&mut child.walk()).collect();
+                if !seen_right {
+                    left_values.extend(values);
+                    seen_right = true;
+                } else {
+                    right_values.extend(values);
+                }
+            }
+            _ => {
+                if !seen_right && child.kind() == "identifier" {
+                    left_values.push(child);
+                } else {
+                    seen_right = true;
+                    right_values.push(child);
+                }
+            }
+        }
+    }
+
+    left_values
         .into_iter()
-        .map(|function| ParsedCallable {
-            metadata: Callable {
-                name: function.signature.clone(),
-                signature: function.signature,
-                namespace: function.namespace,
-                parameters: vec![],
-                return_type: None,
-                is_async: false,
-                is_constructor: false,
-                hash: function.hash,
-                file_path: file_path.to_string(),
-            },
-            ast: CallableAst {
-                statements: vec![],
-                nested: vec![],
-            },
+        .zip(right_values)
+        .filter_map(|(left, right)| {
+            if left.kind() != "identifier" {
+                return None;
+            }
+            Some((node_text(left, code).to_string(), right))
         })
         .collect()
 }
 
-fn build_callable_index(callables: &[ParsedCallable]) -> HashMap<String, Callable> {
-    let mut index = HashMap::new();
-    for callable in callables {
-        index.insert(simple_callable_name(&callable.metadata.name), callable.metadata.clone());
-    }
-    index
+fn collect_call_statements(
+    body: Node,
+    code: &str,
+    callable: &Callable,
+    call_statements: &mut Vec<CallStatement>,
+) {
+    walk_named(body, &mut |node| {
+        if node.kind() != "call_expression" {
+            return;
+        }
+
+        let Some(function_node) = node.child_by_field_name("function") else {
+            return;
+        };
+        let function_name = normalize_whitespace(node_text(function_node, code));
+        let arguments = node
+            .child_by_field_name("arguments")
+            .map(|args| parse_arguments(args, code))
+            .unwrap_or_default();
+
+        call_statements.push(CallStatement {
+            function_name,
+            arguments,
+            enclosing_function_name: Some(callable.signature.clone()),
+            enclosing_class_name: match &callable.namespace {
+                Namespace::Class(name) => Some(name.clone()),
+                Namespace::Module(_) => None,
+            },
+            enclosing_function_hash: Some(callable.hash.clone()),
+            is_self_invoke: false,
+            is_super_invoke: false,
+            invoked_on: None,
+            is_decorator: false,
+        });
+    });
 }
 
-fn extract_endpoints(
+fn parse_arguments(node: Node, code: &str) -> Vec<Argument> {
+    node.named_children(&mut node.walk())
+        .map(|arg| Argument {
+            assigned_variable: "".to_string(),
+            value: normalize_whitespace(node_text(arg, code)),
+            datatype: None,
+        })
+        .collect()
+}
+
+fn collect_endpoints(
+    root: Node,
     code: &str,
     file_path: &str,
-    globals: &HashMap<String, String>,
-    callables: &HashMap<String, Callable>,
+    assignments: &HashMap<AssignmentKey, Assignment>,
+    callable_lookup: &HashMap<String, Callable>,
     synthetic_callables: &mut Vec<ParsedCallable>,
 ) -> Vec<Endpoint> {
-    let mut endpoints = Vec::new();
+    let globals = scope_bindings(assignments, &Scope::Global);
     let mut synthetic_hashes = HashSet::new();
+    let mut endpoints = Vec::new();
 
-    for route in find_handlefunc_routes(code, globals) {
-        let handler = resolve_handler_callable(
+    walk_named(root, &mut |node| {
+        if node.kind() != "call_expression" {
+            return;
+        }
+
+        if let Some(endpoint) = endpoint_from_call(
+            node,
+            code,
             file_path,
-            &route.handler_expr,
-            &route.uri,
-            route.http_method.clone(),
-            callables,
+            &globals,
+            callable_lookup,
             synthetic_callables,
             &mut synthetic_hashes,
-        );
-        endpoints.push(Endpoint {
-            function_name: handler.name,
-            function_hash: handler.hash,
-            http_method: route.http_method,
-            parameters: vec![],
-            uri: route.uri,
-            file_path: file_path.to_string(),
-            router_variable: None,
-        });
-    }
-
-    for route in find_web_routes(code, globals) {
-        let handler = resolve_handler_callable(
-            file_path,
-            &route.handler_expr,
-            &route.uri,
-            route.http_method.clone(),
-            callables,
-            synthetic_callables,
-            &mut synthetic_hashes,
-        );
-        endpoints.push(Endpoint {
-            function_name: handler.name,
-            function_hash: handler.hash,
-            http_method: route.http_method,
-            parameters: vec![],
-            uri: route.uri,
-            file_path: file_path.to_string(),
-            router_variable: None,
-        });
-    }
+        ) {
+            endpoints.push(endpoint);
+        }
+    });
 
     endpoints
 }
 
-fn extract_restcalls(
+fn endpoint_from_call(
+    node: Node,
     code: &str,
     file_path: &str,
     globals: &HashMap<String, String>,
-    callables: &HashMap<String, Callable>,
-) -> Vec<RestCall> {
-    let mut restcalls = Vec::new();
+    callable_lookup: &HashMap<String, Callable>,
+    synthetic_callables: &mut Vec<ParsedCallable>,
+    synthetic_hashes: &mut HashSet<String>,
+) -> Option<Endpoint> {
+    let function_node = node.child_by_field_name("function")?;
 
-    for function in find_functions(code) {
-        let scope = merged_scope(globals, &function.body);
-        let callable = callables
-            .get(&simple_callable_name(&function.signature))
-            .cloned()
-            .unwrap_or_else(|| Callable {
-                name: function.signature.clone(),
-                signature: function.signature.clone(),
-                namespace: function.namespace.clone(),
-                parameters: vec![],
-                return_type: None,
-                is_async: false,
-                is_constructor: false,
-                hash: function.hash.clone(),
-                file_path: file_path.to_string(),
-            });
-
-        for caps in EXCHANGE_RE.captures_iter(&function.body) {
-            let Some(service_expr) = caps.get(1).map(|m| m.as_str()) else {
-                continue;
-            };
-            let Some(method_expr) = caps.get(2).map(|m| m.as_str()) else {
-                continue;
-            };
-            let Some(path_expr) = caps.get(3).map(|m| m.as_str()) else {
-                continue;
-            };
-            let Some(method) = parse_http_method(method_expr) else {
-                continue;
-            };
-            let service_name = evaluate_expr(service_expr, &scope);
-            let path = evaluate_expr(path_expr, &scope);
-            let target_uri =
-                if service_name.starts_with("http://") || service_name.starts_with("https://") {
-                    format!("{}{}", service_name.trim_end_matches('/'), path)
-                } else {
-                    format!("http://{}{}", service_name, path)
-                };
-            restcalls.push(RestCall {
-                function_name: callable.signature.clone(),
-                function_hash: callable.hash.clone(),
-                call_arguments: vec![],
-                http_method: method,
-                target_uri,
-                file_path: file_path.to_string(),
-            });
-        }
-
-        for caps in HTTP_GET_RE.captures_iter(&function.body) {
-            if let Some(url_expr) = caps.get(1).map(|m| m.as_str()) {
-                restcalls.push(build_restcall(
-                    file_path,
-                    HttpMethod::GET,
-                    url_expr,
-                    &scope,
-                    &callable,
-                ));
-            }
-        }
-
-        for caps in HTTP_POST_RE.captures_iter(&function.body) {
-            if let Some(url_expr) = caps.get(1).map(|m| m.as_str()) {
-                restcalls.push(build_restcall(
-                    file_path,
-                    HttpMethod::POST,
-                    url_expr,
-                    &scope,
-                    &callable,
-                ));
-            }
-        }
-
-        for caps in HTTP_NEW_REQUEST_RE.captures_iter(&function.body) {
-            let Some(method_expr) = caps.get(1).map(|m| m.as_str()) else {
-                continue;
-            };
-            let Some(url_expr) = caps.get(2).map(|m| m.as_str()) else {
-                continue;
-            };
-            let Some(method) = parse_http_method(method_expr) else {
-                continue;
-            };
-            restcalls.push(build_restcall(file_path, method, url_expr, &scope, &callable));
-        }
-    }
-
-    restcalls
-}
-
-fn build_restcall(
-    file_path: &str,
-    http_method: HttpMethod,
-    url_expr: &str,
-    scope: &HashMap<String, String>,
-    callable: &Callable,
-) -> RestCall {
-    RestCall {
-        function_name: callable.signature.clone(),
-        function_hash: callable.hash.clone(),
-        call_arguments: vec![],
-        http_method,
-        target_uri: evaluate_expr(url_expr, scope),
-        file_path: file_path.to_string(),
-    }
-}
-
-fn merged_scope(globals: &HashMap<String, String>, body: &str) -> HashMap<String, String> {
-    let mut scope = globals.clone();
-    for line in body.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("return ") || trimmed.starts_with("if ") {
-            continue;
-        }
-        let Some(caps) = LOCAL_ASSIGN_RE.captures(trimmed) else {
-            continue;
-        };
-        let Some(name) = caps.get(1).map(|m| m.as_str()) else {
-            continue;
-        };
-        let Some(expr) = caps.get(2).map(|m| m.as_str()) else {
-            continue;
-        };
-        let value = evaluate_expr(expr, &scope);
-        scope.insert(name.to_string(), value);
-    }
-    scope
-}
-
-fn find_functions(code: &str) -> Vec<FunctionBlock> {
-    let mut functions = Vec::new();
-    for caps in FUNC_RE.captures_iter(code) {
-        let Some(full) = caps.get(0) else {
-            continue;
-        };
-        let receiver = caps.get(1).map(|m| m.as_str()).unwrap_or_default().trim();
-        let open_brace = full.end() - 1;
-        let Some(close_brace) = find_matching_brace(code, open_brace) else {
-            continue;
-        };
-        let signature = full.as_str().trim_end_matches('{').trim().to_string();
-        let namespace = parse_namespace(receiver, code, full.start());
-        let body = code[open_brace + 1..close_brace].to_string();
-        let hash = hash_text(full.as_str());
-        functions.push(FunctionBlock {
-            signature,
-            hash,
-            namespace,
-            body,
+    if let Some((method, path, handler)) = gorilla_route_parts(node, code, globals) {
+        let callable = resolve_handler_callable(
+            file_path,
+            &handler,
+            &path,
+            &method,
+            callable_lookup,
+            synthetic_callables,
+            synthetic_hashes,
+        );
+        return Some(Endpoint {
+            function_name: callable.signature.clone(),
+            function_hash: callable.hash,
+            http_method: method,
+            parameters: vec![],
+            uri: path,
+            file_path: file_path.to_string(),
+            router_variable: None,
         });
     }
-    functions
-}
 
-fn parse_namespace(receiver: &str, file_path: &str, offset: usize) -> Namespace {
-    if receiver.is_empty() {
-        return Namespace::Module(file_path.to_string());
-    }
-    let receiver_type = receiver
-        .split_whitespace()
-        .last()
-        .unwrap_or(receiver)
-        .trim_start_matches('*')
-        .to_string();
-    if receiver_type.is_empty() {
-        Namespace::Module(format!("{file_path}#{offset}"))
-    } else {
-        Namespace::Class(receiver_type)
-    }
-}
-
-fn find_matching_brace(code: &str, open_brace: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    let mut in_string = false;
-    let mut escaped = false;
-
-    for (idx, ch) in code[open_brace..].char_indices() {
-        match ch {
-            '"' if !escaped => in_string = !in_string,
-            '\\' if in_string => {
-                escaped = !escaped;
-                continue;
-            }
-            '{' if !in_string => depth += 1,
-            '}' if !in_string => {
-                depth = depth.saturating_sub(1);
-                if depth == 0 {
-                    return Some(open_brace + idx);
-                }
-            }
-            _ => {}
+    let selector = selector_name(function_node, code)?;
+    if selector == "HandleFunc" {
+        let arguments = node
+            .child_by_field_name("arguments")
+            .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
+            .unwrap_or_default();
+        if arguments.len() < 2 {
+            return None;
         }
-        escaped = false;
+        let resolved = evaluate_expression_node(arguments[0], code, globals);
+        let (method, uri) = split_method_and_path(&resolved)?;
+        let handler_expr = normalize_whitespace(node_text(arguments[1], code));
+        let callable = resolve_handler_callable(
+            file_path,
+            &handler_expr,
+            &uri,
+            &method,
+            callable_lookup,
+            synthetic_callables,
+            synthetic_hashes,
+        );
+        return Some(Endpoint {
+            function_name: callable.signature.clone(),
+            function_hash: callable.hash,
+            http_method: method,
+            parameters: vec![],
+            uri,
+            file_path: file_path.to_string(),
+            router_variable: None,
+        });
+    }
+
+    if let Some(method) = web_route_method(&selector) {
+        let arguments = node
+            .child_by_field_name("arguments")
+            .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
+            .unwrap_or_default();
+        if arguments.len() < 2 {
+            return None;
+        }
+        let uri = evaluate_expression_node(arguments[0], code, globals);
+        let handler_expr = normalize_whitespace(node_text(arguments[1], code));
+        let callable = resolve_handler_callable(
+            file_path,
+            &handler_expr,
+            &uri,
+            &method,
+            callable_lookup,
+            synthetic_callables,
+            synthetic_hashes,
+        );
+        return Some(Endpoint {
+            function_name: callable.signature.clone(),
+            function_hash: callable.hash,
+            http_method: method,
+            parameters: vec![],
+            uri,
+            file_path: file_path.to_string(),
+            router_variable: None,
+        });
     }
 
     None
 }
 
-fn collect_string_bindings(code: &str) -> HashMap<String, String> {
-    let mut bindings = HashMap::new();
-
-    for caps in SIMPLE_CONST_RE.captures_iter(code) {
-        let Some(name) = caps.get(1).map(|m| m.as_str()) else {
-            continue;
-        };
-        let Some(value) = caps.get(2).map(|m| m.as_str()) else {
-            continue;
-        };
-        bindings.insert(name.to_string(), unquote(value));
+fn gorilla_route_parts(
+    node: Node,
+    code: &str,
+    globals: &HashMap<String, String>,
+) -> Option<(HttpMethod, String, String)> {
+    let function_node = node.child_by_field_name("function")?;
+    if selector_name(function_node, code)? != "Methods" {
+        return None;
     }
 
-    for block in CONST_BLOCK_RE.captures_iter(code) {
-        let Some(body) = block.get(1).map(|m| m.as_str()) else {
-            continue;
-        };
-        for caps in BLOCK_CONST_ENTRY_RE.captures_iter(body) {
-            let Some(name) = caps.get(1).map(|m| m.as_str()) else {
-                continue;
-            };
-            let Some(value) = caps.get(2).map(|m| m.as_str()) else {
-                continue;
-            };
-            bindings.insert(name.to_string(), unquote(value));
-        }
+    let selector_operand = function_node.child_by_field_name("operand")?;
+    if selector_operand.kind() != "call_expression" {
+        return None;
     }
 
-    bindings
-}
-
-fn find_handlefunc_routes(code: &str, globals: &HashMap<String, String>) -> Vec<RouteRegistration> {
-    let mut routes = Vec::new();
-    for line in code.lines() {
-        let Some(idx) = line.find(".HandleFunc(") else {
-            continue;
-        };
-        let args = split_args(&line[idx + ".HandleFunc(".len()..]);
-        if args.len() < 2 {
-            continue;
-        }
-        let path_expr = args[0];
-        let handler_expr = args[1].trim().to_string();
-
-        if let Some(methods_idx) = line.find(".Methods(") {
-            let methods_args = split_args(&line[methods_idx + ".Methods(".len()..]);
-            let path = evaluate_expr(path_expr, globals);
-            for method in methods_args
-                .into_iter()
-                .filter_map(|value| parse_http_method(value.trim()))
-            {
-                routes.push(RouteRegistration {
-                    http_method: method,
-                    uri: path.clone(),
-                    handler_expr: handler_expr.clone(),
-                });
-            }
-        } else {
-            let resolved = evaluate_expr(path_expr, globals);
-            let Some((method, uri)) = split_method_and_path(&resolved) else {
-                continue;
-            };
-            routes.push(RouteRegistration {
-                http_method: method,
-                uri,
-                handler_expr,
-            });
-        }
+    let inner_function = selector_operand.child_by_field_name("function")?;
+    if selector_name(inner_function, code)? != "HandleFunc" {
+        return None;
     }
-    routes
-}
 
-fn find_web_routes(code: &str, globals: &HashMap<String, String>) -> Vec<RouteRegistration> {
-    let mut routes = Vec::new();
-    for line in code.lines() {
-        let Some(caps) = WEB_METHOD_RE.captures(line) else {
-            continue;
-        };
-        let Some(method_text) = caps.get(1).map(|m| m.as_str()) else {
-            continue;
-        };
-        let Some(start) = line.find(&format!("web.{method_text}(")) else {
-            continue;
-        };
-        let args = split_args(&line[start + format!("web.{method_text}(").len()..]);
-        if args.len() < 2 {
-            continue;
-        }
-        let Ok(http_method) = HttpMethod::from_str(&method_text.to_uppercase()) else {
-            continue;
-        };
-        routes.push(RouteRegistration {
-            http_method,
-            uri: evaluate_expr(args[0], globals),
-            handler_expr: args[1].trim().to_string(),
-        });
+    let inner_args = selector_operand
+        .child_by_field_name("arguments")
+        .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())?;
+    let method_args = node
+        .child_by_field_name("arguments")
+        .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())?;
+    if inner_args.len() < 2 || method_args.is_empty() {
+        return None;
     }
-    routes
+
+    let method = parse_http_method_value(&evaluate_expression_node(method_args[0], code, globals))?;
+    let path = evaluate_expression_node(inner_args[0], code, globals);
+    let handler = normalize_whitespace(node_text(inner_args[1], code));
+    Some((method, path, handler))
 }
 
 fn resolve_handler_callable(
     file_path: &str,
     handler_expr: &str,
     uri: &str,
-    method: HttpMethod,
-    callables: &HashMap<String, Callable>,
+    method: &HttpMethod,
+    callable_lookup: &HashMap<String, Callable>,
     synthetic_callables: &mut Vec<ParsedCallable>,
     synthetic_hashes: &mut HashSet<String>,
 ) -> Callable {
-    if let Some(actual) = lookup_callable(handler_expr, callables) {
+    if let Some(actual) = lookup_callable(handler_expr, callable_lookup) {
         return actual;
     }
 
-    let signature = format!("handler {} {}", format_http_method(&method), uri);
+    let signature = format!("handler {} {}", format_http_method(method), uri);
     let hash = hash_text(&format!("{file_path}::{signature}::{handler_expr}"));
     if synthetic_hashes.insert(hash.clone()) {
         synthetic_callables.push(ParsedCallable {
@@ -568,153 +580,335 @@ fn resolve_handler_callable(
     }
 }
 
-fn lookup_callable(handler_expr: &str, callables: &HashMap<String, Callable>) -> Option<Callable> {
+fn lookup_callable(
+    handler_expr: &str,
+    callable_lookup: &HashMap<String, Callable>,
+) -> Option<Callable> {
     let trimmed = handler_expr.trim();
-    let key = trimmed
-        .split('.')
-        .next_back()
-        .unwrap_or(trimmed)
-        .trim();
-    callables.get(key).cloned()
+    let simple = trimmed.split('.').next_back().unwrap_or(trimmed);
+    callable_lookup
+        .get(trimmed)
+        .cloned()
+        .or_else(|| callable_lookup.get(simple).cloned())
 }
 
-fn simple_callable_name(signature: &str) -> String {
-    FUNC_NAME_RE
-        .captures(signature)
-        .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
-        .unwrap_or_else(|| {
-            signature
-                .split('(')
-                .next()
-                .unwrap_or(signature)
-                .split_whitespace()
-                .next_back()
-                .unwrap_or(signature)
-                .to_string()
-        })
-}
+fn identify_restcall(file: &TypedFileRecord, call: &CallStatement) -> Option<RestCall> {
+    let scope = call
+        .enclosing_function_name
+        .as_ref()
+        .map(|name| Scope::Function(name.clone()))
+        .unwrap_or(Scope::Global);
+    let resolved_scope = merged_scope_bindings(&file.assignments, &scope);
 
-fn split_args(input: &str) -> Vec<&str> {
-    let mut args = Vec::new();
-    let mut depth = 0i32;
-    let mut in_string = false;
-    let mut escaped = false;
-    let mut start = 0usize;
+    if call.function_name.ends_with(".exchange") && call.arguments.len() >= 4 {
+        let service = resolve_argument_value(&call.arguments[1], &resolved_scope);
+        let method =
+            parse_http_method_value(&resolve_argument_value(&call.arguments[2], &resolved_scope))?;
+        let path = resolve_argument_value(&call.arguments[3], &resolved_scope);
+        let target_uri = if service.starts_with("http://") || service.starts_with("https://") {
+            format!("{}{}", service.trim_end_matches('/'), path)
+        } else {
+            format!("http://{}{}", service, path)
+        };
+        return Some(build_restcall(file, call, method, target_uri));
+    }
 
-    for (idx, ch) in input.char_indices() {
-        match ch {
-            '"' if !escaped => in_string = !in_string,
-            '\\' if in_string => {
-                escaped = !escaped;
-                continue;
-            }
-            '(' if !in_string => depth += 1,
-            ')' if !in_string => {
-                if depth == 0 {
-                    args.push(input[start..idx].trim());
-                    return args;
-                }
-                depth -= 1;
-            }
-            ',' if !in_string && depth == 0 => {
-                args.push(input[start..idx].trim());
-                start = idx + 1;
-            }
-            _ => {}
+    if call.function_name == "http.Get" && !call.arguments.is_empty() {
+        let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
+        return Some(build_restcall(file, call, HttpMethod::GET, target_uri));
+    }
+
+    if call.function_name == "http.Post" && !call.arguments.is_empty() {
+        let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
+        return Some(build_restcall(file, call, HttpMethod::POST, target_uri));
+    }
+
+    if matches!(
+        call.function_name.as_str(),
+        "http.NewRequest" | "http.NewRequestWithContext"
+    ) {
+        let method_index = usize::from(call.function_name == "http.NewRequestWithContext");
+        let url_index = method_index + 1;
+        if call.arguments.len() <= url_index {
+            return None;
         }
-        escaped = false;
+        let method = parse_http_method_value(&resolve_argument_value(
+            &call.arguments[method_index],
+            &resolved_scope,
+        ))?;
+        let target_uri = resolve_argument_value(&call.arguments[url_index], &resolved_scope);
+        return Some(build_restcall(file, call, method, target_uri));
     }
 
-    args
+    None
 }
 
-fn split_method_and_path(value: &str) -> Option<(HttpMethod, String)> {
-    let (method, path) = value.split_once(' ')?;
-    Some((HttpMethod::from_str(method).ok()?, path.to_string()))
+fn build_restcall(
+    file: &TypedFileRecord,
+    call: &CallStatement,
+    http_method: HttpMethod,
+    target_uri: String,
+) -> RestCall {
+    RestCall {
+        function_name: call
+            .enclosing_function_name
+            .clone()
+            .unwrap_or_else(|| call.function_name.clone()),
+        function_hash: call.enclosing_function_hash.clone().unwrap_or_default(),
+        call_arguments: call.arguments.clone(),
+        http_method,
+        target_uri,
+        file_path: file.file_path.clone(),
+    }
 }
 
-fn parse_http_method(expr: &str) -> Option<HttpMethod> {
-    let trimmed = expr.trim();
-    if let Some(caps) = HTTP_METHOD_CONST_RE.captures(trimmed) {
-        return HttpMethod::from_str(caps.get(1)?.as_str()).ok();
-    }
-    if let Some(literal) = STRING_LITERAL_RE.captures(trimmed) {
-        return HttpMethod::from_str(literal.get(1)?.as_str()).ok();
-    }
-    HttpMethod::from_str(trimmed).ok()
+fn resolve_argument_value(argument: &Argument, scope: &HashMap<String, String>) -> String {
+    evaluate_expression_text(&argument.value, scope)
 }
 
-fn evaluate_expr(expr: &str, scope: &HashMap<String, String>) -> String {
-    let trimmed = expr.trim().trim_end_matches(',');
-    if let Some(parts) = split_top_level(trimmed, '+') {
-        return parts
-            .into_iter()
-            .map(|part| evaluate_expr(&part, scope))
-            .collect::<String>();
+fn merged_scope_bindings(
+    assignments: &HashMap<AssignmentKey, Assignment>,
+    scope: &Scope,
+) -> HashMap<String, String> {
+    let mut values = scope_bindings(assignments, &Scope::Global);
+    values.extend(scope_bindings(assignments, scope));
+    values
+}
+
+fn scope_bindings(
+    assignments: &HashMap<AssignmentKey, Assignment>,
+    scope: &Scope,
+) -> HashMap<String, String> {
+    assignments
+        .iter()
+        .filter(|(key, _)| key.scope == *scope)
+        .map(|(_, assignment)| (assignment.variable_name.clone(), assignment.value.clone()))
+        .collect()
+}
+
+fn evaluate_expression_node(node: Node, code: &str, scope: &HashMap<String, String>) -> String {
+    match node.kind() {
+        "interpreted_string_literal" | "raw_string_literal" => {
+            strip_quotes(node_text(node, code)).to_string()
+        }
+        "identifier" => scope
+            .get(node_text(node, code))
+            .cloned()
+            .unwrap_or_else(|| node_text(node, code).to_string()),
+        "parenthesized_expression" => node
+            .named_child(0)
+            .map(|child| evaluate_expression_node(child, code, scope))
+            .unwrap_or_default(),
+        "binary_expression" => {
+            let children: Vec<Node> = node.named_children(&mut node.walk()).collect();
+            if children.len() == 2 && node_text(node, code).contains('+') {
+                return evaluate_expression_node(children[0], code, scope)
+                    + &evaluate_expression_node(children[1], code, scope);
+            }
+            normalize_whitespace(node_text(node, code))
+        }
+        "call_expression" => evaluate_special_call(node, code, scope)
+            .unwrap_or_else(|| normalize_whitespace(node_text(node, code))),
+        "selector_expression" => scope
+            .get(node_text(node, code))
+            .cloned()
+            .unwrap_or_else(|| normalize_whitespace(node_text(node, code))),
+        "unary_expression" => node
+            .named_child(0)
+            .map(|child| evaluate_expression_node(child, code, scope))
+            .unwrap_or_else(|| normalize_whitespace(node_text(node, code))),
+        _ => normalize_whitespace(node_text(node, code)),
     }
-    if let Some(caps) = STRING_LITERAL_RE.captures(trimmed) {
-        return unescape_basic(caps.get(1).map(|m| m.as_str()).unwrap_or_default());
+}
+
+fn evaluate_special_call(
+    node: Node,
+    code: &str,
+    scope: &HashMap<String, String>,
+) -> Option<String> {
+    let function_node = node.child_by_field_name("function")?;
+    let selector = selector_name(function_node, code)?;
+    let arguments = node
+        .child_by_field_name("arguments")
+        .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
+        .unwrap_or_default();
+
+    match selector.as_str() {
+        "PathEscape" => arguments.first().map(|arg| {
+            let value = node_text(*arg, code).trim().to_string();
+            format!("{{{value}}}")
+        }),
+        "PathValue" => arguments.first().map(|arg| {
+            let value = strip_quotes(node_text(*arg, code));
+            format!("{{{value}}}")
+        }),
+        "TrimRight" => {
+            if arguments.len() < 2 {
+                return None;
+            }
+            let base = evaluate_expression_node(arguments[0], code, scope);
+            let suffix = strip_quotes(node_text(arguments[1], code));
+            Some(base.trim_end_matches(&suffix).to_string())
+        }
+        _ => None,
     }
-    if let Some(caps) = URL_PATH_ESCAPE_RE.captures(trimmed) {
-        return format!("{{{}}}", caps.get(1).map(|m| m.as_str()).unwrap_or("value"));
-    }
-    if let Some(caps) = PATH_VALUE_RE.captures(trimmed) {
-        return format!("{{{}}}", caps.get(1).map(|m| m.as_str()).unwrap_or("value"));
-    }
-    if let Some(caps) = TRIM_RIGHT_RE.captures(trimmed) {
-        return evaluate_expr(caps.get(1).map(|m| m.as_str()).unwrap_or_default(), scope)
-            .trim_end_matches('/')
-            .to_string();
-    }
-    if let Some(value) = scope.get(trimmed) {
+}
+
+fn evaluate_expression_text(expr: &str, scope: &HashMap<String, String>) -> String {
+    if let Some(value) = scope.get(expr.trim()) {
         return value.clone();
     }
+
+    if let Some(parts) = split_top_level_plus(expr) {
+        return parts
+            .into_iter()
+            .map(|part| evaluate_expression_text(&part, scope))
+            .collect::<String>();
+    }
+
+    let trimmed = expr.trim().trim_end_matches(',');
+    if (trimmed.starts_with('"') && trimmed.ends_with('"'))
+        || (trimmed.starts_with('`') && trimmed.ends_with('`'))
+    {
+        return strip_quotes(trimmed).to_string();
+    }
+    if let Some(inner) = trimmed
+        .strip_prefix("url.PathEscape(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        return format!("{{{}}}", inner.trim());
+    }
+    if let Some(inner) = trimmed
+        .strip_prefix("request.PathValue(")
+        .or_else(|| trimmed.strip_prefix("PathValue("))
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        return format!("{{{}}}", strip_quotes(inner.trim()));
+    }
+    if let Some(inner) = trimmed
+        .strip_prefix("strings.TrimRight(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        let parts = split_argument_text(inner);
+        if parts.len() == 2 {
+            let base = evaluate_expression_text(parts[0], scope);
+            let suffix = strip_quotes(parts[1].trim());
+            return base.trim_end_matches(&suffix).to_string();
+        }
+    }
+
     trimmed.to_string()
 }
 
-fn split_top_level(input: &str, delimiter: char) -> Option<Vec<String>> {
+fn split_argument_text(input: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut depth = 0i32;
     let mut in_string = false;
-    let mut escaped = false;
+    let mut quote = '\0';
     let mut start = 0usize;
-    let mut saw_delimiter = false;
 
-    for (idx, ch) in input.char_indices() {
+    for (index, ch) in input.char_indices() {
         match ch {
-            '"' if !escaped => in_string = !in_string,
-            '\\' if in_string => {
-                escaped = !escaped;
-                continue;
+            '"' | '`' => {
+                if !in_string {
+                    in_string = true;
+                    quote = ch;
+                } else if ch == quote {
+                    in_string = false;
+                }
             }
             '(' if !in_string => depth += 1,
             ')' if !in_string => depth -= 1,
-            _ if ch == delimiter && !in_string && depth == 0 => {
-                parts.push(input[start..idx].trim().to_string());
-                start = idx + ch.len_utf8();
-                saw_delimiter = true;
+            ',' if !in_string && depth == 0 => {
+                parts.push(input[start..index].trim());
+                start = index + 1;
             }
             _ => {}
         }
-        escaped = false;
     }
 
-    if !saw_delimiter {
+    let tail = input[start..].trim();
+    if !tail.is_empty() {
+        parts.push(tail);
+    }
+    parts
+}
+
+fn split_top_level_plus(input: &str) -> Option<Vec<String>> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut in_string = false;
+    let mut quote = '\0';
+    let mut start = 0usize;
+    let mut seen_plus = false;
+
+    for (index, ch) in input.char_indices() {
+        match ch {
+            '"' | '`' => {
+                if !in_string {
+                    in_string = true;
+                    quote = ch;
+                } else if ch == quote {
+                    in_string = false;
+                }
+            }
+            '(' if !in_string => depth += 1,
+            ')' if !in_string => depth -= 1,
+            '+' if !in_string && depth == 0 => {
+                parts.push(input[start..index].trim().to_string());
+                start = index + 1;
+                seen_plus = true;
+            }
+            _ => {}
+        }
+    }
+
+    if !seen_plus {
         return None;
     }
     parts.push(input[start..].trim().to_string());
     Some(parts)
 }
 
-fn unquote(input: &str) -> String {
-    STRING_LITERAL_RE
-        .captures(input)
-        .and_then(|caps| caps.get(1).map(|m| unescape_basic(m.as_str())))
-        .unwrap_or_else(|| input.to_string())
+fn selector_name(node: Node, code: &str) -> Option<String> {
+    if node.kind() == "identifier" {
+        return Some(node_text(node, code).to_string());
+    }
+    if node.kind() != "selector_expression" {
+        return None;
+    }
+    node.child_by_field_name("field")
+        .map(|field| node_text(field, code).to_string())
+        .or_else(|| {
+            node.named_children(&mut node.walk())
+                .last()
+                .map(|field| node_text(field, code).to_string())
+        })
 }
 
-fn unescape_basic(input: &str) -> String {
-    input.replace("\\\"", "\"").replace("\\n", "\n")
+fn web_route_method(selector: &str) -> Option<HttpMethod> {
+    let method = selector
+        .strip_prefix("Get")
+        .map(|_| "GET")
+        .or_else(|| selector.strip_prefix("Post").map(|_| "POST"))
+        .or_else(|| selector.strip_prefix("Put").map(|_| "PUT"))
+        .or_else(|| selector.strip_prefix("Delete").map(|_| "DELETE"))?;
+    HttpMethod::from_str(method).ok()
+}
+
+fn parse_http_method_value(value: &str) -> Option<HttpMethod> {
+    let trimmed = value.trim();
+    let normalized = trimmed
+        .strip_prefix("http.Method")
+        .unwrap_or(trimmed)
+        .trim_matches('"')
+        .trim_matches('`');
+    HttpMethod::from_str(&normalized.to_uppercase()).ok()
+}
+
+fn split_method_and_path(value: &str) -> Option<(HttpMethod, String)> {
+    let (method, path) = value.split_once(' ')?;
+    Some((HttpMethod::from_str(method).ok()?, path.to_string()))
 }
 
 fn format_http_method(method: &HttpMethod) -> &'static str {
@@ -727,22 +921,29 @@ fn format_http_method(method: &HttpMethod) -> &'static str {
     }
 }
 
-struct FunctionBlock {
-    signature: String,
-    hash: String,
-    namespace: Namespace,
-    body: String,
+fn simple_callable_name(signature: &str) -> Option<String> {
+    signature
+        .split('(')
+        .next()
+        .map(str::trim)
+        .and_then(|prefix| prefix.split_whitespace().next_back())
+        .map(|name| name.to_string())
 }
 
-struct RouteRegistration {
-    http_method: HttpMethod,
-    uri: String,
-    handler_expr: String,
+fn walk_named(node: Node, visit: &mut impl FnMut(Node)) {
+    visit(node);
+    for child in node.named_children(&mut node.walk()) {
+        walk_named(child, visit);
+    }
+}
+
+fn node_text<'a>(node: Node, code: &'a str) -> &'a str {
+    &code[node.start_byte()..node.end_byte()]
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_callables, extract_endpoints, extract_restcalls};
+    use super::{extract_syntactic, identify};
 
     #[test]
     fn extracts_train_ticket_routes_and_exchange_calls() {
@@ -763,36 +964,34 @@ func (c *RouteClient) RoutesBetween(start, end string) {
 }
 "#;
 
-        let globals = super::collect_string_bindings(code);
-        let mut callables = extract_callables(code, "router.go");
-        let callable_index = super::build_callable_index(&callables);
-        let mut synthetic = Vec::new();
-        let endpoints =
-            extract_endpoints(code, "router.go", &globals, &callable_index, &mut synthetic);
-        callables.extend(synthetic);
-        assert_eq!(endpoints.len(), 1);
-        assert_eq!(endpoints[0].uri, "/api/v1/stationservice/stations");
-        assert!(!endpoints[0].function_hash.is_empty());
-
-        let restcalls = extract_restcalls(
-            code,
-            "client.go",
-            &globals,
-            &super::build_callable_index(&callables),
+        let record = extract_syntactic(code, "router.go").expect("Go extraction should succeed");
+        assert_eq!(record.endpoints.len(), 1);
+        assert_eq!(record.endpoints[0].uri, "/api/v1/stationservice/stations");
+        assert_eq!(record.call_statements.len(), 4);
+        assert!(
+            record
+                .assignments
+                .values()
+                .any(|assignment| assignment.variable_name == "path"
+                    && assignment.value == "/api/v1/routeservice/routes/{start}/{end}")
         );
-        assert_eq!(restcalls.len(), 1);
+
+        let mut typed = models::ir::project::TypedFileRecord::from(record);
+        identify(&mut typed);
+        assert_eq!(typed.raw_restcalls.len(), 1);
         assert_eq!(
-            restcalls[0].target_uri,
+            typed.raw_restcalls[0].target_uri,
             "http://ts-route-service/api/v1/routeservice/routes/{start}/{end}"
         );
-        assert!(!restcalls[0].function_hash.is_empty());
     }
 
     #[test]
     fn extracts_gorilla_and_direct_http_calls() {
         let code = r#"
+func UpdatePaymentStatus() {}
+
 func Router() {
-    r.HandleFunc("/payment/{order_id}", paymentController.UpdatePaymentStatus).Methods("POST")
+    r.HandleFunc("/payment/{order_id}", UpdatePaymentStatus).Methods("POST")
 }
 
 func invoke(url string) {
@@ -801,26 +1000,14 @@ func invoke(url string) {
     _ = req
 }
 "#;
-        let globals = super::collect_string_bindings(code);
-        let callables = extract_callables(code, "router.go");
-        let callable_index = super::build_callable_index(&callables);
-        let mut synthetic = Vec::new();
-        let endpoints =
-            extract_endpoints(code, "router.go", &globals, &callable_index, &mut synthetic);
-        assert_eq!(endpoints.len(), 1);
-        assert_eq!(endpoints[0].uri, "/payment/{order_id}");
-        assert!(!endpoints[0].function_hash.is_empty());
 
-        let mut all_callables = callables;
-        all_callables.extend(synthetic);
-        let restcalls = extract_restcalls(
-            code,
-            "client.go",
-            &globals,
-            &super::build_callable_index(&all_callables),
-        );
-        assert_eq!(restcalls.len(), 1);
-        assert_eq!(restcalls[0].target_uri, "url/ship-order");
-        assert!(!restcalls[0].function_hash.is_empty());
+        let record = extract_syntactic(code, "router.go").expect("Go extraction should succeed");
+        assert_eq!(record.endpoints.len(), 1);
+        assert_eq!(record.endpoints[0].uri, "/payment/{order_id}");
+
+        let mut typed = models::ir::project::TypedFileRecord::from(record);
+        identify(&mut typed);
+        assert_eq!(typed.raw_restcalls.len(), 1);
+        assert_eq!(typed.raw_restcalls[0].target_uri, "url/ship-order");
     }
 }

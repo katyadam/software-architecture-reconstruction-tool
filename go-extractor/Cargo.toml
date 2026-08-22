@@ -6,5 +6,5 @@ edition = "2024"
 [dependencies]
 models = { workspace = true }
 statix = { workspace = true }
-regex = { workspace = true }
-once_cell = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-go = { workspace = true }
