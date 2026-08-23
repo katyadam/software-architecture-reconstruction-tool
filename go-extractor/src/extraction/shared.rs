@@ -4,6 +4,57 @@ use models::{Assignment, AssignmentKey, Callable, HttpMethod, Scope};
 use statix::strings::{normalize_whitespace, strip_quotes};
 use tree_sitter::Node;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum GoNodeKind {
+    InterpretedStringLiteral,
+    RawStringLiteral,
+    Identifier,
+    ParenthesizedExpression,
+    BinaryExpression,
+    CallExpression,
+    SelectorExpression,
+    UnaryExpression,
+    FunctionDeclaration,
+    MethodDeclaration,
+    ConstDeclaration,
+    VarDeclaration,
+    ConstSpec,
+    VarSpec,
+    ExpressionList,
+    ShortVarDeclaration,
+    AssignmentStatement,
+    Other,
+}
+
+impl From<&str> for GoNodeKind {
+    fn from(value: &str) -> Self {
+        match value {
+            "interpreted_string_literal" => Self::InterpretedStringLiteral,
+            "raw_string_literal" => Self::RawStringLiteral,
+            "identifier" => Self::Identifier,
+            "parenthesized_expression" => Self::ParenthesizedExpression,
+            "binary_expression" => Self::BinaryExpression,
+            "call_expression" => Self::CallExpression,
+            "selector_expression" => Self::SelectorExpression,
+            "unary_expression" => Self::UnaryExpression,
+            "function_declaration" => Self::FunctionDeclaration,
+            "method_declaration" => Self::MethodDeclaration,
+            "const_declaration" => Self::ConstDeclaration,
+            "var_declaration" => Self::VarDeclaration,
+            "const_spec" => Self::ConstSpec,
+            "var_spec" => Self::VarSpec,
+            "expression_list" => Self::ExpressionList,
+            "short_var_declaration" => Self::ShortVarDeclaration,
+            "assignment_statement" => Self::AssignmentStatement,
+            _ => Self::Other,
+        }
+    }
+}
+
+pub(super) fn go_node_kind(node: Node) -> GoNodeKind {
+    GoNodeKind::from(node.kind())
+}
+
 pub(super) fn scope_bindings(
     assignments: &HashMap<AssignmentKey, Assignment>,
     scope: &Scope,
@@ -29,19 +80,19 @@ pub(super) fn evaluate_expression_node(
     code: &str,
     scope: &HashMap<String, String>,
 ) -> String {
-    match node.kind() {
-        "interpreted_string_literal" | "raw_string_literal" => {
+    match go_node_kind(node) {
+        GoNodeKind::InterpretedStringLiteral | GoNodeKind::RawStringLiteral => {
             strip_quotes(node_text(node, code)).to_string()
         }
-        "identifier" => scope
+        GoNodeKind::Identifier => scope
             .get(node_text(node, code))
             .cloned()
             .unwrap_or_else(|| node_text(node, code).to_string()),
-        "parenthesized_expression" => node
+        GoNodeKind::ParenthesizedExpression => node
             .named_child(0)
             .map(|child| evaluate_expression_node(child, code, scope))
             .unwrap_or_default(),
-        "binary_expression" => {
+        GoNodeKind::BinaryExpression => {
             let children: Vec<Node> = node.named_children(&mut node.walk()).collect();
             if children.len() == 2 && node_text(node, code).contains('+') {
                 return evaluate_expression_node(children[0], code, scope)
@@ -49,17 +100,26 @@ pub(super) fn evaluate_expression_node(
             }
             normalize_whitespace(node_text(node, code))
         }
-        "call_expression" => evaluate_special_call(node, code, scope)
+        GoNodeKind::CallExpression => evaluate_special_call(node, code, scope)
             .unwrap_or_else(|| normalize_whitespace(node_text(node, code))),
-        "selector_expression" => scope
+        GoNodeKind::SelectorExpression => scope
             .get(node_text(node, code))
             .cloned()
             .unwrap_or_else(|| normalize_whitespace(node_text(node, code))),
-        "unary_expression" => node
+        GoNodeKind::UnaryExpression => node
             .named_child(0)
             .map(|child| evaluate_expression_node(child, code, scope))
             .unwrap_or_else(|| normalize_whitespace(node_text(node, code))),
-        _ => normalize_whitespace(node_text(node, code)),
+        GoNodeKind::Other
+        | GoNodeKind::FunctionDeclaration
+        | GoNodeKind::MethodDeclaration
+        | GoNodeKind::ConstDeclaration
+        | GoNodeKind::VarDeclaration
+        | GoNodeKind::ConstSpec
+        | GoNodeKind::VarSpec
+        | GoNodeKind::ExpressionList
+        | GoNodeKind::ShortVarDeclaration
+        | GoNodeKind::AssignmentStatement => normalize_whitespace(node_text(node, code)),
     }
 }
 
@@ -110,10 +170,10 @@ pub(super) fn evaluate_expression_text(expr: &str, scope: &HashMap<String, Strin
 }
 
 pub(super) fn selector_name(node: Node, code: &str) -> Option<String> {
-    if node.kind() == "identifier" {
+    if go_node_kind(node) == GoNodeKind::Identifier {
         return Some(node_text(node, code).to_string());
     }
-    if node.kind() != "selector_expression" {
+    if go_node_kind(node) != GoNodeKind::SelectorExpression {
         return None;
     }
     node.child_by_field_name("field")

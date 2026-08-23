@@ -7,9 +7,9 @@ use statix::strings::{hash_text, normalize_whitespace};
 use tree_sitter::Node;
 
 use super::shared::{
-    evaluate_expression_node, format_http_method, lookup_callable, node_text,
-    parse_http_method_value, scope_bindings, selector_name, split_method_and_path, walk_named,
-    web_route_method,
+    GoNodeKind, evaluate_expression_node, format_http_method, go_node_kind, lookup_callable,
+    node_text, parse_http_method_value, scope_bindings, selector_name, split_method_and_path,
+    walk_named, web_route_method,
 };
 
 pub(super) fn collect_endpoints(
@@ -25,7 +25,7 @@ pub(super) fn collect_endpoints(
     let mut endpoints = Vec::new();
 
     walk_named(root, &mut |node| {
-        if node.kind() != "call_expression" {
+        if go_node_kind(node) != GoNodeKind::CallExpression {
             return;
         }
 
@@ -153,7 +153,7 @@ fn gorilla_route_parts(
     }
 
     let selector_operand = function_node.child_by_field_name("operand")?;
-    if selector_operand.kind() != "call_expression" {
+    if go_node_kind(selector_operand) != GoNodeKind::CallExpression {
         return None;
     }
 

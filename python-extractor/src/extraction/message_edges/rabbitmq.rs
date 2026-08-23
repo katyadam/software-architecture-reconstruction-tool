@@ -6,6 +6,7 @@ use models::{
 const RABBITMQ_PUBLISH_METHOD: &str = "basic_publish";
 const RABBITMQ_CONSUME_METHOD: &str = "basic_consume";
 const RABBITMQ_QUEUE_DECLARE_METHOD: &str = "queue_declare";
+const RABBITMQ_QUEUE_BIND_METHOD: &str = "queue_bind";
 const METHOD_SEPARATOR: char = '.';
 const DESTINATION_SEPARATOR: &str = ":";
 const EXCHANGE_ARGUMENT: &str = "exchange";
@@ -33,6 +34,7 @@ impl RabbitMqIdentificationStrategy {
             RABBITMQ_PUBLISH_METHOD => self.identify_publish(call, file_path),
             RABBITMQ_CONSUME_METHOD => self.identify_consume(call, file_path),
             RABBITMQ_QUEUE_DECLARE_METHOD => self.identify_queue_declare(call, file_path),
+            RABBITMQ_QUEUE_BIND_METHOD => self.identify_queue_bind(call, file_path),
             _ => None,
         }
     }
@@ -102,6 +104,42 @@ impl RabbitMqIdentificationStrategy {
             None,
             None,
             Some(queue),
+            None,
+            call,
+            file_path,
+        ))
+    }
+
+    fn identify_queue_bind(&self, call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
+        let exchange = get_arg(&call.arguments, EXCHANGE_ARGUMENT, 0)
+            .map(clean_value)
+            .filter(|v| !v.is_empty());
+        let queue = get_arg(&call.arguments, QUEUE_ARGUMENT, 1).map(clean_value);
+        let routing_key = get_arg(&call.arguments, ROUTING_KEY_ARGUMENT, 2).map(clean_value);
+
+        let destination = match (&exchange, &routing_key) {
+            (Some(exchange), Some(routing_key)) => {
+                format!("{exchange}{DESTINATION_SEPARATOR}{routing_key}")
+            }
+            (Some(exchange), None) => exchange.clone(),
+            (None, Some(routing_key)) => routing_key.clone(),
+            (None, None) => queue.clone().unwrap_or_default(),
+        };
+        if destination.is_empty() {
+            return None;
+        }
+
+        Some(self.edge(
+            MessageRole::Binding,
+            if exchange.is_some() {
+                MessageDestinationKind::ExchangeRoutingKey
+            } else {
+                MessageDestinationKind::Queue
+            },
+            destination,
+            exchange,
+            routing_key,
+            queue,
             None,
             call,
             file_path,

@@ -8,7 +8,8 @@ use statix::strings::{hash_text, normalize_whitespace};
 use tree_sitter::Node;
 
 use super::shared::{
-    evaluate_expression_node, node_text, scope_bindings, simple_callable_name, walk_named,
+    GoNodeKind, evaluate_expression_node, go_node_kind, node_text, scope_bindings,
+    simple_callable_name, walk_named,
 };
 
 pub(super) fn collect_global_assignments(
@@ -17,8 +18,8 @@ pub(super) fn collect_global_assignments(
     assignments: &mut HashMap<AssignmentKey, Assignment>,
 ) {
     for child in root.named_children(&mut root.walk()) {
-        match child.kind() {
-            "const_declaration" | "var_declaration" => {
+        match go_node_kind(child) {
+            GoNodeKind::ConstDeclaration | GoNodeKind::VarDeclaration => {
                 collect_declaration_assignments(child, code, Scope::Global, assignments);
             }
             _ => {}
@@ -36,7 +37,10 @@ pub(super) fn collect_callable_ir(
     assignments: &mut HashMap<AssignmentKey, Assignment>,
 ) {
     for child in root.named_children(&mut root.walk()) {
-        if !matches!(child.kind(), "function_declaration" | "method_declaration") {
+        if !matches!(
+            go_node_kind(child),
+            GoNodeKind::FunctionDeclaration | GoNodeKind::MethodDeclaration
+        ) {
             continue;
         }
 
@@ -60,7 +64,7 @@ fn build_callable(node: Node, code: &str, file_path: &str) -> ParsedCallable {
         .map(|name| node_text(name, code).to_string())
         .unwrap_or_else(|| signature.clone());
     let body_hash = hash_text(node_text(node, code));
-    let namespace = if node.kind() == "method_declaration" {
+    let namespace = if go_node_kind(node) == GoNodeKind::MethodDeclaration {
         Namespace::Class(
             receiver_type(
                 node.child_by_field_name("receiver")
@@ -125,7 +129,10 @@ fn collect_declaration_assignments(
     assignments: &mut HashMap<AssignmentKey, Assignment>,
 ) {
     for child in node.named_children(&mut node.walk()) {
-        if matches!(child.kind(), "const_spec" | "var_spec") {
+        if matches!(
+            go_node_kind(child),
+            GoNodeKind::ConstSpec | GoNodeKind::VarSpec
+        ) {
             collect_spec_assignments(child, code, scope.clone(), assignments);
         }
     }
@@ -141,17 +148,17 @@ fn collect_spec_assignments(
     let mut values = Vec::new();
 
     for child in spec.named_children(&mut spec.walk()) {
-        match child.kind() {
-            "identifier" => identifiers.push(child),
-            "expression_list" => {
+        match go_node_kind(child) {
+            GoNodeKind::Identifier => identifiers.push(child),
+            GoNodeKind::ExpressionList => {
                 values.extend(child.named_children(&mut child.walk()));
             }
-            "interpreted_string_literal"
-            | "raw_string_literal"
-            | "binary_expression"
-            | "call_expression"
-            | "selector_expression"
-            | "parenthesized_expression" => values.push(child),
+            GoNodeKind::InterpretedStringLiteral
+            | GoNodeKind::RawStringLiteral
+            | GoNodeKind::BinaryExpression
+            | GoNodeKind::CallExpression
+            | GoNodeKind::SelectorExpression
+            | GoNodeKind::ParenthesizedExpression => values.push(child),
             _ => {}
         }
     }
@@ -189,8 +196,8 @@ fn collect_local_assignments(
 ) {
     let scope = Scope::Function(function_signature.to_string());
     let mut scope_values = scope_bindings(assignments, &Scope::Global);
-    walk_named(body, &mut |node| match node.kind() {
-        "short_var_declaration" | "assignment_statement" => {
+    walk_named(body, &mut |node| match go_node_kind(node) {
+        GoNodeKind::ShortVarDeclaration | GoNodeKind::AssignmentStatement => {
             let pairs = assignment_pairs(node, code);
             for (name, value_node) in pairs {
                 let value = evaluate_expression_node(value_node, code, &scope_values);
@@ -208,7 +215,7 @@ fn collect_local_assignments(
                 scope_values.insert(name, value);
             }
         }
-        "const_declaration" | "var_declaration" => {
+        GoNodeKind::ConstDeclaration | GoNodeKind::VarDeclaration => {
             collect_declaration_assignments(node, code, scope.clone(), assignments);
             scope_values.extend(scope_bindings(assignments, &scope));
         }
@@ -222,8 +229,8 @@ fn assignment_pairs<'a>(node: Node<'a>, code: &'a str) -> Vec<(String, Node<'a>)
     let mut seen_right = false;
 
     for child in node.named_children(&mut node.walk()) {
-        match child.kind() {
-            "expression_list" => {
+        match go_node_kind(child) {
+            GoNodeKind::ExpressionList => {
                 let values: Vec<Node> = child.named_children(&mut child.walk()).collect();
                 if !seen_right {
                     left_values.extend(values);
@@ -233,7 +240,7 @@ fn assignment_pairs<'a>(node: Node<'a>, code: &'a str) -> Vec<(String, Node<'a>)
                 }
             }
             _ => {
-                if !seen_right && child.kind() == "identifier" {
+                if !seen_right && go_node_kind(child) == GoNodeKind::Identifier {
                     left_values.push(child);
                 } else {
                     seen_right = true;
@@ -247,7 +254,7 @@ fn assignment_pairs<'a>(node: Node<'a>, code: &'a str) -> Vec<(String, Node<'a>)
         .into_iter()
         .zip(right_values)
         .filter_map(|(left, right)| {
-            if left.kind() != "identifier" {
+            if go_node_kind(left) != GoNodeKind::Identifier {
                 return None;
             }
             Some((node_text(left, code).to_string(), right))
@@ -262,7 +269,7 @@ fn collect_call_statements(
     call_statements: &mut Vec<CallStatement>,
 ) {
     walk_named(body, &mut |node| {
-        if node.kind() != "call_expression" {
+        if go_node_kind(node) != GoNodeKind::CallExpression {
             return;
         }
 

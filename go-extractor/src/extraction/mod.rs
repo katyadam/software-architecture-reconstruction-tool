@@ -1,6 +1,7 @@
 mod endpoints;
 mod identify;
 mod ir;
+mod message_edges;
 mod shared;
 
 use std::collections::HashMap;
@@ -61,6 +62,11 @@ pub fn identify(file: &mut TypedFileRecord) {
         .call_statements
         .iter()
         .filter_map(|call| identify::identify_restcall(file, call))
+        .collect();
+    file.raw_message_edges = file
+        .call_statements
+        .iter()
+        .filter_map(|call| message_edges::identify_message_edge(call, &file.file_path))
         .collect();
 }
 

@@ -166,3 +166,25 @@ func NewRouter() http.Handler {
     assert_eq!(record.endpoints.len(), 1);
     assert_eq!(record.endpoints[0].uri, "/api/v1/stationservice/stations");
 }
+
+#[test]
+fn go_rabbitmq_message_edges_are_identified_in_pass2() {
+    let code = r#"
+package service
+
+func publish(ctx any, ch any, q any, msg any) {
+    _ = ch.PublishWithContext(ctx, "payment.exchange", "payment.processed", false, false, msg)
+    _ = ch.QueueBind(q.Name, "order.created", "order.exchange", false, nil)
+}
+"#;
+
+    let record = go_extract(code, "payment_service.go").expect("Go extraction should succeed");
+    let ir = build_project_ir(vec![record]);
+
+    assert_eq!(
+        ir.files[0].raw_message_edges.len(),
+        2,
+        "Pass 2 must identify RabbitMQ publish and bind calls, got: {:?}",
+        ir.files[0].raw_message_edges
+    );
+}

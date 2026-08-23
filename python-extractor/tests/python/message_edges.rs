@@ -13,7 +13,7 @@ use python_extractor::{
 use crate::python::utils::get_tree;
 
 #[test]
-fn identifies_pika_publish_consume_and_queue_declare() {
+fn identifies_pika_publish_consume_queue_declare_and_bind() {
     let code = r#"
 class RabbitMQPublisher:
     def publish(self, message):
@@ -27,6 +27,7 @@ class RabbitMQPublisher:
 class RabbitMQSubscriber:
     def connect(self):
         self.channel.queue_declare(queue=self.queue_name)
+        self.channel.queue_bind(exchange='orders', queue=self.queue_name, routing_key='created')
         self.channel.basic_consume(queue=self.queue_name, on_message_callback=self.callback)
 "#;
     let tree = get_tree(code);
@@ -41,11 +42,18 @@ class RabbitMQSubscriber:
         .filter_map(|call| strategy.identify_message_edge(call, "rabbit.py"))
         .collect::<Vec<_>>();
 
-    assert_eq!(edges.len(), 4);
+    assert_eq!(edges.len(), 5);
     assert!(edges.iter().any(|edge| {
         edge.role == MessageRole::Producer
             && edge.destination_kind == MessageDestinationKind::Queue
             && edge.routing_key == Some(s!("self.queue_name"))
+    }));
+    assert!(edges.iter().any(|edge| {
+        edge.role == MessageRole::Binding
+            && edge.destination_kind == MessageDestinationKind::ExchangeRoutingKey
+            && edge.exchange == Some(s!("orders"))
+            && edge.routing_key == Some(s!("created"))
+            && edge.queue == Some(s!("self.queue_name"))
     }));
     assert!(edges.iter().any(|edge| {
         edge.role == MessageRole::Consumer
