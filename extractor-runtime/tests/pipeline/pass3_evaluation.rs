@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use extractor_runtime::pipeline::{build_project_ir, evaluate};
 use java_extractor::extraction::extract_syntactic as java_extract;
-use models::{HttpMethod, MessageDestinationKind, RestCall};
+use models::{HttpMethod, MessageDestinationKind, MessageRole, RestCall};
 use python_extractor::extraction::parse::extract_syntactic as python_extract;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -54,6 +54,72 @@ class Publisher:
         .expect("producer edge should be present");
     assert_eq!(edge.destination_kind, MessageDestinationKind::Queue);
     assert_eq!(edge.destination, "orders");
+}
+
+#[test]
+fn python_message_edges_propagate_wrapper_parameters_from_callsites() {
+    let code = r#"
+class NotificationService:
+    @staticmethod
+    def receive_data(connection, exchange_name, routing_key, callback):
+        channel = connection.channel()
+        queue_name = "queue_name"
+        channel.queue_bind(exchange=exchange_name, queue=queue_name, routing_key=routing_key)
+
+    @staticmethod
+    def save_notif_data_payment():
+        connection = object()
+        NotificationService.receive_data(connection, 'payment.exchange', 'payment.processed', None)
+
+class OrderService:
+    @staticmethod
+    def publish(order, routing_key: str):
+        channel = object()
+        channel.basic_publish(exchange='order.exchange', routing_key=routing_key, body='payload')
+
+    @staticmethod
+    def create_order(order):
+        OrderService.publish(order, 'order.created')
+
+    @staticmethod
+    def process_payment(order):
+        OrderService.publish(order, 'order.processed')
+"#;
+
+    let record =
+        python_extract(code, "message_wrappers.py").expect("Python extraction should succeed");
+    let evaluated = evaluate(
+        build_project_ir(vec![record]),
+        &HashMap::new(),
+        &HashMap::new(),
+        &HashMap::new(),
+    );
+
+    let producer_destinations = evaluated
+        .message_edges
+        .iter()
+        .filter(|edge| edge.role == MessageRole::Producer)
+        .map(|edge| edge.destination.as_str())
+        .collect::<Vec<_>>();
+    assert!(
+        producer_destinations.contains(&"order.exchange:order.created"),
+        "expected order.created producer edge, got: {producer_destinations:?}"
+    );
+    assert!(
+        producer_destinations.contains(&"order.exchange:order.processed"),
+        "expected order.processed producer edge, got: {producer_destinations:?}"
+    );
+
+    let binding_destinations = evaluated
+        .message_edges
+        .iter()
+        .filter(|edge| edge.role == MessageRole::Binding)
+        .map(|edge| edge.destination.as_str())
+        .collect::<Vec<_>>();
+    assert!(
+        binding_destinations.contains(&"payment.exchange:payment.processed"),
+        "expected payment binding edge, got: {binding_destinations:?}"
+    );
 }
 
 // ── Java tests ────────────────────────────────────────────────────────────────

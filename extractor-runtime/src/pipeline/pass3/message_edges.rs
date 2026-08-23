@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use models::{
-    MessageDestinationKind, MessageEdge, MessageRole, Scope,
+    CallStatement, MessageDestinationKind, MessageEdge, MessageRole, ParsedCallable, Scope,
     ir::{
         ast::Expr,
         project::{ProjectIR, TypedFileRecord},
@@ -42,10 +42,39 @@ pub(super) fn evaluate_message_edges(
                 per_file_attrs,
                 per_file_module_consts,
             );
+            let mut seen = HashSet::new();
             file.raw_message_edges
                 .iter()
-                .map(|edge| evaluate_single_edge(edge, file, &file_env))
+                .flat_map(|edge| evaluate_edge_instances(edge, file, &file_env))
+                .filter(|edge| seen.insert(edge.clone()))
                 .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn evaluate_edge_instances(
+    edge: &MessageEdge,
+    file: &TypedFileRecord,
+    file_env: &Env,
+) -> Vec<MessageEdge> {
+    let Some(callable) = find_enclosing_callable(edge, file) else {
+        return vec![evaluate_single_edge(edge, file, file_env)];
+    };
+    if callable.metadata.parameters.is_empty() {
+        return vec![evaluate_single_edge(edge, file, file_env)];
+    }
+
+    let callsites = find_wrapper_callsites(&callable, file);
+    if callsites.is_empty() {
+        return vec![evaluate_single_edge(edge, file, file_env)];
+    }
+
+    callsites
+        .into_iter()
+        .map(|callsite| {
+            let caller_env = build_caller_env(file, file_env, callsite);
+            let specialized_env = bind_callable_parameters(&callable, callsite, file, &caller_env);
+            evaluate_single_edge(edge, file, &specialized_env)
         })
         .collect()
 }
@@ -232,4 +261,116 @@ fn expr_to_string(expr: &Expr) -> Option<String> {
         Expr::Joined { vals } => vals.iter().map(expr_to_string).collect::<Option<String>>(),
         _ => None,
     }
+}
+
+fn find_enclosing_callable<'a>(
+    edge: &MessageEdge,
+    file: &'a TypedFileRecord,
+) -> Option<&'a ParsedCallable> {
+    file.callables
+        .iter()
+        .find(|pc| pc.metadata.hash == edge.function_hash)
+        .or_else(|| pc_by_name(edge.function_name.as_str(), file))
+}
+
+fn pc_by_name<'a>(name: &str, file: &'a TypedFileRecord) -> Option<&'a ParsedCallable> {
+    file.callables.iter().find(|pc| pc.metadata.name == name)
+}
+
+fn find_wrapper_callsites<'a>(
+    callable: &ParsedCallable,
+    file: &'a TypedFileRecord,
+) -> Vec<&'a CallStatement> {
+    let target_name = simple_callable_name(&callable.metadata.name);
+    file.call_statements
+        .iter()
+        .filter(|call| call_invokes_callable(call, target_name))
+        .collect()
+}
+
+fn simple_callable_name(name: &str) -> &str {
+    name.split('(').next().unwrap_or(name).trim()
+}
+
+fn call_invokes_callable(call: &CallStatement, target_name: &str) -> bool {
+    let function_name = call.function_name.trim();
+    function_name == target_name || function_name.ends_with(&format!(".{target_name}"))
+}
+
+fn build_caller_env(file: &TypedFileRecord, file_env: &Env, call: &CallStatement) -> Env {
+    let mut env = file_env.clone();
+    let scope = Scope::from_enclosing_function(call.enclosing_function_name.clone());
+    let scoped_assignments = file
+        .assignments
+        .iter()
+        .filter(|(key, _)| key.scope == scope)
+        .map(|(_, assignment)| assignment)
+        .collect::<Vec<_>>();
+
+    for _ in 0..scoped_assignments.len().max(1) {
+        for assignment in &scoped_assignments {
+            let resolved = resolve_value(&assignment.value, file, &env);
+            env.insert(
+                assignment.variable_name.clone(),
+                (Some("String".to_string()), Expr::Literal(resolved)),
+            );
+        }
+    }
+
+    env
+}
+
+fn bind_callable_parameters(
+    callable: &ParsedCallable,
+    call: &CallStatement,
+    file: &TypedFileRecord,
+    caller_env: &Env,
+) -> Env {
+    let mut env = caller_env.clone();
+    let positional_args = call
+        .arguments
+        .iter()
+        .filter(|arg| arg.assigned_variable.is_empty())
+        .collect::<Vec<_>>();
+    let mut positional_index = 0usize;
+
+    for parameter in &callable.metadata.parameters {
+        if matches!(parameter.name.as_str(), "self" | "cls") {
+            continue;
+        }
+
+        let argument = call
+            .arguments
+            .iter()
+            .find(|arg| arg.assigned_variable == parameter.name)
+            .or_else(|| {
+                let arg = positional_args.get(positional_index).copied();
+                if arg.is_some() {
+                    positional_index += 1;
+                }
+                arg
+            });
+
+        if let Some(argument) = argument {
+            let resolved = resolve_value(&argument.value, file, &env);
+            env.insert(
+                parameter.name.clone(),
+                (
+                    parameter
+                        .datatype
+                        .clone()
+                        .or_else(|| argument.datatype.clone()),
+                    Expr::Literal(resolved),
+                ),
+            );
+        } else if let Some(default_value) = &parameter.initial_value {
+            let resolved = resolve_value(default_value, file, &env);
+            env.insert(
+                parameter.name.clone(),
+                (parameter.datatype.clone(), Expr::Literal(resolved)),
+            );
+        }
+    }
+
+    env
 }
