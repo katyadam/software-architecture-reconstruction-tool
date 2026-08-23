@@ -4,8 +4,7 @@ use java_extractor::extraction::restcalls::evaluation::uri_generator::generate_t
 use models::ir::language::Language;
 use python_extractor::extraction::restcalls::evaluation::uri_generator::generate_target_uris as python_generate_target_uris;
 use statix::{
-    go::matcher::GoCallableMatcher,
-    java::matcher::JavaCallableMatcher, matcher::CallableMatcher,
+    go::matcher::GoCallableMatcher, java::matcher::JavaCallableMatcher, matcher::CallableMatcher,
     python::matcher::PythonCallableMatcher, symbolic::AnalysisResult,
 };
 

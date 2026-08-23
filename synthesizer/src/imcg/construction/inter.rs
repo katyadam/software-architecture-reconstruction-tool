@@ -57,7 +57,8 @@ impl ImcgBuilderImpl {
     ) -> Result<Vec<Call>, BuilderError> {
         let mut calls = Vec::new();
         for request in sdg.connections.iter().flat_map(|conn| conn.requests.iter()) {
-            if request.endpoint.function_hash.is_empty() || request.restcall.function_hash.is_empty()
+            if request.endpoint.function_hash.is_empty()
+                || request.restcall.function_hash.is_empty()
             {
                 continue;
             }
