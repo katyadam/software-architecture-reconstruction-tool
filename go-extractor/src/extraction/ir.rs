@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use models::{
-    Argument, Assignment, AssignmentKey, CallStatement, Callable, Namespace, ParsedCallable, Scope,
-    ir::ast::CallableAst,
+    Argument, Assignment, AssignmentKey, CallStatement, Callable, Namespace, Parameter,
+    ParsedCallable, Scope, ir::ast::CallableAst,
 };
 use statix::strings::{hash_text, normalize_whitespace};
 use tree_sitter::Node;
@@ -63,6 +63,10 @@ fn build_callable(node: Node, code: &str, file_path: &str) -> ParsedCallable {
         .child_by_field_name("name")
         .map(|name| node_text(name, code).to_string())
         .unwrap_or_else(|| signature.clone());
+    let parameters = node
+        .child_by_field_name("parameters")
+        .map(|params| parse_parameters(params, code))
+        .unwrap_or_default();
     let body_hash = hash_text(node_text(node, code));
     let namespace = if go_node_kind(node) == GoNodeKind::MethodDeclaration {
         Namespace::Class(
@@ -82,7 +86,7 @@ fn build_callable(node: Node, code: &str, file_path: &str) -> ParsedCallable {
             name: function_name,
             signature,
             namespace,
-            parameters: vec![],
+            parameters,
             return_type: None,
             is_async: false,
             is_constructor: false,
@@ -219,6 +223,23 @@ fn collect_local_assignments(
             collect_declaration_assignments(node, code, scope.clone(), assignments);
             scope_values.extend(scope_bindings(assignments, &scope));
         }
+        _ if node.kind() == "for_statement" => {
+            if let Some((name, source)) = parse_range_binding(node_text(node, code)) {
+                let value = scope_values.get(&source).cloned().unwrap_or(source);
+                assignments.insert(
+                    AssignmentKey {
+                        scope: scope.clone(),
+                        variable_name: name.clone(),
+                    },
+                    Assignment {
+                        variable_name: name.clone(),
+                        variable_type: "".to_string(),
+                        value: value.clone(),
+                    },
+                );
+                scope_values.insert(name, value);
+            }
+        }
         _ => {}
     });
 }
@@ -307,4 +328,92 @@ fn parse_arguments(node: Node, code: &str) -> Vec<Argument> {
             datatype: None,
         })
         .collect()
+}
+
+fn parse_parameters(node: Node, code: &str) -> Vec<Parameter> {
+    let raw = node_text(node, code)
+        .trim()
+        .trim_start_matches('(')
+        .trim_end_matches(')');
+    if raw.is_empty() {
+        return vec![];
+    }
+
+    split_top_level_commas(raw)
+        .into_iter()
+        .flat_map(parse_parameter_group)
+        .collect()
+}
+
+fn parse_parameter_group(group: String) -> Vec<Parameter> {
+    let group = group.trim();
+    if group.is_empty() {
+        return vec![];
+    }
+
+    let mut parts = group.split_whitespace().collect::<Vec<_>>();
+    if parts.len() < 2 {
+        return vec![];
+    }
+
+    let datatype = parts.pop().unwrap_or_default().to_string();
+    let names = parts.join(" ");
+    names
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(|name| Parameter::new(name.to_string(), Some(datatype.clone()), None))
+        .collect()
+}
+
+fn split_top_level_commas(input: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut in_string = false;
+    let mut quote = '\0';
+    let mut start = 0usize;
+
+    for (index, ch) in input.char_indices() {
+        match ch {
+            '"' | '`' => {
+                if !in_string {
+                    in_string = true;
+                    quote = ch;
+                } else if ch == quote {
+                    in_string = false;
+                }
+            }
+            '(' | '[' | '{' if !in_string => depth += 1,
+            ')' | ']' | '}' if !in_string => depth -= 1,
+            ',' if !in_string && depth == 0 => {
+                parts.push(input[start..index].trim().to_string());
+                start = index + 1;
+            }
+            _ => {}
+        }
+    }
+
+    let tail = input[start..].trim();
+    if !tail.is_empty() {
+        parts.push(tail.to_string());
+    }
+    parts
+}
+
+fn parse_range_binding(loop_text: &str) -> Option<(String, String)> {
+    let header = loop_text.split('{').next()?.trim();
+    let (left, right) = header
+        .split_once(":= range")
+        .or_else(|| header.split_once("= range"))?;
+    let name = left
+        .split(',')
+        .next_back()?
+        .trim()
+        .trim_start_matches('*')
+        .to_string();
+    let source = right.trim().to_string();
+    if name.is_empty() || source.is_empty() {
+        return None;
+    }
+    Some((name, source))
 }

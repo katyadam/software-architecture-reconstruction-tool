@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use extractor_runtime::pipeline::{build_project_ir, evaluate};
+use go_extractor::extraction::extract_syntactic as go_extract;
 use java_extractor::extraction::extract_syntactic as java_extract;
 use models::{HttpMethod, MessageDestinationKind, MessageRole, RestCall};
 use python_extractor::extraction::parse::extract_syntactic as python_extract;
@@ -119,6 +120,69 @@ class OrderService:
     assert!(
         binding_destinations.contains(&"payment.exchange:payment.processed"),
         "expected payment binding edge, got: {binding_destinations:?}"
+    );
+}
+
+#[test]
+fn go_message_edges_propagate_wrapper_parameters_and_slice_ranges() {
+    let code = r#"
+package event
+
+type Consumer struct{}
+type Emitter struct{}
+
+func (e *Emitter) Push(event string, severity string) error {
+    channel.PublishWithContext(ctx, "logs_topic", severity, false, false, payload)
+    return nil
+}
+
+func (consumer *Consumer) Listen(topics []string) error {
+    for _, s := range topics {
+        ch.QueueBind(q.Name, s, "logs_topic", false, nil)
+    }
+    return nil
+}
+
+func main() {
+    emitter := &Emitter{}
+    _ = emitter.Push("x", "log.INFO")
+    consumer := &Consumer{}
+    _ = consumer.Listen([]string{"log.INFO", "log.WARNING"})
+}
+"#;
+
+    let record = go_extract(code, "event.go").expect("Go extraction should succeed");
+    let evaluated = evaluate(
+        build_project_ir(vec![record]),
+        &HashMap::new(),
+        &HashMap::new(),
+        &HashMap::new(),
+    );
+
+    let producer_destinations = evaluated
+        .message_edges
+        .iter()
+        .filter(|edge| edge.role == MessageRole::Producer)
+        .map(|edge| edge.destination.as_str())
+        .collect::<Vec<_>>();
+    assert!(
+        producer_destinations.contains(&"logs_topic:log.INFO"),
+        "expected propagated producer edge, got: {producer_destinations:?}"
+    );
+
+    let binding_destinations = evaluated
+        .message_edges
+        .iter()
+        .filter(|edge| edge.role == MessageRole::Binding)
+        .map(|edge| edge.destination.as_str())
+        .collect::<Vec<_>>();
+    assert!(
+        binding_destinations.contains(&"logs_topic:log.INFO"),
+        "expected log.INFO binding edge, got: {binding_destinations:?}"
+    );
+    assert!(
+        binding_destinations.contains(&"logs_topic:log.WARNING"),
+        "expected log.WARNING binding edge, got: {binding_destinations:?}"
     );
 }
 

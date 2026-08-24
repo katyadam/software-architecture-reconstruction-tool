@@ -45,7 +45,7 @@ pub(super) fn evaluate_message_edges(
             let mut seen = HashSet::new();
             file.raw_message_edges
                 .iter()
-                .flat_map(|edge| evaluate_edge_instances(edge, file, &file_env))
+                .flat_map(|edge| evaluate_edge_instances(edge, file, &file_env, project_ir))
                 .filter(|edge| seen.insert(edge.clone()))
                 .collect::<Vec<_>>()
         })
@@ -56,119 +56,189 @@ fn evaluate_edge_instances(
     edge: &MessageEdge,
     file: &TypedFileRecord,
     file_env: &Env,
+    project_ir: &ProjectIR,
 ) -> Vec<MessageEdge> {
     let Some(callable) = find_enclosing_callable(edge, file) else {
-        return vec![evaluate_single_edge(edge, file, file_env)];
+        return evaluate_single_edge_variants(edge, file, file_env);
     };
+    let callable_env = build_callable_env(file, file_env, callable);
     if callable.metadata.parameters.is_empty() {
-        return vec![evaluate_single_edge(edge, file, file_env)];
+        return evaluate_single_edge_variants(edge, file, &callable_env);
     }
 
-    let callsites = find_wrapper_callsites(&callable, file);
+    let callsites = find_wrapper_callsites(&callable, project_ir);
     if callsites.is_empty() {
-        return vec![evaluate_single_edge(edge, file, file_env)];
+        return evaluate_single_edge_variants(edge, file, &callable_env);
     }
 
     callsites
         .into_iter()
-        .map(|callsite| {
-            let caller_env = build_caller_env(file, file_env, callsite);
-            let specialized_env = bind_callable_parameters(&callable, callsite, file, &caller_env);
-            evaluate_single_edge(edge, file, &specialized_env)
+        .flat_map(|(caller_file, callsite)| {
+            let caller_file_env = build_file_env(
+                caller_file,
+                project_ir,
+                &build_constants_env(&project_ir.constants, &HashMap::new()),
+                &HashMap::new(),
+                &HashMap::new(),
+            );
+            let caller_env = build_caller_env(caller_file, &caller_file_env, callsite);
+            let specialized_env =
+                bind_callable_parameters(&callable, callsite, caller_file, &caller_env);
+            let callable_env = build_callable_env(file, &specialized_env, callable);
+            evaluate_single_edge_variants(edge, file, &callable_env)
         })
         .collect()
 }
 
 /// Resolves an edge's fields and derives its final destination from its role and transport data.
 fn evaluate_single_edge(edge: &MessageEdge, file: &TypedFileRecord, env: &Env) -> MessageEdge {
-    let exchange = edge
-        .exchange
-        .as_ref()
-        .map(|value| resolve_value(value, file, env));
-    let topic = edge
-        .topic
-        .as_ref()
-        .map(|value| resolve_value(value, file, env));
-    let routing_key = edge
-        .routing_key
-        .as_ref()
-        .map(|value| resolve_value(value, file, env));
-    let queue = edge
-        .queue
-        .as_ref()
-        .map(|value| resolve_value(value, file, env));
-    let handler = edge
-        .handler
-        .as_ref()
-        .map(|value| resolve_value(value, file, env));
+    evaluate_single_edge_variants(edge, file, env)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| edge.clone())
+}
 
-    let destination = match edge.role {
-        MessageRole::Producer => match (&exchange, &routing_key) {
-            _ if matches!(edge.destination_kind, MessageDestinationKind::Topic) => {
-                topic.clone().unwrap_or_else(|| edge.destination.clone())
+fn evaluate_single_edge_variants(
+    edge: &MessageEdge,
+    file: &TypedFileRecord,
+    env: &Env,
+) -> Vec<MessageEdge> {
+    let exchanges = resolve_option_values(edge.exchange.as_deref(), file, env);
+    let topics = resolve_option_values(edge.topic.as_deref(), file, env);
+    let routing_keys = resolve_option_values(edge.routing_key.as_deref(), file, env);
+    let queues = resolve_option_values(edge.queue.as_deref(), file, env);
+    let handlers = resolve_option_values(edge.handler.as_deref(), file, env);
+
+    let exchanges = ensure_non_empty_option_set(exchanges);
+    let topics = ensure_non_empty_option_set(topics);
+    let routing_keys = ensure_non_empty_option_set(routing_keys);
+    let queues = ensure_non_empty_option_set(queues);
+    let handlers = ensure_non_empty_option_set(handlers);
+
+    let mut variants = Vec::new();
+    for exchange in &exchanges {
+        for topic in &topics {
+            for routing_key in &routing_keys {
+                for queue in &queues {
+                    for handler in &handlers {
+                        let destination = match edge.role {
+                            MessageRole::Producer => match (exchange, routing_key) {
+                                _ if matches!(
+                                    edge.destination_kind,
+                                    MessageDestinationKind::Topic
+                                ) =>
+                                {
+                                    topic.clone().unwrap_or_else(|| edge.destination.clone())
+                                }
+                                (Some(exchange), Some(routing_key)) if !exchange.is_empty() => {
+                                    format!("{exchange}{DESTINATION_SEPARATOR}{routing_key}")
+                                }
+                                (_, Some(routing_key)) => routing_key.clone(),
+                                (Some(exchange), _) => exchange.clone(),
+                                _ => edge.destination.clone(),
+                            },
+                            MessageRole::Binding => match (exchange, routing_key) {
+                                (Some(exchange), Some(routing_key)) if !exchange.is_empty() => {
+                                    format!("{exchange}{DESTINATION_SEPARATOR}{routing_key}")
+                                }
+                                _ => topic
+                                    .clone()
+                                    .or_else(|| queue.clone())
+                                    .unwrap_or_else(|| edge.destination.clone()),
+                            },
+                            MessageRole::Consumer
+                            | MessageRole::QueueDeclaration
+                            | MessageRole::TopicDeclaration => topic
+                                .clone()
+                                .or_else(|| queue.clone())
+                                .unwrap_or_else(|| edge.destination.clone()),
+                        };
+
+                        let destination_kind = match edge.role {
+                            MessageRole::Producer
+                                if !matches!(
+                                    edge.destination_kind,
+                                    MessageDestinationKind::Topic
+                                ) =>
+                            {
+                                if exchange.as_ref().is_some_and(|value| !value.is_empty()) {
+                                    MessageDestinationKind::ExchangeRoutingKey
+                                } else {
+                                    MessageDestinationKind::Queue
+                                }
+                            }
+                            _ => edge.destination_kind.clone(),
+                        };
+
+                        variants.push(MessageEdge {
+                            destination_kind,
+                            ..edge.clone_with_resolved_destination(
+                                destination,
+                                topic.clone(),
+                                exchange.clone(),
+                                routing_key.clone(),
+                                queue.clone(),
+                                handler.clone(),
+                            )
+                        });
+                    }
+                }
             }
-            (Some(exchange), Some(routing_key)) if !exchange.is_empty() => {
-                format!("{exchange}{DESTINATION_SEPARATOR}{routing_key}")
-            }
-            (_, Some(routing_key)) => routing_key.clone(),
-            (Some(exchange), _) => exchange.clone(),
-            _ => edge.destination.clone(),
-        },
-        MessageRole::Binding => match (&exchange, &routing_key) {
-            (Some(exchange), Some(routing_key)) if !exchange.is_empty() => {
-                format!("{exchange}{DESTINATION_SEPARATOR}{routing_key}")
-            }
-            _ => topic
-                .clone()
-                .or_else(|| queue.clone())
-                .unwrap_or_else(|| edge.destination.clone()),
-        },
-        MessageRole::Consumer | MessageRole::QueueDeclaration | MessageRole::TopicDeclaration => {
-            topic
-                .clone()
-                .or_else(|| queue.clone())
-                .unwrap_or_else(|| edge.destination.clone())
         }
-    };
-
-    let destination_kind = match edge.role {
-        MessageRole::Producer
-            if !matches!(edge.destination_kind, MessageDestinationKind::Topic) =>
-        {
-            if exchange.as_ref().is_some_and(|value| !value.is_empty()) {
-                MessageDestinationKind::ExchangeRoutingKey
-            } else {
-                MessageDestinationKind::Queue
-            }
-        }
-        _ => edge.destination_kind.clone(),
-    };
-
-    MessageEdge {
-        destination_kind,
-        ..edge.clone_with_resolved_destination(
-            destination,
-            topic,
-            exchange,
-            routing_key,
-            queue,
-            handler,
-        )
     }
+
+    variants
 }
 
 /// Resolves a value through the supported sources in precedence order.
 fn resolve_value(raw: &str, file: &TypedFileRecord, env: &Env) -> String {
-    let cleaned = statix::strings::clean_python_string(raw.trim());
-    if cleaned.is_empty() {
-        return cleaned;
+    resolve_values(raw, file, env)
+        .into_iter()
+        .next()
+        .unwrap_or_default()
+}
+
+fn resolve_values(raw: &str, file: &TypedFileRecord, env: &Env) -> Vec<String> {
+    resolve_values_inner(raw, file, env, &mut HashSet::new())
+}
+
+fn resolve_values_inner(
+    raw: &str,
+    file: &TypedFileRecord,
+    env: &Env,
+    visited: &mut HashSet<String>,
+) -> Vec<String> {
+    let trimmed = raw.trim();
+    if let Some(values) = parse_iterable_literal(trimmed) {
+        return values;
     }
 
-    resolve_from_env(&cleaned, env)
-        .or_else(|| resolve_self_attr(&cleaned, file, env))
-        .or_else(|| resolve_from_env_by_attr(&cleaned, &file.file_path, env))
-        .or_else(|| resolve_conditional_fallback(&cleaned, file, env))
-        .unwrap_or(cleaned)
+    let cleaned = statix::strings::clean_python_string(trimmed);
+    if cleaned.is_empty() {
+        return vec![cleaned];
+    }
+    if !visited.insert(cleaned.clone()) {
+        return vec![cleaned];
+    }
+
+    let resolved = resolve_many_from_env(&cleaned, env)
+        .or_else(|| resolve_self_attr(&cleaned, file, env).map(|value| vec![value]))
+        .or_else(|| {
+            resolve_from_env_by_attr(&cleaned, &file.file_path, env).map(|value| vec![value])
+        })
+        .or_else(|| resolve_conditional_fallback(&cleaned, file, env).map(|value| vec![value]))
+        .unwrap_or_else(|| vec![cleaned.clone()]);
+
+    resolved
+        .into_iter()
+        .flat_map(|value| {
+            if value == cleaned {
+                vec![value]
+            } else {
+                resolve_values_inner(&value, file, env, visited)
+            }
+        })
+        .collect()
 }
 /// Resolves `self.*` references assigned in the class initializer.
 fn resolve_self_attr(raw: &str, file: &TypedFileRecord, env: &Env) -> Option<String> {
@@ -201,6 +271,11 @@ fn resolve_conditional_fallback(raw: &str, file: &TypedFileRecord, env: &Env) ->
 fn resolve_from_env(raw: &str, env: &Env) -> Option<String> {
     let (_, expr) = env.get(raw)?;
     expr_to_string(expr)
+}
+
+fn resolve_many_from_env(raw: &str, env: &Env) -> Option<Vec<String>> {
+    let (_, expr) = env.get(raw)?;
+    expr_to_values(expr)
 }
 
 /// Resolves an attribute by matching environment names and preferring the local service.
@@ -250,16 +325,86 @@ fn service_name_score(env_name: &str, file_path: &str) -> usize {
 
 /// Converts statically evaluable expressions into strings.
 fn expr_to_string(expr: &Expr) -> Option<String> {
+    expr_to_values(expr).and_then(|values| values.into_iter().next())
+}
+
+fn expr_to_values(expr: &Expr) -> Option<Vec<String>> {
     match expr {
-        Expr::Literal(value) => Some(value.clone()),
-        Expr::Var(value) => Some(value.clone()),
-        Expr::Concat(left, right) => {
-            let left = expr_to_string(left)?;
-            let right = expr_to_string(right)?;
-            Some(format!("{left}{right}"))
+        Expr::Literal(value) => {
+            Some(parse_iterable_literal(value).unwrap_or_else(|| vec![value.clone()]))
         }
-        Expr::Joined { vals } => vals.iter().map(expr_to_string).collect::<Option<String>>(),
+        Expr::Var(value) => {
+            Some(parse_iterable_literal(value).unwrap_or_else(|| vec![value.clone()]))
+        }
+        Expr::Concat(left, right) => {
+            let left = expr_to_values(left)?;
+            let right = expr_to_values(right)?;
+            Some(
+                left.into_iter()
+                    .flat_map(|left| right.iter().map(move |right| format!("{left}{right}")))
+                    .collect(),
+            )
+        }
+        Expr::Joined { vals } => {
+            let mut parts = vec![String::new()];
+            for value in vals {
+                let resolved = expr_to_values(value)?;
+                parts = parts
+                    .into_iter()
+                    .flat_map(|prefix| {
+                        resolved
+                            .iter()
+                            .map(move |suffix| format!("{prefix}{suffix}"))
+                    })
+                    .collect();
+            }
+            Some(parts)
+        }
         _ => None,
+    }
+}
+
+fn resolve_option_values(
+    raw: Option<&str>,
+    file: &TypedFileRecord,
+    env: &Env,
+) -> Vec<Option<String>> {
+    match raw {
+        Some(value) => resolve_values(value, file, env)
+            .into_iter()
+            .map(Some)
+            .collect(),
+        None => vec![None],
+    }
+}
+
+fn ensure_non_empty_option_set(values: Vec<Option<String>>) -> Vec<Option<String>> {
+    if values.is_empty() {
+        vec![None]
+    } else {
+        values
+    }
+}
+
+fn parse_iterable_literal(raw: &str) -> Option<Vec<String>> {
+    let trimmed = raw.trim();
+    if !(trimmed.starts_with("[]") && trimmed.contains('{') && trimmed.ends_with('}')) {
+        return None;
+    }
+    let body = trimmed
+        .split_once('{')
+        .map(|(_, rest)| rest.trim_end_matches('}'))
+        .unwrap_or_default();
+    let values = body
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(statix::strings::clean_python_string)
+        .collect::<Vec<_>>();
+    if values.is_empty() {
+        None
+    } else {
+        Some(values)
     }
 }
 
@@ -279,12 +424,18 @@ fn pc_by_name<'a>(name: &str, file: &'a TypedFileRecord) -> Option<&'a ParsedCal
 
 fn find_wrapper_callsites<'a>(
     callable: &ParsedCallable,
-    file: &'a TypedFileRecord,
-) -> Vec<&'a CallStatement> {
+    project_ir: &'a ProjectIR,
+) -> Vec<(&'a TypedFileRecord, &'a CallStatement)> {
     let target_name = simple_callable_name(&callable.metadata.name);
-    file.call_statements
+    project_ir
+        .files
         .iter()
-        .filter(|call| call_invokes_callable(call, target_name))
+        .flat_map(|file| {
+            file.call_statements
+                .iter()
+                .filter(|call| call_invokes_callable(call, target_name))
+                .map(move |call| (file, call))
+        })
         .collect()
 }
 
@@ -309,10 +460,33 @@ fn build_caller_env(file: &TypedFileRecord, file_env: &Env, call: &CallStatement
 
     for _ in 0..scoped_assignments.len().max(1) {
         for assignment in &scoped_assignments {
-            let resolved = resolve_value(&assignment.value, file, &env);
+            let resolved = resolve_values(&assignment.value, file, &env);
             env.insert(
                 assignment.variable_name.clone(),
-                (Some("String".to_string()), Expr::Literal(resolved)),
+                (Some("String".to_string()), values_to_expr(resolved)),
+            );
+        }
+    }
+
+    env
+}
+
+fn build_callable_env(file: &TypedFileRecord, base_env: &Env, callable: &ParsedCallable) -> Env {
+    let mut env = base_env.clone();
+    let scope = Scope::from_enclosing_function(Some(callable.metadata.signature.clone()));
+    let scoped_assignments = file
+        .assignments
+        .iter()
+        .filter(|(key, _)| key.scope == scope)
+        .map(|(_, assignment)| assignment)
+        .collect::<Vec<_>>();
+
+    for _ in 0..scoped_assignments.len().max(1) {
+        for assignment in &scoped_assignments {
+            let resolved = resolve_values(&assignment.value, file, &env);
+            env.insert(
+                assignment.variable_name.clone(),
+                (Some("String".to_string()), values_to_expr(resolved)),
             );
         }
     }
@@ -352,7 +526,7 @@ fn bind_callable_parameters(
             });
 
         if let Some(argument) = argument {
-            let resolved = resolve_value(&argument.value, file, &env);
+            let resolved = resolve_values(&argument.value, file, &env);
             env.insert(
                 parameter.name.clone(),
                 (
@@ -360,17 +534,32 @@ fn bind_callable_parameters(
                         .datatype
                         .clone()
                         .or_else(|| argument.datatype.clone()),
-                    Expr::Literal(resolved),
+                    values_to_expr(resolved),
                 ),
             );
         } else if let Some(default_value) = &parameter.initial_value {
-            let resolved = resolve_value(default_value, file, &env);
+            let resolved = resolve_values(default_value, file, &env);
             env.insert(
                 parameter.name.clone(),
-                (parameter.datatype.clone(), Expr::Literal(resolved)),
+                (parameter.datatype.clone(), values_to_expr(resolved)),
             );
         }
     }
 
     env
+}
+
+fn values_to_expr(values: Vec<String>) -> Expr {
+    if values.len() <= 1 {
+        Expr::Literal(values.into_iter().next().unwrap_or_default())
+    } else {
+        Expr::Literal(format!(
+            "[]string{{{}}}",
+            values
+                .into_iter()
+                .map(|value| format!("\"{value}\""))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))
+    }
 }
