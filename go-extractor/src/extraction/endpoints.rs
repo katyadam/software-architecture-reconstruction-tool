@@ -109,7 +109,7 @@ fn endpoint_from_call(
         });
     }
 
-    if let Some(method) = web_route_method(&selector) {
+    if is_web_route_call(function_node, code) && let Some(method) = web_route_method(&selector) {
         let arguments = node
             .child_by_field_name("arguments")
             .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
@@ -140,6 +140,17 @@ fn endpoint_from_call(
     }
 
     None
+}
+
+fn is_web_route_call(function_node: Node, code: &str) -> bool {
+    if function_node.kind() != "selector_expression" {
+        return false;
+    }
+
+    function_node
+        .child_by_field_name("operand")
+        .map(|operand| normalize_whitespace(node_text(operand, code)) == "web")
+        .unwrap_or(false)
 }
 
 fn gorilla_route_parts(

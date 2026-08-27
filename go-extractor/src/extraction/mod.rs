@@ -52,7 +52,7 @@ pub fn extract_syntactic(text: &str, file_path: &str) -> Result<FileRecord, Extr
         call_statements,
         assignments,
         enums: vec![],
-        raw_message_edges: vec![],
+        raw_restcalls: vec![],
     })
 }
 
@@ -142,5 +142,31 @@ func invoke(url string) {
         identify(&mut typed);
         assert_eq!(typed.raw_restcalls.len(), 1);
         assert_eq!(typed.raw_restcalls[0].target_uri, "url/ship-order");
+    }
+
+    #[test]
+    fn does_not_treat_regular_delete_method_calls_as_endpoints() {
+        let code = r#"
+package api
+
+import "net/http"
+
+const basePath = "/api/v1/stationservice"
+
+func NewRouter(stations *Service) http.Handler {
+    mux := http.NewServeMux()
+    mux.HandleFunc("DELETE "+basePath+"/stations/{stationsId}", func(writer http.ResponseWriter, request *http.Request) {
+        _ = stations.Delete(request.Context(), request.PathValue("stationsId"))
+    })
+    return mux
+}
+"#;
+
+        let record = extract_syntactic(code, "router.go").expect("Go extraction should succeed");
+        assert_eq!(record.endpoints.len(), 1);
+        assert_eq!(
+            record.endpoints[0].uri,
+            "/api/v1/stationservice/stations/{stationsId}"
+        );
     }
 }
