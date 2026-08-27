@@ -145,6 +145,33 @@ func invoke(url string) {
     }
 
     #[test]
+    fn extracts_chi_routes() {
+        let code = r#"
+package main
+
+import "net/http"
+
+func broker(http.ResponseWriter, *http.Request) {}
+func submit(http.ResponseWriter, *http.Request) {}
+func dynamic(http.ResponseWriter, *http.Request) {}
+
+func routes() http.Handler {
+    mux := chi.NewRouter()
+    mux.Post("/", broker)
+    mux.Post("/handle", submit)
+    mux.Method("DELETE", "/items/{id}", http.HandlerFunc(dynamic))
+    return mux
+}
+"#;
+
+        let record = extract_syntactic(code, "routes.go").expect("Go extraction should succeed");
+        assert_eq!(record.endpoints.len(), 3);
+        assert!(record.endpoints.iter().any(|e| e.uri == "/" && e.http_method == models::HttpMethod::POST));
+        assert!(record.endpoints.iter().any(|e| e.uri == "/handle" && e.http_method == models::HttpMethod::POST));
+        assert!(record.endpoints.iter().any(|e| e.uri == "/items/{id}" && e.http_method == models::HttpMethod::DELETE));
+    }
+
+    #[test]
     fn does_not_treat_regular_delete_method_calls_as_endpoints() {
         let code = r#"
 package api

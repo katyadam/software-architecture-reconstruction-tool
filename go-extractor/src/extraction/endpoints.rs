@@ -57,24 +57,27 @@ fn endpoint_from_call(
     let function_node = node.child_by_field_name("function")?;
 
     if let Some((method, path, handler)) = gorilla_route_parts(node, code, globals) {
-        let callable = resolve_handler_callable(
+        return Some(build_endpoint(
             file_path,
-            &handler,
             &path,
-            &method,
+            method,
+            &handler,
             callable_lookup,
             synthetic_callables,
             synthetic_hashes,
-        );
-        return Some(Endpoint {
-            function_name: callable.signature.clone(),
-            function_hash: callable.hash,
-            http_method: method,
-            parameters: vec![],
-            uri: path,
-            file_path: file_path.to_string(),
-            router_variable: None,
-        });
+        ));
+    }
+
+    if let Some((method, path, handler)) = chi_route_parts(node, code, globals) {
+        return Some(build_endpoint(
+            file_path,
+            &path,
+            method,
+            &handler,
+            callable_lookup,
+            synthetic_callables,
+            synthetic_hashes,
+        ));
     }
 
     let selector = selector_name(function_node, code)?;
@@ -89,24 +92,15 @@ fn endpoint_from_call(
         let resolved = evaluate_expression_node(arguments[0], code, globals);
         let (method, uri) = split_method_and_path(&resolved)?;
         let handler_expr = normalize_whitespace(node_text(arguments[1], code));
-        let callable = resolve_handler_callable(
+        return Some(build_endpoint(
             file_path,
-            &handler_expr,
             &uri,
-            &method,
+            method,
+            &handler_expr,
             callable_lookup,
             synthetic_callables,
             synthetic_hashes,
-        );
-        return Some(Endpoint {
-            function_name: callable.signature.clone(),
-            function_hash: callable.hash,
-            http_method: method,
-            parameters: vec![],
-            uri,
-            file_path: file_path.to_string(),
-            router_variable: None,
-        });
+        ));
     }
 
     if is_web_route_call(function_node, code) && let Some(method) = web_route_method(&selector) {
@@ -119,27 +113,96 @@ fn endpoint_from_call(
         }
         let uri = evaluate_expression_node(arguments[0], code, globals);
         let handler_expr = normalize_whitespace(node_text(arguments[1], code));
-        let callable = resolve_handler_callable(
+        return Some(build_endpoint(
             file_path,
-            &handler_expr,
             &uri,
-            &method,
+            method,
+            &handler_expr,
             callable_lookup,
             synthetic_callables,
             synthetic_hashes,
-        );
-        return Some(Endpoint {
-            function_name: callable.signature.clone(),
-            function_hash: callable.hash,
-            http_method: method,
-            parameters: vec![],
-            uri,
-            file_path: file_path.to_string(),
-            router_variable: None,
-        });
+        ));
     }
 
     None
+}
+
+fn build_endpoint(
+    file_path: &str,
+    uri: &str,
+    method: HttpMethod,
+    handler_expr: &str,
+    callable_lookup: &HashMap<String, Callable>,
+    synthetic_callables: &mut Vec<ParsedCallable>,
+    synthetic_hashes: &mut HashSet<String>,
+) -> Endpoint {
+    let callable = resolve_handler_callable(
+        file_path,
+        handler_expr,
+        uri,
+        &method,
+        callable_lookup,
+        synthetic_callables,
+        synthetic_hashes,
+    );
+    Endpoint {
+        function_name: callable.signature.clone(),
+        function_hash: callable.hash,
+        http_method: method,
+        parameters: vec![],
+        uri: uri.to_string(),
+        file_path: file_path.to_string(),
+        router_variable: None,
+    }
+}
+
+fn chi_route_parts(
+    node: Node,
+    code: &str,
+    globals: &HashMap<String, String>,
+) -> Option<(HttpMethod, String, String)> {
+    let function_node = node.child_by_field_name("function")?;
+    let selector = selector_name(function_node, code)?;
+    let arguments = node
+        .child_by_field_name("arguments")
+        .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
+        .unwrap_or_default();
+
+    match selector.as_str() {
+        "Get" | "Post" | "Put" | "Delete" | "Patch" | "Options" | "Head" => {
+            if arguments.len() < 2 {
+                return None;
+            }
+            let path = evaluate_expression_node(arguments[0], code, globals);
+            if !looks_like_http_path(&path) {
+                return None;
+            }
+            let method = parse_http_method_value(selector.as_str())?;
+            let handler = normalize_whitespace(node_text(arguments[1], code));
+            Some((method, path, handler))
+        }
+        "Method" | "MethodFunc" => {
+            if arguments.len() < 3 {
+                return None;
+            }
+            let method = parse_http_method_value(&evaluate_expression_node(arguments[0], code, globals))?;
+            let path = evaluate_expression_node(arguments[1], code, globals);
+            if !looks_like_http_path(&path) {
+                return None;
+            }
+            let handler = normalize_whitespace(node_text(arguments[2], code));
+            Some((method, path, handler))
+        }
+        _ => None,
+    }
+}
+
+fn looks_like_http_path(path: &str) -> bool {
+    path.starts_with('/')
+        || path.starts_with("./")
+        || path.starts_with("../")
+        || path.starts_with('{')
+        || path.contains("/{")
 }
 
 fn is_web_route_call(function_node: Node, code: &str) -> bool {
