@@ -1,14 +1,11 @@
-use std::{
-    collections::{HashMap, HashSet, hash_map::Entry},
-    path::Path,
-};
+use std::collections::{HashMap, HashSet, hash_map::Entry};
 
 use models::{
     Callable,
     ir::{language::Language, project::TypedFileRecord},
 };
 
-use super::shared::SYNTHETIC_HANDLER_PREFIX;
+use super::shared::{SYNTHETIC_HANDLER_PREFIX, package_path};
 
 pub(super) fn resolve_endpoint_handlers(files: &mut [TypedFileRecord]) {
     let package_callables = collect_package_callables(files);
@@ -113,11 +110,4 @@ fn unwrap_handler(reference: &str) -> &str {
 
 fn is_synthetic_handler(callable: &Callable) -> bool {
     callable.signature.starts_with(SYNTHETIC_HANDLER_PREFIX)
-}
-
-fn package_path(file_path: &str) -> String {
-    Path::new(file_path)
-        .parent()
-        .map(|parent| parent.to_string_lossy().into_owned())
-        .unwrap_or_default()
 }

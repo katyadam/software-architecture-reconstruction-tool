@@ -4,6 +4,7 @@ mod identify;
 mod imports;
 mod ir;
 mod package_resolution;
+mod project;
 pub mod restcalls;
 mod shared;
 
@@ -102,6 +103,10 @@ pub fn identify_with_package_context(
 
 pub fn resolve_package_endpoint_handlers(files: &mut [TypedFileRecord]) {
     package_resolution::resolve_endpoint_handlers(files);
+}
+
+pub fn identify_project_restcalls(files: &mut [TypedFileRecord]) {
+    project::identify_restcalls(files);
 }
 
 fn parse_go_tree(code: &str) -> Result<Tree, ExtractionError> {

@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    path::Path,
     str::FromStr,
 };
 
@@ -189,6 +190,13 @@ pub(super) fn walk_named(node: Node, visit: &mut impl FnMut(Node)) {
 
 pub(super) fn node_text<'a>(node: Node, code: &'a str) -> &'a str {
     &code[node.start_byte()..node.end_byte()]
+}
+
+pub(super) fn package_path(file_path: &str) -> String {
+    Path::new(file_path)
+        .parent()
+        .map(|parent| parent.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 fn contains_any(value: &str, hints: &[&str]) -> bool {
