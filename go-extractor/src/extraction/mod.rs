@@ -79,14 +79,6 @@ pub fn identify(file: &mut TypedFileRecord) {
     identify_with_package_context(file, &globals, &callables);
 }
 
-pub fn identify_with_package_globals(
-    file: &mut TypedFileRecord,
-    package_globals: &HashMap<String, String>,
-) {
-    let callables = file.callables.clone();
-    identify_with_package_context(file, package_globals, &callables);
-}
-
 pub fn identify_with_package_context(
     file: &mut TypedFileRecord,
     package_globals: &HashMap<String, String>,
