@@ -1,5 +1,6 @@
 mod endpoints;
 mod evaluator;
+mod files;
 mod identify;
 mod imports;
 mod ir;
@@ -18,7 +19,7 @@ use models::{
 use tree_sitter::{Parser, Tree};
 
 pub fn should_extract_file(path: &Path) -> bool {
-    !is_generated_file(path)
+    files::should_extract(path)
 }
 
 pub fn extract_syntactic(text: &str, file_path: &str) -> Result<FileRecord, ExtractionError> {
@@ -109,23 +110,6 @@ fn parse_go_tree(code: &str) -> Result<Tree, ExtractionError> {
     parser
         .parse(code, None)
         .ok_or_else(|| ExtractionError::Process("failed to parse Go source".to_string()))
-}
-
-fn is_generated_file(path: &Path) -> bool {
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or_default();
-    if file_name.ends_with(".pb.go") || file_name.ends_with("_grpc.pb.go") {
-        return true;
-    }
-
-    path.components().any(|component| {
-        component
-            .as_os_str()
-            .to_str()
-            .is_some_and(|value| value == "thriftgo")
-    })
 }
 
 #[cfg(test)]
