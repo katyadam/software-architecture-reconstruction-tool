@@ -80,6 +80,18 @@ fn endpoint_from_call(
         ));
     }
 
+    if let Some((method, path, handler)) = serve_mux_route_parts(node, code, globals) {
+        return Some(build_endpoint(
+            file_path,
+            &path,
+            method,
+            &handler,
+            callable_lookup,
+            synthetic_callables,
+            synthetic_hashes,
+        ));
+    }
+
     let selector = selector_name(function_node, code)?;
     if selector == "HandleFunc" {
         let arguments = node
@@ -181,6 +193,18 @@ fn chi_route_parts(
             let handler = normalize_whitespace(node_text(arguments[1], code));
             Some((method, path, handler))
         }
+        "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "OPTIONS" | "HEAD" => {
+            if arguments.len() < 2 {
+                return None;
+            }
+            let path = evaluate_expression_node(arguments[0], code, globals);
+            if !looks_like_http_path(&path) {
+                return None;
+            }
+            let method = parse_http_method_value(selector.as_str())?;
+            let handler = normalize_whitespace(node_text(arguments[1], code));
+            Some((method, path, handler))
+        }
         "Method" | "MethodFunc" => {
             if arguments.len() < 3 {
                 return None;
@@ -197,12 +221,59 @@ fn chi_route_parts(
     }
 }
 
+fn serve_mux_route_parts(
+    node: Node,
+    code: &str,
+    globals: &HashMap<String, String>,
+) -> Option<(HttpMethod, String, String)> {
+    let function_node = node.child_by_field_name("function")?;
+    if selector_name(function_node, code)? != "Handle" {
+        return None;
+    }
+
+    let arguments = node
+        .child_by_field_name("arguments")
+        .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
+        .unwrap_or_default();
+    if arguments.len() < 2 {
+        return None;
+    }
+
+    let path = evaluate_expression_node(arguments[0], code, globals);
+    if !looks_like_http_path(&path) {
+        return None;
+    }
+
+    let handler = normalize_whitespace(node_text(arguments[1], code));
+    Some((infer_method_from_handler(&handler), path, handler))
+}
+
 fn looks_like_http_path(path: &str) -> bool {
     path.starts_with('/')
         || path.starts_with("./")
         || path.starts_with("../")
         || path.starts_with('{')
         || path.contains("/{")
+}
+
+fn infer_method_from_handler(handler: &str) -> HttpMethod {
+    let normalized = handler
+        .trim()
+        .trim_end_matches("()")
+        .rsplit('.')
+        .next()
+        .unwrap_or(handler);
+    if normalized.contains("Post") || normalized.contains("Create") || normalized.contains("Add") {
+        HttpMethod::POST
+    } else if normalized.contains("Put") || normalized.contains("Update") {
+        HttpMethod::PUT
+    } else if normalized.contains("Delete") || normalized.contains("Remove") {
+        HttpMethod::DELETE
+    } else if normalized.contains("Patch") {
+        HttpMethod::PATCH
+    } else {
+        HttpMethod::GET
+    }
 }
 
 fn is_web_route_call(function_node: Node, code: &str) -> bool {

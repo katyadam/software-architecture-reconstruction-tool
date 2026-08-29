@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
-use extractor_runtime::pipeline::{build_project_ir, evaluate};
+use extractor_runtime::pipeline::{build_project_ir, evaluate, pass2::re_identify_restcalls};
 use java_extractor::extraction::extract_syntactic as java_extract;
 use models::{HttpMethod, RestCall};
 use python_extractor::extraction::parse::extract_syntactic as python_extract;
+use go_extractor::extraction::extract_syntactic as go_extract;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -221,6 +222,72 @@ def fetch_by_status(status: Status):
     assert!(
         uris.contains(&"/api/items/inactive"),
         "should contain /api/items/inactive, got: {uris:?}"
+    );
+}
+
+#[test]
+fn go_cross_file_package_restcall_reidentification() {
+    let rest_go = r#"
+package main
+
+import "fmt"
+
+const PRODUCT_CATALOG_SERVICE_ADDR = "PRODUCT_CATALOG_SERVICE_ADDR"
+
+var defaultServiceName = map[string]string{
+    PRODUCT_CATALOG_SERVICE_ADDR: "product-catalog-service",
+}
+
+type RestClient struct {
+    ProductCatalogService string
+}
+
+var client = &RestClient{}
+
+func getService(serviceEnv string, port int) string {
+    serviceHost := defaultServiceName[serviceEnv]
+    return fmt.Sprintf("%s:%d", serviceHost, port)
+}
+
+func init() {
+    client.ProductCatalogService = getService(PRODUCT_CATALOG_SERVICE_ADDR, 60000)
+}
+"#;
+
+    let client_go = r#"
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+func (c *RestClient) GetProduct(productID string) {
+    url := fmt.Sprintf("http://%s/%s?product_id=%s", c.ProductCatalogService, "get-product", productID)
+    _, _ = http.Get(url)
+}
+"#;
+
+    let rest_record = go_extract(rest_go, "checkoutservice/rest.go").expect("rest.go should parse");
+    let client_record =
+        go_extract(client_go, "checkoutservice/rest_client.go").expect("rest_client.go should parse");
+    let mut typed = vec![rest_record.into(), client_record.into()];
+
+    re_identify_restcalls(&mut typed);
+
+    let client_file = typed
+        .iter()
+        .find(|file| file.file_path.ends_with("rest_client.go"))
+        .expect("rest_client.go should exist");
+    let uris = client_file
+        .raw_restcalls
+        .iter()
+        .map(|call| call.target_uri.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(
+        uris.contains(&"http://product-catalog-service:60000/get-product?product_id=productID"),
+        "resolved URIs: {uris:?}"
     );
 }
 

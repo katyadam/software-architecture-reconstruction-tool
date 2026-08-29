@@ -6,9 +6,10 @@ use statix::{class_hierarchy::build_class_hierarchy, import_graph::build_import_
 
 use crate::pipeline::pass2::{
     callables::build_project_global_callables, constants::collect_constants,
-    entities::resolve_entity_fields, restcalls::re_identify_restcalls,
-    type_inference::resolve_call_argument_types,
+    entities::resolve_entity_fields, type_inference::resolve_call_argument_types,
 };
+
+pub use restcalls::re_identify_restcalls;
 
 mod assignments;
 pub mod callables;

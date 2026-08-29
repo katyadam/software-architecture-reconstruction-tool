@@ -2,15 +2,24 @@ use std::collections::HashMap;
 
 use models::{Argument, CallStatement, HttpMethod, RestCall, Scope, ir::project::TypedFileRecord};
 
-use super::shared::{evaluate_expression_text, merged_scope_bindings, parse_http_method_value};
+use super::shared::{
+    evaluate_expression_text, merged_scope_bindings, merged_scope_bindings_with_globals,
+    parse_http_method_value,
+};
 
-pub(super) fn identify_restcall(file: &TypedFileRecord, call: &CallStatement) -> Option<RestCall> {
+pub(super) fn identify_restcall(
+    file: &TypedFileRecord,
+    call: &CallStatement,
+    package_globals: Option<&HashMap<String, String>>,
+) -> Option<RestCall> {
     let scope = call
         .enclosing_function_name
         .as_ref()
         .map(|name| Scope::Function(name.clone()))
         .unwrap_or(Scope::Global);
-    let resolved_scope = merged_scope_bindings(&file.assignments, &scope);
+    let resolved_scope = package_globals
+        .map(|globals| merged_scope_bindings_with_globals(&file.assignments, &scope, globals))
+        .unwrap_or_else(|| merged_scope_bindings(&file.assignments, &scope));
 
     if call.function_name.ends_with(".exchange") && call.arguments.len() >= 4 {
         let service = resolve_argument_value(&call.arguments[1], &resolved_scope);
@@ -30,7 +39,17 @@ pub(super) fn identify_restcall(file: &TypedFileRecord, call: &CallStatement) ->
         return Some(build_restcall(file, call, HttpMethod::GET, target_uri));
     }
 
+    if call.function_name.ends_with(".Get") && !call.function_name.starts_with("http.") && !call.arguments.is_empty() {
+        let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
+        return Some(build_restcall(file, call, HttpMethod::GET, target_uri));
+    }
+
     if call.function_name == "http.Post" && !call.arguments.is_empty() {
+        let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
+        return Some(build_restcall(file, call, HttpMethod::POST, target_uri));
+    }
+
+    if call.function_name.ends_with(".Post") && !call.function_name.starts_with("http.") && !call.arguments.is_empty() {
         let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
         return Some(build_restcall(file, call, HttpMethod::POST, target_uri));
     }
@@ -50,6 +69,18 @@ pub(super) fn identify_restcall(file: &TypedFileRecord, call: &CallStatement) ->
         ))?;
         let target_uri = resolve_argument_value(&call.arguments[url_index], &resolved_scope);
         return Some(build_restcall(file, call, method, target_uri));
+    }
+
+    if call.function_name.ends_with(".Do") && !call.function_name.starts_with("http.") && !call.arguments.is_empty() {
+        let request_value = resolve_argument_value(&call.arguments[0], &resolved_scope);
+        if request_value.starts_with("http.NewRequest(")
+            || request_value.starts_with("http.NewRequestWithContext(")
+        {
+            return None;
+        }
+        if let Some((method, target_uri)) = parse_request_call(&request_value, &resolved_scope) {
+            return Some(build_restcall(file, call, method, target_uri));
+        }
     }
 
     None
@@ -76,4 +107,57 @@ fn build_restcall(
 
 fn resolve_argument_value(argument: &Argument, scope: &HashMap<String, String>) -> String {
     evaluate_expression_text(&argument.value, scope)
+}
+
+fn parse_request_call(raw: &str, scope: &HashMap<String, String>) -> Option<(HttpMethod, String)> {
+    let (name, args) = raw.split_once('(')?;
+    if !matches!(name.trim(), "http.NewRequest" | "http.NewRequestWithContext") {
+        return None;
+    }
+
+    let body = args.strip_suffix(')')?;
+    let args = split_args(body);
+    let method_index = usize::from(name.trim().ends_with("WithContext"));
+    let url_index = method_index + 1;
+    if args.len() <= url_index {
+        return None;
+    }
+
+    let method = parse_http_method_value(&evaluate_expression_text(args[method_index], scope))?;
+    let target_uri = evaluate_expression_text(args[url_index], scope);
+    Some((method, target_uri))
+}
+
+fn split_args(input: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut in_string = false;
+    let mut quote = '\0';
+    let mut start = 0usize;
+
+    for (index, ch) in input.char_indices() {
+        match ch {
+            '"' | '`' => {
+                if !in_string {
+                    in_string = true;
+                    quote = ch;
+                } else if ch == quote {
+                    in_string = false;
+                }
+            }
+            '(' | '[' | '{' if !in_string => depth += 1,
+            ')' | ']' | '}' if !in_string => depth -= 1,
+            ',' if !in_string && depth == 0 => {
+                parts.push(input[start..index].trim());
+                start = index + 1;
+            }
+            _ => {}
+        }
+    }
+
+    let tail = input[start..].trim();
+    if !tail.is_empty() {
+        parts.push(tail);
+    }
+    parts
 }

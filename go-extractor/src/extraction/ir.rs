@@ -150,7 +150,9 @@ fn collect_spec_assignments(
             | "raw_string_literal"
             | "binary_expression"
             | "call_expression"
+            | "composite_literal"
             | "selector_expression"
+            | "unary_expression"
             | "parenthesized_expression" => values.push(child),
             _ => {}
         }
@@ -177,7 +179,19 @@ fn collect_spec_assignments(
             },
             assignment,
         );
-        scope_values.insert(variable_name, value);
+        scope_values.insert(variable_name.clone(), value);
+        if let Some(value_node) = values.get(index)
+            && node_text(*value_node, code).trim_start().starts_with("map[")
+        {
+            collect_map_literal_entries(
+                variable_name,
+                *value_node,
+                code,
+                scope.clone(),
+                &scope_values,
+                assignments,
+            );
+        }
     }
 }
 
@@ -205,7 +219,22 @@ fn collect_local_assignments(
                         value: value.clone(),
                     },
                 );
-                scope_values.insert(name, value);
+                scope_values.insert(name.clone(), value);
+                if let Some(root) = selector_root(&name)
+                    && scope_bindings(assignments, &Scope::Global).contains_key(root)
+                {
+                    assignments.insert(
+                        AssignmentKey {
+                            scope: Scope::Global,
+                            variable_name: name.clone(),
+                        },
+                        Assignment {
+                            variable_name: name.clone(),
+                            variable_type: "".to_string(),
+                            value: scope_values[&name].clone(),
+                        },
+                    );
+                }
             }
         }
         "const_declaration" | "var_declaration" => {
@@ -233,7 +262,7 @@ fn assignment_pairs<'a>(node: Node<'a>, code: &'a str) -> Vec<(String, Node<'a>)
                 }
             }
             _ => {
-                if !seen_right && child.kind() == "identifier" {
+                if !seen_right && matches!(child.kind(), "identifier" | "selector_expression") {
                     left_values.push(child);
                 } else {
                     seen_right = true;
@@ -247,12 +276,59 @@ fn assignment_pairs<'a>(node: Node<'a>, code: &'a str) -> Vec<(String, Node<'a>)
         .into_iter()
         .zip(right_values)
         .filter_map(|(left, right)| {
-            if left.kind() != "identifier" {
+            if !matches!(left.kind(), "identifier" | "selector_expression") {
                 return None;
             }
             Some((node_text(left, code).to_string(), right))
         })
         .collect()
+}
+
+fn collect_map_literal_entries(
+    variable_name: String,
+    value_node: Node,
+    code: &str,
+    scope: Scope,
+    scope_values: &HashMap<String, String>,
+    assignments: &mut HashMap<AssignmentKey, Assignment>,
+) {
+    let mut value_cursor = value_node.walk();
+    for child in value_node.named_children(&mut value_cursor) {
+        let mut entry_cursor = child.walk();
+        for entry in child.named_children(&mut entry_cursor) {
+            if entry.kind() != "keyed_element" {
+                continue;
+            }
+
+            let mut keyed_cursor = entry.walk();
+            let mut children = entry.named_children(&mut keyed_cursor);
+            let Some(key_node) = children.next() else {
+                continue;
+            };
+            let Some(value_node) = children.next() else {
+                continue;
+            };
+            let key = evaluate_expression_node(key_node, code, scope_values);
+            let value = evaluate_expression_node(value_node, code, scope_values);
+            let entry_name = format!("{variable_name}[{key}]");
+
+            assignments.insert(
+                AssignmentKey {
+                    scope: scope.clone(),
+                    variable_name: entry_name.clone(),
+                },
+                Assignment {
+                    variable_name: entry_name,
+                    variable_type: "".to_string(),
+                    value,
+                },
+            );
+        }
+    }
+}
+
+fn selector_root(selector: &str) -> Option<&str> {
+    selector.split_once('.').map(|(root, _)| root)
 }
 
 fn collect_call_statements(

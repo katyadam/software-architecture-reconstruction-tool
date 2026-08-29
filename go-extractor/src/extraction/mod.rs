@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 use models::{
     api::ExtractionError,
+    assignments::Scope,
     ir::{language::Language, project::TypedFileRecord, syntax::FileRecord},
 };
 use tree_sitter::{Parser, Tree};
@@ -57,10 +58,23 @@ pub fn extract_syntactic(text: &str, file_path: &str) -> Result<FileRecord, Extr
 }
 
 pub fn identify(file: &mut TypedFileRecord) {
+    let globals = file
+        .assignments
+        .iter()
+        .filter(|(key, _)| key.scope == Scope::Global)
+        .map(|(_, assignment)| (assignment.variable_name.clone(), assignment.value.clone()))
+        .collect::<HashMap<_, _>>();
+    identify_with_package_globals(file, &globals);
+}
+
+pub fn identify_with_package_globals(
+    file: &mut TypedFileRecord,
+    package_globals: &HashMap<String, String>,
+) {
     file.raw_restcalls = file
         .call_statements
         .iter()
-        .filter_map(|call| identify::identify_restcall(file, call))
+        .filter_map(|call| identify::identify_restcall(file, call, Some(package_globals)))
         .collect();
 }
 
@@ -169,6 +183,116 @@ func routes() http.Handler {
         assert!(record.endpoints.iter().any(|e| e.uri == "/" && e.http_method == models::HttpMethod::POST));
         assert!(record.endpoints.iter().any(|e| e.uri == "/handle" && e.http_method == models::HttpMethod::POST));
         assert!(record.endpoints.iter().any(|e| e.uri == "/items/{id}" && e.http_method == models::HttpMethod::DELETE));
+    }
+
+    #[test]
+    fn extracts_serve_mux_handle_and_client_methods() {
+        let code = r#"
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+func httpGetProduct() http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {}
+}
+
+func routes() {
+    mux := http.NewServeMux()
+    mux.Handle("/get-product", httpGetProduct())
+}
+
+type RestClient struct {
+    restClient *http.Client
+    ProductCatalogService string
+}
+
+func (c *RestClient) GetProduct(productID string) {
+    url := fmt.Sprintf("http://%s/%s?product_id=%s", c.ProductCatalogService, "get-product", productID)
+    _, _ = c.restClient.Get(url)
+}
+"#;
+
+        let record = extract_syntactic(code, "sample.go").expect("Go extraction should succeed");
+        assert!(record.endpoints.iter().any(|e| e.uri == "/get-product"));
+
+        let mut typed = models::ir::project::TypedFileRecord::from(record);
+        identify(&mut typed);
+        assert!(typed.raw_restcalls.iter().any(|call| call.target_uri.contains("/get-product?product_id=")));
+    }
+
+    #[test]
+    fn extracts_gin_routes() {
+        let code = r#"
+package main
+
+func checkout() {}
+
+func startRest() {
+    router := gin.Default()
+    router.POST("/checkout", checkout)
+}
+"#;
+
+        let record = extract_syntactic(code, "gin.go").expect("Go extraction should succeed");
+        assert!(record.endpoints.iter().any(|e| e.uri == "/checkout" && e.http_method == models::HttpMethod::POST));
+    }
+
+    #[test]
+    fn resolves_service_hosts_from_init_assignments() {
+        let code = r#"
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+const PRODUCT_CATALOG_SERVICE_ADDR = "PRODUCT_CATALOG_SERVICE_ADDR"
+
+var defaultServiceName = map[string]string{
+    PRODUCT_CATALOG_SERVICE_ADDR: "product-catalog-service",
+}
+
+type RestClient struct {
+    restClient *http.Client
+    ProductCatalogService string
+}
+
+var client = &RestClient{}
+
+func getService(serviceEnv string, port int) string {
+    serviceHost := defaultServiceName[serviceEnv]
+    service := fmt.Sprintf("%s:%d", serviceHost, port)
+    return service
+}
+
+func init() {
+    client.ProductCatalogService = getService(PRODUCT_CATALOG_SERVICE_ADDR, 60000)
+}
+
+func (c *RestClient) GetProduct(productID string) {
+    url := fmt.Sprintf("http://%s/%s?product_id=%s", c.ProductCatalogService, "get-product", productID)
+    _, _ = c.restClient.Get(url)
+}
+"#;
+
+        let record = extract_syntactic(code, "sample.go").expect("Go extraction should succeed");
+        let mut typed = models::ir::project::TypedFileRecord::from(record);
+        identify(&mut typed);
+        let uris = typed
+            .raw_restcalls
+            .iter()
+            .map(|call| call.target_uri.clone())
+            .collect::<Vec<_>>();
+        assert!(
+            uris.iter().any(|uri| {
+                uri == "http://product-catalog-service:60000/get-product?product_id=productID"
+            }),
+            "resolved URIs: {uris:?}"
+        );
     }
 
     #[test]
