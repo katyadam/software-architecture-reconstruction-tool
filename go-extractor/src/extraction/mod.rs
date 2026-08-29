@@ -1,3 +1,4 @@
+mod endpoint_frameworks;
 mod endpoints;
 mod evaluator;
 mod files;
