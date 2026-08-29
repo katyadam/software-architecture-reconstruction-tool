@@ -14,7 +14,11 @@ struct PythonEndpointPostProcessor;
 
 impl EndpointPostProcessor for PythonEndpointPostProcessor {
     fn process(&self, files: &mut [TypedFileRecord]) {
-        python_extractor::extraction::post_process(files);
+        let mut python_files = files
+            .iter_mut()
+            .filter(|file| file.language == Language::Python)
+            .collect::<Vec<_>>();
+        python_extractor::extraction::post_process(&mut python_files);
     }
 }
 
@@ -31,8 +35,6 @@ fn strategy(language: &Language) -> &'static dyn EndpointPostProcessor {
 /// Apply endpoint-specific enrichment without exposing language implementations
 /// to the project-building pipeline.
 pub fn post_process_endpoints(files: &mut [TypedFileRecord]) {
-    // Python's enrichment can use endpoints from every file, so the strategy
-    // is selected once from the project rather than invoked per file.
     if files.iter().any(|file| file.language == Language::Python) {
         strategy(&Language::Python).process(files);
     }

@@ -1,17 +1,17 @@
 pub mod extractor;
+mod identification;
 
 use crate::extraction::extractor::ExtractParams;
 use models::Endpoint;
 
-/// Strategy used to discover HTTP endpoints in a source file.
+/// Facade used to discover Python HTTP endpoints in a source file.
 ///
-/// The runtime only needs the language-neutral result. Framework-specific
-/// syntax (FastAPI/Flask/Django) belongs in the Python implementation.
+/// Framework-specific endpoint identification lives in internal strategies
+/// rather than in the extractor runtime.
 pub trait EndpointStrategy {
     fn extract<'a>(&self, params: ExtractParams<'a>) -> Vec<Endpoint>;
 }
 
-/// Python endpoint strategy. It understands decorator-based frameworks and
-/// Django's `urlpatterns` calls.
+/// Python endpoint facade that delegates to framework-specific strategies.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct PythonEndpointStrategy;

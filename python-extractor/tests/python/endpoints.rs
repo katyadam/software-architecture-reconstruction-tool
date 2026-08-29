@@ -9,6 +9,7 @@ use python_extractor::{
 use crate::python::utils::{get_tree, load_file, parse_file};
 
 use models::{Endpoint, HttpMethod, Parameter};
+use models::ir::{language::Language, project::TypedFileRecord, syntax::FileRecord};
 
 #[test]
 fn base_test() {
@@ -314,4 +315,73 @@ urlpatterns = [
         endpoint.function_name == "get_product" && endpoint.uri == "products/id={id}/"
     }));
     assert!(endpoints.iter().all(|endpoint| endpoint.uri != "ignored/"));
+}
+
+#[test]
+fn python_post_process_skips_non_python_files() {
+    let mut files = vec![
+        TypedFileRecord::from(FileRecord {
+            file_path: "controller.java".to_string(),
+            language: Language::Java,
+            imports: vec![],
+            entities: vec![],
+            endpoints: vec![Endpoint {
+                function_name: "status".to_string(),
+                function_hash: "java-hash".to_string(),
+                http_method: HttpMethod::GET,
+                parameters: vec![],
+                uri: "/status".to_string(),
+                file_path: "controller.java".to_string(),
+                router_variable: Some("controller".to_string()),
+            }],
+            callables: vec![],
+            call_statements: vec![],
+            assignments: std::collections::HashMap::new(),
+            enums: vec![],
+        }),
+        TypedFileRecord::from(FileRecord {
+            file_path: "views.py".to_string(),
+            language: Language::Python,
+            imports: vec![],
+            entities: vec![],
+            endpoints: vec![
+                Endpoint {
+                    function_name: "products".to_string(),
+                    function_hash: "placeholder".to_string(),
+                    http_method: HttpMethod::POST,
+                    parameters: vec![],
+                    uri: String::new(),
+                    file_path: "views.py".to_string(),
+                    router_variable: None,
+                },
+                Endpoint {
+                    function_name: "products".to_string(),
+                    function_hash: String::new(),
+                    http_method: HttpMethod::GET,
+                    parameters: vec![],
+                    uri: "products/".to_string(),
+                    file_path: "views.py".to_string(),
+                    router_variable: Some("urlpatterns".to_string()),
+                },
+            ],
+            callables: vec![],
+            call_statements: vec![],
+            assignments: std::collections::HashMap::new(),
+            enums: vec![],
+        }),
+    ];
+
+    let mut python_files = files
+        .iter_mut()
+        .filter(|file| file.language == Language::Python)
+        .collect::<Vec<_>>();
+    python_extractor::extraction::post_process(&mut python_files);
+
+    assert_eq!(files[0].endpoints.len(), 1);
+    assert_eq!(files[0].endpoints[0].uri, "/status");
+    assert_eq!(files[0].endpoints[0].function_name, "status");
+
+    assert_eq!(files[1].endpoints.len(), 1);
+    assert_eq!(files[1].endpoints[0].http_method, HttpMethod::POST);
+    assert_eq!(files[1].endpoints[0].uri, "products/");
 }

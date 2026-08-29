@@ -1,15 +1,18 @@
 use std::collections::HashMap;
 
-use models::{HttpMethod, ir::project::TypedFileRecord};
+use models::{
+    HttpMethod,
+    ir::project::TypedFileRecord,
+};
 
 /// Applies Python-specific endpoint transformations after project-wide type
 /// resolution. The runtime only invokes this generic Python hook; framework
 /// details remain inside the Python extractor.
-pub(super) fn post_process(files: &mut [TypedFileRecord]) {
+pub(super) fn post_process(files: &mut [&mut TypedFileRecord]) {
     enrich_urlpattern_methods(files);
 }
 
-fn enrich_urlpattern_methods(files: &mut [TypedFileRecord]) {
+fn enrich_urlpattern_methods(files: &mut [&mut TypedFileRecord]) {
     let api_view_methods = collect_api_view_methods(files);
     if api_view_methods.is_empty() {
         return;
@@ -37,7 +40,7 @@ fn enrich_urlpattern_methods(files: &mut [TypedFileRecord]) {
     }
 }
 
-fn collect_api_view_methods(files: &[TypedFileRecord]) -> HashMap<String, Vec<HttpMethod>> {
+fn collect_api_view_methods(files: &[&mut TypedFileRecord]) -> HashMap<String, Vec<HttpMethod>> {
     let mut methods = HashMap::new();
     for file in files {
         for endpoint in &file.endpoints {

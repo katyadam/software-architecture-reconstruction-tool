@@ -16,6 +16,6 @@ pub mod restcalls;
 
 /// Applies Python-specific Pass 2 transformations without exposing framework
 /// details to the extractor runtime.
-pub fn post_process(files: &mut [models::ir::project::TypedFileRecord]) {
+pub fn post_process(files: &mut [&mut models::ir::project::TypedFileRecord]) {
     post_process::post_process(files);
 }
