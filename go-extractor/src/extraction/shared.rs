@@ -8,12 +8,18 @@ use models::{Assignment, AssignmentKey, Callable, HttpMethod, Scope};
 use statix::strings::{normalize_whitespace, strip_quotes};
 use tree_sitter::Node;
 
-const HTTP_METHOD_SELECTORS: &[&str] =
-    &["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"];
-const POST_HANDLER_HINTS: &[&str] = &["Post", "Create", "Add"];
-const PUT_HANDLER_HINTS: &[&str] = &["Put", "Update"];
-const DELETE_HANDLER_HINTS: &[&str] = &["Delete", "Remove"];
-const PATCH_HANDLER_HINTS: &[&str] = &["Patch"];
+const ROUTE_METHOD_PREFIXES: &[(&str, HttpMethod)] = &[
+    ("Get", HttpMethod::GET),
+    ("Post", HttpMethod::POST),
+    ("Put", HttpMethod::PUT),
+    ("Delete", HttpMethod::DELETE),
+];
+const HANDLER_METHOD_HINTS: &[(HttpMethod, &[&str])] = &[
+    (HttpMethod::POST, &["Post", "Create", "Add"]),
+    (HttpMethod::PUT, &["Put", "Update"]),
+    (HttpMethod::DELETE, &["Delete", "Remove"]),
+    (HttpMethod::PATCH, &["Patch"]),
+];
 pub(super) const SYNTHETIC_HANDLER_PREFIX: &str = "handler ";
 
 pub(super) fn scope_bindings(
@@ -106,17 +112,15 @@ pub(super) fn selector_name(node: Node, code: &str) -> Option<String> {
 }
 
 pub(super) fn is_http_method_selector(selector: &str) -> bool {
-    HTTP_METHOD_SELECTORS.contains(&selector)
+    HttpMethod::ALL
+        .iter()
+        .any(|method| method.as_str() == selector)
 }
 
 pub(super) fn web_route_method(selector: &str) -> Option<HttpMethod> {
-    let method = selector
-        .strip_prefix("Get")
-        .map(|_| "GET")
-        .or_else(|| selector.strip_prefix("Post").map(|_| "POST"))
-        .or_else(|| selector.strip_prefix("Put").map(|_| "PUT"))
-        .or_else(|| selector.strip_prefix("Delete").map(|_| "DELETE"))?;
-    HttpMethod::from_str(method).ok()
+    ROUTE_METHOD_PREFIXES
+        .iter()
+        .find_map(|(prefix, method)| selector.strip_prefix(prefix).map(|_| *method))
 }
 
 pub(super) fn parse_http_method_value(value: &str) -> Option<HttpMethod> {
@@ -135,29 +139,14 @@ pub(super) fn split_method_and_path(value: &str) -> Option<(HttpMethod, String)>
 }
 
 pub(super) fn format_http_method(method: &HttpMethod) -> &'static str {
-    match method {
-        HttpMethod::GET => "GET",
-        HttpMethod::POST => "POST",
-        HttpMethod::PUT => "PUT",
-        HttpMethod::DELETE => "DELETE",
-        HttpMethod::PATCH => "PATCH",
-        HttpMethod::HEAD => "HEAD",
-        HttpMethod::OPTIONS => "OPTIONS",
-    }
+    method.as_str()
 }
 
 pub(super) fn infer_http_method_from_name(name: &str) -> HttpMethod {
-    if contains_any(name, POST_HANDLER_HINTS) {
-        HttpMethod::POST
-    } else if contains_any(name, PUT_HANDLER_HINTS) {
-        HttpMethod::PUT
-    } else if contains_any(name, DELETE_HANDLER_HINTS) {
-        HttpMethod::DELETE
-    } else if contains_any(name, PATCH_HANDLER_HINTS) {
-        HttpMethod::PATCH
-    } else {
-        HttpMethod::GET
-    }
+    HANDLER_METHOD_HINTS
+        .iter()
+        .find_map(|(method, hints)| contains_any(name, hints).then_some(*method))
+        .unwrap_or(HttpMethod::GET)
 }
 
 pub(super) fn simple_callable_name(signature: &str) -> Option<String> {

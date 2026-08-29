@@ -3,7 +3,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema, Clone, Default)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema, Clone, Copy, Default)]
 pub enum HttpMethod {
     #[default]
     GET,
@@ -13,6 +13,30 @@ pub enum HttpMethod {
     PATCH,
     HEAD,
     OPTIONS,
+}
+
+impl HttpMethod {
+    pub const ALL: [Self; 7] = [
+        Self::GET,
+        Self::POST,
+        Self::PUT,
+        Self::DELETE,
+        Self::PATCH,
+        Self::HEAD,
+        Self::OPTIONS,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::GET => "GET",
+            Self::POST => "POST",
+            Self::PUT => "PUT",
+            Self::DELETE => "DELETE",
+            Self::PATCH => "PATCH",
+            Self::HEAD => "HEAD",
+            Self::OPTIONS => "OPTIONS",
+        }
+    }
 }
 
 impl FromStr for HttpMethod {
