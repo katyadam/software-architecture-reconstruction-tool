@@ -33,6 +33,7 @@ pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
         .map(TypedFileRecord::from)
         .collect();
 
+    go_extractor::extraction::resolve_package_endpoint_handlers(&mut files);
     resolve_entity_fields(&mut files, &import_graph);
     resolve_call_argument_types(&mut files);
     re_identify_restcalls(&mut files);

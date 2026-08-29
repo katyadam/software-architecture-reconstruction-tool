@@ -42,7 +42,11 @@ pub(super) fn identify_restcall(
         return Some(build_restcall(file, call, HttpMethod::GET, target_uri));
     }
 
-    if call.function_name.ends_with(".Get") && !call.function_name.starts_with("http.") && !call.arguments.is_empty() {
+    if call.function_name.ends_with(".Get")
+        && !call.function_name.starts_with("http.")
+        && !call.arguments.is_empty()
+        && !is_route_registration(file, call, &HttpMethod::GET, &resolved_scope)
+    {
         let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
         return Some(build_restcall(file, call, HttpMethod::GET, target_uri));
     }
@@ -52,7 +56,11 @@ pub(super) fn identify_restcall(
         return Some(build_restcall(file, call, HttpMethod::POST, target_uri));
     }
 
-    if call.function_name.ends_with(".Post") && !call.function_name.starts_with("http.") && !call.arguments.is_empty() {
+    if call.function_name.ends_with(".Post")
+        && !call.function_name.starts_with("http.")
+        && !call.arguments.is_empty()
+        && !is_route_registration(file, call, &HttpMethod::POST, &resolved_scope)
+    {
         let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
         return Some(build_restcall(file, call, HttpMethod::POST, target_uri));
     }
@@ -74,7 +82,10 @@ pub(super) fn identify_restcall(
         return Some(build_restcall(file, call, method, target_uri));
     }
 
-    if call.function_name.ends_with(".Do") && !call.function_name.starts_with("http.") && !call.arguments.is_empty() {
+    if call.function_name.ends_with(".Do")
+        && !call.function_name.starts_with("http.")
+        && !call.arguments.is_empty()
+    {
         let request_value = resolve_argument_value(&call.arguments[0], &resolved_scope);
         if request_value.starts_with("http.NewRequest(")
             || request_value.starts_with("http.NewRequestWithContext(")
@@ -87,6 +98,22 @@ pub(super) fn identify_restcall(
     }
 
     None
+}
+
+fn is_route_registration(
+    file: &TypedFileRecord,
+    call: &CallStatement,
+    method: &HttpMethod,
+    scope: &HashMap<String, String>,
+) -> bool {
+    if call.arguments.len() != 2 {
+        return false;
+    }
+
+    let uri = resolve_argument_value(&call.arguments[0], scope);
+    file.endpoints
+        .iter()
+        .any(|endpoint| endpoint.http_method == *method && endpoint.uri == uri)
 }
 
 fn add_receiver_field_aliases(
@@ -163,7 +190,10 @@ fn resolve_argument_value(argument: &Argument, scope: &HashMap<String, String>) 
 
 fn parse_request_call(raw: &str, scope: &HashMap<String, String>) -> Option<(HttpMethod, String)> {
     let (name, args) = raw.split_once('(')?;
-    if !matches!(name.trim(), "http.NewRequest" | "http.NewRequestWithContext") {
+    if !matches!(
+        name.trim(),
+        "http.NewRequest" | "http.NewRequestWithContext"
+    ) {
         return None;
     }
 

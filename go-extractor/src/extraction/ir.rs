@@ -181,7 +181,9 @@ fn collect_spec_assignments(
         );
         scope_values.insert(variable_name.clone(), value);
         if let Some(value_node) = values.get(index)
-            && node_text(*value_node, code).trim_start().starts_with("map[")
+            && node_text(*value_node, code)
+                .trim_start()
+                .starts_with("map[")
         {
             collect_map_literal_entries(
                 variable_name,

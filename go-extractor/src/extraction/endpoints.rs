@@ -7,9 +7,10 @@ use statix::strings::{hash_text, normalize_whitespace};
 use tree_sitter::Node;
 
 use super::shared::{
-    evaluate_expression_node, format_http_method, infer_http_method_from_name,
-    is_http_method_selector, lookup_callable, node_text, parse_http_method_value,
-    scope_bindings, selector_name, split_method_and_path, walk_named, web_route_method,
+    SYNTHETIC_HANDLER_PREFIX, evaluate_expression_node, format_http_method,
+    infer_http_method_from_name, is_http_method_selector, lookup_callable, node_text,
+    parse_http_method_value, scope_bindings, selector_name, split_method_and_path, walk_named,
+    web_route_method,
 };
 
 pub(super) fn collect_endpoints(
@@ -115,7 +116,9 @@ fn endpoint_from_call(
         ));
     }
 
-    if is_web_route_call(function_node, code) && let Some(method) = web_route_method(&selector) {
+    if is_web_route_call(function_node, code)
+        && let Some(method) = web_route_method(&selector)
+    {
         let arguments = node
             .child_by_field_name("arguments")
             .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
@@ -209,7 +212,8 @@ fn chi_route_parts(
             if arguments.len() < 3 {
                 return None;
             }
-            let method = parse_http_method_value(&evaluate_expression_node(arguments[0], code, globals))?;
+            let method =
+                parse_http_method_value(&evaluate_expression_node(arguments[0], code, globals))?;
             let path = evaluate_expression_node(arguments[1], code, globals);
             if !looks_like_http_path(&path) {
                 return None;
@@ -326,12 +330,16 @@ fn resolve_handler_callable(
         return actual;
     }
 
-    let signature = format!("handler {} {}", format_http_method(method), uri);
+    let signature = format!(
+        "{SYNTHETIC_HANDLER_PREFIX}{} {}",
+        format_http_method(method),
+        uri
+    );
     let hash = hash_text(&format!("{file_path}::{signature}::{handler_expr}"));
     if synthetic_hashes.insert(hash.clone()) {
         synthetic_callables.push(ParsedCallable {
             metadata: Callable {
-                name: signature.clone(),
+                name: handler_expr.to_string(),
                 signature: signature.clone(),
                 namespace: Namespace::Module(file_path.to_string()),
                 parameters: vec![],

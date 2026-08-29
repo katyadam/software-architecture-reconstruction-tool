@@ -1,8 +1,8 @@
 use java_extractor::extraction::restcalls::identification::{
     spring::SpringIdentificationStrategy, strategy::IdentificationStrategy,
 };
-use std::{collections::HashMap, path::Path};
 use models::ir::{language::Language, project::TypedFileRecord};
+use std::{collections::HashMap, path::Path};
 
 /// Re-run REST call identification on type-resolved call statements.
 ///
@@ -24,7 +24,10 @@ pub fn re_identify_restcalls(files: &mut [TypedFileRecord]) {
             }
             Language::Go => {
                 let package_dir = parent_dir(&file.file_path);
-                let globals = go_package_globals.get(package_dir.as_str()).cloned().unwrap_or_default();
+                let globals = go_package_globals
+                    .get(package_dir.as_str())
+                    .cloned()
+                    .unwrap_or_default();
                 go_extractor::extraction::identify_with_package_globals(file, &globals);
             }
             Language::Python => {}
@@ -32,10 +35,14 @@ pub fn re_identify_restcalls(files: &mut [TypedFileRecord]) {
     }
 }
 
-fn collect_go_package_globals(files: &[TypedFileRecord]) -> HashMap<String, HashMap<String, String>> {
+fn collect_go_package_globals(
+    files: &[TypedFileRecord],
+) -> HashMap<String, HashMap<String, String>> {
     let mut packages = HashMap::new();
     for file in files.iter().filter(|file| file.language == Language::Go) {
-        let globals = packages.entry(parent_dir(&file.file_path)).or_insert_with(HashMap::new);
+        let globals = packages
+            .entry(parent_dir(&file.file_path))
+            .or_insert_with(HashMap::new);
         for (key, assignment) in &file.assignments {
             if key.scope == models::Scope::Global {
                 globals.insert(assignment.variable_name.clone(), assignment.value.clone());

@@ -1,6 +1,7 @@
 mod endpoints;
 mod identify;
 mod ir;
+mod package_resolution;
 pub mod restcalls;
 mod shared;
 
@@ -83,6 +84,10 @@ pub fn identify_with_package_globals(
         .collect();
 }
 
+pub fn resolve_package_endpoint_handlers(files: &mut [TypedFileRecord]) {
+    package_resolution::resolve_endpoint_handlers(files);
+}
+
 fn parse_go_tree(code: &str) -> Result<Tree, ExtractionError> {
     let mut parser = Parser::new();
     parser
@@ -94,7 +99,10 @@ fn parse_go_tree(code: &str) -> Result<Tree, ExtractionError> {
 }
 
 fn is_generated_file(path: &Path) -> bool {
-    let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
     if file_name.ends_with(".pb.go") || file_name.ends_with("_grpc.pb.go") {
         return true;
     }
@@ -192,6 +200,7 @@ func dynamic(http.ResponseWriter, *http.Request) {}
 
 func routes() http.Handler {
     mux := chi.NewRouter()
+    mux.Get("/status", dynamic)
     mux.Post("/", broker)
     mux.Post("/handle", submit)
     mux.Method("DELETE", "/items/{id}", http.HandlerFunc(dynamic))
@@ -200,10 +209,39 @@ func routes() http.Handler {
 "#;
 
         let record = extract_syntactic(code, "routes.go").expect("Go extraction should succeed");
-        assert_eq!(record.endpoints.len(), 3);
-        assert!(record.endpoints.iter().any(|e| e.uri == "/" && e.http_method == models::HttpMethod::POST));
-        assert!(record.endpoints.iter().any(|e| e.uri == "/handle" && e.http_method == models::HttpMethod::POST));
-        assert!(record.endpoints.iter().any(|e| e.uri == "/items/{id}" && e.http_method == models::HttpMethod::DELETE));
+        assert_eq!(record.endpoints.len(), 4);
+        assert!(
+            record
+                .endpoints
+                .iter()
+                .any(|e| { e.uri == "/status" && e.http_method == models::HttpMethod::GET })
+        );
+        assert!(
+            record
+                .endpoints
+                .iter()
+                .any(|e| e.uri == "/" && e.http_method == models::HttpMethod::POST)
+        );
+        assert!(
+            record
+                .endpoints
+                .iter()
+                .any(|e| e.uri == "/handle" && e.http_method == models::HttpMethod::POST)
+        );
+        assert!(
+            record
+                .endpoints
+                .iter()
+                .any(|e| e.uri == "/items/{id}" && e.http_method == models::HttpMethod::DELETE)
+        );
+
+        let mut typed = models::ir::project::TypedFileRecord::from(record);
+        identify(&mut typed);
+        assert!(
+            typed.raw_restcalls.is_empty(),
+            "route registrations must not become outgoing REST calls: {:?}",
+            typed.raw_restcalls
+        );
     }
 
     #[test]
@@ -241,7 +279,12 @@ func (c *RestClient) GetProduct(productID string) {
 
         let mut typed = models::ir::project::TypedFileRecord::from(record);
         identify(&mut typed);
-        assert!(typed.raw_restcalls.iter().any(|call| call.target_uri.contains("/get-product?product_id=")));
+        assert!(
+            typed
+                .raw_restcalls
+                .iter()
+                .any(|call| call.target_uri.contains("/get-product?product_id="))
+        );
     }
 
     #[test]
@@ -258,7 +301,12 @@ func startRest() {
 "#;
 
         let record = extract_syntactic(code, "gin.go").expect("Go extraction should succeed");
-        assert!(record.endpoints.iter().any(|e| e.uri == "/checkout" && e.http_method == models::HttpMethod::POST));
+        assert!(
+            record
+                .endpoints
+                .iter()
+                .any(|e| e.uri == "/checkout" && e.http_method == models::HttpMethod::POST)
+        );
     }
 
     #[test]
@@ -366,9 +414,8 @@ func (c *RestClient) GetCart(user_id string) {
             .map(|call| call.target_uri.clone())
             .collect::<Vec<_>>();
         assert!(
-            uris.iter().any(|uri| {
-                uri == "http://cart-service:60000/cart/user_id/user_id"
-            }),
+            uris.iter()
+                .any(|uri| { uri == "http://cart-service:60000/cart/user_id/user_id" }),
             "resolved URIs: {uris:?}"
         );
     }
@@ -446,7 +493,10 @@ func (c *RestClient) charge(data []byte) {
             .map(|call| call.target_uri.clone())
             .collect::<Vec<_>>();
         assert!(
-            uris.contains(&"http://product-catalog-service:60000/get-product?product_id=productID".to_string()),
+            uris.contains(
+                &"http://product-catalog-service:60000/get-product?product_id=productID"
+                    .to_string()
+            ),
             "resolved URIs: {uris:?}"
         );
         assert!(

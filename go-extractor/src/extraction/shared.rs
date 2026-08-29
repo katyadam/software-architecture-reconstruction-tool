@@ -1,4 +1,7 @@
-use std::{collections::{HashMap, HashSet}, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
 use models::{Assignment, AssignmentKey, Callable, HttpMethod, Scope};
 use statix::strings::{normalize_whitespace, strip_quotes};
@@ -10,6 +13,7 @@ const POST_HANDLER_HINTS: &[&str] = &["Post", "Create", "Add"];
 const PUT_HANDLER_HINTS: &[&str] = &["Put", "Update"];
 const DELETE_HANDLER_HINTS: &[&str] = &["Delete", "Remove"];
 const PATCH_HANDLER_HINTS: &[&str] = &["Patch"];
+pub(super) const SYNTHETIC_HANDLER_PREFIX: &str = "handler ";
 
 pub(super) fn scope_bindings(
     assignments: &HashMap<AssignmentKey, Assignment>,
@@ -26,7 +30,11 @@ pub(super) fn merged_scope_bindings(
     assignments: &HashMap<AssignmentKey, Assignment>,
     scope: &Scope,
 ) -> HashMap<String, String> {
-    merged_scope_bindings_with_globals(assignments, scope, &scope_bindings(assignments, &Scope::Global))
+    merged_scope_bindings_with_globals(
+        assignments,
+        scope,
+        &scope_bindings(assignments, &Scope::Global),
+    )
 }
 
 pub(super) fn merged_scope_bindings_with_globals(

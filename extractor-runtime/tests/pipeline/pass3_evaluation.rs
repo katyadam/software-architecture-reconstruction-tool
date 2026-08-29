@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use extractor_runtime::pipeline::{build_project_ir, evaluate, pass2::re_identify_restcalls};
+use go_extractor::extraction::extract_syntactic as go_extract;
 use java_extractor::extraction::extract_syntactic as java_extract;
 use models::{HttpMethod, RestCall};
 use python_extractor::extraction::parse::extract_syntactic as python_extract;
-use go_extractor::extraction::extract_syntactic as go_extract;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -269,8 +269,8 @@ func (c *RestClient) GetProduct(productID string) {
 "#;
 
     let rest_record = go_extract(rest_go, "checkoutservice/rest.go").expect("rest.go should parse");
-    let client_record =
-        go_extract(client_go, "checkoutservice/rest_client.go").expect("rest_client.go should parse");
+    let client_record = go_extract(client_go, "checkoutservice/rest_client.go")
+        .expect("rest_client.go should parse");
     let mut typed = vec![rest_record.into(), client_record.into()];
 
     re_identify_restcalls(&mut typed);
@@ -345,8 +345,8 @@ func (c *RestClient) GetCart(userID string) {
     _, _ = http.DefaultClient.Do(request)
 }
 "#;
-    let client_record =
-        go_extract(client_go, "checkoutservice/rest_client.go").expect("rest_client.go should parse");
+    let client_record = go_extract(client_go, "checkoutservice/rest_client.go")
+        .expect("rest_client.go should parse");
     let mut typed = vec![rest_record.into(), client_record.into()];
 
     re_identify_restcalls(&mut typed);
@@ -364,6 +364,61 @@ func (c *RestClient) GetCart(userID string) {
     assert!(
         uris.contains(&"http://cart-service:60000/cart/user_id/userID"),
         "resolved URIs: {uris:?}"
+    );
+}
+
+#[test]
+fn go_cross_file_endpoint_handler_resolves_to_real_callable() {
+    let routes_go = r#"
+package api
+
+func routes() {
+    router := chi.NewRouter()
+    router.Get("/items", listItems)
+}
+"#;
+    let handlers_go = r#"
+package api
+
+import "net/http"
+
+func listItems(writer http.ResponseWriter, request *http.Request) {
+    _, _ = http.Get("http://inventory-service/items")
+}
+"#;
+
+    let routes_record =
+        go_extract(routes_go, "service/api/routes.go").expect("routes.go should parse");
+    let handlers_record =
+        go_extract(handlers_go, "service/api/handlers.go").expect("handlers.go should parse");
+    let handler = handlers_record
+        .callables
+        .iter()
+        .find(|callable| callable.metadata.name == "listItems")
+        .expect("listItems callable should exist")
+        .metadata
+        .clone();
+
+    let project = build_project_ir(vec![routes_record, handlers_record]);
+    let routes_file = project
+        .files
+        .iter()
+        .find(|file| file.file_path.ends_with("routes.go"))
+        .expect("routes.go should exist");
+    let endpoint = routes_file
+        .endpoints
+        .iter()
+        .find(|endpoint| endpoint.uri == "/items")
+        .expect("GET /items endpoint should exist");
+
+    assert_eq!(endpoint.function_hash, handler.hash);
+    assert_eq!(endpoint.function_name, handler.signature);
+    assert!(
+        routes_file
+            .callables
+            .iter()
+            .all(|callable| !callable.metadata.signature.starts_with("handler ")),
+        "resolved synthetic handlers should be removed"
     );
 }
 
