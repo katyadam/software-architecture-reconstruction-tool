@@ -12,6 +12,7 @@ use std::{collections::HashMap, path::Path};
 pub fn re_identify_restcalls(files: &mut [TypedFileRecord]) {
     let strategy = SpringIdentificationStrategy::new();
     let go_package_globals = collect_go_package_globals(files);
+    let go_package_callables = collect_go_package_callables(files);
     for file in files.iter_mut() {
         match file.language {
             Language::Java => {
@@ -28,11 +29,28 @@ pub fn re_identify_restcalls(files: &mut [TypedFileRecord]) {
                     .get(package_dir.as_str())
                     .cloned()
                     .unwrap_or_default();
-                go_extractor::extraction::identify_with_package_globals(file, &globals);
+                let callables = go_package_callables
+                    .get(package_dir.as_str())
+                    .map(Vec::as_slice)
+                    .unwrap_or_default();
+                go_extractor::extraction::identify_with_package_context(file, &globals, callables);
             }
             Language::Python => {}
         }
     }
+}
+
+fn collect_go_package_callables(
+    files: &[TypedFileRecord],
+) -> HashMap<String, Vec<models::ParsedCallable>> {
+    let mut packages = HashMap::new();
+    for file in files.iter().filter(|file| file.language == Language::Go) {
+        packages
+            .entry(parent_dir(&file.file_path))
+            .or_insert_with(Vec::new)
+            .extend(file.callables.iter().cloned());
+    }
+    packages
 }
 
 fn collect_go_package_globals(

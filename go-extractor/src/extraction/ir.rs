@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
 use models::{
-    Argument, Assignment, AssignmentKey, CallStatement, Callable, Namespace, ParsedCallable, Scope,
-    ir::ast::CallableAst,
+    Argument, Assignment, AssignmentKey, CallStatement, Callable, Namespace, Parameter,
+    ParsedCallable, Scope,
+    ir::ast::{CallableAst, Expr, Stmt},
 };
-use statix::strings::{hash_text, normalize_whitespace};
+use statix::strings::{hash_text, normalize_whitespace, strip_quotes};
 use tree_sitter::Node;
 
 use super::shared::{
@@ -72,23 +73,202 @@ fn build_callable(node: Node, code: &str, file_path: &str) -> ParsedCallable {
     } else {
         Namespace::Module(file_path.to_string())
     };
+    let parameters = node
+        .child_by_field_name("parameters")
+        .map(|parameters| parse_callable_parameters(parameters, code))
+        .unwrap_or_default();
+    let return_type = node
+        .child_by_field_name("result")
+        .map(|result| normalize_whitespace(node_text(result, code)));
+    let ast = node
+        .child_by_field_name("body")
+        .map(|body| parse_callable_body(body, code))
+        .unwrap_or_else(empty_callable_ast);
 
     ParsedCallable {
         metadata: Callable {
             name: function_name,
             signature,
             namespace,
-            parameters: vec![],
-            return_type: None,
+            parameters,
+            return_type,
             is_async: false,
             is_constructor: false,
             hash: body_hash,
             file_path: file_path.to_string(),
         },
-        ast: CallableAst {
-            statements: vec![],
-            nested: vec![],
-        },
+        ast,
+    }
+}
+
+fn empty_callable_ast() -> CallableAst {
+    CallableAst {
+        statements: vec![],
+        nested: vec![],
+    }
+}
+
+fn parse_callable_parameters(node: Node, code: &str) -> Vec<Parameter> {
+    let mut parameters = Vec::new();
+    for declaration in node.named_children(&mut node.walk()) {
+        if declaration.kind() != "parameter_declaration" {
+            continue;
+        }
+        let datatype = declaration
+            .child_by_field_name("type")
+            .map(|kind| normalize_whitespace(node_text(kind, code)));
+        let type_start = declaration
+            .child_by_field_name("type")
+            .map(|kind| kind.start_byte())
+            .unwrap_or(declaration.end_byte());
+        for name in declaration
+            .named_children(&mut declaration.walk())
+            .filter(|child| child.kind() == "identifier" && child.start_byte() < type_start)
+        {
+            parameters.push(Parameter {
+                name: node_text(name, code).to_string(),
+                datatype: datatype.clone(),
+                initial_value: None,
+            });
+        }
+    }
+    parameters
+}
+
+fn parse_callable_body(node: Node, code: &str) -> CallableAst {
+    CallableAst {
+        statements: parse_statements(node, code),
+        nested: vec![],
+    }
+}
+
+fn parse_statements(node: Node, code: &str) -> Vec<Stmt> {
+    let mut statements = Vec::new();
+    for child in node.named_children(&mut node.walk()) {
+        match child.kind() {
+            "statement_list" => statements.extend(parse_statements(child, code)),
+            "short_var_declaration" | "assignment_statement" => {
+                for (name, value) in assignment_pairs(child, code) {
+                    let value = parse_expression(value, code);
+                    if child.kind() == "short_var_declaration" {
+                        statements.push(Stmt::Declaration {
+                            name,
+                            dtype: None,
+                            value,
+                        });
+                    } else {
+                        statements.push(Stmt::Assignment { name, value });
+                    }
+                }
+            }
+            "return_statement" => {
+                let value = child
+                    .named_child(0)
+                    .map(|value| parse_expression(value, code))
+                    .unwrap_or(Expr::Empty);
+                statements.push(Stmt::Return(value));
+            }
+            _ => {}
+        }
+    }
+    statements
+}
+
+fn parse_expression(node: Node, code: &str) -> Expr {
+    match node.kind() {
+        "interpreted_string_literal" | "raw_string_literal" => {
+            Expr::Literal(strip_quotes(node_text(node, code)).to_string())
+        }
+        "int_literal" | "float_literal" | "true" | "false" => {
+            Expr::Literal(node_text(node, code).to_string())
+        }
+        "identifier" => Expr::Var(node_text(node, code).to_string()),
+        "selector_expression" => {
+            let Some(object) = node.child_by_field_name("operand") else {
+                return Expr::Empty;
+            };
+            let Some(field) = node.child_by_field_name("field") else {
+                return Expr::Empty;
+            };
+            Expr::Attr {
+                object: Box::new(parse_expression(object, code)),
+                field: node_text(field, code).to_string(),
+            }
+        }
+        "binary_expression" => {
+            let children = node.named_children(&mut node.walk()).collect::<Vec<_>>();
+            if children.len() == 2 && node_text(node, code).contains('+') {
+                Expr::Concat(
+                    Box::new(parse_expression(children[0], code)),
+                    Box::new(parse_expression(children[1], code)),
+                )
+            } else {
+                Expr::Empty
+            }
+        }
+        "parenthesized_expression" | "unary_expression" => node
+            .named_child(0)
+            .map(|child| parse_expression(child, code))
+            .unwrap_or(Expr::Empty),
+        "expression_list" => node
+            .named_child(0)
+            .map(|child| parse_expression(child, code))
+            .unwrap_or(Expr::Empty),
+        "index_expression" => {
+            let collection = node
+                .child_by_field_name("operand")
+                .or_else(|| node.named_child(0))
+                .map(|child| parse_expression(child, code))
+                .unwrap_or(Expr::Empty);
+            let index = node
+                .child_by_field_name("index")
+                .or_else(|| node.named_child(1))
+                .map(|child| parse_expression(child, code))
+                .unwrap_or(Expr::Empty);
+            Expr::Call {
+                name: "index".to_string(),
+                receiver: Some(Box::new(collection)),
+                args: vec![index],
+            }
+        }
+        "call_expression" => parse_call_expression(node, code),
+        _ => Expr::Empty,
+    }
+}
+
+fn parse_call_expression(node: Node, code: &str) -> Expr {
+    let Some(function) = node.child_by_field_name("function") else {
+        return Expr::Empty;
+    };
+    let args = node
+        .child_by_field_name("arguments")
+        .map(|arguments| {
+            arguments
+                .named_children(&mut arguments.walk())
+                .map(|argument| parse_expression(argument, code))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if function.kind() == "selector_expression" {
+        let receiver = function
+            .child_by_field_name("operand")
+            .map(|operand| parse_expression(operand, code));
+        let name = function
+            .child_by_field_name("field")
+            .map(|field| node_text(field, code).to_string())
+            .unwrap_or_default();
+        return Expr::Call {
+            name,
+            receiver: receiver.map(Box::new),
+            args,
+        };
+    }
+
+    Expr::Call {
+        name: node_text(function, code).to_string(),
+        receiver: None,
+        args,
     }
 }
 

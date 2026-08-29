@@ -1,4 +1,5 @@
 mod endpoints;
+mod evaluator;
 mod identify;
 mod imports;
 mod ir;
@@ -73,17 +74,29 @@ pub fn identify(file: &mut TypedFileRecord) {
         .filter(|(key, _)| key.scope == Scope::Global)
         .map(|(_, assignment)| (assignment.variable_name.clone(), assignment.value.clone()))
         .collect::<HashMap<_, _>>();
-    identify_with_package_globals(file, &globals);
+    let callables = file.callables.clone();
+    identify_with_package_context(file, &globals, &callables);
 }
 
 pub fn identify_with_package_globals(
     file: &mut TypedFileRecord,
     package_globals: &HashMap<String, String>,
 ) {
+    let callables = file.callables.clone();
+    identify_with_package_context(file, package_globals, &callables);
+}
+
+pub fn identify_with_package_context(
+    file: &mut TypedFileRecord,
+    package_globals: &HashMap<String, String>,
+    package_callables: &[models::ParsedCallable],
+) {
     file.raw_restcalls = file
         .call_statements
         .iter()
-        .filter_map(|call| identify::identify_restcall(file, call, Some(package_globals)))
+        .filter_map(|call| {
+            identify::identify_restcall(file, call, Some(package_globals), package_callables)
+        })
         .collect();
 }
 
@@ -350,14 +363,14 @@ type RestClient struct {
 
 var client = &RestClient{}
 
-func getService(serviceEnv string, port int) string {
+func resolveEndpoint(serviceEnv string, port int) string {
     serviceHost := defaultServiceName[serviceEnv]
     service := fmt.Sprintf("%s:%d", serviceHost, port)
     return service
 }
 
 func init() {
-    client.ProductCatalogService = getService(PRODUCT_CATALOG_SERVICE_ADDR, 60000)
+    client.ProductCatalogService = resolveEndpoint(PRODUCT_CATALOG_SERVICE_ADDR, 60000)
 }
 
 func (c *RestClient) GetProduct(productID string) {

@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 
-use models::{Argument, CallStatement, HttpMethod, RestCall, Scope, ir::project::TypedFileRecord};
+use models::{
+    Argument, CallStatement, HttpMethod, ParsedCallable, RestCall, Scope,
+    ir::project::TypedFileRecord,
+};
 
+use super::evaluator::evaluate_call_text;
 use super::shared::{
     evaluate_expression_text, merged_scope_bindings, merged_scope_bindings_with_globals,
     parse_http_method_value,
@@ -11,6 +15,7 @@ pub(super) fn identify_restcall(
     file: &TypedFileRecord,
     call: &CallStatement,
     package_globals: Option<&HashMap<String, String>>,
+    package_callables: &[ParsedCallable],
 ) -> Option<RestCall> {
     let scope = call
         .enclosing_function_name
@@ -25,10 +30,14 @@ pub(super) fn identify_restcall(
     }
 
     if call.function_name.ends_with(".exchange") && call.arguments.len() >= 4 {
-        let service = resolve_argument_value(&call.arguments[1], &resolved_scope);
-        let method =
-            parse_http_method_value(&resolve_argument_value(&call.arguments[2], &resolved_scope))?;
-        let path = resolve_argument_value(&call.arguments[3], &resolved_scope);
+        let service =
+            resolve_argument_value(&call.arguments[1], &resolved_scope, package_callables);
+        let method = parse_http_method_value(&resolve_argument_value(
+            &call.arguments[2],
+            &resolved_scope,
+            package_callables,
+        ))?;
+        let path = resolve_argument_value(&call.arguments[3], &resolved_scope, package_callables);
         let target_uri = if service.starts_with("http://") || service.starts_with("https://") {
             format!("{}{}", service.trim_end_matches('/'), path)
         } else {
@@ -38,32 +47,48 @@ pub(super) fn identify_restcall(
     }
 
     if is_net_http_call(&call.function_name, "Get", file) && !call.arguments.is_empty() {
-        let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
+        let target_uri =
+            resolve_argument_value(&call.arguments[0], &resolved_scope, package_callables);
         return Some(build_restcall(file, call, HttpMethod::GET, target_uri));
     }
 
     if call.function_name.ends_with(".Get")
         && !call.function_name.starts_with("http.")
         && !call.arguments.is_empty()
-        && !is_route_registration(file, call, &HttpMethod::GET, &resolved_scope)
+        && !is_route_registration(
+            file,
+            call,
+            &HttpMethod::GET,
+            &resolved_scope,
+            package_callables,
+        )
         && is_http_client_receiver(&call.function_name, &resolved_scope)
     {
-        let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
+        let target_uri =
+            resolve_argument_value(&call.arguments[0], &resolved_scope, package_callables);
         return Some(build_restcall(file, call, HttpMethod::GET, target_uri));
     }
 
     if is_net_http_call(&call.function_name, "Post", file) && !call.arguments.is_empty() {
-        let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
+        let target_uri =
+            resolve_argument_value(&call.arguments[0], &resolved_scope, package_callables);
         return Some(build_restcall(file, call, HttpMethod::POST, target_uri));
     }
 
     if call.function_name.ends_with(".Post")
         && !call.function_name.starts_with("http.")
         && !call.arguments.is_empty()
-        && !is_route_registration(file, call, &HttpMethod::POST, &resolved_scope)
+        && !is_route_registration(
+            file,
+            call,
+            &HttpMethod::POST,
+            &resolved_scope,
+            package_callables,
+        )
         && is_http_client_receiver(&call.function_name, &resolved_scope)
     {
-        let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
+        let target_uri =
+            resolve_argument_value(&call.arguments[0], &resolved_scope, package_callables);
         return Some(build_restcall(file, call, HttpMethod::POST, target_uri));
     }
 
@@ -78,8 +103,13 @@ pub(super) fn identify_restcall(
         let method = parse_http_method_value(&resolve_argument_value(
             &call.arguments[method_index],
             &resolved_scope,
+            package_callables,
         ))?;
-        let target_uri = resolve_argument_value(&call.arguments[url_index], &resolved_scope);
+        let target_uri = resolve_argument_value(
+            &call.arguments[url_index],
+            &resolved_scope,
+            package_callables,
+        );
         return Some(build_restcall(file, call, method, target_uri));
     }
 
@@ -88,7 +118,8 @@ pub(super) fn identify_restcall(
         && !call.arguments.is_empty()
         && is_http_client_receiver(&call.function_name, &resolved_scope)
     {
-        let request_value = resolve_argument_value(&call.arguments[0], &resolved_scope);
+        let request_value =
+            resolve_argument_value(&call.arguments[0], &resolved_scope, package_callables);
         if request_value.starts_with("http.NewRequest(")
             || request_value.starts_with("http.NewRequestWithContext(")
         {
@@ -145,12 +176,13 @@ fn is_route_registration(
     call: &CallStatement,
     method: &HttpMethod,
     scope: &HashMap<String, String>,
+    package_callables: &[ParsedCallable],
 ) -> bool {
     if call.arguments.len() != 2 {
         return false;
     }
 
-    let uri = resolve_argument_value(&call.arguments[0], scope);
+    let uri = resolve_argument_value(&call.arguments[0], scope, package_callables);
     file.endpoints
         .iter()
         .any(|endpoint| endpoint.http_method == *method && endpoint.uri == uri)
@@ -224,8 +256,13 @@ fn build_restcall(
     }
 }
 
-fn resolve_argument_value(argument: &Argument, scope: &HashMap<String, String>) -> String {
-    evaluate_expression_text(&argument.value, scope)
+fn resolve_argument_value(
+    argument: &Argument,
+    scope: &HashMap<String, String>,
+    package_callables: &[ParsedCallable],
+) -> String {
+    let resolved = evaluate_expression_text(&argument.value, scope);
+    evaluate_call_text(&resolved, package_callables, scope).unwrap_or(resolved)
 }
 
 fn parse_request_call(

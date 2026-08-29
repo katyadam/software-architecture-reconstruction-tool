@@ -322,26 +322,6 @@ fn evaluate_expression_text_inner(
             .get(&format!("{map_name}[{key}]"))
             .cloned()
             .unwrap_or_else(|| trimmed.to_string())
-    } else if let Some(inner) = trimmed
-        .strip_prefix("getService(")
-        .and_then(|rest| rest.strip_suffix(')'))
-    {
-        let parts = split_argument_text(inner);
-        if parts.len() == 2 {
-            let service_env = evaluate_expression_text_inner(parts[0], scope, seen);
-            let port = evaluate_expression_text_inner(parts[1], scope, seen);
-            if let Some(host) = scope.get(&format!("defaultServiceName[{service_env}]")) {
-                format!(
-                    "{}:{}",
-                    strip_quotes(host.trim()),
-                    strip_quotes(port.trim())
-                )
-            } else {
-                trimmed.to_string()
-            }
-        } else {
-            trimmed.to_string()
-        }
     } else {
         let substituted = substitute_scope_tokens(trimmed, scope);
         if substituted != trimmed {
@@ -433,7 +413,7 @@ fn split_argument_text(input: &str) -> Vec<&str> {
     parts
 }
 
-fn apply_sprintf(format: &str, args: &[String]) -> String {
+pub(super) fn apply_sprintf(format: &str, args: &[String]) -> String {
     let mut result = String::new();
     let mut chars = format.chars().peekable();
     let mut arg_index = 0usize;
