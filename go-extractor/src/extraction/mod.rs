@@ -201,6 +201,8 @@ func dynamic(http.ResponseWriter, *http.Request) {}
 func routes() http.Handler {
     mux := chi.NewRouter()
     mux.Get("/status", dynamic)
+    mux.Head("/status", dynamic)
+    mux.Options("/status", dynamic)
     mux.Post("/", broker)
     mux.Post("/handle", submit)
     mux.Method("DELETE", "/items/{id}", http.HandlerFunc(dynamic))
@@ -209,7 +211,7 @@ func routes() http.Handler {
 "#;
 
         let record = extract_syntactic(code, "routes.go").expect("Go extraction should succeed");
-        assert_eq!(record.endpoints.len(), 4);
+        assert_eq!(record.endpoints.len(), 6);
         assert!(
             record
                 .endpoints
@@ -233,6 +235,18 @@ func routes() http.Handler {
                 .endpoints
                 .iter()
                 .any(|e| e.uri == "/items/{id}" && e.http_method == models::HttpMethod::DELETE)
+        );
+        assert!(
+            record
+                .endpoints
+                .iter()
+                .any(|e| e.uri == "/status" && e.http_method == models::HttpMethod::HEAD)
+        );
+        assert!(
+            record
+                .endpoints
+                .iter()
+                .any(|e| e.uri == "/status" && e.http_method == models::HttpMethod::OPTIONS)
         );
 
         let mut typed = models::ir::project::TypedFileRecord::from(record);

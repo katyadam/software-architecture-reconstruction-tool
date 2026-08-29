@@ -11,6 +11,8 @@ pub enum HttpMethod {
     PUT,
     DELETE,
     PATCH,
+    HEAD,
+    OPTIONS,
 }
 
 impl FromStr for HttpMethod {
@@ -23,6 +25,8 @@ impl FromStr for HttpMethod {
             "PUT" | "PUT_STREAM_RESPONSE" => Ok(HttpMethod::PUT),
             "DELETE" | "DELETE_STREAM_RESPONSE" => Ok(HttpMethod::DELETE),
             "PATCH" | "PATCH_STREAM_RESPONSE" => Ok(HttpMethod::PATCH),
+            "HEAD" | "HEAD_STREAM_RESPONSE" => Ok(HttpMethod::HEAD),
+            "OPTIONS" | "OPTIONS_STREAM_RESPONSE" => Ok(HttpMethod::OPTIONS),
             _ => Err(format!("Invalid HTTP method: {s}")),
         }
     }

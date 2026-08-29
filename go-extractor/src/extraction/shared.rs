@@ -140,6 +140,8 @@ pub(super) fn format_http_method(method: &HttpMethod) -> &'static str {
         HttpMethod::PUT => "PUT",
         HttpMethod::DELETE => "DELETE",
         HttpMethod::PATCH => "PATCH",
+        HttpMethod::HEAD => "HEAD",
+        HttpMethod::OPTIONS => "OPTIONS",
     }
 }
 
