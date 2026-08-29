@@ -7,9 +7,9 @@ use statix::strings::{hash_text, normalize_whitespace};
 use tree_sitter::Node;
 
 use super::shared::{
-    evaluate_expression_node, format_http_method, lookup_callable, node_text,
-    parse_http_method_value, scope_bindings, selector_name, split_method_and_path, walk_named,
-    web_route_method,
+    evaluate_expression_node, format_http_method, infer_http_method_from_name,
+    is_http_method_selector, lookup_callable, node_text, parse_http_method_value,
+    scope_bindings, selector_name, split_method_and_path, walk_named, web_route_method,
 };
 
 pub(super) fn collect_endpoints(
@@ -193,7 +193,7 @@ fn chi_route_parts(
             let handler = normalize_whitespace(node_text(arguments[1], code));
             Some((method, path, handler))
         }
-        "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "OPTIONS" | "HEAD" => {
+        _ if is_http_method_selector(selector.as_str()) => {
             if arguments.len() < 2 {
                 return None;
             }
@@ -263,17 +263,7 @@ fn infer_method_from_handler(handler: &str) -> HttpMethod {
         .rsplit('.')
         .next()
         .unwrap_or(handler);
-    if normalized.contains("Post") || normalized.contains("Create") || normalized.contains("Add") {
-        HttpMethod::POST
-    } else if normalized.contains("Put") || normalized.contains("Update") {
-        HttpMethod::PUT
-    } else if normalized.contains("Delete") || normalized.contains("Remove") {
-        HttpMethod::DELETE
-    } else if normalized.contains("Patch") {
-        HttpMethod::PATCH
-    } else {
-        HttpMethod::GET
-    }
+    infer_http_method_from_name(normalized)
 }
 
 fn is_web_route_call(function_node: Node, code: &str) -> bool {

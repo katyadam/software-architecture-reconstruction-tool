@@ -14,25 +14,11 @@ pub fn dispatch_syntactic(
             python_extractor::extraction::parse::extract_syntactic(text, file_path).map(Some)
         }
         Some("go") => {
-            if should_skip_generated_go_file(path) {
+            if !go_extractor::extraction::should_extract_file(path) {
                 return Ok(None);
             }
             go_extractor::extraction::extract_syntactic(text, file_path).map(Some)
         }
         _ => Ok(None),
     }
-}
-
-fn should_skip_generated_go_file(path: &std::path::Path) -> bool {
-    let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
-    if file_name.ends_with(".pb.go") || file_name.ends_with("_grpc.pb.go") {
-        return true;
-    }
-
-    path.components().any(|component| {
-        component
-            .as_os_str()
-            .to_str()
-            .is_some_and(|value| value == "thriftgo")
-    })
 }

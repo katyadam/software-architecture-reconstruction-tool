@@ -4,6 +4,13 @@ use models::{Assignment, AssignmentKey, Callable, HttpMethod, Scope};
 use statix::strings::{normalize_whitespace, strip_quotes};
 use tree_sitter::Node;
 
+const HTTP_METHOD_SELECTORS: &[&str] =
+    &["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"];
+const POST_HANDLER_HINTS: &[&str] = &["Post", "Create", "Add"];
+const PUT_HANDLER_HINTS: &[&str] = &["Put", "Update"];
+const DELETE_HANDLER_HINTS: &[&str] = &["Delete", "Remove"];
+const PATCH_HANDLER_HINTS: &[&str] = &["Patch"];
+
 pub(super) fn scope_bindings(
     assignments: &HashMap<AssignmentKey, Assignment>,
     scope: &Scope,
@@ -89,6 +96,10 @@ pub(super) fn selector_name(node: Node, code: &str) -> Option<String> {
         })
 }
 
+pub(super) fn is_http_method_selector(selector: &str) -> bool {
+    HTTP_METHOD_SELECTORS.contains(&selector)
+}
+
 pub(super) fn web_route_method(selector: &str) -> Option<HttpMethod> {
     let method = selector
         .strip_prefix("Get")
@@ -124,6 +135,20 @@ pub(super) fn format_http_method(method: &HttpMethod) -> &'static str {
     }
 }
 
+pub(super) fn infer_http_method_from_name(name: &str) -> HttpMethod {
+    if contains_any(name, POST_HANDLER_HINTS) {
+        HttpMethod::POST
+    } else if contains_any(name, PUT_HANDLER_HINTS) {
+        HttpMethod::PUT
+    } else if contains_any(name, DELETE_HANDLER_HINTS) {
+        HttpMethod::DELETE
+    } else if contains_any(name, PATCH_HANDLER_HINTS) {
+        HttpMethod::PATCH
+    } else {
+        HttpMethod::GET
+    }
+}
+
 pub(super) fn simple_callable_name(signature: &str) -> Option<String> {
     signature
         .split('(')
@@ -154,6 +179,10 @@ pub(super) fn walk_named(node: Node, visit: &mut impl FnMut(Node)) {
 
 pub(super) fn node_text<'a>(node: Node, code: &'a str) -> &'a str {
     &code[node.start_byte()..node.end_byte()]
+}
+
+fn contains_any(value: &str, hints: &[&str]) -> bool {
+    hints.iter().any(|hint| value.contains(hint))
 }
 
 fn resolve_scope_value<'a>(expr: &str, scope: &'a HashMap<String, String>) -> Option<&'a String> {

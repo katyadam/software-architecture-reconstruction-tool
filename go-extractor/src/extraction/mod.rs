@@ -4,7 +4,7 @@ mod ir;
 pub mod restcalls;
 mod shared;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use models::{
     api::ExtractionError,
@@ -12,6 +12,10 @@ use models::{
     ir::{language::Language, project::TypedFileRecord, syntax::FileRecord},
 };
 use tree_sitter::{Parser, Tree};
+
+pub fn should_extract_file(path: &Path) -> bool {
+    !is_generated_file(path)
+}
 
 pub fn extract_syntactic(text: &str, file_path: &str) -> Result<FileRecord, ExtractionError> {
     let tree = parse_go_tree(text)?;
@@ -89,9 +93,25 @@ fn parse_go_tree(code: &str) -> Result<Tree, ExtractionError> {
         .ok_or_else(|| ExtractionError::Process("failed to parse Go source".to_string()))
 }
 
+fn is_generated_file(path: &Path) -> bool {
+    let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+    if file_name.ends_with(".pb.go") || file_name.ends_with("_grpc.pb.go") {
+        return true;
+    }
+
+    path.components().any(|component| {
+        component
+            .as_os_str()
+            .to_str()
+            .is_some_and(|value| value == "thriftgo")
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{extract_syntactic, identify};
+    use std::path::Path;
+
+    use super::{extract_syntactic, identify, should_extract_file};
 
     #[test]
     fn extracts_train_ticket_routes_and_exchange_calls() {
@@ -463,5 +483,13 @@ func NewRouter(stations *Service) http.Handler {
             record.endpoints[0].uri,
             "/api/v1/stationservice/stations/{stationsId}"
         );
+    }
+
+    #[test]
+    fn skips_generated_go_files() {
+        assert!(!should_extract_file(Path::new("service.pb.go")));
+        assert!(!should_extract_file(Path::new("service_grpc.pb.go")));
+        assert!(!should_extract_file(Path::new("gen/thriftgo/client.go")));
+        assert!(should_extract_file(Path::new("service.go")));
     }
 }
