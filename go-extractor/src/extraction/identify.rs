@@ -17,9 +17,12 @@ pub(super) fn identify_restcall(
         .as_ref()
         .map(|name| Scope::Function(name.clone()))
         .unwrap_or(Scope::Global);
-    let resolved_scope = package_globals
+    let mut resolved_scope = package_globals
         .map(|globals| merged_scope_bindings_with_globals(&file.assignments, &scope, globals))
         .unwrap_or_else(|| merged_scope_bindings(&file.assignments, &scope));
+    if let Some(globals) = package_globals {
+        add_receiver_field_aliases(call, globals, &mut resolved_scope);
+    }
 
     if call.function_name.ends_with(".exchange") && call.arguments.len() >= 4 {
         let service = resolve_argument_value(&call.arguments[1], &resolved_scope);
@@ -84,6 +87,55 @@ pub(super) fn identify_restcall(
     }
 
     None
+}
+
+fn add_receiver_field_aliases(
+    call: &CallStatement,
+    package_globals: &HashMap<String, String>,
+    resolved_scope: &mut HashMap<String, String>,
+) {
+    let Some(signature) = call.enclosing_function_name.as_deref() else {
+        return;
+    };
+    let Some(class_name) = call.enclosing_class_name.as_deref() else {
+        return;
+    };
+    let Some(receiver_name) = parse_receiver_name(signature) else {
+        return;
+    };
+
+    for (key, value) in package_globals {
+        let Some((root, field)) = key.split_once('.') else {
+            continue;
+        };
+        let Some(root_value) = package_globals.get(root) else {
+            continue;
+        };
+        if !matches_receiver_instance(root_value, class_name) {
+            continue;
+        }
+        resolved_scope
+            .entry(format!("{receiver_name}.{field}"))
+            .or_insert_with(|| value.clone());
+    }
+}
+
+fn parse_receiver_name(signature: &str) -> Option<&str> {
+    let receiver = signature
+        .strip_prefix("func")?
+        .trim_start()
+        .strip_prefix('(')?
+        .split_once(')')?
+        .0
+        .trim();
+    receiver.split_whitespace().next()
+}
+
+fn matches_receiver_instance(instance: &str, class_name: &str) -> bool {
+    instance.contains(&format!("*{class_name}"))
+        || instance.contains(&format!("&{class_name}"))
+        || instance.contains(&format!("{class_name}{{"))
+        || instance.contains(&format!("New{class_name}("))
 }
 
 fn build_restcall(

@@ -291,6 +291,82 @@ func (c *RestClient) GetProduct(productID string) {
     );
 }
 
+#[test]
+fn go_cross_file_receiver_alias_prefers_matching_client_type() {
+    let rest_go = r#"
+package main
+
+import "fmt"
+
+const CART_SERVICE_ADDR = "CART_SERVICE_ADDR"
+
+var defaultServiceName = map[string]string{
+    CART_SERVICE_ADDR: "cart-service",
+}
+
+type RestClient struct {
+    CartService string
+}
+
+type ThriftClient struct {
+    CartService string
+}
+
+var client = NewRestClient()
+var thriftClient = &ThriftClient{}
+
+func NewRestClient() *RestClient {
+    return &RestClient{}
+}
+
+func getService(serviceEnv string, port int) string {
+    serviceHost := defaultServiceName[serviceEnv]
+    return fmt.Sprintf("%s:%d", serviceHost, port)
+}
+
+func init() {
+    client.CartService = getService(CART_SERVICE_ADDR, 60000)
+    thriftClient.CartService = getService(CART_SERVICE_ADDR, 50000)
+}
+"#;
+
+    let rest_record = go_extract(rest_go, "checkoutservice/rest.go").expect("rest.go should parse");
+    let client_go = r#"
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+func (c *RestClient) GetCart(userID string) {
+    url := fmt.Sprintf("http://%s/%s/user_id/%s", c.CartService, "cart", userID)
+    request, _ := http.NewRequest("GET", url, nil)
+    _, _ = http.DefaultClient.Do(request)
+}
+"#;
+    let client_record =
+        go_extract(client_go, "checkoutservice/rest_client.go").expect("rest_client.go should parse");
+    let mut typed = vec![rest_record.into(), client_record.into()];
+
+    re_identify_restcalls(&mut typed);
+
+    let client_file = typed
+        .iter()
+        .find(|file| file.file_path.ends_with("rest_client.go"))
+        .expect("rest_client.go should exist");
+    let uris = client_file
+        .raw_restcalls
+        .iter()
+        .map(|call| call.target_uri.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(
+        uris.contains(&"http://cart-service:60000/cart/user_id/userID"),
+        "resolved URIs: {uris:?}"
+    );
+}
+
 /// Same as `python_cross_file_constant_injection` but the constant uses single
 /// quotes (`BASE_URL = '/api/v1'`). Both quote styles must be stripped identically.
 #[test]

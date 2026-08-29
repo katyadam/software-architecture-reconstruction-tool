@@ -203,7 +203,8 @@ fn flush_scope_token(result: &mut String, token: &mut String, scope: &HashMap<St
         return;
     }
 
-    if let Some(value) = resolve_scope_value(token, scope)
+    if token.contains('.')
+        && let Some(value) = resolve_scope_value(token, scope)
         && value.trim() != token.trim()
     {
         result.push_str(&evaluate_expression_text(value, scope));

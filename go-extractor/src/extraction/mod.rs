@@ -296,6 +296,149 @@ func (c *RestClient) GetProduct(productID string) {
     }
 
     #[test]
+    fn preserves_literal_path_segments_when_resolving_selector_hosts() {
+        let code = r#"
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+const CART_SERVICE_ADDR = "CART_SERVICE_ADDR"
+
+var defaultServiceName = map[string]string{
+    CART_SERVICE_ADDR: "cart-service",
+}
+
+type RestClient struct {
+    restClient *http.Client
+    CartService string
+}
+
+var client = &RestClient{}
+
+func getService(serviceEnv string, port int) string {
+    serviceHost := defaultServiceName[serviceEnv]
+    return fmt.Sprintf("%s:%d", serviceHost, port)
+}
+
+func init() {
+    client.CartService = getService(CART_SERVICE_ADDR, 60000)
+}
+
+func (c *RestClient) GetCart(user_id string) {
+    url := fmt.Sprintf("http://%s/%s/user_id/%s", c.CartService, "cart", user_id)
+    request, _ := http.NewRequest("GET", url, nil)
+    _, _ = c.restClient.Do(request)
+    cart := &pb.Cart{}
+    _ = cart
+}
+"#;
+
+        let record = extract_syntactic(code, "sample.go").expect("Go extraction should succeed");
+        let mut typed = models::ir::project::TypedFileRecord::from(record);
+        identify(&mut typed);
+        let uris = typed
+            .raw_restcalls
+            .iter()
+            .map(|call| call.target_uri.clone())
+            .collect::<Vec<_>>();
+        assert!(
+            uris.iter().any(|uri| {
+                uri == "http://cart-service:60000/cart/user_id/user_id"
+            }),
+            "resolved URIs: {uris:?}"
+        );
+    }
+
+    #[test]
+    fn extracts_multiple_rest_client_calls() {
+        let code = r#"
+package main
+
+import (
+    "bytes"
+    "fmt"
+    "net/http"
+)
+
+const (
+    CART_SERVICE_ADDR = "CART_SERVICE_ADDR"
+    PRODUCT_CATALOG_SERVICE_ADDR = "PRODUCT_CATALOG_SERVICE_ADDR"
+    PAYMENT_SERVICE_ADDR = "PAYMENT_SERVICE_ADDR"
+)
+
+var defaultServiceName = map[string]string{
+    CART_SERVICE_ADDR: "cart-service",
+    PRODUCT_CATALOG_SERVICE_ADDR: "product-catalog-service",
+    PAYMENT_SERVICE_ADDR: "payment-service",
+}
+
+type RestClient struct {
+    restClient *http.Client
+    CartService string
+    ProductCatalogService string
+    Paymentservice string
+}
+
+var client = NewRestClient()
+
+func NewRestClient() *RestClient {
+    return &RestClient{restClient: &http.Client{}}
+}
+
+func getService(serviceEnv string, port int) string {
+    serviceHost := defaultServiceName[serviceEnv]
+    return fmt.Sprintf("%s:%d", serviceHost, port)
+}
+
+func init() {
+    client.CartService = getService(CART_SERVICE_ADDR, 60000)
+    client.ProductCatalogService = getService(PRODUCT_CATALOG_SERVICE_ADDR, 60000)
+    client.Paymentservice = getService(PAYMENT_SERVICE_ADDR, 60000)
+}
+
+func (c *RestClient) GetProduct(productID string) {
+    url := fmt.Sprintf("http://%s/%s?product_id=%s", c.ProductCatalogService, "get-product", productID)
+    _, _ = c.restClient.Get(url)
+}
+
+func (c *RestClient) GetCart(userID string) {
+    url := fmt.Sprintf("http://%s/%s/user_id/%s", c.CartService, "cart", userID)
+    request, _ := http.NewRequest("GET", url, nil)
+    _, _ = c.restClient.Do(request)
+}
+
+func (c *RestClient) charge(data []byte) {
+    url := fmt.Sprintf("http://%s/%s", c.Paymentservice, "charge")
+    _, _ = c.restClient.Post(url, "application/json", bytes.NewBuffer(data))
+}
+"#;
+
+        let record = extract_syntactic(code, "sample.go").expect("Go extraction should succeed");
+        let mut typed = models::ir::project::TypedFileRecord::from(record);
+        identify(&mut typed);
+        let uris = typed
+            .raw_restcalls
+            .iter()
+            .map(|call| call.target_uri.clone())
+            .collect::<Vec<_>>();
+        assert!(
+            uris.contains(&"http://product-catalog-service:60000/get-product?product_id=productID".to_string()),
+            "resolved URIs: {uris:?}"
+        );
+        assert!(
+            uris.contains(&"http://cart-service:60000/cart/user_id/userID".to_string()),
+            "resolved URIs: {uris:?}"
+        );
+        assert!(
+            uris.contains(&"http://payment-service:60000/charge".to_string()),
+            "resolved URIs: {uris:?}"
+        );
+    }
+
+    #[test]
     fn does_not_treat_regular_delete_method_calls_as_endpoints() {
         let code = r#"
 package api

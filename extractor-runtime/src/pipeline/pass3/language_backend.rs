@@ -69,7 +69,13 @@ impl LanguageSpecificEvaluator for GoEvaluator {
         _analysis: &AnalysisResult,
         _enums: &HashMap<String, Vec<String>>,
     ) -> Vec<String> {
-        vec![template.to_string()]
+        let mut uris = vec![template.to_string()];
+        if let Some((base, _query)) = template.split_once('?') {
+            uris.push(base.to_string());
+        }
+        uris.sort();
+        uris.dedup();
+        uris
     }
 }
 
