@@ -1,5 +1,6 @@
 mod endpoints;
 mod identify;
+mod imports;
 mod ir;
 mod package_resolution;
 pub mod restcalls;
@@ -26,6 +27,7 @@ pub fn extract_syntactic(text: &str, file_path: &str) -> Result<FileRecord, Extr
     let mut callable_lookup = HashMap::new();
     let mut call_statements = Vec::new();
     let mut assignments = HashMap::new();
+    let imports = imports::collect_imports(root, text);
 
     ir::collect_global_assignments(root, text, &mut assignments);
     ir::collect_callable_ir(
@@ -44,6 +46,7 @@ pub fn extract_syntactic(text: &str, file_path: &str) -> Result<FileRecord, Extr
         text,
         file_path,
         &assignments,
+        &imports,
         &callable_lookup,
         &mut synthetic_callables,
     );
@@ -52,7 +55,7 @@ pub fn extract_syntactic(text: &str, file_path: &str) -> Result<FileRecord, Extr
     Ok(FileRecord {
         file_path: file_path.to_string(),
         language: Language::Go,
-        imports: vec![],
+        imports,
         entities: vec![],
         endpoints,
         callables,
@@ -127,6 +130,7 @@ mod tests {
 const basePath = "/api/v1/stationservice"
 
 func NewRouter() {
+    mux := http.NewServeMux()
     mux.HandleFunc("GET "+basePath+"/stations", handler)
 }
 
@@ -143,7 +147,7 @@ func (c *RouteClient) RoutesBetween(start, end string) {
         let record = extract_syntactic(code, "router.go").expect("Go extraction should succeed");
         assert_eq!(record.endpoints.len(), 1);
         assert_eq!(record.endpoints[0].uri, "/api/v1/stationservice/stations");
-        assert_eq!(record.call_statements.len(), 4);
+        assert_eq!(record.call_statements.len(), 5);
         assert!(
             record
                 .assignments
@@ -555,5 +559,43 @@ func NewRouter(stations *Service) http.Handler {
         assert!(!should_extract_file(Path::new("service_grpc.pb.go")));
         assert!(!should_extract_file(Path::new("gen/thriftgo/client.go")));
         assert!(should_extract_file(Path::new("service.go")));
+    }
+
+    #[test]
+    fn uses_import_and_receiver_provenance_for_rest_operations() {
+        let code = r#"
+package api
+
+import (
+    nethttp "net/http"
+    "github.com/go-chi/chi/v5"
+)
+
+func listItems(nethttp.ResponseWriter, *nethttp.Request) {}
+
+func routes() {
+    router := chi.NewRouter()
+    router.Get("/items", listItems)
+}
+
+func load() {
+    store.Get("/cache", listItems)
+    _, _ = nethttp.Get("http://inventory-service/items")
+}
+"#;
+
+        let record =
+            extract_syntactic(code, "api/routes.go").expect("Go extraction should succeed");
+        assert_eq!(record.imports.len(), 2);
+        assert_eq!(record.endpoints.len(), 1);
+        assert_eq!(record.endpoints[0].uri, "/items");
+
+        let mut typed = models::ir::project::TypedFileRecord::from(record);
+        identify(&mut typed);
+        assert_eq!(typed.raw_restcalls.len(), 1);
+        assert_eq!(
+            typed.raw_restcalls[0].target_uri,
+            "http://inventory-service/items"
+        );
     }
 }

@@ -37,7 +37,7 @@ pub(super) fn identify_restcall(
         return Some(build_restcall(file, call, method, target_uri));
     }
 
-    if call.function_name == "http.Get" && !call.arguments.is_empty() {
+    if is_net_http_call(&call.function_name, "Get", file) && !call.arguments.is_empty() {
         let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
         return Some(build_restcall(file, call, HttpMethod::GET, target_uri));
     }
@@ -46,12 +46,13 @@ pub(super) fn identify_restcall(
         && !call.function_name.starts_with("http.")
         && !call.arguments.is_empty()
         && !is_route_registration(file, call, &HttpMethod::GET, &resolved_scope)
+        && is_http_client_receiver(&call.function_name, &resolved_scope)
     {
         let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
         return Some(build_restcall(file, call, HttpMethod::GET, target_uri));
     }
 
-    if call.function_name == "http.Post" && !call.arguments.is_empty() {
+    if is_net_http_call(&call.function_name, "Post", file) && !call.arguments.is_empty() {
         let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
         return Some(build_restcall(file, call, HttpMethod::POST, target_uri));
     }
@@ -60,16 +61,16 @@ pub(super) fn identify_restcall(
         && !call.function_name.starts_with("http.")
         && !call.arguments.is_empty()
         && !is_route_registration(file, call, &HttpMethod::POST, &resolved_scope)
+        && is_http_client_receiver(&call.function_name, &resolved_scope)
     {
         let target_uri = resolve_argument_value(&call.arguments[0], &resolved_scope);
         return Some(build_restcall(file, call, HttpMethod::POST, target_uri));
     }
 
-    if matches!(
-        call.function_name.as_str(),
-        "http.NewRequest" | "http.NewRequestWithContext"
-    ) {
-        let method_index = usize::from(call.function_name == "http.NewRequestWithContext");
+    if is_net_http_call(&call.function_name, "NewRequest", file)
+        || is_net_http_call(&call.function_name, "NewRequestWithContext", file)
+    {
+        let method_index = usize::from(call.function_name.ends_with(".NewRequestWithContext"));
         let url_index = method_index + 1;
         if call.arguments.len() <= url_index {
             return None;
@@ -85,6 +86,7 @@ pub(super) fn identify_restcall(
     if call.function_name.ends_with(".Do")
         && !call.function_name.starts_with("http.")
         && !call.arguments.is_empty()
+        && is_http_client_receiver(&call.function_name, &resolved_scope)
     {
         let request_value = resolve_argument_value(&call.arguments[0], &resolved_scope);
         if request_value.starts_with("http.NewRequest(")
@@ -92,12 +94,50 @@ pub(super) fn identify_restcall(
         {
             return None;
         }
-        if let Some((method, target_uri)) = parse_request_call(&request_value, &resolved_scope) {
+        if let Some((method, target_uri)) =
+            parse_request_call(&request_value, &resolved_scope, file)
+        {
             return Some(build_restcall(file, call, method, target_uri));
         }
     }
 
     None
+}
+
+fn is_net_http_call(function_name: &str, method: &str, file: &TypedFileRecord) -> bool {
+    let Some((receiver, selector)) = function_name.rsplit_once('.') else {
+        return false;
+    };
+    selector == method
+        && (receiver == "http"
+            || file
+                .imports
+                .iter()
+                .any(|import| import.orig_module == "net/http" && import.module_alias == receiver))
+}
+
+fn is_http_client_receiver(function_name: &str, scope: &HashMap<String, String>) -> bool {
+    let Some((receiver, _method)) = function_name.rsplit_once('.') else {
+        return false;
+    };
+    let receiver_name = receiver
+        .trim_end_matches(".R()")
+        .rsplit('.')
+        .next()
+        .unwrap_or(receiver)
+        .to_ascii_lowercase();
+    if matches!(
+        receiver_name.as_str(),
+        "client" | "restclient" | "httpclient" | "apiclient" | "defaultclient"
+    ) {
+        return true;
+    }
+
+    scope.get(receiver).is_some_and(|origin| {
+        origin.contains("http.Client")
+            || origin.contains("resty.New(")
+            || origin.contains("retryablehttp.NewClient(")
+    })
 }
 
 fn is_route_registration(
@@ -188,18 +228,22 @@ fn resolve_argument_value(argument: &Argument, scope: &HashMap<String, String>) 
     evaluate_expression_text(&argument.value, scope)
 }
 
-fn parse_request_call(raw: &str, scope: &HashMap<String, String>) -> Option<(HttpMethod, String)> {
+fn parse_request_call(
+    raw: &str,
+    scope: &HashMap<String, String>,
+    file: &TypedFileRecord,
+) -> Option<(HttpMethod, String)> {
     let (name, args) = raw.split_once('(')?;
-    if !matches!(
-        name.trim(),
-        "http.NewRequest" | "http.NewRequestWithContext"
-    ) {
+    let name = name.trim();
+    if !is_net_http_call(name, "NewRequest", file)
+        && !is_net_http_call(name, "NewRequestWithContext", file)
+    {
         return None;
     }
 
     let body = args.strip_suffix(')')?;
     let args = split_args(body);
-    let method_index = usize::from(name.trim().ends_with("WithContext"));
+    let method_index = usize::from(name.ends_with("WithContext"));
     let url_index = method_index + 1;
     if args.len() <= url_index {
         return None;

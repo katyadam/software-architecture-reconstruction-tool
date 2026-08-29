@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use models::{
-    Assignment, AssignmentKey, Callable, Endpoint, HttpMethod, Namespace, ParsedCallable,
+    Assignment, AssignmentKey, Callable, Endpoint, HttpMethod, Import, Namespace, ParsedCallable,
 };
 use statix::strings::{hash_text, normalize_whitespace};
 use tree_sitter::Node;
@@ -18,6 +18,7 @@ pub(super) fn collect_endpoints(
     code: &str,
     file_path: &str,
     assignments: &HashMap<AssignmentKey, Assignment>,
+    imports: &[Import],
     callable_lookup: &HashMap<String, Callable>,
     synthetic_callables: &mut Vec<ParsedCallable>,
 ) -> Vec<Endpoint> {
@@ -35,6 +36,8 @@ pub(super) fn collect_endpoints(
             code,
             file_path,
             &globals,
+            assignments,
+            imports,
             callable_lookup,
             synthetic_callables,
             &mut synthetic_hashes,
@@ -51,6 +54,8 @@ fn endpoint_from_call(
     code: &str,
     file_path: &str,
     globals: &HashMap<String, String>,
+    assignments: &HashMap<AssignmentKey, Assignment>,
+    imports: &[Import],
     callable_lookup: &HashMap<String, Callable>,
     synthetic_callables: &mut Vec<ParsedCallable>,
     synthetic_hashes: &mut HashSet<String>,
@@ -69,7 +74,9 @@ fn endpoint_from_call(
         ));
     }
 
-    if let Some((method, path, handler)) = chi_route_parts(node, code, globals) {
+    if let Some((method, path, handler)) =
+        chi_route_parts(node, code, globals, assignments, imports)
+    {
         return Some(build_endpoint(
             file_path,
             &path,
@@ -81,7 +88,9 @@ fn endpoint_from_call(
         ));
     }
 
-    if let Some((method, path, handler)) = serve_mux_route_parts(node, code, globals) {
+    if let Some((method, path, handler)) =
+        serve_mux_route_parts(node, code, globals, assignments, imports)
+    {
         return Some(build_endpoint(
             file_path,
             &path,
@@ -94,7 +103,8 @@ fn endpoint_from_call(
     }
 
     let selector = selector_name(function_node, code)?;
-    if selector == "HandleFunc" {
+    if selector == "HandleFunc" && is_serve_mux_receiver(function_node, code, assignments, imports)
+    {
         let arguments = node
             .child_by_field_name("arguments")
             .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
@@ -175,8 +185,13 @@ fn chi_route_parts(
     node: Node,
     code: &str,
     globals: &HashMap<String, String>,
+    assignments: &HashMap<AssignmentKey, Assignment>,
+    imports: &[Import],
 ) -> Option<(HttpMethod, String, String)> {
     let function_node = node.child_by_field_name("function")?;
+    if !is_known_router_receiver(function_node, code, assignments, imports) {
+        return None;
+    }
     let selector = selector_name(function_node, code)?;
     let arguments = node
         .child_by_field_name("arguments")
@@ -229,9 +244,14 @@ fn serve_mux_route_parts(
     node: Node,
     code: &str,
     globals: &HashMap<String, String>,
+    assignments: &HashMap<AssignmentKey, Assignment>,
+    imports: &[Import],
 ) -> Option<(HttpMethod, String, String)> {
     let function_node = node.child_by_field_name("function")?;
     if selector_name(function_node, code)? != "Handle" {
+        return None;
+    }
+    if !is_serve_mux_receiver(function_node, code, assignments, imports) {
         return None;
     }
 
@@ -250,6 +270,79 @@ fn serve_mux_route_parts(
 
     let handler = normalize_whitespace(node_text(arguments[1], code));
     Some((infer_method_from_handler(&handler), path, handler))
+}
+
+fn is_known_router_receiver(
+    function_node: Node,
+    code: &str,
+    assignments: &HashMap<AssignmentKey, Assignment>,
+    imports: &[Import],
+) -> bool {
+    receiver_origin(function_node, code, assignments).is_some_and(|origin| {
+        const ROUTER_CONSTRUCTORS: &[&str] = &[
+            "chi.NewRouter(",
+            "gin.Default(",
+            "gin.New(",
+            "echo.New(",
+            "fiber.New(",
+            "httprouter.New(",
+        ];
+        ROUTER_CONSTRUCTORS
+            .iter()
+            .any(|constructor| origin.starts_with(constructor))
+            || imported_origin_matches(
+                origin,
+                imports,
+                &[
+                    "github.com/go-chi/chi",
+                    "github.com/gin-gonic/gin",
+                    "github.com/labstack/echo",
+                    "github.com/gofiber/fiber",
+                    "github.com/julienschmidt/httprouter",
+                ],
+            )
+    })
+}
+
+fn is_serve_mux_receiver(
+    function_node: Node,
+    code: &str,
+    assignments: &HashMap<AssignmentKey, Assignment>,
+    imports: &[Import],
+) -> bool {
+    receiver_origin(function_node, code, assignments).is_some_and(|origin| {
+        origin.starts_with("http.NewServeMux(")
+            || origin == "http.DefaultServeMux"
+            || imported_origin_matches(origin, imports, &["net/http"])
+    })
+}
+
+fn receiver_origin<'a>(
+    function_node: Node,
+    code: &'a str,
+    assignments: &'a HashMap<AssignmentKey, Assignment>,
+) -> Option<&'a str> {
+    let receiver = function_node.child_by_field_name("operand")?;
+    let receiver = node_text(receiver, code).trim();
+    let mut values = assignments
+        .values()
+        .filter(|assignment| assignment.variable_name == receiver)
+        .map(|assignment| assignment.value.as_str());
+    let first = values.next().unwrap_or(receiver);
+    if values.any(|value| value != first) {
+        return None;
+    }
+    Some(first)
+}
+
+fn imported_origin_matches(origin: &str, imports: &[Import], packages: &[&str]) -> bool {
+    let alias = origin.split('.').next().unwrap_or(origin);
+    imports.iter().any(|import| {
+        import.module_alias == alias
+            && packages
+                .iter()
+                .any(|package| import.orig_module.starts_with(package))
+    })
 }
 
 fn looks_like_http_path(path: &str) -> bool {
