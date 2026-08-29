@@ -1,6 +1,7 @@
 mod endpoints;
 mod identify;
 mod ir;
+pub mod restcalls;
 mod shared;
 
 use std::collections::HashMap;
