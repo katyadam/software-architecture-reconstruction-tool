@@ -28,9 +28,7 @@ pub(crate) fn decorator_query() -> &'static Query {
     })
 }
 
-pub(crate) fn collect_decorator_matches(
-    params: ExtractParams<'_>,
-) -> Vec<DecoratorEndpointMatch> {
+pub(crate) fn collect_decorator_matches(params: ExtractParams<'_>) -> Vec<DecoratorEndpointMatch> {
     let query = decorator_query();
     let mut query_cursor = QueryCursor::new();
     let matches = query_cursor.matches(query, params.tree.root_node(), params.code.as_bytes());

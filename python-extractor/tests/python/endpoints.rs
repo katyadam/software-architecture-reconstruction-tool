@@ -8,8 +8,8 @@ use python_extractor::{
 
 use crate::python::utils::{get_tree, load_file, parse_file};
 
-use models::{Endpoint, HttpMethod, Parameter};
 use models::ir::{language::Language, project::TypedFileRecord};
+use models::{Endpoint, HttpMethod, Parameter};
 
 #[test]
 fn base_test() {

@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use models::{
-    HttpMethod,
-    ir::project::TypedFileRecord,
-};
+use models::{HttpMethod, ir::project::TypedFileRecord};
 
 /// Applies Python-specific endpoint transformations after project-wide type
 /// resolution. The runtime only invokes this generic Python hook; framework

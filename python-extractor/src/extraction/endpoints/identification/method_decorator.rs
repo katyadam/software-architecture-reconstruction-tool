@@ -1,4 +1,6 @@
-use crate::extraction::endpoints::identification::{DecoratorEndpointMatch, IdentificationStrategy};
+use crate::extraction::endpoints::identification::{
+    DecoratorEndpointMatch, IdentificationStrategy,
+};
 use crate::extraction::extractor::ExtractParams;
 use models::{Endpoint, HttpMethod};
 
