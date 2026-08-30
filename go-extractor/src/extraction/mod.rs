@@ -20,7 +20,7 @@ use models::{
 use tree_sitter::{Parser, Tree};
 
 pub fn should_extract_file(path: &Path) -> bool {
-    files::should_extract(path)
+    !files::is_generated(path)
 }
 
 pub fn extract_syntactic(text: &str, file_path: &str) -> Result<FileRecord, ExtractionError> {

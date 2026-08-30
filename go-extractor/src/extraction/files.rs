@@ -3,11 +3,7 @@ use std::path::Path;
 const GENERATED_GO_SUFFIXES: &[&str] = &[".pb.go", "_grpc.pb.go"];
 const GENERATED_GO_DIRECTORIES: &[&str] = &["thriftgo"];
 
-pub(super) fn should_extract(path: &Path) -> bool {
-    !is_generated(path)
-}
-
-fn is_generated(path: &Path) -> bool {
+pub(super) fn is_generated(path: &Path) -> bool {
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
