@@ -9,7 +9,7 @@ use python_extractor::{
 use crate::python::utils::{get_tree, load_file, parse_file};
 
 use models::{Endpoint, HttpMethod, Parameter};
-use models::ir::{language::Language, project::TypedFileRecord, syntax::FileRecord};
+use models::ir::{language::Language, project::TypedFileRecord};
 
 #[test]
 fn base_test() {
@@ -320,7 +320,7 @@ urlpatterns = [
 #[test]
 fn python_post_process_skips_non_python_files() {
     let mut files = vec![
-        TypedFileRecord::from(FileRecord {
+        TypedFileRecord {
             file_path: "controller.java".to_string(),
             language: Language::Java,
             imports: vec![],
@@ -338,8 +338,10 @@ fn python_post_process_skips_non_python_files() {
             call_statements: vec![],
             assignments: std::collections::HashMap::new(),
             enums: vec![],
-        }),
-        TypedFileRecord::from(FileRecord {
+            raw_restcalls: vec![],
+            raw_message_edges: vec![],
+        },
+        TypedFileRecord {
             file_path: "views.py".to_string(),
             language: Language::Python,
             imports: vec![],
@@ -368,7 +370,9 @@ fn python_post_process_skips_non_python_files() {
             call_statements: vec![],
             assignments: std::collections::HashMap::new(),
             enums: vec![],
-        }),
+            raw_restcalls: vec![],
+            raw_message_edges: vec![],
+        },
     ];
 
     let mut python_files = files
