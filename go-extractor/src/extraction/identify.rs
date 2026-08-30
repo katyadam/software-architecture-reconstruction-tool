@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use models::{
     Argument, CallStatement, HttpMethod, ParsedCallable, RestCall, Scope,
+    ir::ast::{Expr, Stmt},
     ir::project::TypedFileRecord,
 };
 
@@ -28,6 +29,7 @@ pub(super) fn identify_restcall(
     if let Some(globals) = package_globals {
         add_receiver_field_aliases(call, globals, &mut resolved_scope);
     }
+    add_constructor_receiver_field_aliases(call, package_callables, &mut resolved_scope);
 
     if call.function_name.ends_with(".exchange") && call.arguments.len() >= 4 {
         let service =
@@ -216,6 +218,164 @@ fn add_receiver_field_aliases(
         resolved_scope
             .entry(format!("{receiver_name}.{field}"))
             .or_insert_with(|| value.clone());
+    }
+}
+
+fn add_constructor_receiver_field_aliases(
+    call: &CallStatement,
+    package_callables: &[ParsedCallable],
+    resolved_scope: &mut HashMap<String, String>,
+) {
+    let Some(signature) = call.enclosing_function_name.as_deref() else {
+        return;
+    };
+    let Some(class_name) = call.enclosing_class_name.as_deref() else {
+        return;
+    };
+    let Some(receiver_name) = parse_receiver_name(signature) else {
+        return;
+    };
+
+    for (field, value) in constructor_field_aliases(class_name, package_callables, resolved_scope) {
+        resolved_scope
+            .entry(format!("{receiver_name}.{field}"))
+            .or_insert(value);
+    }
+}
+
+fn constructor_field_aliases(
+    class_name: &str,
+    package_callables: &[ParsedCallable],
+    scope: &HashMap<String, String>,
+) -> Vec<(String, String)> {
+    package_callables
+        .iter()
+        .filter(|callable| callable_returns_class(callable, class_name))
+        .find_map(|callable| evaluate_constructor_fields(callable, package_callables, scope))
+        .unwrap_or_default()
+}
+
+fn callable_returns_class(callable: &ParsedCallable, class_name: &str) -> bool {
+    callable
+        .metadata
+        .return_type
+        .as_deref()
+        .is_some_and(|return_type| return_type.contains(class_name))
+        || callable
+            .ast
+            .statements
+            .iter()
+            .any(|statement| returned_struct_matches_class(statement, class_name))
+}
+
+fn returned_struct_matches_class(statement: &Stmt, class_name: &str) -> bool {
+    match statement {
+        Stmt::Return(Expr::StructLiteral { type_name, .. }) => type_name
+            .as_deref()
+            .is_some_and(|type_name| type_name.trim_start_matches('&') == class_name),
+        _ => false,
+    }
+}
+
+fn evaluate_constructor_fields(
+    callable: &ParsedCallable,
+    package_callables: &[ParsedCallable],
+    scope: &HashMap<String, String>,
+) -> Option<Vec<(String, String)>> {
+    let mut env = scope.clone();
+    let mut struct_bindings = HashMap::<String, Vec<(String, Expr)>>::new();
+
+    for statement in &callable.ast.statements {
+        match statement {
+            Stmt::Declaration { name, value, .. } | Stmt::Assignment { name, value } => {
+                if let Expr::StructLiteral { fields, .. } = value {
+                    struct_bindings.insert(name.clone(), fields.clone());
+                } else if let Some(value) = resolve_expr_value(value, package_callables, &env) {
+                    env.insert(name.clone(), value);
+                }
+            }
+            Stmt::Return(value) => {
+                return struct_literal_fields(value, package_callables, &env, &struct_bindings);
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
+fn struct_literal_fields(
+    value: &Expr,
+    package_callables: &[ParsedCallable],
+    env: &HashMap<String, String>,
+    struct_bindings: &HashMap<String, Vec<(String, Expr)>>,
+) -> Option<Vec<(String, String)>> {
+    match value {
+        Expr::StructLiteral { fields, .. } => Some(
+            fields
+                .iter()
+                .filter_map(|(field, expr)| {
+                    resolve_expr_value(expr, package_callables, env)
+                        .map(|value| (field.clone(), value))
+                })
+                .collect(),
+        ),
+        Expr::Var(name) => struct_bindings.get(name).map(|fields| {
+            fields
+                .iter()
+                .filter_map(|(field, expr)| {
+                    resolve_expr_value(expr, package_callables, env)
+                        .map(|value| (field.clone(), value))
+                })
+                .collect()
+        }),
+        _ => None,
+    }
+}
+
+fn resolve_expr_value(
+    expr: &Expr,
+    package_callables: &[ParsedCallable],
+    env: &HashMap<String, String>,
+) -> Option<String> {
+    let rendered = render_expr(expr)?;
+    Some(
+        evaluate_call_text(&rendered, package_callables, env)
+            .unwrap_or_else(|| evaluate_expression_text(&rendered, env)),
+    )
+}
+
+fn render_expr(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Literal(value) => Some(value.clone()),
+        Expr::Var(name) => Some(name.clone()),
+        Expr::Concat(left, right) => Some(format!("{}{}", render_expr(left)?, render_expr(right)?)),
+        Expr::StructLiteral { .. } => None,
+        Expr::Call {
+            name,
+            receiver,
+            args,
+        } => {
+            let mut rendered = String::new();
+            if let Some(receiver) = receiver {
+                rendered.push_str(&render_expr(receiver)?);
+                rendered.push('.');
+            }
+            rendered.push_str(name);
+            rendered.push('(');
+            rendered.push_str(
+                &args
+                    .iter()
+                    .map(render_expr)
+                    .collect::<Option<Vec<_>>>()?
+                    .join(", "),
+            );
+            rendered.push(')');
+            Some(rendered)
+        }
+        Expr::Empty => None,
+        Expr::Joined { vals } => vals.first().and_then(render_expr),
+        Expr::Attr { object, field } => Some(format!("{}.{}", render_expr(object)?, field)),
     }
 }
 

@@ -368,6 +368,67 @@ func (c *RestClient) GetCart(userID string) {
 }
 
 #[test]
+fn go_restcall_fallback_uses_external_env_for_config_selectors() {
+    let code = r#"
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+type Client struct {
+    hostURL string
+}
+
+func NewCustomerClient() *Client {
+    return &Client{
+        hostURL: config.AppConfig.CustomerServiceEndpoint,
+    }
+}
+
+func (c *Client) GetBasketItems(customerID string) {
+    resp, _ := http.Get(c.hostURL + fmt.Sprintf("/customers/%v/basketItems", customerID))
+    _ = resp
+}
+"#;
+
+    let mut record =
+        go_extract(code, "customer_http_client.go").expect("Go extraction should succeed");
+    let mut typed = models::ir::project::TypedFileRecord::from(
+        go_extract(code, "customer_http_client.go").expect("Go extraction should succeed"),
+    );
+    go_extractor::extraction::identify(&mut typed);
+    record.raw_restcalls = typed.raw_restcalls.clone();
+
+    let project_ir = build_project_ir(vec![record]);
+    let mut external_constants = HashMap::new();
+    external_constants.insert(
+        "CUSTOMER_SERVICE_ENDPOINT".to_string(),
+        "http://localhost:8082/api".to_string(),
+    );
+
+    let evaluated = evaluate(
+        project_ir,
+        &external_constants,
+        &HashMap::new(),
+        &HashMap::new(),
+    );
+
+    assert!(
+        evaluated.restcalls.iter().any(|restcall| {
+            restcall.target_uri == "http://localhost:8082/api/customers/customerID/basketItems"
+        }),
+        "resolved URIs: {:?}",
+        evaluated
+            .restcalls
+            .iter()
+            .map(|restcall| restcall.target_uri.as_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn go_cross_file_endpoint_handler_resolves_to_real_callable() {
     let routes_go = r#"
 package api

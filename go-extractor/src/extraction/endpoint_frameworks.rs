@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use models::{Assignment, AssignmentKey, HttpMethod, Import};
-use statix::strings::normalize_whitespace;
+use statix::strings::{normalize_whitespace, strip_quotes};
 use tree_sitter::Node;
 
 use super::shared::{
@@ -70,7 +70,8 @@ pub(super) fn chi_route_parts(
     imports: &[Import],
 ) -> Option<(HttpMethod, String, String)> {
     let function_node = node.child_by_field_name("function")?;
-    if !is_known_router_receiver(function_node, code, assignments, imports) {
+    let prefix = router_prefix(function_node, code, assignments, imports)?;
+    if prefix.is_empty() && !is_known_router_receiver(function_node, code, assignments, imports) {
         return None;
     }
     let selector = selector_name(function_node, code)?;
@@ -84,7 +85,10 @@ pub(super) fn chi_route_parts(
             if arguments.len() < 2 {
                 return None;
             }
-            let path = evaluate_expression_node(arguments[0], code, globals);
+            let path = join_route_prefix(
+                &prefix,
+                &evaluate_expression_node(arguments[0], code, globals),
+            );
             if !looks_like_http_path(&path) {
                 return None;
             }
@@ -96,7 +100,10 @@ pub(super) fn chi_route_parts(
             if arguments.len() < 2 {
                 return None;
             }
-            let path = evaluate_expression_node(arguments[0], code, globals);
+            let path = join_route_prefix(
+                &prefix,
+                &evaluate_expression_node(arguments[0], code, globals),
+            );
             if !looks_like_http_path(&path) {
                 return None;
             }
@@ -110,7 +117,10 @@ pub(super) fn chi_route_parts(
             }
             let method =
                 parse_http_method_value(&evaluate_expression_node(arguments[0], code, globals))?;
-            let path = evaluate_expression_node(arguments[1], code, globals);
+            let path = join_route_prefix(
+                &prefix,
+                &evaluate_expression_node(arguments[1], code, globals),
+            );
             if !looks_like_http_path(&path) {
                 return None;
             }
@@ -221,6 +231,16 @@ fn is_known_router_receiver(
     })
 }
 
+fn router_prefix(
+    function_node: Node,
+    code: &str,
+    assignments: &HashMap<AssignmentKey, Assignment>,
+    imports: &[Import],
+) -> Option<String> {
+    let origin = receiver_origin(function_node, code, assignments)?;
+    router_prefix_from_origin(origin, assignments, imports, &mut Vec::new())
+}
+
 fn is_serve_mux_receiver(
     function_node: Node,
     code: &str,
@@ -232,6 +252,47 @@ fn is_serve_mux_receiver(
             || origin == "http.DefaultServeMux"
             || imported_origin_matches(origin, imports, SERVE_MUX_IMPORT_PREFIXES)
     })
+}
+
+fn router_prefix_from_origin(
+    origin: &str,
+    assignments: &HashMap<AssignmentKey, Assignment>,
+    imports: &[Import],
+    seen: &mut Vec<String>,
+) -> Option<String> {
+    let trimmed = origin.trim();
+    if seen.iter().any(|value| value == trimmed) {
+        return None;
+    }
+    seen.push(trimmed.to_string());
+
+    if ROUTER_CONSTRUCTORS
+        .iter()
+        .any(|constructor| trimmed.starts_with(constructor))
+        || imported_origin_matches(trimmed, imports, ROUTER_IMPORT_PREFIXES)
+    {
+        seen.pop();
+        return Some(String::new());
+    }
+
+    let resolved = parse_group_origin(trimmed).and_then(|(base, group_prefix)| {
+        let base_origin = assignments
+            .values()
+            .find(|assignment| assignment.variable_name == base)
+            .map(|assignment| assignment.value.as_str())
+            .unwrap_or(base);
+        router_prefix_from_origin(base_origin, assignments, imports, seen)
+            .map(|prefix| join_route_prefix(&prefix, &group_prefix))
+    });
+    seen.pop();
+    resolved
+}
+
+fn parse_group_origin(origin: &str) -> Option<(&str, String)> {
+    let (base, rest) = origin.split_once(".Group(")?;
+    let args = rest.strip_suffix(')')?;
+    let group_prefix = strip_quotes(args.trim()).to_string();
+    Some((base.trim(), group_prefix))
 }
 
 fn receiver_origin<'a>(
@@ -260,6 +321,23 @@ fn imported_origin_matches(origin: &str, imports: &[Import], packages: &[&str]) 
                 .iter()
                 .any(|package| import.orig_module.starts_with(package))
     })
+}
+
+fn join_route_prefix(prefix: &str, path: &str) -> String {
+    if prefix.is_empty() {
+        return path.to_string();
+    }
+    if path.is_empty() {
+        return prefix.to_string();
+    }
+
+    let normalized_prefix = prefix.trim_end_matches('/');
+    let normalized_path = path.trim_start_matches('/');
+    if normalized_path.is_empty() {
+        normalized_prefix.to_string()
+    } else {
+        format!("{normalized_prefix}/{normalized_path}")
+    }
 }
 
 fn looks_like_http_path(path: &str) -> bool {

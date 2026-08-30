@@ -183,6 +183,7 @@ fn parse_expression(node: Node, code: &str) -> Expr {
             Expr::Literal(node_text(node, code).to_string())
         }
         "identifier" => Expr::Var(node_text(node, code).to_string()),
+        "composite_literal" => parse_composite_literal(node, code),
         "selector_expression" => {
             let Some(object) = node.child_by_field_name("operand") else {
                 return Expr::Empty;
@@ -207,6 +208,10 @@ fn parse_expression(node: Node, code: &str) -> Expr {
             }
         }
         "parenthesized_expression" | "unary_expression" => node
+            .named_child(0)
+            .map(|child| parse_expression(child, code))
+            .unwrap_or(Expr::Empty),
+        "literal_element" => node
             .named_child(0)
             .map(|child| parse_expression(child, code))
             .unwrap_or(Expr::Empty),
@@ -269,6 +274,45 @@ fn parse_call_expression(node: Node, code: &str) -> Expr {
         name: node_text(function, code).to_string(),
         receiver: None,
         args,
+    }
+}
+
+fn parse_composite_literal(node: Node, code: &str) -> Expr {
+    let mut type_name = None;
+    let mut fields = Vec::new();
+
+    for child in node.named_children(&mut node.walk()) {
+        match child.kind() {
+            "literal_value" => collect_composite_literal_fields(child, code, &mut fields),
+            _ if type_name.is_none() => {
+                type_name = Some(normalize_whitespace(node_text(child, code)));
+            }
+            _ => {}
+        }
+    }
+
+    Expr::StructLiteral { type_name, fields }
+}
+
+fn collect_composite_literal_fields(node: Node, code: &str, fields: &mut Vec<(String, Expr)>) {
+    for child in node.named_children(&mut node.walk()) {
+        if child.kind() == "keyed_element" {
+            let mut cursor = child.walk();
+            let mut children = child.named_children(&mut cursor);
+            let Some(key) = children.next() else {
+                continue;
+            };
+            let Some(value) = children.next() else {
+                continue;
+            };
+            fields.push((
+                normalize_whitespace(node_text(key, code)),
+                parse_expression(value, code),
+            ));
+            continue;
+        }
+
+        collect_composite_literal_fields(child, code, fields);
     }
 }
 

@@ -150,6 +150,7 @@ fn evaluate_expr(
             evaluate_expr(left, callables, env, visiting)?
                 + &evaluate_expr(right, callables, env, visiting)?,
         ),
+        Expr::StructLiteral { .. } => None,
         Expr::Attr { object, field } => {
             let key = format!("{}.{}", expression_name(object)?, field);
             Some(resolve_text(&key, callables, env, visiting))
@@ -200,6 +201,7 @@ fn evaluate_expr(
 fn expression_name(expression: &Expr) -> Option<String> {
     match expression {
         Expr::Var(name) => Some(name.clone()),
+        Expr::StructLiteral { .. } => None,
         Expr::Attr { object, field } => Some(format!("{}.{}", expression_name(object)?, field)),
         _ => None,
     }
