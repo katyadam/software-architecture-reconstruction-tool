@@ -469,8 +469,8 @@ func (c *Client) GetBasketItems(customerID string) {
 }
 "#;
 
-    let record =
-        extract_syntactic(code, "customer_http_client.go").expect("customer_http_client.go should parse");
+    let record = extract_syntactic(code, "customer_http_client.go")
+        .expect("customer_http_client.go should parse");
     let mut typed = models::ir::project::TypedFileRecord::from(record);
     identify(&mut typed);
 
@@ -481,7 +481,8 @@ func (c *Client) GetBasketItems(customerID string) {
         .collect::<Vec<_>>();
     assert!(
         uris.contains(
-            &"config.AppConfig.CustomerServiceEndpoint/customers/customerID/basketItems".to_string()
+            &"config.AppConfig.CustomerServiceEndpoint/customers/customerID/basketItems"
+                .to_string()
         ),
         "resolved URIs: {uris:?}"
     );

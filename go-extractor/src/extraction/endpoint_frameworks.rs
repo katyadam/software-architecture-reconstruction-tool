@@ -25,196 +25,274 @@ const ROUTER_IMPORT_PREFIXES: &[&str] = &[
     "github.com/julienschmidt/httprouter",
 ];
 const SERVE_MUX_IMPORT_PREFIXES: &[&str] = &["net/http"];
+const WEB_IMPORT_PREFIXES: &[&str] = &["github.com/hoisie/web"];
 
-pub(super) fn gorilla_route_parts(
-    node: Node,
-    code: &str,
-    globals: &HashMap<String, String>,
-) -> Option<(HttpMethod, String, String)> {
-    let function_node = node.child_by_field_name("function")?;
-    if selector_name(function_node, code)? != "Methods" {
-        return None;
-    }
-
-    let selector_operand = function_node.child_by_field_name("operand")?;
-    if selector_operand.kind() != "call_expression" {
-        return None;
-    }
-
-    let inner_function = selector_operand.child_by_field_name("function")?;
-    if selector_name(inner_function, code)? != "HandleFunc" {
-        return None;
-    }
-
-    let inner_args = selector_operand
-        .child_by_field_name("arguments")
-        .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())?;
-    let method_args = node
-        .child_by_field_name("arguments")
-        .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())?;
-    if inner_args.len() < 2 || method_args.is_empty() {
-        return None;
-    }
-
-    let method = parse_http_method_value(&evaluate_expression_node(method_args[0], code, globals))?;
-    let path = evaluate_expression_node(inner_args[0], code, globals);
-    let handler = normalize_whitespace(node_text(inner_args[1], code));
-    Some((method, path, handler))
+pub(super) struct EndpointMatch {
+    pub method: HttpMethod,
+    pub path: String,
+    pub handler: String,
 }
 
-pub(super) fn chi_route_parts(
-    node: Node,
-    code: &str,
-    globals: &HashMap<String, String>,
-    assignments: &HashMap<AssignmentKey, Assignment>,
-    imports: &[Import],
-) -> Option<(HttpMethod, String, String)> {
-    let function_node = node.child_by_field_name("function")?;
-    let prefix = router_prefix(function_node, code, assignments, imports)?;
-    if prefix.is_empty() && !is_known_router_receiver(function_node, code, assignments, imports) {
-        return None;
-    }
-    let selector = selector_name(function_node, code)?;
-    let arguments = node
-        .child_by_field_name("arguments")
-        .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
-        .unwrap_or_default();
+pub(super) struct ExtractParams<'a> {
+    pub node: Node<'a>,
+    pub code: &'a str,
+    pub globals: &'a HashMap<String, String>,
+    pub assignments: &'a HashMap<AssignmentKey, Assignment>,
+    pub imports: &'a [Import],
+}
 
-    match selector.as_str() {
-        "Get" | "Post" | "Put" | "Delete" | "Patch" | "Options" | "Head" => {
-            if arguments.len() < 2 {
-                return None;
-            }
-            let path = join_route_prefix(
-                &prefix,
-                &evaluate_expression_node(arguments[0], code, globals),
-            );
-            if !looks_like_http_path(&path) {
-                return None;
-            }
-            let method = parse_http_method_value(selector.as_str())?;
-            let handler = normalize_whitespace(node_text(arguments[1], code));
-            Some((method, path, handler))
+pub(super) trait EndpointIdentificationStrategy: Sync {
+    fn identify(&self, params: &ExtractParams<'_>) -> Option<EndpointMatch>;
+}
+
+pub(super) fn strategies() -> &'static [&'static dyn EndpointIdentificationStrategy] {
+    STRATEGIES
+}
+
+struct GorillaStrategy;
+struct ChiStrategy;
+struct ServeMuxHandleStrategy;
+struct ServeMuxHandleFuncStrategy;
+struct WebStrategy;
+
+static GORILLA: GorillaStrategy = GorillaStrategy;
+static CHI: ChiStrategy = ChiStrategy;
+static SERVE_MUX_HANDLE: ServeMuxHandleStrategy = ServeMuxHandleStrategy;
+static SERVE_MUX_HANDLE_FUNC: ServeMuxHandleFuncStrategy = ServeMuxHandleFuncStrategy;
+static WEB: WebStrategy = WebStrategy;
+static STRATEGIES: &[&dyn EndpointIdentificationStrategy] = &[
+    &GORILLA,
+    &CHI,
+    &SERVE_MUX_HANDLE,
+    &SERVE_MUX_HANDLE_FUNC,
+    &WEB,
+];
+
+impl EndpointIdentificationStrategy for GorillaStrategy {
+    fn identify(&self, params: &ExtractParams<'_>) -> Option<EndpointMatch> {
+        let function_node = params.node.child_by_field_name("function")?;
+        if selector_name(function_node, params.code)? != "Methods" {
+            return None;
         }
-        _ if is_http_method_selector(selector.as_str()) => {
-            if arguments.len() < 2 {
-                return None;
-            }
-            let path = join_route_prefix(
-                &prefix,
-                &evaluate_expression_node(arguments[0], code, globals),
-            );
-            if !looks_like_http_path(&path) {
-                return None;
-            }
-            let method = parse_http_method_value(selector.as_str())?;
-            let handler = normalize_whitespace(node_text(arguments[1], code));
-            Some((method, path, handler))
+
+        let selector_operand = function_node.child_by_field_name("operand")?;
+        if selector_operand.kind() != "call_expression" {
+            return None;
         }
-        "Method" | "MethodFunc" => {
-            if arguments.len() < 3 {
-                return None;
-            }
-            let method =
-                parse_http_method_value(&evaluate_expression_node(arguments[0], code, globals))?;
-            let path = join_route_prefix(
-                &prefix,
-                &evaluate_expression_node(arguments[1], code, globals),
-            );
-            if !looks_like_http_path(&path) {
-                return None;
-            }
-            let handler = normalize_whitespace(node_text(arguments[2], code));
-            Some((method, path, handler))
+
+        let inner_function = selector_operand.child_by_field_name("function")?;
+        if selector_name(inner_function, params.code)? != "HandleFunc" {
+            return None;
         }
-        _ => None,
+
+        let inner_args = selector_operand
+            .child_by_field_name("arguments")
+            .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())?;
+        let method_args = params
+            .node
+            .child_by_field_name("arguments")
+            .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())?;
+        if inner_args.len() < 2 || method_args.is_empty() {
+            return None;
+        }
+
+        Some(EndpointMatch {
+            method: parse_http_method_value(&evaluate_expression_node(
+                method_args[0],
+                params.code,
+                params.globals,
+            ))?,
+            path: evaluate_expression_node(inner_args[0], params.code, params.globals),
+            handler: normalize_whitespace(node_text(inner_args[1], params.code)),
+        })
     }
 }
 
-pub(super) fn serve_mux_route_parts(
-    node: Node,
-    code: &str,
-    globals: &HashMap<String, String>,
-    assignments: &HashMap<AssignmentKey, Assignment>,
-    imports: &[Import],
-) -> Option<(HttpMethod, String, String)> {
-    let function_node = node.child_by_field_name("function")?;
-    if selector_name(function_node, code)? != "Handle" {
-        return None;
-    }
-    if !is_serve_mux_receiver(function_node, code, assignments, imports) {
-        return None;
-    }
+impl EndpointIdentificationStrategy for ChiStrategy {
+    fn identify(&self, params: &ExtractParams<'_>) -> Option<EndpointMatch> {
+        let function_node = params.node.child_by_field_name("function")?;
+        let prefix = router_prefix(
+            function_node,
+            params.code,
+            params.assignments,
+            params.imports,
+        )?;
+        if prefix.is_empty()
+            && !is_known_router_receiver(
+                function_node,
+                params.code,
+                params.assignments,
+                params.imports,
+            )
+        {
+            return None;
+        }
+        let selector = selector_name(function_node, params.code)?;
+        let arguments = params
+            .node
+            .child_by_field_name("arguments")
+            .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
+            .unwrap_or_default();
 
-    let arguments = node
-        .child_by_field_name("arguments")
-        .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
-        .unwrap_or_default();
-    if arguments.len() < 2 {
-        return None;
+        match selector.as_str() {
+            "Get" | "Post" | "Put" | "Delete" | "Patch" | "Options" | "Head" => {
+                if arguments.len() < 2 {
+                    return None;
+                }
+                let path = join_route_prefix(
+                    &prefix,
+                    &evaluate_expression_node(arguments[0], params.code, params.globals),
+                );
+                if !looks_like_http_path(&path) {
+                    return None;
+                }
+                Some(EndpointMatch {
+                    method: parse_http_method_value(selector.as_str())?,
+                    path,
+                    handler: normalize_whitespace(node_text(arguments[1], params.code)),
+                })
+            }
+            _ if is_http_method_selector(selector.as_str()) => {
+                if arguments.len() < 2 {
+                    return None;
+                }
+                let path = join_route_prefix(
+                    &prefix,
+                    &evaluate_expression_node(arguments[0], params.code, params.globals),
+                );
+                if !looks_like_http_path(&path) {
+                    return None;
+                }
+                Some(EndpointMatch {
+                    method: parse_http_method_value(selector.as_str())?,
+                    path,
+                    handler: normalize_whitespace(node_text(arguments[1], params.code)),
+                })
+            }
+            "Method" | "MethodFunc" => {
+                if arguments.len() < 3 {
+                    return None;
+                }
+                let path = join_route_prefix(
+                    &prefix,
+                    &evaluate_expression_node(arguments[1], params.code, params.globals),
+                );
+                if !looks_like_http_path(&path) {
+                    return None;
+                }
+                Some(EndpointMatch {
+                    method: parse_http_method_value(&evaluate_expression_node(
+                        arguments[0],
+                        params.code,
+                        params.globals,
+                    ))?,
+                    path,
+                    handler: normalize_whitespace(node_text(arguments[2], params.code)),
+                })
+            }
+            _ => None,
+        }
     }
-
-    let path = evaluate_expression_node(arguments[0], code, globals);
-    if !looks_like_http_path(&path) {
-        return None;
-    }
-
-    let handler = normalize_whitespace(node_text(arguments[1], code));
-    Some((infer_method_from_handler(&handler), path, handler))
 }
 
-pub(super) fn serve_mux_handle_func_parts(
-    node: Node,
-    code: &str,
-    globals: &HashMap<String, String>,
-    assignments: &HashMap<AssignmentKey, Assignment>,
-    imports: &[Import],
-) -> Option<(HttpMethod, String, String)> {
-    let function_node = node.child_by_field_name("function")?;
-    if selector_name(function_node, code)? != "HandleFunc" {
-        return None;
-    }
-    if !is_serve_mux_receiver(function_node, code, assignments, imports) {
-        return None;
-    }
+impl EndpointIdentificationStrategy for ServeMuxHandleStrategy {
+    fn identify(&self, params: &ExtractParams<'_>) -> Option<EndpointMatch> {
+        let function_node = params.node.child_by_field_name("function")?;
+        if selector_name(function_node, params.code)? != "Handle" {
+            return None;
+        }
+        if !is_serve_mux_receiver(
+            function_node,
+            params.code,
+            params.assignments,
+            params.imports,
+        ) {
+            return None;
+        }
 
-    let arguments = node
-        .child_by_field_name("arguments")
-        .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
-        .unwrap_or_default();
-    if arguments.len() < 2 {
-        return None;
-    }
+        let arguments = params
+            .node
+            .child_by_field_name("arguments")
+            .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
+            .unwrap_or_default();
+        if arguments.len() < 2 {
+            return None;
+        }
 
-    let resolved = evaluate_expression_node(arguments[0], code, globals);
-    let (method, uri) = split_method_and_path(&resolved)?;
-    let handler = normalize_whitespace(node_text(arguments[1], code));
-    Some((method, uri, handler))
+        let path = evaluate_expression_node(arguments[0], params.code, params.globals);
+        if !looks_like_http_path(&path) {
+            return None;
+        }
+
+        Some(EndpointMatch {
+            method: infer_method_from_handler(&normalize_whitespace(node_text(
+                arguments[1],
+                params.code,
+            ))),
+            path,
+            handler: normalize_whitespace(node_text(arguments[1], params.code)),
+        })
+    }
 }
 
-pub(super) fn web_route_parts(
-    node: Node,
-    code: &str,
-    globals: &HashMap<String, String>,
-) -> Option<(HttpMethod, String, String)> {
-    let function_node = node.child_by_field_name("function")?;
-    if !is_web_route_call(function_node, code) {
-        return None;
-    }
+impl EndpointIdentificationStrategy for ServeMuxHandleFuncStrategy {
+    fn identify(&self, params: &ExtractParams<'_>) -> Option<EndpointMatch> {
+        let function_node = params.node.child_by_field_name("function")?;
+        if selector_name(function_node, params.code)? != "HandleFunc" {
+            return None;
+        }
+        if !is_serve_mux_receiver(
+            function_node,
+            params.code,
+            params.assignments,
+            params.imports,
+        ) {
+            return None;
+        }
 
-    let selector = selector_name(function_node, code)?;
-    let method = web_route_method(&selector)?;
-    let arguments = node
-        .child_by_field_name("arguments")
-        .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
-        .unwrap_or_default();
-    if arguments.len() < 2 {
-        return None;
-    }
+        let arguments = params
+            .node
+            .child_by_field_name("arguments")
+            .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
+            .unwrap_or_default();
+        if arguments.len() < 2 {
+            return None;
+        }
 
-    let uri = evaluate_expression_node(arguments[0], code, globals);
-    let handler = normalize_whitespace(node_text(arguments[1], code));
-    Some((method, uri, handler))
+        let resolved = evaluate_expression_node(arguments[0], params.code, params.globals);
+        let (method, path) = split_method_and_path(&resolved)?;
+        Some(EndpointMatch {
+            method,
+            path,
+            handler: normalize_whitespace(node_text(arguments[1], params.code)),
+        })
+    }
+}
+
+impl EndpointIdentificationStrategy for WebStrategy {
+    fn identify(&self, params: &ExtractParams<'_>) -> Option<EndpointMatch> {
+        let function_node = params.node.child_by_field_name("function")?;
+        if !is_web_route_call(function_node, params.code, params.imports) {
+            return None;
+        }
+
+        let selector = selector_name(function_node, params.code)?;
+        let method = web_route_method(&selector)?;
+        let arguments = params
+            .node
+            .child_by_field_name("arguments")
+            .map(|args| args.named_children(&mut args.walk()).collect::<Vec<_>>())
+            .unwrap_or_default();
+        if arguments.len() < 2 {
+            return None;
+        }
+
+        Some(EndpointMatch {
+            method,
+            path: evaluate_expression_node(arguments[0], params.code, params.globals),
+            handler: normalize_whitespace(node_text(arguments[1], params.code)),
+        })
+    }
 }
 
 fn is_known_router_receiver(
@@ -323,48 +401,41 @@ fn imported_origin_matches(origin: &str, imports: &[Import], packages: &[&str]) 
     })
 }
 
-fn join_route_prefix(prefix: &str, path: &str) -> String {
-    if prefix.is_empty() {
-        return path.to_string();
-    }
-    if path.is_empty() {
-        return prefix.to_string();
-    }
-
-    let normalized_prefix = prefix.trim_end_matches('/');
-    let normalized_path = path.trim_start_matches('/');
-    if normalized_path.is_empty() {
-        normalized_prefix.to_string()
-    } else {
-        format!("{normalized_prefix}/{normalized_path}")
-    }
-}
-
 fn looks_like_http_path(path: &str) -> bool {
     path.starts_with('/')
-        || path.starts_with("./")
-        || path.starts_with("../")
-        || path.starts_with('{')
-        || path.contains("/{")
 }
 
 fn infer_method_from_handler(handler: &str) -> HttpMethod {
-    let normalized = handler
-        .trim()
-        .trim_end_matches("()")
-        .rsplit('.')
-        .next()
-        .unwrap_or(handler);
-    infer_http_method_from_name(normalized)
+    infer_http_method_from_name(handler.rsplit('.').next().unwrap_or(handler))
 }
 
-fn is_web_route_call(function_node: Node, code: &str) -> bool {
-    if function_node.kind() != "selector_expression" {
+fn is_web_route_call(function_node: Node, code: &str, imports: &[Import]) -> bool {
+    let Some(selector) = selector_name(function_node, code) else {
+        return false;
+    };
+    if web_route_method(&selector).is_none() {
         return false;
     }
+    let Some(receiver) = function_node.child_by_field_name("operand") else {
+        return false;
+    };
+    let receiver = node_text(receiver, code).trim();
+    imports.iter().any(|import| {
+        import.module_alias == receiver
+            && WEB_IMPORT_PREFIXES
+                .iter()
+                .any(|prefix| import.orig_module.starts_with(prefix))
+    })
+}
 
-    function_node
-        .child_by_field_name("operand")
-        .map(|operand| normalize_whitespace(node_text(operand, code)) == "web")
-        .unwrap_or(false)
+fn join_route_prefix(prefix: &str, path: &str) -> String {
+    match (prefix.is_empty(), path.is_empty()) {
+        (true, _) => path.to_string(),
+        (_, true) => prefix.to_string(),
+        _ => format!(
+            "{}/{}",
+            prefix.trim_end_matches('/'),
+            path.trim_start_matches('/')
+        ),
+    }
 }

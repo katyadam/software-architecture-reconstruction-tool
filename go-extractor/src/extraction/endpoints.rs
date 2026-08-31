@@ -6,10 +6,7 @@ use models::{
 use statix::strings::hash_text;
 use tree_sitter::Node;
 
-use super::endpoint_frameworks::{
-    chi_route_parts, gorilla_route_parts, serve_mux_handle_func_parts, serve_mux_route_parts,
-    web_route_parts,
-};
+use super::endpoint_frameworks::{ExtractParams, strategies};
 use super::shared::{
     SYNTHETIC_HANDLER_PREFIX, format_http_method, lookup_callable, scope_bindings, walk_named,
 };
@@ -61,70 +58,25 @@ fn endpoint_from_call(
     synthetic_callables: &mut Vec<ParsedCallable>,
     synthetic_hashes: &mut HashSet<String>,
 ) -> Option<Endpoint> {
-    if let Some((method, path, handler)) = gorilla_route_parts(node, code, globals) {
-        return Some(build_endpoint(
-            file_path,
-            &path,
-            method,
-            &handler,
-            callable_lookup,
-            synthetic_callables,
-            synthetic_hashes,
-        ));
-    }
-
-    if let Some((method, path, handler)) =
-        chi_route_parts(node, code, globals, assignments, imports)
-    {
-        return Some(build_endpoint(
-            file_path,
-            &path,
-            method,
-            &handler,
-            callable_lookup,
-            synthetic_callables,
-            synthetic_hashes,
-        ));
-    }
-
-    if let Some((method, path, handler)) =
-        serve_mux_route_parts(node, code, globals, assignments, imports)
-    {
-        return Some(build_endpoint(
-            file_path,
-            &path,
-            method,
-            &handler,
-            callable_lookup,
-            synthetic_callables,
-            synthetic_hashes,
-        ));
-    }
-
-    if let Some((method, uri, handler_expr)) =
-        serve_mux_handle_func_parts(node, code, globals, assignments, imports)
-    {
-        return Some(build_endpoint(
-            file_path,
-            &uri,
-            method,
-            &handler_expr,
-            callable_lookup,
-            synthetic_callables,
-            synthetic_hashes,
-        ));
-    }
-
-    if let Some((method, uri, handler_expr)) = web_route_parts(node, code, globals) {
-        return Some(build_endpoint(
-            file_path,
-            &uri,
-            method,
-            &handler_expr,
-            callable_lookup,
-            synthetic_callables,
-            synthetic_hashes,
-        ));
+    let params = ExtractParams {
+        node,
+        code,
+        globals,
+        assignments,
+        imports,
+    };
+    for strategy in strategies() {
+        if let Some(endpoint) = strategy.identify(&params) {
+            return Some(build_endpoint(
+                file_path,
+                &endpoint.path,
+                endpoint.method,
+                &endpoint.handler,
+                callable_lookup,
+                synthetic_callables,
+                synthetic_hashes,
+            ));
+        }
     }
 
     None
