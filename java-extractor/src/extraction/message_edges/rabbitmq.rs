@@ -360,6 +360,7 @@ fn message_handler_query() -> &'static Query {
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn edge(
     role: MessageRole,
     destination_kind: MessageDestinationKind,

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use extractor_runtime::pipeline::pass1::dispatch_syntactic;
 use extractor_runtime::pipeline::{build_project_ir, evaluate};
 use java_extractor::extraction::extract_syntactic as java_extract;
 use models::{HttpMethod, MessageDestinationKind, RestCall};
@@ -24,6 +25,42 @@ fn java_restcall(function_name: &str, target_uri: &str, file_path: &str) -> Rest
     }
 }
 
+#[test]
+fn proto_contract_filters_undeclared_grpc_operations() {
+    let client = python_extract(
+        r#"
+import document_service_pb2_grpc
+class Client:
+    def __init__(self, channel):
+        self.stub = document_service_pb2_grpc.DocumentServiceStub(channel)
+    async def load(self, request):
+        return await self.stub.GetDocument(request)
+    async def invalid(self, request):
+        return await self.stub.DoesNotExist(request)
+"#,
+        "client.py",
+    )
+    .expect("Python extraction should succeed");
+    let contract = dispatch_syntactic(
+        "service DocumentService { rpc GetDocument (Request) returns (Document); }",
+        "document.proto",
+    )
+    .unwrap()
+    .expect("protobuf extraction should succeed");
+
+    let evaluated = evaluate(
+        build_project_ir(vec![client, contract]),
+        &HashMap::new(),
+        &HashMap::new(),
+        &HashMap::new(),
+    );
+    assert_eq!(evaluated.restcalls.len(), 1);
+    assert_eq!(
+        evaluated.restcalls[0].target_uri,
+        "grpc://DocumentService/GetDocument"
+    );
+}
+
 /// Python: an exchange that resolves to an empty value uses queue semantics.
 #[test]
 fn python_empty_resolved_exchange_is_a_queue() {
@@ -46,7 +83,6 @@ class Publisher:
         &HashMap::new(),
         &HashMap::new(),
     );
-
     let edge = evaluated
         .message_edges
         .iter()
