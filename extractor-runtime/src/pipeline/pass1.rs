@@ -6,13 +6,18 @@ pub fn dispatch_syntactic(
     text: &str,
     file_path: &str,
 ) -> Result<Option<FileRecord>, ExtractionError> {
-    let ext = std::path::Path::new(file_path)
-        .extension()
-        .and_then(|e| e.to_str());
+    let path = std::path::Path::new(file_path);
+    let ext = path.extension().and_then(|e| e.to_str());
     match ext {
         Some("java") => java_extractor::extraction::extract_syntactic(text, file_path).map(Some),
         Some("py") => {
             python_extractor::extraction::parse::extract_syntactic(text, file_path).map(Some)
+        }
+        Some("go") => {
+            if !go_extractor::extraction::should_extract_file(path) {
+                return Ok(None);
+            }
+            go_extractor::extraction::extract_syntactic(text, file_path).map(Some)
         }
         _ => Ok(None),
     }

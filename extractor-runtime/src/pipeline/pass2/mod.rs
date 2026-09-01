@@ -6,13 +6,16 @@ use statix::{class_hierarchy::build_class_hierarchy, import_graph::build_import_
 
 use crate::pipeline::pass2::{
     callables::build_project_global_callables, constants::collect_constants,
-    entities::resolve_entity_fields, restcalls::re_identify_restcalls,
+    endpoints::resolve_endpoint_handlers, entities::resolve_entity_fields,
     type_inference::resolve_call_argument_types,
 };
+
+pub use restcalls::re_identify_restcalls;
 
 mod assignments;
 pub mod callables;
 mod constants;
+mod endpoints;
 mod entities;
 mod restcalls;
 mod type_inference;
@@ -32,6 +35,7 @@ pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
         .map(TypedFileRecord::from)
         .collect();
 
+    resolve_endpoint_handlers(&mut files);
     resolve_entity_fields(&mut files, &import_graph);
     resolve_call_argument_types(&mut files);
     re_identify_restcalls(&mut files);

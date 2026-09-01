@@ -11,14 +11,15 @@ use models::ir::{language::Language, project::TypedFileRecord};
 pub fn re_identify_restcalls(files: &mut [TypedFileRecord]) {
     let strategy = SpringIdentificationStrategy::new();
     for file in files.iter_mut() {
-        if file.language != Language::Java {
-            continue;
+        if file.language == Language::Java {
+            let identified: Vec<_> = file
+                .call_statements
+                .iter()
+                .filter_map(|call| strategy.identify_restcall(call, &file.file_path))
+                .collect();
+            file.raw_restcalls.extend(identified);
         }
-        let identified: Vec<_> = file
-            .call_statements
-            .iter()
-            .filter_map(|call| strategy.identify_restcall(call, &file.file_path))
-            .collect();
-        file.raw_restcalls.extend(identified);
     }
+
+    go_extractor::extraction::identify_project_restcalls(files);
 }
