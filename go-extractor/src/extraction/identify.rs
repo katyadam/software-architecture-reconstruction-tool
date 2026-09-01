@@ -12,6 +12,36 @@ use super::shared::{
     parse_http_method_value,
 };
 
+struct IdentifyContext<'a> {
+    file: &'a TypedFileRecord,
+    call: &'a CallStatement,
+    resolved_scope: &'a HashMap<String, String>,
+    package_callables: &'a [ParsedCallable],
+}
+
+trait RestCallIdentificationStrategy: Sync {
+    fn identify(&self, ctx: &IdentifyContext<'_>) -> Option<RestCall>;
+}
+
+struct ExchangeStrategy;
+struct NetHttpVerbStrategy;
+struct ClientVerbStrategy;
+struct NewRequestStrategy;
+struct DoRequestStrategy;
+
+static EXCHANGE: ExchangeStrategy = ExchangeStrategy;
+static NET_HTTP_VERB: NetHttpVerbStrategy = NetHttpVerbStrategy;
+static CLIENT_VERB: ClientVerbStrategy = ClientVerbStrategy;
+static NEW_REQUEST: NewRequestStrategy = NewRequestStrategy;
+static DO_REQUEST: DoRequestStrategy = DoRequestStrategy;
+static IDENTIFICATION_STRATEGIES: &[&dyn RestCallIdentificationStrategy] = &[
+    &EXCHANGE,
+    &NET_HTTP_VERB,
+    &CLIENT_VERB,
+    &NEW_REQUEST,
+    &DO_REQUEST,
+];
+
 pub(super) fn identify_restcall(
     file: &TypedFileRecord,
     call: &CallStatement,
@@ -30,111 +60,157 @@ pub(super) fn identify_restcall(
         add_receiver_field_aliases(call, globals, &mut resolved_scope);
     }
     add_constructor_receiver_field_aliases(call, package_callables, &mut resolved_scope);
+    let ctx = IdentifyContext {
+        file,
+        call,
+        resolved_scope: &resolved_scope,
+        package_callables,
+    };
+    IDENTIFICATION_STRATEGIES
+        .iter()
+        .find_map(|strategy| strategy.identify(&ctx))
+}
 
-    if call.function_name.ends_with(".exchange") && call.arguments.len() >= 4 {
-        let service =
-            resolve_argument_value(&call.arguments[1], &resolved_scope, package_callables);
+impl RestCallIdentificationStrategy for ExchangeStrategy {
+    fn identify(&self, ctx: &IdentifyContext<'_>) -> Option<RestCall> {
+        if !ctx.call.function_name.ends_with(".exchange") || ctx.call.arguments.len() < 4 {
+            return None;
+        }
+
+        let service = resolve_argument_value(
+            &ctx.call.arguments[1],
+            ctx.resolved_scope,
+            ctx.package_callables,
+        );
         let method = parse_http_method_value(&resolve_argument_value(
-            &call.arguments[2],
-            &resolved_scope,
-            package_callables,
+            &ctx.call.arguments[2],
+            ctx.resolved_scope,
+            ctx.package_callables,
         ))?;
-        let path = resolve_argument_value(&call.arguments[3], &resolved_scope, package_callables);
+        let path = resolve_argument_value(
+            &ctx.call.arguments[3],
+            ctx.resolved_scope,
+            ctx.package_callables,
+        );
         let target_uri = if service.starts_with("http://") || service.starts_with("https://") {
             format!("{}{}", service.trim_end_matches('/'), path)
         } else {
             format!("http://{}{}", service, path)
         };
-        return Some(build_restcall(file, call, method, target_uri));
+        Some(build_restcall(ctx.file, ctx.call, method, target_uri))
     }
+}
 
-    if is_net_http_call(&call.function_name, "Get", file) && !call.arguments.is_empty() {
-        let target_uri =
-            resolve_argument_value(&call.arguments[0], &resolved_scope, package_callables);
-        return Some(build_restcall(file, call, HttpMethod::GET, target_uri));
+impl RestCallIdentificationStrategy for NetHttpVerbStrategy {
+    fn identify(&self, ctx: &IdentifyContext<'_>) -> Option<RestCall> {
+        direct_http_verb("Get", HttpMethod::GET, ctx)
+            .or_else(|| direct_http_verb("Post", HttpMethod::POST, ctx))
     }
+}
 
-    if call.function_name.ends_with(".Get")
-        && !call.function_name.starts_with("http.")
-        && !call.arguments.is_empty()
-        && !is_route_registration(
-            file,
-            call,
-            &HttpMethod::GET,
-            &resolved_scope,
-            package_callables,
-        )
-        && is_http_client_receiver(&call.function_name, &resolved_scope)
-    {
-        let target_uri =
-            resolve_argument_value(&call.arguments[0], &resolved_scope, package_callables);
-        return Some(build_restcall(file, call, HttpMethod::GET, target_uri));
+impl RestCallIdentificationStrategy for ClientVerbStrategy {
+    fn identify(&self, ctx: &IdentifyContext<'_>) -> Option<RestCall> {
+        client_http_verb("Get", HttpMethod::GET, ctx)
+            .or_else(|| client_http_verb("Post", HttpMethod::POST, ctx))
     }
+}
 
-    if is_net_http_call(&call.function_name, "Post", file) && !call.arguments.is_empty() {
-        let target_uri =
-            resolve_argument_value(&call.arguments[0], &resolved_scope, package_callables);
-        return Some(build_restcall(file, call, HttpMethod::POST, target_uri));
-    }
+impl RestCallIdentificationStrategy for NewRequestStrategy {
+    fn identify(&self, ctx: &IdentifyContext<'_>) -> Option<RestCall> {
+        if !is_net_http_call(&ctx.call.function_name, "NewRequest", ctx.file)
+            && !is_net_http_call(&ctx.call.function_name, "NewRequestWithContext", ctx.file)
+        {
+            return None;
+        }
 
-    if call.function_name.ends_with(".Post")
-        && !call.function_name.starts_with("http.")
-        && !call.arguments.is_empty()
-        && !is_route_registration(
-            file,
-            call,
-            &HttpMethod::POST,
-            &resolved_scope,
-            package_callables,
-        )
-        && is_http_client_receiver(&call.function_name, &resolved_scope)
-    {
-        let target_uri =
-            resolve_argument_value(&call.arguments[0], &resolved_scope, package_callables);
-        return Some(build_restcall(file, call, HttpMethod::POST, target_uri));
-    }
-
-    if is_net_http_call(&call.function_name, "NewRequest", file)
-        || is_net_http_call(&call.function_name, "NewRequestWithContext", file)
-    {
-        let method_index = usize::from(call.function_name.ends_with(".NewRequestWithContext"));
+        let method_index = usize::from(ctx.call.function_name.ends_with(".NewRequestWithContext"));
         let url_index = method_index + 1;
-        if call.arguments.len() <= url_index {
+        if ctx.call.arguments.len() <= url_index {
             return None;
         }
         let method = parse_http_method_value(&resolve_argument_value(
-            &call.arguments[method_index],
-            &resolved_scope,
-            package_callables,
+            &ctx.call.arguments[method_index],
+            ctx.resolved_scope,
+            ctx.package_callables,
         ))?;
         let target_uri = resolve_argument_value(
-            &call.arguments[url_index],
-            &resolved_scope,
-            package_callables,
+            &ctx.call.arguments[url_index],
+            ctx.resolved_scope,
+            ctx.package_callables,
         );
-        return Some(build_restcall(file, call, method, target_uri));
+        Some(build_restcall(ctx.file, ctx.call, method, target_uri))
     }
+}
 
-    if call.function_name.ends_with(".Do")
-        && !call.function_name.starts_with("http.")
-        && !call.arguments.is_empty()
-        && is_http_client_receiver(&call.function_name, &resolved_scope)
-    {
-        let request_value =
-            resolve_argument_value(&call.arguments[0], &resolved_scope, package_callables);
+impl RestCallIdentificationStrategy for DoRequestStrategy {
+    fn identify(&self, ctx: &IdentifyContext<'_>) -> Option<RestCall> {
+        if !ctx.call.function_name.ends_with(".Do")
+            || ctx.call.function_name.starts_with("http.")
+            || ctx.call.arguments.is_empty()
+            || !is_http_client_receiver(&ctx.call.function_name, ctx.resolved_scope)
+        {
+            return None;
+        }
+
+        let request_value = resolve_argument_value(
+            &ctx.call.arguments[0],
+            ctx.resolved_scope,
+            ctx.package_callables,
+        );
         if request_value.starts_with("http.NewRequest(")
             || request_value.starts_with("http.NewRequestWithContext(")
         {
             return None;
         }
-        if let Some((method, target_uri)) =
-            parse_request_call(&request_value, &resolved_scope, file)
-        {
-            return Some(build_restcall(file, call, method, target_uri));
-        }
+        let (method, target_uri) =
+            parse_request_call(&request_value, ctx.resolved_scope, ctx.file)?;
+        Some(build_restcall(ctx.file, ctx.call, method, target_uri))
     }
+}
 
-    None
+fn direct_http_verb(
+    method_name: &str,
+    http_method: HttpMethod,
+    ctx: &IdentifyContext<'_>,
+) -> Option<RestCall> {
+    if !is_net_http_call(&ctx.call.function_name, method_name, ctx.file)
+        || ctx.call.arguments.is_empty()
+    {
+        return None;
+    }
+    let target_uri = resolve_argument_value(
+        &ctx.call.arguments[0],
+        ctx.resolved_scope,
+        ctx.package_callables,
+    );
+    Some(build_restcall(ctx.file, ctx.call, http_method, target_uri))
+}
+
+fn client_http_verb(
+    method_name: &str,
+    http_method: HttpMethod,
+    ctx: &IdentifyContext<'_>,
+) -> Option<RestCall> {
+    if !ctx.call.function_name.ends_with(&format!(".{method_name}"))
+        || ctx.call.function_name.starts_with("http.")
+        || ctx.call.arguments.is_empty()
+        || is_route_registration(
+            ctx.file,
+            ctx.call,
+            &http_method,
+            ctx.resolved_scope,
+            ctx.package_callables,
+        )
+        || !is_http_client_receiver(&ctx.call.function_name, ctx.resolved_scope)
+    {
+        return None;
+    }
+    let target_uri = resolve_argument_value(
+        &ctx.call.arguments[0],
+        ctx.resolved_scope,
+        ctx.package_callables,
+    );
+    Some(build_restcall(ctx.file, ctx.call, http_method, target_uri))
 }
 
 fn is_net_http_call(function_name: &str, method: &str, file: &TypedFileRecord) -> bool {
