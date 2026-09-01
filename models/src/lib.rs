@@ -8,6 +8,7 @@ pub mod configuration;
 pub mod endpoints;
 pub mod entities;
 pub mod enums;
+pub mod impact;
 pub mod imports;
 pub mod ir;
 pub mod restcalls;
@@ -21,5 +22,9 @@ pub use communication::{CommunicationProtocol, MessageDestinationKind, MessageEd
 pub use configuration::ConfigurationData;
 pub use endpoints::Endpoint;
 pub use entities::{Entity, Field};
+pub use impact::{
+    ChangeKind, ChangedFile, ImpactEdge, ImpactSymbol, Resolution, SelectedTest, SourcePosition,
+    SourceRange, SymbolKind, TestImpactMap, classify_unified_diff,
+};
 pub use imports::Import;
 pub use restcalls::RestCall;
