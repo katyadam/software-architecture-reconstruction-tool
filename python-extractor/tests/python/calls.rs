@@ -657,7 +657,7 @@ fn test_call_edge_cases() {
     );
     let target_call = delegate_calls
         .iter()
-        .find(|c| c.function_name == s!("target"))
+        .find(|c| c.function_name == "target")
         .unwrap();
     assert!(
         target_call
@@ -685,7 +685,7 @@ fn test_call_edge_cases() {
         "str(x) inside list comprehension should be captured"
     );
     assert!(
-        transform_calls.iter().any(|c| c.function_name == s!("str")),
+        transform_calls.iter().any(|c| c.function_name == "str"),
         "str() call inside comprehension must be captured"
     );
 
@@ -697,7 +697,7 @@ fn test_call_edge_cases() {
         .collect();
     let isinstance_call = handle_calls
         .iter()
-        .find(|c| c.function_name == s!("isinstance"))
+        .find(|c| c.function_name == "isinstance")
         .unwrap();
     assert_eq!(
         isinstance_call.arguments.len(),

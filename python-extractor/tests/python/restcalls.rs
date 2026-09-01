@@ -26,11 +26,11 @@ use crate::python::utils::{get_tree, load_file, parse_file};
 
 fn restcalls(code: &str, tree: &Tree, file_name: &str) -> Vec<RestCall> {
     let calls = CallsExtractor
-        .extract(ExtractParams::new(&tree, &code))
+        .extract(ExtractParams::new(tree, code))
         .into_iter()
         .map(PythonCallStatement::to_language_agnostic)
         .collect::<Vec<_>>();
-    let function_asts = parse_python(&tree, &code);
+    let function_asts = parse_python(tree, code);
     MethodCallSelector::new(
         MethodCallIdentificationStrategy::new(),
         MethodCallEvaluationStrategy::new(function_asts, HashMap::new()),
@@ -45,7 +45,7 @@ fn restcalls_extraction() {
     let code = load_file(filename).unwrap();
     let tree = get_tree(&code);
 
-    let restcalls = restcalls(&code, &tree, &filename);
+    let restcalls = restcalls(&code, &tree, filename);
     let expected = vec![
         RestCall {
             function_name: s!(
@@ -166,7 +166,7 @@ fn restcalls_evaluation() {
     let filename = "./examples/python/restcalls/large_example.py";
     let code = load_file(filename).unwrap();
     let tree = get_tree(&code);
-    let mut restcalls = restcalls(&code, &tree, &filename);
+    let mut restcalls = restcalls(&code, &tree, filename);
     let assignments_map = get_assignments_map(&tree, &code);
     evaluate_local_and_global_assignments(&mut restcalls, &assignments_map);
     let expected = vec![
@@ -295,7 +295,7 @@ fn should_extract_all_types_of_restcall() {
     let filename = "./examples/python/restcalls/different_types.py";
     let code = load_file(filename).unwrap();
     let tree = get_tree(&code);
-    let mut restcalls = restcalls(&code, &tree, &filename);
+    let mut restcalls = restcalls(&code, &tree, filename);
     let assignments_map = get_assignments_map(&tree, &code);
     evaluate_local_and_global_assignments(&mut restcalls, &assignments_map);
     let expected = vec![
@@ -429,7 +429,7 @@ fn should_assign_correct_target_uris_using_symbolic_evaluation() {
     let filename = "./examples/python/restcalls/url_not_in_call.py";
     let code = load_file(filename).unwrap();
     let tree = get_tree(&code);
-    let mut restcalls = restcalls(&code, &tree, &filename);
+    let mut restcalls = restcalls(&code, &tree, filename);
     let assignments_map = get_assignments_map(&tree, &code);
     evaluate_local_and_global_assignments(&mut restcalls, &assignments_map);
 
@@ -465,7 +465,7 @@ fn should_not_identify_endpoints_with_restcall_notation() {
     let filename = "./examples/python/restcalls/endpoints_with_restcall_notation.py";
     let code = load_file(filename).unwrap();
     let tree = get_tree(&code);
-    let mut restcalls = restcalls(&code, &tree, &filename);
+    let mut restcalls = restcalls(&code, &tree, filename);
     let assignments_map = get_assignments_map(&tree, &code);
     evaluate_local_and_global_assignments(&mut restcalls, &assignments_map);
 
@@ -487,7 +487,7 @@ fn should_correctly_generate_multiple_restcalls_with_resolved_enums() {
         MethodCallIdentificationStrategy::new(),
         MethodCallEvaluationStrategy::new(
             function_asts,
-            get_enums_map(&vec![EnumDefinition {
+            get_enums_map(&[EnumDefinition {
                 name: s!("MappingType"),
                 variants: vec![s!("cases"), s!("slides")],
                 file_path: s!("./examples/python/restcalls/enum_in_restcall_uri.py"),

@@ -28,7 +28,7 @@ impl RabbitMqIdentificationStrategy {
         call: &CallStatement,
         file_path: &str,
     ) -> Option<MessageEdge> {
-        let method = call.function_name.split(METHOD_SEPARATOR).last()?;
+        let method = call.function_name.split(METHOD_SEPARATOR).next_back()?;
         match method {
             RABBITMQ_PUBLISH_METHOD => self.identify_publish(call, file_path),
             RABBITMQ_CONSUME_METHOD => self.identify_consume(call, file_path),
@@ -109,6 +109,7 @@ impl RabbitMqIdentificationStrategy {
     }
 
     /// Builds a RabbitMQ message edge with call-site metadata.
+    #[allow(clippy::too_many_arguments)]
     fn edge(
         &self,
         role: MessageRole,

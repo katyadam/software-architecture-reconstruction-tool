@@ -28,6 +28,7 @@ mod enclosing_lookup;
 pub mod endpoints;
 pub mod entities;
 pub mod extractor;
+pub mod grpc;
 pub mod imports;
 pub mod message_edges;
 mod queries;
@@ -87,6 +88,9 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         })
         .collect();
 
+    let (grpc_endpoints, grpc_calls) = grpc::extract(code, &tree, file_name, &calls);
+    let mut endpoints = endpoints;
+    endpoints.extend(grpc_endpoints);
     let rabbitmq_strategy = RabbitMqIdentificationStrategy::new();
     let mut raw_message_edges = rabbitmq_strategy.identify_from_calls(&calls, file_name);
     raw_message_edges.extend(rabbitmq_strategy.identify_from_annotations(code, &tree, file_name));
@@ -107,7 +111,9 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         call_statements: calls,
         assignments,
         enums: vec![],
+        raw_restcalls: grpc_calls,
         raw_message_edges,
+        proto_services: vec![],
     })
 }
 
@@ -118,10 +124,12 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
 /// this at Pass 1 would always find nothing.
 pub fn identify(file: &mut TypedFileRecord) {
     let strategy = SpringIdentificationStrategy::new();
-    let identified: Vec<_> = file
-        .call_statements
-        .iter()
-        .filter_map(|call| strategy.identify_restcall(call, &file.file_path))
-        .collect();
+    let mut identified = file.raw_restcalls.clone();
+    identified.extend(
+        file.call_statements
+            .iter()
+            .filter_map(|call| strategy.identify_restcall(call, &file.file_path))
+            .collect::<Vec<_>>(),
+    );
     file.raw_restcalls = identified;
 }

@@ -564,7 +564,7 @@ fn test_call_statement_edge_cases() {
     //   the inner call "input.trim()" and the outer "input.trim().toLowerCase()"
     let trim_calls: Vec<&CallStatement> = calls
         .iter()
-        .filter(|c| c.function_name == s!("input.trim()"))
+        .filter(|c| c.function_name == "input.trim()")
         .collect();
     assert_eq!(
         trim_calls.len(),
@@ -578,7 +578,7 @@ fn test_call_statement_edge_cases() {
 
     let chained_calls: Vec<&CallStatement> = calls
         .iter()
-        .filter(|c| c.function_name == s!("input.trim().toLowerCase()"))
+        .filter(|c| c.function_name == "input.trim().toLowerCase()")
         .collect();
     assert_eq!(
         chained_calls.len(),
@@ -610,7 +610,7 @@ fn test_call_statement_edge_cases() {
     // not a statement-level expression, but is still captured.
     let guard_calls: Vec<&CallStatement> = calls
         .iter()
-        .filter(|c| c.function_name == s!("s.isEmpty()"))
+        .filter(|c| c.function_name == "s.isEmpty()")
         .collect();
     assert_eq!(
         guard_calls.len(),

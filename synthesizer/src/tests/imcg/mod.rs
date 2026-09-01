@@ -28,7 +28,7 @@ mod tests {
                 &ConfigurationData {
                     service_descriptions: service_descs.clone(),
                 },
-                &vec![],
+                &[],
             )
             .expect("SDG in IMCG tests should be valid and buildable!");
 
