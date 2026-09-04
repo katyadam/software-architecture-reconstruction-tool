@@ -4,7 +4,7 @@ use serde::de::Unexpected;
 
 use crate::{
     imcg::model::{Call, ServiceCallable},
-    sdg::model::Request,
+    sdg::model::{MessageRequest, Request},
 };
 
 impl From<ServiceCallable> for BoltType {
@@ -144,6 +144,8 @@ impl From<Call> for BoltType {
 
         let request_json = serde_json::to_string(&value.request).unwrap();
         map.put("request".into(), request_json.into());
+        let message_request_json = serde_json::to_string(&value.message_request).unwrap();
+        map.put("message_request".into(), message_request_json.into());
 
         BoltType::Map(map)
     }
@@ -169,15 +171,22 @@ impl TryFrom<BoltMap> for Call {
             _ => return Err(DeError::NoSuchProperty),
         };
 
-        let request: Request = match node.get("request") {
-            Ok(BoltType::String(s)) => serde_json::from_str(&s.value).unwrap(),
-            _ => return Err(DeError::NoSuchProperty),
+        let request: Option<Request> = match node.get("request") {
+            Ok(BoltType::String(s)) => serde_json::from_str(&s.value).unwrap_or(None),
+            Ok(BoltType::Null(_)) => None,
+            _ => None,
+        };
+        let message_request: Option<MessageRequest> = match node.get("message_request") {
+            Ok(BoltType::String(s)) => serde_json::from_str(&s.value).unwrap_or(None),
+            Ok(BoltType::Null(_)) => None,
+            _ => None,
         };
 
         Ok(Call {
             source_id,
             target_id,
-            request: Some(request),
+            request,
+            message_request,
         })
     }
 }

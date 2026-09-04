@@ -49,7 +49,12 @@ impl CallGraphBuilderImpl {
                 match source {
                     Some(src) => {
                         let target_id = Self::find_target_id(stmt, callables, &src.service_name)?;
-                        Some(Call::new(src.callable.signature.clone(), target_id, None))
+                        Some(Call::new(
+                            src.callable.signature.clone(),
+                            target_id,
+                            None,
+                            None,
+                        ))
                     }
                     None => None,
                 }

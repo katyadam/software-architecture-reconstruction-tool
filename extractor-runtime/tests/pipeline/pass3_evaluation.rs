@@ -44,12 +44,12 @@ class UserClient {
 }
 "#;
 
-    let mut record = java_extract(code, "UserClient.java").expect("Java extraction should succeed");
-    record
+    let mut project_ir = build_project_ir(vec![
+        java_extract(code, "UserClient.java").expect("Java extraction should succeed"),
+    ]);
+    project_ir.files[0]
         .raw_restcalls
         .push(java_restcall("void fetchUsers()", "url", "UserClient.java"));
-
-    let project_ir = build_project_ir(vec![record]);
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -92,15 +92,18 @@ class UserClient {
 }
 "#;
 
-    let base_record =
-        java_extract(base_code, "BaseService.java").expect("BaseService.java should parse");
-    let mut client_record =
-        java_extract(client_code, "UserClient.java").expect("UserClient.java should parse");
-    client_record
+    let mut project_ir = build_project_ir(vec![
+        java_extract(base_code, "BaseService.java").expect("BaseService.java should parse"),
+        java_extract(client_code, "UserClient.java").expect("UserClient.java should parse"),
+    ]);
+    let client_file = project_ir
+        .files
+        .iter_mut()
+        .find(|file| file.file_path == "UserClient.java")
+        .expect("UserClient.java should exist");
+    client_file
         .raw_restcalls
         .push(java_restcall("void fetchUsers()", "url", "UserClient.java"));
-
-    let project_ir = build_project_ir(vec![base_record, client_record]);
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -145,17 +148,20 @@ class LocalClient {
 }
 "#;
 
-    let global_record =
-        java_extract(global_code, "GlobalService.java").expect("GlobalService.java should parse");
-    let mut local_record =
-        java_extract(local_code, "LocalClient.java").expect("LocalClient.java should parse");
-    local_record.raw_restcalls.push(java_restcall(
+    let mut project_ir = build_project_ir(vec![
+        java_extract(global_code, "GlobalService.java").expect("GlobalService.java should parse"),
+        java_extract(local_code, "LocalClient.java").expect("LocalClient.java should parse"),
+    ]);
+    let local_file = project_ir
+        .files
+        .iter_mut()
+        .find(|file| file.file_path == "LocalClient.java")
+        .expect("LocalClient.java should exist");
+    local_file.raw_restcalls.push(java_restcall(
         "void fetchItems()",
         "url",
         "LocalClient.java",
     ));
-
-    let project_ir = build_project_ir(vec![global_record, local_record]);
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -393,15 +399,9 @@ func (c *Client) GetBasketItems(customerID string) {
 }
 "#;
 
-    let mut record =
-        go_extract(code, "customer_http_client.go").expect("Go extraction should succeed");
-    let mut typed = models::ir::project::TypedFileRecord::from(
+    let project_ir = build_project_ir(vec![
         go_extract(code, "customer_http_client.go").expect("Go extraction should succeed"),
-    );
-    go_extractor::extraction::identify(&mut typed);
-    record.raw_restcalls = typed.raw_restcalls.clone();
-
-    let project_ir = build_project_ir(vec![record]);
+    ]);
     let mut external_constants = HashMap::new();
     external_constants.insert(
         "CUSTOMER_SERVICE_ENDPOINT".to_string(),
@@ -573,15 +573,15 @@ def helper():
     return "/api/v1"
 "#;
 
-    let record = python_extract(code, "helper.py").expect("helper.py should parse");
+    let project_ir = build_project_ir(vec![
+        python_extract(code, "helper.py").expect("helper.py should parse"),
+    ]);
     // raw_restcalls is empty — no requests.get/post/etc. calls in the file
     assert!(
-        record.raw_restcalls.is_empty(),
+        project_ir.files[0].raw_restcalls.is_empty(),
         "helper.py should have no raw_restcalls, got: {:?}",
-        record.raw_restcalls
+        project_ir.files[0].raw_restcalls
     );
-
-    let project_ir = build_project_ir(vec![record]);
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),

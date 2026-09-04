@@ -8,7 +8,7 @@ use crate::{
         construction::{intra::CallGraphBuilderImpl, map::get_callables_map},
         model::{Call, Imcg, ServiceCallable},
     },
-    sdg::model::{Request, Sdg},
+    sdg::model::{MessageRequest, Request, Sdg},
     utils::assign_service_description_to_file,
 };
 
@@ -55,11 +55,22 @@ impl ImcgBuilderImpl {
         sdg: &Sdg,
         callables_map: &HashMap<String, ServiceCallable>,
     ) -> Result<Vec<Call>, BuilderError> {
-        sdg.connections
+        let mut calls: Vec<Call> = sdg
+            .connections
             .iter()
             .flat_map(|connection| connection.requests.iter())
             .map(|request| self.create_call_from_request(request, callables_map))
-            .collect()
+            .collect::<Result<_, _>>()?;
+
+        let mut message_calls: Vec<Call> = sdg
+            .message_connections
+            .iter()
+            .flat_map(|connection| connection.messages.iter())
+            .map(|message| self.create_call_from_message_request(message, callables_map))
+            .collect::<Result<_, _>>()?;
+
+        calls.append(&mut message_calls);
+        Ok(calls)
     }
 
     fn create_call_from_request(
@@ -79,10 +90,40 @@ impl ImcgBuilderImpl {
                 BuilderError::Error(format!("Missing restcall function: {:?}", request.restcall))
             })?;
 
-        Ok(Call::new(
+        Ok(Call::from_request(
             restcall.callable.signature.clone(),
             endpoint.callable.signature.clone(),
-            Some(request.clone()),
+            request.clone(),
+        ))
+    }
+
+    fn create_call_from_message_request(
+        &self,
+        message: &MessageRequest,
+        callables_map: &HashMap<String, ServiceCallable>,
+    ) -> Result<Call, BuilderError> {
+        let consumer = callables_map
+            .get(&message.consumer.function_hash)
+            .ok_or_else(|| {
+                BuilderError::Error(format!(
+                    "Missing consumer function: {:?}",
+                    message.consumer
+                ))
+            })?;
+
+        let producer = callables_map
+            .get(&message.producer.function_hash)
+            .ok_or_else(|| {
+                BuilderError::Error(format!(
+                    "Missing producer function: {:?}",
+                    message.producer
+                ))
+            })?;
+
+        Ok(Call::from_message_request(
+            producer.callable.signature.clone(),
+            consumer.callable.signature.clone(),
+            message.clone(),
         ))
     }
 }

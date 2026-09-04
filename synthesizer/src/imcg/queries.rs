@@ -21,6 +21,7 @@ MATCH (src:Callable {id: call.source_id, codebase_uuid: $codebase_uuid, commit_h
 MATCH (tgt:Callable {id: call.target_id, codebase_uuid: $codebase_uuid, commit_hash: $commit_hash})
 MERGE (src)-[r:DEPENDS_ON {codebase_uuid: $codebase_uuid, commit_hash: $commit_hash}]->(tgt)
 SET r.request = call.request
+SET r.message_request = call.message_request
 "#;
 
 pub const GET_IMCG: &str = r#"
@@ -29,7 +30,12 @@ OPTIONAL MATCH (c)-[r:DEPENDS_ON]->(target:Callable)
 WHERE target.codebase_uuid = $codebase_uuid AND target.commit_hash = $commit_hash
 WITH 
     collect(DISTINCT c) AS all_callables,
-    collect(DISTINCT {source: c.id, target: target.id, request: r.request}) AS all_calls
+    collect(DISTINCT {
+        source: c.id,
+        target: target.id,
+        request: r.request,
+        message_request: r.message_request
+    }) AS all_calls
 RETURN all_callables, all_calls
 "#;
 
