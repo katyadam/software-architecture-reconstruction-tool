@@ -2,7 +2,7 @@ use models::Callable;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::sdg::model::Request;
+use crate::sdg::model::{MessageRequest, Request};
 
 mod bolt;
 
@@ -23,15 +23,34 @@ pub struct Call {
     source_id: String,
     target_id: String,
     request: Option<Request>,
+    message_request: Option<MessageRequest>,
 }
 
 impl Call {
-    pub fn new(source_id: String, target_id: String, request: Option<Request>) -> Self {
+    pub fn new(
+        source_id: String,
+        target_id: String,
+        request: Option<Request>,
+        message_request: Option<MessageRequest>,
+    ) -> Self {
         Self {
             source_id,
             target_id,
             request,
+            message_request,
         }
+    }
+
+    pub fn from_request(source_id: String, target_id: String, request: Request) -> Self {
+        Self::new(source_id, target_id, Some(request), None)
+    }
+
+    pub fn from_message_request(
+        source_id: String,
+        target_id: String,
+        message_request: MessageRequest,
+    ) -> Self {
+        Self::new(source_id, target_id, None, Some(message_request))
     }
 }
 #[derive(ToSchema, Debug, Serialize, Deserialize, Clone)]

@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
     use models::{
-        ConfigurationData, Endpoint, HttpMethod, RestCall, configuration::ServiceDescription,
+        CommunicationProtocol, ConfigurationData, Endpoint, HttpMethod, MessageDestinationKind,
+        MessageEdge, MessageRole, RestCall, configuration::ServiceDescription,
     };
     use strsim::levenshtein;
 
@@ -13,7 +14,7 @@ mod tests {
         let sample_data = sample_data();
         let configuration = sample_configuration();
         let sdg = service
-            .build(&sample_data.0, &sample_data.1, &configuration, &vec![])
+            .build(&sample_data.0, &sample_data.1, &[], &configuration, &vec![])
             .expect("This test doesn't produce error!");
         assert!(
             sdg.services.len() == 2,
@@ -35,6 +36,50 @@ mod tests {
             }),
             "Not matching URIs between matched endpoint-restcall pair, should be matching or atleast similar"
         );
+    }
+
+    #[test]
+    fn should_match_rabbitmq_bindings_to_producers() {
+        let builder = SdgBuilderImpl::new();
+        let configuration = sample_configuration();
+        let producer = MessageEdge {
+            protocol: CommunicationProtocol::RabbitMq,
+            role: MessageRole::Producer,
+            destination_kind: MessageDestinationKind::ExchangeRoutingKey,
+            destination: "orders:created".to_string(),
+            exchange: Some("orders".to_string()),
+            routing_key: Some("created".to_string()),
+            queue: None,
+            topic: None,
+            handler: None,
+            function_name: "publish".to_string(),
+            function_hash: "producer-hash".to_string(),
+            call_arguments: vec![],
+            file_path: "crm/admin-user-service/src/api/publisher.py".to_string(),
+        };
+        let binding = MessageEdge {
+            protocol: CommunicationProtocol::RabbitMq,
+            role: MessageRole::Binding,
+            destination_kind: MessageDestinationKind::ExchangeRoutingKey,
+            destination: "orders:created".to_string(),
+            exchange: Some("orders".to_string()),
+            routing_key: Some("created".to_string()),
+            queue: Some("tmp-queue".to_string()),
+            topic: None,
+            handler: None,
+            function_name: "consume".to_string(),
+            function_hash: "binding-hash".to_string(),
+            call_arguments: vec![],
+            file_path: "crm/user-service/src/api/consumer.py".to_string(),
+        };
+
+        let sdg = builder
+            .build(&[], &[], &[producer, binding], &configuration, &[])
+            .expect("message-only SDG should build");
+
+        assert_eq!(sdg.message_connections.len(), 1);
+        assert_eq!(sdg.message_connections[0].source_id, "admin-user-service");
+        assert_eq!(sdg.message_connections[0].target_id, "user-service");
     }
 
     fn sample_data() -> (Vec<Endpoint>, Vec<RestCall>) {

@@ -20,6 +20,11 @@ pub struct CallStatement {
     pub is_self_invoke: bool,
     pub is_super_invoke: bool,
     pub invoked_on: Option<String>,
+
+    /// True when this call sits inside a decorator/annotation rather than
+    /// executable code -- e.g. Python's `@app.get("/items")`. Such calls are
+    /// route declarations, not outbound calls.
+    pub is_decorator: bool,
 }
 
 impl Display for CallStatement {

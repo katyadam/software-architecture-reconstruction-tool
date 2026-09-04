@@ -589,6 +589,7 @@ fn collect_call_statements(
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            is_decorator: false,
         });
     });
 }

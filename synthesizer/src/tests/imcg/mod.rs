@@ -1,8 +1,9 @@
 #[cfg(test)]
 mod tests {
     use models::{
-        Argument, CallStatement, Callable, ConfigurationData, Endpoint, HttpMethod, Namespace,
-        Parameter, RestCall, configuration::ServiceDescription,
+        Argument, CallStatement, Callable, CommunicationProtocol, ConfigurationData, Endpoint,
+        HttpMethod, MessageDestinationKind, MessageEdge, MessageRole, Namespace, Parameter,
+        RestCall, configuration::ServiceDescription,
     };
 
     use crate::{
@@ -22,6 +23,29 @@ mod tests {
         let imcg = imcg_builder
             .build(&callables, &call_statements, &service_descs, &sdg)
             .expect("IMCG building should pass!");
+
+        assert_eq!(imcg.calls.len(), 1, "There should be exactly 1 IMCG call");
+    }
+
+    #[test]
+    fn should_connect_message_pairs_as_calls() {
+        let service_descs = sample_service_descriptions();
+        let callables = sample_message_callables();
+        let sdg = SdgBuilderImpl::new()
+            .build(
+                &[],
+                &[],
+                &sample_message_edges(),
+                &ConfigurationData {
+                    service_descriptions: service_descs.clone(),
+                },
+                &[],
+            )
+            .expect("message SDG in IMCG tests should be valid");
+
+        let imcg = ImcgBuilderImpl::new()
+            .build(&callables, &[], &service_descs, &sdg)
+            .expect("IMCG building for message calls should pass");
 
         assert_eq!(imcg.calls.len(), 1, "There should be exactly 1 IMCG call");
     }
@@ -72,6 +96,7 @@ mod tests {
             .build(
                 &sample_endpoints(),
                 &sample_restcalls(),
+                &[],
                 &ConfigurationData {
                     service_descriptions: service_descs.to_vec(),
                 },
@@ -156,6 +181,7 @@ mod tests {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            is_decorator: false,
         }]
     }
 
@@ -204,6 +230,68 @@ mod tests {
                 uri: "/proxy-items/".to_string(),
                 file_path: "serviceB/main.py".to_string(),
                 ..Default::default()
+            },
+        ]
+    }
+
+    fn sample_message_callables() -> Vec<Callable> {
+        vec![
+            Callable {
+                name: "publish_order_created()".to_string(),
+                signature: "module:serviceA/events.py/publish_order_created()".to_string(),
+                namespace: Namespace::Module("serviceA/events.py".to_string()),
+                parameters: vec![],
+                return_type: None,
+                is_async: true,
+                is_constructor: false,
+                hash: "producer-hash".to_string(),
+                file_path: "serviceA/events.py".to_string(),
+            },
+            Callable {
+                name: "consume_order_created()".to_string(),
+                signature: "module:serviceB/consumer.py/consume_order_created()".to_string(),
+                namespace: Namespace::Module("serviceB/consumer.py".to_string()),
+                parameters: vec![],
+                return_type: None,
+                is_async: true,
+                is_constructor: false,
+                hash: "consumer-hash".to_string(),
+                file_path: "serviceB/consumer.py".to_string(),
+            },
+        ]
+    }
+
+    fn sample_message_edges() -> Vec<MessageEdge> {
+        vec![
+            MessageEdge {
+                protocol: CommunicationProtocol::Kafka,
+                role: MessageRole::Producer,
+                destination_kind: MessageDestinationKind::Topic,
+                destination: "orders.created".to_string(),
+                exchange: None,
+                routing_key: None,
+                queue: None,
+                topic: Some("orders.created".to_string()),
+                handler: None,
+                function_name: "publish_order_created".to_string(),
+                function_hash: "producer-hash".to_string(),
+                call_arguments: vec![],
+                file_path: "serviceA/events.py".to_string(),
+            },
+            MessageEdge {
+                protocol: CommunicationProtocol::Kafka,
+                role: MessageRole::Consumer,
+                destination_kind: MessageDestinationKind::Topic,
+                destination: "orders.created".to_string(),
+                exchange: None,
+                routing_key: None,
+                queue: None,
+                topic: Some("orders.created".to_string()),
+                handler: None,
+                function_name: "consume_order_created".to_string(),
+                function_hash: "consumer-hash".to_string(),
+                call_arguments: vec![],
+                file_path: "serviceB/consumer.py".to_string(),
             },
         ]
     }

@@ -466,8 +466,14 @@ def fetch():
     requests.get(url)
 "#;
 
-    let mut java_record = java_extract(java_code, "JavaClient.java").expect("parses");
-    java_record.raw_restcalls.push(RestCall {
+    let java_record = java_extract(java_code, "JavaClient.java").expect("parses");
+    let python_record = python_extract(python_code, "client.py").expect("parses");
+
+    // The Java snippet has no real Spring/RestTemplate call for Pass 2 to
+    // identify, so the RestCall is added by hand to the TypedFileRecord,
+    // after Pass 2 has run, so this test can target pass_module in isolation.
+    let mut project_ir = build_project_ir(vec![java_record, python_record]);
+    project_ir.files[0].raw_restcalls.push(RestCall {
         function_name: "void fetch()".into(),
         function_hash: String::new(),
         call_arguments: vec![],
@@ -475,9 +481,16 @@ def fetch():
         target_uri: "url".into(),
         file_path: "JavaClient.java".into(),
     });
-    let python_record = python_extract(python_code, "client.py").expect("parses");
 
-    let evaluated = run_pipeline(vec![java_record, python_record], &HashMap::new());
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, &HashMap::new());
+    let per_file_module_consts =
+        pass_module::resolve_all(&project_ir, &HashMap::new(), &per_file_attrs);
+    let evaluated = evaluate(
+        project_ir,
+        &HashMap::new(),
+        &per_file_attrs,
+        &per_file_module_consts,
+    );
 
     let java_uri = evaluated
         .restcalls
