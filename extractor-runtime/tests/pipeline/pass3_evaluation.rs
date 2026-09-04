@@ -1,19 +1,18 @@
 use std::collections::HashMap;
 
-use extractor_runtime::pipeline::{build_project_ir, evaluate};
+use extractor_runtime::pipeline::{build_project_ir, evaluate, pass2::re_identify_restcalls};
 use go_extractor::extraction::extract_syntactic as go_extract;
 use java_extractor::extraction::extract_syntactic as java_extract;
-use models::{HttpMethod, MessageDestinationKind, MessageRole, RestCall};
+use models::{HttpMethod, RestCall};
 use python_extractor::extraction::parse::extract_syntactic as python_extract;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 /// Minimal Java RestCall for pass 3 testing.
 ///
-/// These tests exercise hand-written Java that has no real Spring/RestTemplate
-/// shape for Pass 2 to identify, so they add the RestCall by hand onto the
-/// `TypedFileRecord` after `build_project_ir` has run, to target Pass 3's
-/// symbolic evaluation in isolation.
+/// Java `extract_syntactic` does not run `evaluate_invocations`, so `invoked_on`
+/// is never set and `SpringIdentificationStrategy` produces no raw_restcalls.
+/// Tests add them manually instead.
 fn java_restcall(function_name: &str, target_uri: &str, file_path: &str) -> RestCall {
     RestCall {
         function_name: function_name.to_string(),
@@ -23,167 +22,6 @@ fn java_restcall(function_name: &str, target_uri: &str, file_path: &str) -> Rest
         target_uri: target_uri.to_string(),
         file_path: file_path.to_string(),
     }
-}
-
-/// Python: an exchange that resolves to an empty value uses queue semantics.
-#[test]
-fn python_empty_resolved_exchange_is_a_queue() {
-    let code = r#"
-EXCHANGE = ""
-
-class Publisher:
-    def publish(self, message):
-        self.channel.basic_publish(
-            exchange=EXCHANGE,
-            routing_key="orders",
-            body=message,
-        )
-"#;
-
-    let record = python_extract(code, "publisher.py").expect("Python extraction should succeed");
-    let evaluated = evaluate(
-        build_project_ir(vec![record]),
-        &HashMap::new(),
-        &HashMap::new(),
-        &HashMap::new(),
-    );
-
-    let edge = evaluated
-        .message_edges
-        .iter()
-        .find(|edge| edge.role == models::MessageRole::Producer)
-        .expect("producer edge should be present");
-    assert_eq!(edge.destination_kind, MessageDestinationKind::Queue);
-    assert_eq!(edge.destination, "orders");
-}
-
-#[test]
-fn python_message_edges_propagate_wrapper_parameters_from_callsites() {
-    let code = r#"
-class NotificationService:
-    @staticmethod
-    def receive_data(connection, exchange_name, routing_key, callback):
-        channel = connection.channel()
-        queue_name = "queue_name"
-        channel.queue_bind(exchange=exchange_name, queue=queue_name, routing_key=routing_key)
-
-    @staticmethod
-    def save_notif_data_payment():
-        connection = object()
-        NotificationService.receive_data(connection, 'payment.exchange', 'payment.processed', None)
-
-class OrderService:
-    @staticmethod
-    def publish(order, routing_key: str):
-        channel = object()
-        channel.basic_publish(exchange='order.exchange', routing_key=routing_key, body='payload')
-
-    @staticmethod
-    def create_order(order):
-        OrderService.publish(order, 'order.created')
-
-    @staticmethod
-    def process_payment(order):
-        OrderService.publish(order, 'order.processed')
-"#;
-
-    let record =
-        python_extract(code, "message_wrappers.py").expect("Python extraction should succeed");
-    let evaluated = evaluate(
-        build_project_ir(vec![record]),
-        &HashMap::new(),
-        &HashMap::new(),
-        &HashMap::new(),
-    );
-
-    let producer_destinations = evaluated
-        .message_edges
-        .iter()
-        .filter(|edge| edge.role == MessageRole::Producer)
-        .map(|edge| edge.destination.as_str())
-        .collect::<Vec<_>>();
-    assert!(
-        producer_destinations.contains(&"order.exchange:order.created"),
-        "expected order.created producer edge, got: {producer_destinations:?}"
-    );
-    assert!(
-        producer_destinations.contains(&"order.exchange:order.processed"),
-        "expected order.processed producer edge, got: {producer_destinations:?}"
-    );
-
-    let binding_destinations = evaluated
-        .message_edges
-        .iter()
-        .filter(|edge| edge.role == MessageRole::Binding)
-        .map(|edge| edge.destination.as_str())
-        .collect::<Vec<_>>();
-    assert!(
-        binding_destinations.contains(&"payment.exchange:payment.processed"),
-        "expected payment binding edge, got: {binding_destinations:?}"
-    );
-}
-
-#[test]
-fn go_message_edges_propagate_wrapper_parameters_and_slice_ranges() {
-    let code = r#"
-package event
-
-type Consumer struct{}
-type Emitter struct{}
-
-func (e *Emitter) Push(event string, severity string) error {
-    channel.PublishWithContext(ctx, "logs_topic", severity, false, false, payload)
-    return nil
-}
-
-func (consumer *Consumer) Listen(topics []string) error {
-    for _, s := range topics {
-        ch.QueueBind(q.Name, s, "logs_topic", false, nil)
-    }
-    return nil
-}
-
-func main() {
-    emitter := &Emitter{}
-    _ = emitter.Push("x", "log.INFO")
-    consumer := &Consumer{}
-    _ = consumer.Listen([]string{"log.INFO", "log.WARNING"})
-}
-"#;
-
-    let record = go_extract(code, "event.go").expect("Go extraction should succeed");
-    let evaluated = evaluate(
-        build_project_ir(vec![record]),
-        &HashMap::new(),
-        &HashMap::new(),
-        &HashMap::new(),
-    );
-
-    let producer_destinations = evaluated
-        .message_edges
-        .iter()
-        .filter(|edge| edge.role == MessageRole::Producer)
-        .map(|edge| edge.destination.as_str())
-        .collect::<Vec<_>>();
-    assert!(
-        producer_destinations.contains(&"logs_topic:log.INFO"),
-        "expected propagated producer edge, got: {producer_destinations:?}"
-    );
-
-    let binding_destinations = evaluated
-        .message_edges
-        .iter()
-        .filter(|edge| edge.role == MessageRole::Binding)
-        .map(|edge| edge.destination.as_str())
-        .collect::<Vec<_>>();
-    assert!(
-        binding_destinations.contains(&"logs_topic:log.INFO"),
-        "expected log.INFO binding edge, got: {binding_destinations:?}"
-    );
-    assert!(
-        binding_destinations.contains(&"logs_topic:log.WARNING"),
-        "expected log.WARNING binding edge, got: {binding_destinations:?}"
-    );
 }
 
 // ── Java tests ────────────────────────────────────────────────────────────────
@@ -206,14 +44,12 @@ class UserClient {
 }
 "#;
 
-    let record = java_extract(code, "UserClient.java").expect("Java extraction should succeed");
+    let mut record = java_extract(code, "UserClient.java").expect("Java extraction should succeed");
+    record
+        .raw_restcalls
+        .push(java_restcall("void fetchUsers()", "url", "UserClient.java"));
 
-    let mut project_ir = build_project_ir(vec![record]);
-    project_ir.files[0].raw_restcalls.push(java_restcall(
-        "void fetchUsers()",
-        "url",
-        "UserClient.java",
-    ));
+    let project_ir = build_project_ir(vec![record]);
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -258,15 +94,13 @@ class UserClient {
 
     let base_record =
         java_extract(base_code, "BaseService.java").expect("BaseService.java should parse");
-    let client_record =
+    let mut client_record =
         java_extract(client_code, "UserClient.java").expect("UserClient.java should parse");
+    client_record
+        .raw_restcalls
+        .push(java_restcall("void fetchUsers()", "url", "UserClient.java"));
 
-    let mut project_ir = build_project_ir(vec![base_record, client_record]);
-    project_ir.files[1].raw_restcalls.push(java_restcall(
-        "void fetchUsers()",
-        "url",
-        "UserClient.java",
-    ));
+    let project_ir = build_project_ir(vec![base_record, client_record]);
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -313,15 +147,15 @@ class LocalClient {
 
     let global_record =
         java_extract(global_code, "GlobalService.java").expect("GlobalService.java should parse");
-    let local_record =
+    let mut local_record =
         java_extract(local_code, "LocalClient.java").expect("LocalClient.java should parse");
-
-    let mut project_ir = build_project_ir(vec![global_record, local_record]);
-    project_ir.files[1].raw_restcalls.push(java_restcall(
+    local_record.raw_restcalls.push(java_restcall(
         "void fetchItems()",
         "url",
         "LocalClient.java",
     ));
+
+    let project_ir = build_project_ir(vec![global_record, local_record]);
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -388,6 +222,264 @@ def fetch_by_status(status: Status):
     assert!(
         uris.contains(&"/api/items/inactive"),
         "should contain /api/items/inactive, got: {uris:?}"
+    );
+}
+
+#[test]
+fn go_cross_file_package_restcall_reidentification() {
+    let rest_go = r#"
+package main
+
+import "fmt"
+
+const PRODUCT_CATALOG_SERVICE_ADDR = "PRODUCT_CATALOG_SERVICE_ADDR"
+
+var defaultServiceName = map[string]string{
+    PRODUCT_CATALOG_SERVICE_ADDR: "product-catalog-service",
+}
+
+type RestClient struct {
+    ProductCatalogService string
+}
+
+var client = &RestClient{}
+
+func getService(serviceEnv string, port int) string {
+    serviceHost := defaultServiceName[serviceEnv]
+    return fmt.Sprintf("%s:%d", serviceHost, port)
+}
+
+func init() {
+    client.ProductCatalogService = getService(PRODUCT_CATALOG_SERVICE_ADDR, 60000)
+}
+"#;
+
+    let client_go = r#"
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+func (c *RestClient) GetProduct(productID string) {
+    url := fmt.Sprintf("http://%s/%s?product_id=%s", c.ProductCatalogService, "get-product", productID)
+    _, _ = http.Get(url)
+}
+"#;
+
+    let rest_record = go_extract(rest_go, "checkoutservice/rest.go").expect("rest.go should parse");
+    let client_record = go_extract(client_go, "checkoutservice/rest_client.go")
+        .expect("rest_client.go should parse");
+    let mut typed = vec![rest_record.into(), client_record.into()];
+
+    re_identify_restcalls(&mut typed);
+
+    let client_file = typed
+        .iter()
+        .find(|file| file.file_path.ends_with("rest_client.go"))
+        .expect("rest_client.go should exist");
+    let uris = client_file
+        .raw_restcalls
+        .iter()
+        .map(|call| call.target_uri.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(
+        uris.contains(&"http://product-catalog-service:60000/get-product?product_id=productID"),
+        "resolved URIs: {uris:?}"
+    );
+}
+
+#[test]
+fn go_cross_file_receiver_alias_prefers_matching_client_type() {
+    let rest_go = r#"
+package main
+
+import "fmt"
+
+const CART_SERVICE_ADDR = "CART_SERVICE_ADDR"
+
+var defaultServiceName = map[string]string{
+    CART_SERVICE_ADDR: "cart-service",
+}
+
+type RestClient struct {
+    CartService string
+}
+
+type ThriftClient struct {
+    CartService string
+}
+
+var client = NewRestClient()
+var thriftClient = &ThriftClient{}
+
+func NewRestClient() *RestClient {
+    return &RestClient{}
+}
+
+func getService(serviceEnv string, port int) string {
+    serviceHost := defaultServiceName[serviceEnv]
+    return fmt.Sprintf("%s:%d", serviceHost, port)
+}
+
+func init() {
+    client.CartService = getService(CART_SERVICE_ADDR, 60000)
+    thriftClient.CartService = getService(CART_SERVICE_ADDR, 50000)
+}
+"#;
+
+    let rest_record = go_extract(rest_go, "checkoutservice/rest.go").expect("rest.go should parse");
+    let client_go = r#"
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+func (c *RestClient) GetCart(userID string) {
+    url := fmt.Sprintf("http://%s/%s/user_id/%s", c.CartService, "cart", userID)
+    request, _ := http.NewRequest("GET", url, nil)
+    _, _ = http.DefaultClient.Do(request)
+}
+"#;
+    let client_record = go_extract(client_go, "checkoutservice/rest_client.go")
+        .expect("rest_client.go should parse");
+    let mut typed = vec![rest_record.into(), client_record.into()];
+
+    re_identify_restcalls(&mut typed);
+
+    let client_file = typed
+        .iter()
+        .find(|file| file.file_path.ends_with("rest_client.go"))
+        .expect("rest_client.go should exist");
+    let uris = client_file
+        .raw_restcalls
+        .iter()
+        .map(|call| call.target_uri.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(
+        uris.contains(&"http://cart-service:60000/cart/user_id/userID"),
+        "resolved URIs: {uris:?}"
+    );
+}
+
+#[test]
+fn go_restcall_fallback_uses_external_env_for_config_selectors() {
+    let code = r#"
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+type Client struct {
+    hostURL string
+}
+
+func NewCustomerClient() *Client {
+    return &Client{
+        hostURL: config.AppConfig.CustomerServiceEndpoint,
+    }
+}
+
+func (c *Client) GetBasketItems(customerID string) {
+    resp, _ := http.Get(c.hostURL + fmt.Sprintf("/customers/%v/basketItems", customerID))
+    _ = resp
+}
+"#;
+
+    let mut record =
+        go_extract(code, "customer_http_client.go").expect("Go extraction should succeed");
+    let mut typed = models::ir::project::TypedFileRecord::from(
+        go_extract(code, "customer_http_client.go").expect("Go extraction should succeed"),
+    );
+    go_extractor::extraction::identify(&mut typed);
+    record.raw_restcalls = typed.raw_restcalls.clone();
+
+    let project_ir = build_project_ir(vec![record]);
+    let mut external_constants = HashMap::new();
+    external_constants.insert(
+        "CUSTOMER_SERVICE_ENDPOINT".to_string(),
+        "http://localhost:8082/api".to_string(),
+    );
+
+    let evaluated = evaluate(
+        project_ir,
+        &external_constants,
+        &HashMap::new(),
+        &HashMap::new(),
+    );
+
+    assert!(
+        evaluated.restcalls.iter().any(|restcall| {
+            restcall.target_uri == "http://localhost:8082/api/customers/customerID/basketItems"
+        }),
+        "resolved URIs: {:?}",
+        evaluated
+            .restcalls
+            .iter()
+            .map(|restcall| restcall.target_uri.as_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn go_cross_file_endpoint_handler_resolves_to_real_callable() {
+    let routes_go = r#"
+package api
+
+func routes() {
+    router := chi.NewRouter()
+    router.Get("/items", listItems)
+}
+"#;
+    let handlers_go = r#"
+package api
+
+import "net/http"
+
+func listItems(writer http.ResponseWriter, request *http.Request) {
+    _, _ = http.Get("http://inventory-service/items")
+}
+"#;
+
+    let routes_record =
+        go_extract(routes_go, "service/api/routes.go").expect("routes.go should parse");
+    let handlers_record =
+        go_extract(handlers_go, "service/api/handlers.go").expect("handlers.go should parse");
+    let handler = handlers_record
+        .callables
+        .iter()
+        .find(|callable| callable.metadata.name == "listItems")
+        .expect("listItems callable should exist")
+        .metadata
+        .clone();
+
+    let project = build_project_ir(vec![routes_record, handlers_record]);
+    let routes_file = project
+        .files
+        .iter()
+        .find(|file| file.file_path.ends_with("routes.go"))
+        .expect("routes.go should exist");
+    let endpoint = routes_file
+        .endpoints
+        .iter()
+        .find(|endpoint| endpoint.uri == "/items")
+        .expect("GET /items endpoint should exist");
+
+    assert_eq!(endpoint.function_hash, handler.hash);
+    assert_eq!(endpoint.function_name, handler.signature);
+    assert!(
+        routes_file
+            .callables
+            .iter()
+            .all(|callable| !callable.metadata.signature.starts_with("handler ")),
+        "resolved synthetic handlers should be removed"
     );
 }
 
@@ -469,10 +561,10 @@ def fetch_items():
     );
 }
 
-/// Files with no identifiable REST calls produce no output and do not panic.
+/// Files with no raw_restcalls produce no output and do not panic.
 ///
 /// A Python file containing only a helper function (no `requests.*` calls)
-/// has nothing for Pass 2 to identify. Pass 3 must short-circuit and produce
+/// has an empty `raw_restcalls` list. Pass 3 must short-circuit and produce
 /// zero RestCalls rather than attempting symbolic evaluation on an empty set.
 #[test]
 fn empty_raw_restcalls_produces_no_output() {
@@ -482,6 +574,12 @@ def helper():
 "#;
 
     let record = python_extract(code, "helper.py").expect("helper.py should parse");
+    // raw_restcalls is empty — no requests.get/post/etc. calls in the file
+    assert!(
+        record.raw_restcalls.is_empty(),
+        "helper.py should have no raw_restcalls, got: {:?}",
+        record.raw_restcalls
+    );
 
     let project_ir = build_project_ir(vec![record]);
     let evaluated = evaluate(

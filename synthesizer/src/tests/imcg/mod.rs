@@ -8,35 +8,76 @@ mod tests {
     use crate::{
         imcg::construction::inter::{ImcgBuilder, ImcgBuilderImpl},
         sdg::builder::{SdgBuilder, SdgBuilderImpl},
+        sdg::model::Sdg,
     };
 
     #[test]
     fn should_connect_restcall_endpoint_pairs_as_calls() {
         let imcg_builder = ImcgBuilderImpl::new();
-        let sdg_builder = SdgBuilderImpl::new();
         let callables = sample_callables();
         let call_statements = sample_call_statements();
         let service_descs = sample_service_descriptions();
-        let endpoints = sample_endpoints();
-        let restcalls = sample_restcalls();
-
-        let sdg = sdg_builder
-            .build(
-                &endpoints,
-                &restcalls,
-                &[],
-                &ConfigurationData {
-                    service_descriptions: service_descs.clone(),
-                },
-                &vec![],
-            )
-            .expect("SDG in IMCG tests should be valid and buildable!");
+        let sdg = sample_sdg(&service_descs);
 
         let imcg = imcg_builder
             .build(&callables, &call_statements, &service_descs, &sdg)
             .expect("IMCG building should pass!");
 
         assert_eq!(imcg.calls.len(), 1, "There should be exactly 1 IMCG call");
+    }
+
+    #[test]
+    fn should_reject_request_with_empty_callable_hash() {
+        let service_descs = sample_service_descriptions();
+        let mut sdg = sample_sdg(&service_descs);
+        sdg.connections[0].requests[0]
+            .endpoint
+            .function_hash
+            .clear();
+
+        let result = ImcgBuilderImpl::new().build(
+            &sample_callables(),
+            &sample_call_statements(),
+            &service_descs,
+            &sdg,
+        );
+
+        assert!(
+            result.is_err(),
+            "an empty callable hash must fail IMCG construction"
+        );
+    }
+
+    #[test]
+    fn should_reject_request_with_unknown_callable_hash() {
+        let service_descs = sample_service_descriptions();
+        let mut sdg = sample_sdg(&service_descs);
+        sdg.connections[0].requests[0].restcall.function_hash = "missing-callable".to_string();
+
+        let result = ImcgBuilderImpl::new().build(
+            &sample_callables(),
+            &sample_call_statements(),
+            &service_descs,
+            &sdg,
+        );
+
+        assert!(
+            result.is_err(),
+            "an unknown callable hash must fail IMCG construction"
+        );
+    }
+
+    fn sample_sdg(service_descs: &[ServiceDescription]) -> Sdg {
+        SdgBuilderImpl::new()
+            .build(
+                &sample_endpoints(),
+                &sample_restcalls(),
+                &ConfigurationData {
+                    service_descriptions: service_descs.to_vec(),
+                },
+                &[],
+            )
+            .expect("SDG in IMCG tests should be valid and buildable")
     }
 
     fn sample_service_descriptions() -> Vec<ServiceDescription> {
@@ -115,7 +156,6 @@ mod tests {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
-            is_decorator: false,
         }]
     }
 
