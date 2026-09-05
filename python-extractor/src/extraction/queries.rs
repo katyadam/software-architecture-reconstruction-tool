@@ -124,10 +124,22 @@ pub const ENDPOINTS_QUERY: &str = r#"
         (call (attribute
             object: (identifier) @router.variable
             attribute: (identifier) @http.method
-            (#any-of? @http.method "get" "post" "put" "delete" "patch" "options" "head")
+            (#any-of? @http.method "get" "post" "put" "delete" "patch" "options" "head" "route")
         )
         (argument_list (string) @http.uri)
-    ))
+    ) @decorator)
+    (function_definition
+        name: (identifier) @function.name
+        parameters: (parameters) @function.params) @function
+)
+
+(decorated_definition
+    (decorator
+        (call
+            function: (identifier) @http.method
+            (#eq? @http.method "api_view")
+            arguments: (argument_list) @decorator.args
+        ) @decorator)
     (function_definition
         name: (identifier) @function.name
         parameters: (parameters) @function.params) @function

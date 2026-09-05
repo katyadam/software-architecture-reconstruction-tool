@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use extractor_runtime::pipeline::{build_project_ir, evaluate, pass2::re_identify_restcalls};
-use go_extractor::extraction::extract_syntactic as go_extract;
+use extractor_runtime::pipeline::{build_project_ir, evaluate};
+use go_extractor::extraction::{extract_syntactic as go_extract, identify_project_restcalls};
 
 #[test]
 fn go_cross_file_package_restcall_reidentification() {
@@ -51,7 +51,7 @@ func (c *RestClient) GetProduct(productID string) {
         .expect("rest_client.go should parse");
     let mut typed = vec![rest_record.into(), client_record.into()];
 
-    re_identify_restcalls(&mut typed);
+    identify_project_restcalls(&mut typed);
 
     let client_file = typed
         .iter()
@@ -127,7 +127,7 @@ func (c *RestClient) GetCart(userID string) {
         .expect("rest_client.go should parse");
     let mut typed = vec![rest_record.into(), client_record.into()];
 
-    re_identify_restcalls(&mut typed);
+    identify_project_restcalls(&mut typed);
 
     let client_file = typed
         .iter()
@@ -171,15 +171,9 @@ func (c *Client) GetBasketItems(customerID string) {
 }
 "#;
 
-    let mut record =
-        go_extract(code, "customer_http_client.go").expect("Go extraction should succeed");
-    let mut typed = models::ir::project::TypedFileRecord::from(
+    let project_ir = build_project_ir(vec![
         go_extract(code, "customer_http_client.go").expect("Go extraction should succeed"),
-    );
-    go_extractor::extraction::identify(&mut typed);
-    record.raw_restcalls = typed.raw_restcalls.clone();
-
-    let project_ir = build_project_ir(vec![record]);
+    ]);
     let mut external_constants = HashMap::new();
     external_constants.insert(
         "CUSTOMER_SERVICE_ENDPOINT".to_string(),

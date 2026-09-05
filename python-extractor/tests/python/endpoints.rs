@@ -1,6 +1,6 @@
 use python_extractor::{
     extraction::{
-        endpoints::extractor::EndpointsExtractor,
+        endpoints::{EndpointStrategy, PythonEndpointStrategy, extractor::EndpointsExtractor},
         extractor::{ExtractParams, Extractor},
     },
     s,
@@ -8,6 +8,7 @@ use python_extractor::{
 
 use crate::python::utils::{get_tree, load_file, parse_file};
 
+use models::ir::{language::Language, project::TypedFileRecord};
 use models::{Endpoint, HttpMethod, Parameter};
 
 #[test]
@@ -164,6 +165,40 @@ fn base_test() {
 }
 
 #[test]
+fn python_endpoint_strategy_handles_framework_routes() {
+    let code = r#"
+from fastapi import FastAPI
+from flask import Flask
+
+api = FastAPI()
+app = Flask(__name__)
+
+@api.post("/items")
+def create_item():
+    pass
+
+@app.route("/orders", methods=["GET", "PATCH"])
+def update_order():
+    pass
+"#;
+    let tree = get_tree(code);
+    let endpoints = EndpointStrategy::extract(
+        &PythonEndpointStrategy,
+        ExtractParams::new(&tree, code).file_name("frameworks.py"),
+    );
+
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "create_item" && endpoint.http_method == HttpMethod::POST
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "update_order" && endpoint.http_method == HttpMethod::GET
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "update_order" && endpoint.http_method == HttpMethod::PATCH
+    }));
+}
+
+#[test]
 fn test_endpoint_edge_cases() {
     let filename = "./examples/python/endpoint_edge_cases.py";
     let (code, tree) = parse_file(filename);
@@ -214,4 +249,143 @@ fn test_endpoint_edge_cases() {
     assert_eq!(search_ep.parameters[0].name, s!("q"));
     assert_eq!(search_ep.parameters[0].datatype, Some(s!("Optional[str]")));
     assert_eq!(search_ep.parameters[0].initial_value, Some(s!("None")));
+}
+
+#[test]
+fn extracts_fastapi_flask_and_django_endpoint_styles() {
+    let filename = "framework_endpoints.py";
+    let code = r#"
+from flask import Flask
+from fastapi import FastAPI
+from django.urls import path
+
+app = FastAPI()
+flask_app = Flask(__name__)
+
+@app.get("/items/{item_id}")
+def fastapi_get_item(item_id: int):
+    pass
+
+@flask_app.route("/orders/<int:order_id>", methods=["GET", "POST"])
+def flask_order(order_id):
+    pass
+
+@flask_app.route("/health")
+def flask_health():
+    pass
+
+urlpatterns = [
+    path("products/", views.get_products),
+    path("products/id=<int:id>/", views.get_product),
+    path("ignored/", include("nested.urls")),
+]
+"#;
+    let tree = get_tree(code);
+    let endpoints = EndpointsExtractor.extract(ExtractParams::new(&tree, code).file_name(filename));
+
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "fastapi_get_item"
+            && endpoint.http_method == HttpMethod::GET
+            && endpoint.uri == "/items/{item_id}"
+            && endpoint.router_variable.as_deref() == Some("app")
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "flask_order"
+            && endpoint.http_method == HttpMethod::GET
+            && endpoint.uri == "/orders/{order_id}"
+            && endpoint.router_variable.as_deref() == Some("flask_app")
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "flask_order"
+            && endpoint.http_method == HttpMethod::POST
+            && endpoint.uri == "/orders/{order_id}"
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "flask_health"
+            && endpoint.http_method == HttpMethod::GET
+            && endpoint.uri == "/health"
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "get_products"
+            && endpoint.http_method == HttpMethod::GET
+            && endpoint.uri == "products/"
+            && endpoint.router_variable.as_deref() == Some("urlpatterns")
+    }));
+    assert!(endpoints.iter().any(|endpoint| {
+        endpoint.function_name == "get_product" && endpoint.uri == "products/id={id}/"
+    }));
+    assert!(endpoints.iter().all(|endpoint| endpoint.uri != "ignored/"));
+}
+
+#[test]
+fn python_post_process_skips_non_python_files() {
+    let mut files = vec![
+        TypedFileRecord {
+            file_path: "controller.java".to_string(),
+            language: Language::Java,
+            imports: vec![],
+            entities: vec![],
+            endpoints: vec![Endpoint {
+                function_name: "status".to_string(),
+                function_hash: "java-hash".to_string(),
+                http_method: HttpMethod::GET,
+                parameters: vec![],
+                uri: "/status".to_string(),
+                file_path: "controller.java".to_string(),
+                router_variable: Some("controller".to_string()),
+            }],
+            callables: vec![],
+            call_statements: vec![],
+            assignments: std::collections::HashMap::new(),
+            enums: vec![],
+            raw_restcalls: vec![],
+            raw_message_edges: vec![],
+        },
+        TypedFileRecord {
+            file_path: "views.py".to_string(),
+            language: Language::Python,
+            imports: vec![],
+            entities: vec![],
+            endpoints: vec![
+                Endpoint {
+                    function_name: "products".to_string(),
+                    function_hash: "placeholder".to_string(),
+                    http_method: HttpMethod::POST,
+                    parameters: vec![],
+                    uri: String::new(),
+                    file_path: "views.py".to_string(),
+                    router_variable: None,
+                },
+                Endpoint {
+                    function_name: "products".to_string(),
+                    function_hash: String::new(),
+                    http_method: HttpMethod::GET,
+                    parameters: vec![],
+                    uri: "products/".to_string(),
+                    file_path: "views.py".to_string(),
+                    router_variable: Some("urlpatterns".to_string()),
+                },
+            ],
+            callables: vec![],
+            call_statements: vec![],
+            assignments: std::collections::HashMap::new(),
+            enums: vec![],
+            raw_restcalls: vec![],
+            raw_message_edges: vec![],
+        },
+    ];
+
+    let mut python_files = files
+        .iter_mut()
+        .filter(|file| file.language == Language::Python)
+        .collect::<Vec<_>>();
+    python_extractor::extraction::post_process(&mut python_files);
+
+    assert_eq!(files[0].endpoints.len(), 1);
+    assert_eq!(files[0].endpoints[0].uri, "/status");
+    assert_eq!(files[0].endpoints[0].function_name, "status");
+
+    assert_eq!(files[1].endpoints.len(), 1);
+    assert_eq!(files[1].endpoints[0].http_method, HttpMethod::POST);
+    assert_eq!(files[1].endpoints[0].uri, "products/");
 }

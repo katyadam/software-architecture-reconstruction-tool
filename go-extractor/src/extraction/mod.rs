@@ -66,7 +66,7 @@ pub fn extract_syntactic(text: &str, file_path: &str) -> Result<FileRecord, Extr
         call_statements,
         assignments,
         enums: vec![],
-        raw_restcalls: vec![],
+        raw_message_edges: vec![],
     })
 }
 

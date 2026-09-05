@@ -123,14 +123,14 @@ def helper():
     return "/api/v1"
 "#;
 
-    let record = python_extract(code, "helper.py").expect("helper.py should parse");
+    let project_ir = build_project_ir(vec![
+        python_extract(code, "helper.py").expect("helper.py should parse"),
+    ]);
     assert!(
-        record.raw_restcalls.is_empty(),
+        project_ir.files[0].raw_restcalls.is_empty(),
         "helper.py should have no raw_restcalls, got: {:?}",
-        record.raw_restcalls
+        project_ir.files[0].raw_restcalls
     );
-
-    let project_ir = build_project_ir(vec![record]);
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),

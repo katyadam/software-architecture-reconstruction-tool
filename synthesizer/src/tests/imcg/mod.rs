@@ -72,6 +72,7 @@ mod tests {
             .build(
                 &sample_endpoints(),
                 &sample_restcalls(),
+                &[],
                 &ConfigurationData {
                     service_descriptions: service_descs.to_vec(),
                 },
@@ -156,6 +157,7 @@ mod tests {
             is_self_invoke: false,
             is_super_invoke: false,
             invoked_on: None,
+            is_decorator: false,
         }]
     }
 

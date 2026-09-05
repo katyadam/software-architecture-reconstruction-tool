@@ -18,12 +18,12 @@ class UserClient {
 }
 "#;
 
-    let mut record = java_extract(code, "UserClient.java").expect("Java extraction should succeed");
-    record
+    let mut project_ir = build_project_ir(vec![
+        java_extract(code, "UserClient.java").expect("Java extraction should succeed"),
+    ]);
+    project_ir.files[0]
         .raw_restcalls
         .push(java_restcall("void fetchUsers()", "url", "UserClient.java"));
-
-    let project_ir = build_project_ir(vec![record]);
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -60,15 +60,17 @@ class UserClient {
 }
 "#;
 
-    let base_record =
-        java_extract(base_code, "BaseService.java").expect("BaseService.java should parse");
-    let mut client_record =
-        java_extract(client_code, "UserClient.java").expect("UserClient.java should parse");
-    client_record
+    let mut project_ir = build_project_ir(vec![
+        java_extract(base_code, "BaseService.java").expect("BaseService.java should parse"),
+        java_extract(client_code, "UserClient.java").expect("UserClient.java should parse"),
+    ]);
+    project_ir
+        .files
+        .iter_mut()
+        .find(|file| file.file_path == "UserClient.java")
+        .expect("UserClient.java should exist")
         .raw_restcalls
         .push(java_restcall("void fetchUsers()", "url", "UserClient.java"));
-
-    let project_ir = build_project_ir(vec![base_record, client_record]);
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -108,17 +110,17 @@ class LocalClient {
 }
 "#;
 
-    let global_record =
-        java_extract(global_code, "GlobalService.java").expect("GlobalService.java should parse");
-    let mut local_record =
-        java_extract(local_code, "LocalClient.java").expect("LocalClient.java should parse");
-    local_record.raw_restcalls.push(java_restcall(
-        "void fetchItems()",
-        "url",
-        "LocalClient.java",
-    ));
-
-    let project_ir = build_project_ir(vec![global_record, local_record]);
+    let mut project_ir = build_project_ir(vec![
+        java_extract(global_code, "GlobalService.java").expect("GlobalService.java should parse"),
+        java_extract(local_code, "LocalClient.java").expect("LocalClient.java should parse"),
+    ]);
+    project_ir
+        .files
+        .iter_mut()
+        .find(|file| file.file_path == "LocalClient.java")
+        .expect("LocalClient.java should exist")
+        .raw_restcalls
+        .push(java_restcall("void fetchItems()", "url", "LocalClient.java"));
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),

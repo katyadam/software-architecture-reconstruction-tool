@@ -19,6 +19,9 @@ pub fn dispatch_syntactic(
             }
             go_extractor::extraction::extract_syntactic(text, file_path).map(Some)
         }
+        Some("yml") | Some("yaml") | Some("properties") => Ok(
+            java_extractor::extraction::config::extract_syntactic(text, file_path),
+        ),
         _ => Ok(None),
     }
 }
