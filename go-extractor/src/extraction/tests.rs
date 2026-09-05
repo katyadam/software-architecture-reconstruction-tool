@@ -249,6 +249,11 @@ fn extracts_rabbitmq_and_kafka_message_edges() {
     let code = r#"
 package messaging
 
+import (
+    "os"
+    "github.com/segmentio/kafka-go"
+)
+
 func publish(ctx any, writer any, producer any, syncProducer any, client any, channel any) {
     _ = writer.WriteMessages(ctx, kafka.Message{Topic: "segment.out"})
     _ = producer.Produce(&ckafka.Message{TopicPartition: ckafka.TopicPartition{Topic: strPtr("confluent.out")}}, nil)
@@ -266,6 +271,21 @@ func consume(reader any, consumer any, partitionConsumer any, group any, channel
     _ = group.Consume(ctx, []string{"sarama.group.in"}, handler)
     _ = kgo.SeedTopics("franz.in")
     _, _ = channel.Consume("billing", "", false, false, false, false, nil)
+}
+
+func resolveVariables(ctx any, writer any, channel any) {
+    topic := "orders.created"
+    msg := kafka.Message{Topic: topic}
+    exchange := "orders"
+    routingKey := "created"
+    _ = writer.WriteMessages(ctx, msg)
+    _ = channel.Publish(exchange, routingKey, false, false, amqp.Publishing{})
+}
+
+func wrapperTopics(ctx any, client any) {
+    topic := os.Getenv("PAYMENT_SUCCEEDED_TOPIC")
+    _ = client.Producer(nil, ctx, topic, "key")
+    _ = client.Consumer(topic, "group", handler)
 }
 "#;
 
@@ -294,6 +314,26 @@ func consume(reader any, consumer any, partitionConsumer any, group any, channel
         ),
         "context arguments must not become Kafka topics"
     );
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "orders.created"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::Producer,
+        "orders:created"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "PAYMENT_SUCCEEDED_TOPIC"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Consumer,
+        "PAYMENT_SUCCEEDED_TOPIC"
+    ));
     for destination in [
         "segment.in",
         "confluent.in",
