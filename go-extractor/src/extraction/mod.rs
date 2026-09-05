@@ -5,6 +5,7 @@ mod files;
 mod identify;
 mod imports;
 mod ir;
+mod kafka_message_edges;
 mod message_edges;
 mod package_resolution;
 mod project;
@@ -97,7 +98,14 @@ pub fn identify_with_package_context(
     file.raw_message_edges = file
         .call_statements
         .iter()
-        .filter_map(|call| message_edges::identify_message_edge(call, &file.file_path))
+        .flat_map(|call| {
+            message_edges::identify_message_edge(call, &file.file_path)
+                .into_iter()
+                .chain(kafka_message_edges::identify_message_edges(
+                    call,
+                    &file.file_path,
+                ))
+        })
         .collect();
 }
 
