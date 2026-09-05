@@ -47,7 +47,7 @@ pub(super) fn collect_callable_ir(
 
         if let Some(body) = child.child_by_field_name("body") {
             collect_local_assignments(body, code, &metadata.signature, assignments);
-            collect_call_statements(body, code, &metadata, call_statements);
+            collect_call_statements(body, code, &metadata, assignments, call_statements);
         }
 
         callables.push(callable);
@@ -561,25 +561,46 @@ fn collect_call_statements(
     body: Node,
     code: &str,
     callable: &Callable,
+    assignments: &HashMap<AssignmentKey, Assignment>,
     call_statements: &mut Vec<CallStatement>,
 ) {
-    walk_named(body, &mut |node| {
-        if node.kind() != "call_expression" {
-            return;
-        }
+    let mut scope = scope_bindings(assignments, &Scope::Global);
+    collect_calls_in_source_order(body, code, callable, &mut scope, call_statements);
+}
 
+fn collect_calls_in_source_order(
+    node: Node,
+    code: &str,
+    callable: &Callable,
+    scope: &mut HashMap<String, String>,
+    call_statements: &mut Vec<CallStatement>,
+) {
+    if matches!(
+        node.kind(),
+        "short_var_declaration" | "assignment_statement"
+    ) {
+        for (_, value) in assignment_pairs(node, code) {
+            collect_calls_in_source_order(value, code, callable, scope, call_statements);
+        }
+        for (name, value) in assignment_pairs(node, code) {
+            scope.insert(name, evaluate_expression_node(value, code, scope));
+        }
+        return;
+    }
+
+    if node.kind() == "call_expression" {
+        // Resolve calls nested in arguments before the outer call, matching Go evaluation order.
+        if let Some(arguments) = node.child_by_field_name("arguments") {
+            for argument in arguments.named_children(&mut arguments.walk()) {
+                collect_calls_in_source_order(argument, code, callable, scope, call_statements);
+            }
+        }
         let Some(function_node) = node.child_by_field_name("function") else {
             return;
         };
-        let function_name = normalize_whitespace(node_text(function_node, code));
-        let arguments = node
-            .child_by_field_name("arguments")
-            .map(|args| parse_arguments(args, code))
-            .unwrap_or_default();
-
         call_statements.push(CallStatement {
-            function_name,
-            arguments,
+            function_name: normalize_whitespace(node_text(function_node, code)),
+            arguments: parse_arguments(node.child_by_field_name("arguments"), code, scope),
             enclosing_function_name: Some(callable.signature.clone()),
             enclosing_class_name: match &callable.namespace {
                 Namespace::Class(name) => Some(name.clone()),
@@ -591,14 +612,26 @@ fn collect_call_statements(
             invoked_on: None,
             is_decorator: false,
         });
-    });
+        return;
+    }
+
+    for child in node.named_children(&mut node.walk()) {
+        collect_calls_in_source_order(child, code, callable, scope, call_statements);
+    }
 }
 
-fn parse_arguments(node: Node, code: &str) -> Vec<Argument> {
+fn parse_arguments(
+    node: Option<Node>,
+    code: &str,
+    scope: &HashMap<String, String>,
+) -> Vec<Argument> {
+    let Some(node) = node else {
+        return Vec::new();
+    };
     node.named_children(&mut node.walk())
         .map(|arg| Argument {
             assigned_variable: "".to_string(),
-            value: normalize_whitespace(node_text(arg, code)),
+            value: evaluate_expression_node(arg, code, scope),
             datatype: None,
         })
         .collect()

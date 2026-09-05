@@ -287,6 +287,13 @@ func wrapperTopics(ctx any, client any) {
     _ = client.Producer(nil, ctx, topic, "key")
     _ = client.Consumer(topic, "group", handler)
 }
+
+func orderedWrapperTopics(ctx any, client any) {
+    topic := os.Getenv("PAYMENT_CREATED_TOPIC")
+    _ = client.Producer(nil, ctx, topic, "key")
+    topic = os.Getenv("PAYMENT_SUCCEEDED_TOPIC")
+    _ = client.Producer(nil, ctx, topic, "key")
+}
 "#;
 
     let record = extract_syntactic(code, "messaging.go").expect("Go extraction should succeed");
@@ -328,6 +335,11 @@ func wrapperTopics(ctx any, client any) {
         models::CommunicationProtocol::Kafka,
         models::MessageRole::Producer,
         "PAYMENT_SUCCEEDED_TOPIC"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "PAYMENT_CREATED_TOPIC"
     ));
     assert!(has_edge(
         models::CommunicationProtocol::Kafka,
