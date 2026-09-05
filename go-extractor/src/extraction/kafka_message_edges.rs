@@ -26,6 +26,9 @@ pub(super) fn identify_message_edges(call: &CallStatement, file_path: &str) -> V
 fn producer_from_record(call: &CallStatement, file_path: &str) -> Vec<MessageEdge> {
     call.arguments
         .iter()
+        // Producer APIs may take a context before their message records.
+        // Only inline message records can provide a statically known topic.
+        .filter(|argument| argument.value.contains('{'))
         .flat_map(|argument| topics_from_record(&argument.value))
         .map(|topic| edge(MessageRole::Producer, topic, call, file_path))
         .collect()
@@ -61,9 +64,19 @@ fn topics_from_record(raw: &str) -> Vec<String> {
 }
 
 fn topics_from_field_or_literals(raw: &str, field: &str) -> Vec<String> {
-    let mut topics = field_value(raw, field)
-        .map(|value| string_literals(&value))
+    let field_value = field_value(raw, field);
+    let mut topics = field_value
+        .as_deref()
+        .map(string_literals)
         .unwrap_or_default();
+    if topics.is_empty() {
+        if let Some(value) = field_value {
+            let candidate = clean_topic(&value);
+            if !candidate.is_empty() && !candidate.contains(['{', '}', '[', ']']) {
+                topics.push(candidate);
+            }
+        }
+    }
     if topics.is_empty() {
         topics = string_literals(raw);
     }
