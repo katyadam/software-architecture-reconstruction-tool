@@ -238,7 +238,7 @@ impl SdgBuilderImpl {
             .filter(|edge| matches!(edge.data.role, MessageRole::Producer));
         let consumers = message_edges
             .iter()
-            .filter(|edge| matches!(edge.data.role, MessageRole::Consumer))
+            .filter(|edge| matches!(edge.data.role, MessageRole::Consumer | MessageRole::Binding))
             .collect::<Vec<_>>();
 
         let mut connections_map: HashMap<String, MessageConnection> = HashMap::new();
@@ -377,7 +377,20 @@ fn message_destinations_match(producer: &MessageEdge, consumer: &MessageEdge) ->
                     .as_ref()
                     .is_some_and(|consumer_queue| consumer_queue == queue)
             }),
-        MessageDestinationKind::ExchangeRoutingKey => false,
+        MessageDestinationKind::ExchangeRoutingKey => {
+            producer.exchange.as_ref().is_some_and(|exchange| {
+                producer.routing_key.as_ref().is_some_and(|routing_key| {
+                    consumer.exchange.as_ref().is_some_and(|consumer_exchange| {
+                        consumer
+                            .routing_key
+                            .as_ref()
+                            .is_some_and(|consumer_routing_key| {
+                                consumer_exchange == exchange && consumer_routing_key == routing_key
+                            })
+                    })
+                })
+            })
+        }
         MessageDestinationKind::Unknown => false,
     }
 }
