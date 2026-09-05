@@ -5,327 +5,327 @@
       "urls": [
         "http://ts-admin-basic-info-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-admin-basic-info-service"
+      "base_dir_path": "../train-ticket/ts-admin-basic-info-service"
     },
     {
       "name": "ts-admin-order-service",
       "urls": [
         "http://ts-admin-order-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-admin-order-service"
+      "base_dir_path": "../train-ticket/ts-admin-order-service"
     },
     {
       "name": "ts-admin-route-service",
       "urls": [
         "http://ts-admin-route-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-admin-route-service"
+      "base_dir_path": "../train-ticket/ts-admin-route-service"
     },
     {
       "name": "ts-admin-travel-service",
       "urls": [
         "http://ts-admin-travel-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-admin-travel-service"
+      "base_dir_path": "../train-ticket/ts-admin-travel-service"
     },
     {
       "name": "ts-admin-user-service",
       "urls": [
         "http://ts-admin-user-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-admin-user-service"
+      "base_dir_path": "../train-ticket/ts-admin-user-service"
     },
     {
       "name": "ts-assurance-service",
       "urls": [
         "http://ts-assurance-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-assurance-service"
+      "base_dir_path": "../train-ticket/ts-assurance-service"
     },
     {
       "name": "ts-auth-service",
       "urls": [
         "http://ts-auth-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-auth-service"
+      "base_dir_path": "../train-ticket/ts-auth-service"
     },
     {
       "name": "ts-avatar-service",
       "urls": [
         "http://ts-avatar-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-avatar-service"
+      "base_dir_path": "../train-ticket/ts-avatar-service"
     },
     {
       "name": "ts-basic-service",
       "urls": [
         "http://ts-basic-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-basic-service"
+      "base_dir_path": "../train-ticket/ts-basic-service"
     },
     {
       "name": "ts-cancel-service",
       "urls": [
         "http://ts-cancel-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-cancel-service"
+      "base_dir_path": "../train-ticket/ts-cancel-service"
     },
     {
       "name": "ts-common",
       "urls": [],
-      "base_dir_path": "../benchmark/train-ticket/ts-common"
+      "base_dir_path": "../train-ticket/ts-common"
     },
     {
       "name": "ts-config-service",
       "urls": [
         "http://ts-config-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-config-service"
+      "base_dir_path": "../train-ticket/ts-config-service"
     },
     {
       "name": "ts-contacts-service",
       "urls": [
         "http://ts-contacts-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-contacts-service"
+      "base_dir_path": "../train-ticket/ts-contacts-service"
     },
     {
       "name": "ts-consign-price-service",
       "urls": [
         "http://ts-consign-price-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-consign-price-service"
+      "base_dir_path": "../train-ticket/ts-consign-price-service"
     },
     {
       "name": "ts-consign-service",
       "urls": [
         "http://ts-consign-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-consign-service"
+      "base_dir_path": "../train-ticket/ts-consign-service"
     },
     {
       "name": "ts-delivery-service",
       "urls": [
         "http://ts-delivery-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-delivery-service"
+      "base_dir_path": "../train-ticket/ts-delivery-service"
     },
     {
       "name": "ts-execute-service",
       "urls": [
         "http://ts-execute-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-execute-service"
+      "base_dir_path": "../train-ticket/ts-execute-service"
     },
     {
       "name": "ts-food-delivery-service",
       "urls": [
         "http://ts-food-delivery-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-food-delivery-service"
+      "base_dir_path": "../train-ticket/ts-food-delivery-service"
     },
     {
       "name": "ts-food-service",
       "urls": [
         "http://ts-food-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-food-service"
+      "base_dir_path": "../train-ticket/ts-food-service"
     },
     {
       "name": "ts-gateway-service",
       "urls": [
         "http://ts-gateway-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-gateway-service"
+      "base_dir_path": "../train-ticket/ts-gateway-service"
     },
     {
       "name": "ts-inside-payment-service",
       "urls": [
         "http://ts-inside-payment-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-inside-payment-service"
+      "base_dir_path": "../train-ticket/ts-inside-payment-service"
     },
     {
       "name": "ts-news-service",
       "urls": [
         "http://ts-news-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-news-service"
+      "base_dir_path": "../train-ticket/ts-news-service"
     },
     {
       "name": "ts-notification-service",
       "urls": [
         "http://ts-notification-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-notification-service"
+      "base_dir_path": "../train-ticket/ts-notification-service"
     },
     {
       "name": "ts-order-other-service",
       "urls": [
         "http://ts-order-other-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-order-other-service"
+      "base_dir_path": "../train-ticket/ts-order-other-service"
     },
     {
       "name": "ts-order-service",
       "urls": [
         "http://ts-order-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-order-service"
+      "base_dir_path": "../train-ticket/ts-order-service"
     },
     {
       "name": "ts-payment-service",
       "urls": [
         "http://ts-payment-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-payment-service"
+      "base_dir_path": "../train-ticket/ts-payment-service"
     },
     {
       "name": "ts-preserve-other-service",
       "urls": [
         "http://ts-preserve-other-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-preserve-other-service"
+      "base_dir_path": "../train-ticket/ts-preserve-other-service"
     },
     {
       "name": "ts-preserve-service",
       "urls": [
         "http://ts-preserve-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-preserve-service"
+      "base_dir_path": "../train-ticket/ts-preserve-service"
     },
     {
       "name": "ts-price-service",
       "urls": [
         "http://ts-price-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-price-service"
+      "base_dir_path": "../train-ticket/ts-price-service"
     },
     {
       "name": "ts-rebook-service",
       "urls": [
         "http://ts-rebook-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-rebook-service"
+      "base_dir_path": "../train-ticket/ts-rebook-service"
     },
     {
       "name": "ts-route-plan-service",
       "urls": [
         "http://ts-route-plan-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-route-plan-service"
+      "base_dir_path": "../train-ticket/ts-route-plan-service"
     },
     {
       "name": "ts-route-service",
       "urls": [
         "http://ts-route-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-route-service"
+      "base_dir_path": "../train-ticket/ts-route-service"
     },
     {
       "name": "ts-seat-service",
       "urls": [
         "http://ts-seat-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-seat-service"
+      "base_dir_path": "../train-ticket/ts-seat-service"
     },
     {
       "name": "ts-security-service",
       "urls": [
         "http://ts-security-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-security-service"
+      "base_dir_path": "../train-ticket/ts-security-service"
     },
     {
       "name": "ts-station-food-service",
       "urls": [
         "http://ts-station-food-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-station-food-service"
+      "base_dir_path": "../train-ticket/ts-station-food-service"
     },
     {
       "name": "ts-station-service",
       "urls": [
         "http://ts-station-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-station-service"
+      "base_dir_path": "../train-ticket/ts-station-service"
     },
     {
       "name": "ts-ticket-office-service",
       "urls": [
         "http://ts-ticket-office-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-ticket-office-service"
+      "base_dir_path": "../train-ticket/ts-ticket-office-service"
     },
     {
       "name": "ts-train-food-service",
       "urls": [
         "http://ts-train-food-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-train-food-service"
+      "base_dir_path": "../train-ticket/ts-train-food-service"
     },
     {
       "name": "ts-train-service",
       "urls": [
         "http://ts-train-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-train-service"
+      "base_dir_path": "../train-ticket/ts-train-service"
     },
     {
       "name": "ts-travel2-service",
       "urls": [
         "http://ts-travel2-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-travel2-service"
+      "base_dir_path": "../train-ticket/ts-travel2-service"
     },
     {
       "name": "ts-travel-plan-service",
       "urls": [
         "http://ts-travel-plan-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-travel-plan-service"
+      "base_dir_path": "../train-ticket/ts-travel-plan-service"
     },
     {
       "name": "ts-travel-service",
       "urls": [
         "http://ts-travel-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-travel-service"
+      "base_dir_path": "../train-ticket/ts-travel-service"
     },
     {
       "name": "ts-ui-dashboard",
       "urls": [
         "http://ts-ui-dashboard"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-ui-dashboard"
+      "base_dir_path": "../train-ticket/ts-ui-dashboard"
     },
     {
       "name": "ts-user-service",
       "urls": [
         "http://ts-user-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-user-service"
+      "base_dir_path": "../train-ticket/ts-user-service"
     },
     {
       "name": "ts-verification-code-service",
       "urls": [
         "http://ts-verification-code-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-verification-code-service"
+      "base_dir_path": "../train-ticket/ts-verification-code-service"
     },
     {
       "name": "ts-voucher-service",
       "urls": [
         "http://ts-voucher-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-voucher-service"
+      "base_dir_path": "../train-ticket/ts-voucher-service"
     },
     {
       "name": "ts-wait-order-service",
       "urls": [
         "http://ts-wait-order-service"
       ],
-      "base_dir_path": "../benchmark/train-ticket/ts-wait-order-service"
+      "base_dir_path": "../train-ticket/ts-wait-order-service"
     }
   ]
 }
