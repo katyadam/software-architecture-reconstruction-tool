@@ -8,15 +8,32 @@ pub(super) fn identify_message_edge(call: &CallStatement, file_path: &str) -> Op
     let method = call.function_name.split('.').next_back()?;
     match method {
         "PublishWithContext" => identify_publish(call, file_path),
+        "Publish" => identify_publish_without_context(call, file_path),
         "QueueBind" => identify_binding(call, file_path),
         "Consume" => identify_consume(call, file_path),
+        "QueueDeclare" => identify_queue_declaration(call, file_path),
         _ => None,
     }
+}
+
+fn identify_publish_without_context(call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
+    let exchange = clean_arg(call.arguments.first()?.value.as_str());
+    let routing_key = clean_arg(call.arguments.get(1)?.value.as_str());
+    build_publish_edge(call, file_path, exchange, routing_key)
 }
 
 fn identify_publish(call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
     let exchange = clean_arg(call.arguments.get(1)?.value.as_str());
     let routing_key = clean_arg(call.arguments.get(2)?.value.as_str());
+    build_publish_edge(call, file_path, exchange, routing_key)
+}
+
+fn build_publish_edge(
+    call: &CallStatement,
+    file_path: &str,
+    exchange: String,
+    routing_key: String,
+) -> Option<MessageEdge> {
     if exchange.is_empty() && routing_key.is_empty() {
         return None;
     }
@@ -89,6 +106,23 @@ fn identify_consume(call: &CallStatement, file_path: &str) -> Option<MessageEdge
         call,
         file_path,
         MessageRole::Consumer,
+        MessageDestinationKind::Queue,
+        queue.clone(),
+        None,
+        None,
+        Some(queue),
+    ))
+}
+
+fn identify_queue_declaration(call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
+    let queue = clean_arg(call.arguments.first()?.value.as_str());
+    if queue.is_empty() {
+        return None;
+    }
+    Some(edge(
+        call,
+        file_path,
+        MessageRole::QueueDeclaration,
         MessageDestinationKind::Queue,
         queue.clone(),
         None,
