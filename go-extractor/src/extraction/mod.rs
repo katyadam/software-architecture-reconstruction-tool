@@ -99,7 +99,7 @@ pub fn identify_with_package_context(
     file.raw_message_edges = file
         .call_statements
         .iter()
-        .flat_map(|call| message_edge_strategies::identify_message_edges(call, &file.file_path))
+        .flat_map(|call| message_edge_strategies::identify_message_edges(file, call))
         .collect();
 }
 

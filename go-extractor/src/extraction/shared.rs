@@ -345,6 +345,9 @@ fn evaluate_special_call(
         .unwrap_or_default();
 
     match selector.as_str() {
+        "Getenv" => arguments
+            .first()
+            .map(|arg| strip_quotes(node_text(*arg, code)).to_string()),
         "PathEscape" => arguments.first().map(|arg| {
             let value = node_text(*arg, code).trim().to_string();
             format!("{{{value}}}")

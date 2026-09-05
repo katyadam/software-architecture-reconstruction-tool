@@ -1,30 +1,44 @@
+use std::collections::HashMap;
+
 use models::{
     CallStatement, CommunicationProtocol, MessageDestinationKind, MessageEdge, MessageRole,
 };
 
 const DESTINATION_SEPARATOR: &str = ":";
 
-pub(super) fn identify_message_edge(call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
+pub(super) fn identify_message_edge(
+    call: &CallStatement,
+    file_path: &str,
+    scope: &HashMap<String, String>,
+) -> Option<MessageEdge> {
     let method = call.function_name.split('.').next_back()?;
     match method {
-        "PublishWithContext" => identify_publish(call, file_path),
-        "Publish" => identify_publish_without_context(call, file_path),
-        "QueueBind" => identify_binding(call, file_path),
-        "Consume" => identify_consume(call, file_path),
-        "QueueDeclare" => identify_queue_declaration(call, file_path),
+        "PublishWithContext" => identify_publish(call, file_path, scope),
+        "Publish" => identify_publish_without_context(call, file_path, scope),
+        "QueueBind" => identify_binding(call, file_path, scope),
+        "Consume" => identify_consume(call, file_path, scope),
+        "QueueDeclare" => identify_queue_declaration(call, file_path, scope),
         _ => None,
     }
 }
 
-fn identify_publish_without_context(call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
-    let exchange = clean_arg(call.arguments.first()?.value.as_str());
-    let routing_key = clean_arg(call.arguments.get(1)?.value.as_str());
+fn identify_publish_without_context(
+    call: &CallStatement,
+    file_path: &str,
+    scope: &HashMap<String, String>,
+) -> Option<MessageEdge> {
+    let exchange = clean_arg(call.arguments.first()?.value.as_str(), scope);
+    let routing_key = clean_arg(call.arguments.get(1)?.value.as_str(), scope);
     build_publish_edge(call, file_path, exchange, routing_key)
 }
 
-fn identify_publish(call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
-    let exchange = clean_arg(call.arguments.get(1)?.value.as_str());
-    let routing_key = clean_arg(call.arguments.get(2)?.value.as_str());
+fn identify_publish(
+    call: &CallStatement,
+    file_path: &str,
+    scope: &HashMap<String, String>,
+) -> Option<MessageEdge> {
+    let exchange = clean_arg(call.arguments.get(1)?.value.as_str(), scope);
+    let routing_key = clean_arg(call.arguments.get(2)?.value.as_str(), scope);
     build_publish_edge(call, file_path, exchange, routing_key)
 }
 
@@ -63,10 +77,14 @@ fn build_publish_edge(
     ))
 }
 
-fn identify_binding(call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
-    let queue = clean_arg(call.arguments.first()?.value.as_str());
-    let routing_key = clean_arg(call.arguments.get(1)?.value.as_str());
-    let exchange = clean_arg(call.arguments.get(2)?.value.as_str());
+fn identify_binding(
+    call: &CallStatement,
+    file_path: &str,
+    scope: &HashMap<String, String>,
+) -> Option<MessageEdge> {
+    let queue = clean_arg(call.arguments.first()?.value.as_str(), scope);
+    let routing_key = clean_arg(call.arguments.get(1)?.value.as_str(), scope);
+    let exchange = clean_arg(call.arguments.get(2)?.value.as_str(), scope);
     if exchange.is_empty() && routing_key.is_empty() && queue.is_empty() {
         return None;
     }
@@ -96,8 +114,12 @@ fn identify_binding(call: &CallStatement, file_path: &str) -> Option<MessageEdge
     ))
 }
 
-fn identify_consume(call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
-    let queue = clean_arg(call.arguments.first()?.value.as_str());
+fn identify_consume(
+    call: &CallStatement,
+    file_path: &str,
+    scope: &HashMap<String, String>,
+) -> Option<MessageEdge> {
+    let queue = clean_arg(call.arguments.first()?.value.as_str(), scope);
     if queue.is_empty() {
         return None;
     }
@@ -114,8 +136,12 @@ fn identify_consume(call: &CallStatement, file_path: &str) -> Option<MessageEdge
     ))
 }
 
-fn identify_queue_declaration(call: &CallStatement, file_path: &str) -> Option<MessageEdge> {
-    let queue = clean_arg(call.arguments.first()?.value.as_str());
+fn identify_queue_declaration(
+    call: &CallStatement,
+    file_path: &str,
+    scope: &HashMap<String, String>,
+) -> Option<MessageEdge> {
+    let queue = clean_arg(call.arguments.first()?.value.as_str(), scope);
     if queue.is_empty() {
         return None;
     }
@@ -158,8 +184,9 @@ fn edge(
     }
 }
 
-fn clean_arg(raw: &str) -> String {
-    let trimmed = raw.trim().trim_end_matches(',');
+fn clean_arg(raw: &str, scope: &HashMap<String, String>) -> String {
+    let resolved = super::shared::evaluate_expression_text(raw, scope);
+    let trimmed = resolved.trim().trim_end_matches(',');
     if (trimmed.starts_with('"') && trimmed.ends_with('"'))
         || (trimmed.starts_with('`') && trimmed.ends_with('`'))
     {
