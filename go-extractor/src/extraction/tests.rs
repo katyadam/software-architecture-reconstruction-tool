@@ -286,6 +286,14 @@ func consume(reader any, consumer any, partitionConsumer any, group any, channel
             destination
         ));
     }
+    assert!(
+        !has_edge(
+            models::CommunicationProtocol::Kafka,
+            models::MessageRole::Producer,
+            "ctx"
+        ),
+        "context arguments must not become Kafka topics"
+    );
     for destination in [
         "segment.in",
         "confluent.in",
