@@ -245,6 +245,84 @@ func startRest() {
 }
 
 #[test]
+fn extracts_rabbitmq_and_kafka_message_edges() {
+    let code = r#"
+package messaging
+
+func publish(ctx any, writer any, producer any, syncProducer any, client any, channel any) {
+    _ = writer.WriteMessages(ctx, kafka.Message{Topic: "segment.out"})
+    _ = producer.Produce(&ckafka.Message{TopicPartition: ckafka.TopicPartition{Topic: strPtr("confluent.out")}}, nil)
+    _ = syncProducer.SendMessage(&sarama.ProducerMessage{Topic: "sarama.out"})
+    _ = client.Produce(ctx, &kgo.Record{Topic: "franz.out"})
+    _ = channel.Publish("events", "rabbit.out", false, false, amqp.Publishing{})
+    _ = channel.QueueDeclare("billing", true, false, false, false, nil)
+    _ = channel.QueueBind("billing", "created", "events", false, nil)
+}
+
+func consume(reader any, consumer any, partitionConsumer any, group any, channel any) {
+    _ = kafka.NewReader(kafka.ReaderConfig{Topic: "segment.in"})
+    _ = consumer.SubscribeTopics([]string{"confluent.in", "confluent.retry"}, nil)
+    _, _ = partitionConsumer.ConsumePartition("sarama.in", 0, 0)
+    _ = group.Consume(ctx, []string{"sarama.group.in"}, handler)
+    _ = kgo.SeedTopics("franz.in")
+    _, _ = channel.Consume("billing", "", false, false, false, false, nil)
+}
+"#;
+
+    let record = extract_syntactic(code, "messaging.go").expect("Go extraction should succeed");
+    let mut typed = models::ir::project::TypedFileRecord::from(record);
+    identify(&mut typed);
+
+    let has_edge = |protocol, role, destination: &str| {
+        typed.raw_message_edges.iter().any(|edge| {
+            edge.protocol == protocol && edge.role == role && edge.destination == destination
+        })
+    };
+
+    for destination in ["segment.out", "confluent.out", "sarama.out", "franz.out"] {
+        assert!(has_edge(
+            models::CommunicationProtocol::Kafka,
+            models::MessageRole::Producer,
+            destination
+        ));
+    }
+    for destination in [
+        "segment.in",
+        "confluent.in",
+        "confluent.retry",
+        "sarama.in",
+        "sarama.group.in",
+        "franz.in",
+    ] {
+        assert!(has_edge(
+            models::CommunicationProtocol::Kafka,
+            models::MessageRole::Consumer,
+            destination
+        ));
+    }
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::Producer,
+        "events:rabbit.out"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::QueueDeclaration,
+        "billing"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::Binding,
+        "events:created"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::Consumer,
+        "billing"
+    ));
+}
+
+#[test]
 fn resolves_service_hosts_from_init_assignments() {
     let code = r#"
 package main
