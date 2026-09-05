@@ -5,6 +5,7 @@ mod files;
 mod identify;
 mod imports;
 mod ir;
+mod message_edges;
 mod package_resolution;
 mod project;
 pub mod restcalls;
@@ -92,6 +93,11 @@ pub fn identify_with_package_context(
         .filter_map(|call| {
             identify::identify_restcall(file, call, Some(package_globals), package_callables)
         })
+        .collect();
+    file.raw_message_edges = file
+        .call_statements
+        .iter()
+        .filter_map(|call| message_edges::identify_message_edge(call, &file.file_path))
         .collect();
 }
 
