@@ -6,6 +6,7 @@ use models::{
 
 const DESTINATION_SEPARATOR: &str = ":";
 
+/// Dispatches a Go call to the corresponding RabbitMQ edge recognizer.
 pub(super) fn identify_message_edge(
     call: &CallStatement,
     file_path: &str,
@@ -22,6 +23,7 @@ pub(super) fn identify_message_edge(
     }
 }
 
+/// Identifies `Channel.Publish` calls that do not take a context argument.
 fn identify_publish_without_context(
     call: &CallStatement,
     file_path: &str,
@@ -32,6 +34,7 @@ fn identify_publish_without_context(
     build_publish_edge(call, file_path, exchange, routing_key)
 }
 
+/// Identifies `Channel.PublishWithContext` calls.
 fn identify_publish(
     call: &CallStatement,
     file_path: &str,
@@ -42,6 +45,7 @@ fn identify_publish(
     build_publish_edge(call, file_path, exchange, routing_key)
 }
 
+/// Builds a producer edge using the resolved exchange and routing key.
 fn build_publish_edge(
     call: &CallStatement,
     file_path: &str,
@@ -77,6 +81,7 @@ fn build_publish_edge(
     ))
 }
 
+/// Identifies `Channel.QueueBind` declarations as exchange-routing-key bindings.
 fn identify_binding(
     call: &CallStatement,
     file_path: &str,
@@ -114,6 +119,7 @@ fn identify_binding(
     ))
 }
 
+/// Identifies `Channel.Consume` calls as queue consumers.
 fn identify_consume(
     call: &CallStatement,
     file_path: &str,
@@ -136,6 +142,7 @@ fn identify_consume(
     ))
 }
 
+/// Identifies `Channel.QueueDeclare` calls as queue declarations.
 fn identify_queue_declaration(
     call: &CallStatement,
     file_path: &str,
@@ -157,6 +164,7 @@ fn identify_queue_declaration(
     ))
 }
 
+/// Builds a RabbitMQ message edge with the originating call metadata.
 fn edge(
     call: &CallStatement,
     file_path: &str,
@@ -184,6 +192,7 @@ fn edge(
     }
 }
 
+/// Resolves a Go expression and removes surrounding string syntax.
 fn clean_arg(raw: &str, scope: &HashMap<String, String>) -> String {
     let resolved = super::shared::evaluate_expression_text(raw, scope);
     let trimmed = resolved.trim().trim_end_matches(',');
@@ -195,6 +204,7 @@ fn clean_arg(raw: &str, scope: &HashMap<String, String>) -> String {
     trimmed.to_string()
 }
 
+/// Converts an empty transport field into `None`.
 fn non_empty(value: String) -> Option<String> {
     if value.is_empty() { None } else { Some(value) }
 }
