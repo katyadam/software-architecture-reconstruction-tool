@@ -472,6 +472,35 @@ fn collect_local_assignments(
             collect_declaration_assignments(node, code, scope.clone(), assignments);
             scope_values.extend(scope_bindings(assignments, &scope));
         }
+        "range_clause" => {
+            let Some(iterable) = node.child_by_field_name("right") else {
+                return;
+            };
+            let Some(binding) = node.child_by_field_name("left") else {
+                return;
+            };
+            let Some(variable) = binding
+                .named_children(&mut binding.walk())
+                .filter(|child| child.kind() == "identifier")
+                .last()
+            else {
+                return;
+            };
+            let name = node_text(variable, code).to_string();
+            let value = evaluate_expression_node(iterable, code, &scope_values);
+            assignments.insert(
+                AssignmentKey {
+                    scope: scope.clone(),
+                    variable_name: name.clone(),
+                },
+                Assignment {
+                    variable_name: name.clone(),
+                    variable_type: "".to_string(),
+                    value: value.clone(),
+                },
+            );
+            scope_values.insert(name, value);
+        }
         _ => {}
     });
 }
@@ -639,6 +668,20 @@ fn collect_calls_in_source_order(
                     for argument in arguments.into_iter().rev() {
                         pending.push(TraversalItem::Node(argument));
                     }
+                }
+            }
+            TraversalItem::Node(node) if node.kind() == "range_clause" => {
+                if let (Some(iterable), Some(binding)) = (
+                    node.child_by_field_name("right"),
+                    node.child_by_field_name("left"),
+                ) && let Some(variable) = binding
+                    .named_children(&mut binding.walk())
+                    .filter(|child| child.kind() == "identifier")
+                    .last()
+                {
+                    let name = node_text(variable, code).to_string();
+                    let value = evaluate_expression_node(iterable, code, scope);
+                    scope.insert(name, value);
                 }
             }
             TraversalItem::Node(node) => {
