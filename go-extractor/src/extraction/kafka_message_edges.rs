@@ -68,7 +68,7 @@ fn producer_from_record(
         // Only inline message records can provide a statically known topic.
         .map(|argument| resolve_value(&argument.value, scope))
         .filter(|argument| argument.contains('{'))
-        .flat_map(|argument| topics_from_record(&argument, scope))
+        .flat_map(|argument| topics_from_field_or_literals(&argument, "Topic", scope))
         .map(|topic| edge(MessageRole::Producer, topic, call, file_path))
         .collect()
 }
@@ -112,11 +112,6 @@ fn consumer_from_argument(
         .flat_map(|argument| topics_from_field_or_literals(&argument.value, "Topic", scope))
         .map(|topic| edge(MessageRole::Consumer, topic, call, file_path))
         .collect()
-}
-
-/// Extracts topic values from a Kafka message record.
-fn topics_from_record(raw: &str, scope: &HashMap<String, String>) -> Vec<String> {
-    topics_from_field_or_literals(raw, "Topic", scope)
 }
 
 /// Extracts explicit field values, string literals, or resolved topic expressions.
