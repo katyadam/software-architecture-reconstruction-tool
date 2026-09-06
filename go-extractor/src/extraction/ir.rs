@@ -434,6 +434,11 @@ fn collect_local_assignments(
             let pairs = assignment_pairs(node, code);
             for (name, value_node) in pairs {
                 let value = evaluate_expression_node(value_node, code, &scope_values);
+                // Preserve the previous binding when the assignment references
+                // itself, e.g. `r.Body = wrap(r.Body)`.
+                if value.contains(&name) {
+                    continue;
+                }
                 assignments.insert(
                     AssignmentKey {
                         scope: scope.clone(),
@@ -575,48 +580,74 @@ fn collect_calls_in_source_order(
     scope: &mut HashMap<String, String>,
     call_statements: &mut Vec<CallStatement>,
 ) {
-    if matches!(
-        node.kind(),
-        "short_var_declaration" | "assignment_statement"
-    ) {
-        for (_, value) in assignment_pairs(node, code) {
-            collect_calls_in_source_order(value, code, callable, scope, call_statements);
-        }
-        for (name, value) in assignment_pairs(node, code) {
-            scope.insert(name, evaluate_expression_node(value, code, scope));
-        }
-        return;
+    enum TraversalItem<'a> {
+        Node(Node<'a>),
+        ApplyAssignments(Vec<(String, Node<'a>)>),
+        EmitCall(Node<'a>),
     }
 
-    if node.kind() == "call_expression" {
-        // Resolve calls nested in arguments before the outer call, matching Go evaluation order.
-        if let Some(arguments) = node.child_by_field_name("arguments") {
-            for argument in arguments.named_children(&mut arguments.walk()) {
-                collect_calls_in_source_order(argument, code, callable, scope, call_statements);
+    let mut pending = vec![TraversalItem::Node(node)];
+    while let Some(item) = pending.pop() {
+        match item {
+            TraversalItem::ApplyAssignments(pairs) => {
+                for (name, value) in pairs {
+                    let resolved = evaluate_expression_node(value, code, scope);
+                    // Do not turn assignments such as `r.Body = wrap(r.Body)` into
+                    // recursive scope bindings.
+                    if !resolved.contains(&name) {
+                        scope.insert(name, resolved);
+                    }
+                }
+            }
+            TraversalItem::EmitCall(node) => {
+                let Some(function_node) = node.child_by_field_name("function") else {
+                    continue;
+                };
+                call_statements.push(CallStatement {
+                    function_name: normalize_whitespace(node_text(function_node, code)),
+                    arguments: parse_arguments(node.child_by_field_name("arguments"), code, scope),
+                    enclosing_function_name: Some(callable.signature.clone()),
+                    enclosing_class_name: match &callable.namespace {
+                        Namespace::Class(name) => Some(name.clone()),
+                        Namespace::Module(_) => None,
+                    },
+                    enclosing_function_hash: Some(callable.hash.clone()),
+                    is_self_invoke: false,
+                    is_super_invoke: false,
+                    invoked_on: None,
+                    is_decorator: false,
+                });
+            }
+            TraversalItem::Node(node)
+                if matches!(
+                    node.kind(),
+                    "short_var_declaration" | "assignment_statement"
+                ) =>
+            {
+                let pairs = assignment_pairs(node, code);
+                pending.push(TraversalItem::ApplyAssignments(pairs.clone()));
+                for (_, value) in pairs.into_iter().rev() {
+                    pending.push(TraversalItem::Node(value));
+                }
+            }
+            TraversalItem::Node(node) if node.kind() == "call_expression" => {
+                pending.push(TraversalItem::EmitCall(node));
+                if let Some(arguments) = node.child_by_field_name("arguments") {
+                    let arguments = arguments
+                        .named_children(&mut arguments.walk())
+                        .collect::<Vec<_>>();
+                    for argument in arguments.into_iter().rev() {
+                        pending.push(TraversalItem::Node(argument));
+                    }
+                }
+            }
+            TraversalItem::Node(node) => {
+                let children = node.named_children(&mut node.walk()).collect::<Vec<_>>();
+                for child in children.into_iter().rev() {
+                    pending.push(TraversalItem::Node(child));
+                }
             }
         }
-        let Some(function_node) = node.child_by_field_name("function") else {
-            return;
-        };
-        call_statements.push(CallStatement {
-            function_name: normalize_whitespace(node_text(function_node, code)),
-            arguments: parse_arguments(node.child_by_field_name("arguments"), code, scope),
-            enclosing_function_name: Some(callable.signature.clone()),
-            enclosing_class_name: match &callable.namespace {
-                Namespace::Class(name) => Some(name.clone()),
-                Namespace::Module(_) => None,
-            },
-            enclosing_function_hash: Some(callable.hash.clone()),
-            is_self_invoke: false,
-            is_super_invoke: false,
-            invoked_on: None,
-            is_decorator: false,
-        });
-        return;
-    }
-
-    for child in node.named_children(&mut node.walk()) {
-        collect_calls_in_source_order(child, code, callable, scope, call_statements);
     }
 }
 
