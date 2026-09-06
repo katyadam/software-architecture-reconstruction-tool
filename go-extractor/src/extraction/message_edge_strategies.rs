@@ -13,6 +13,7 @@ pub(super) struct MessageEdgeContext<'a> {
 
 /// Identifies message edges for one transport family from a Go call statement.
 pub(super) trait MessageEdgeIdentificationStrategy: Sync {
+    /// Returns every edge recognized for the call context.
     fn identify(&self, ctx: &MessageEdgeContext<'_>) -> Vec<MessageEdge>;
 }
 
@@ -23,6 +24,7 @@ static RABBIT_MQ: RabbitMqStrategy = RabbitMqStrategy;
 static KAFKA: KafkaStrategy = KafkaStrategy;
 static STRATEGIES: &[&dyn MessageEdgeIdentificationStrategy] = &[&RABBIT_MQ, &KAFKA];
 
+/// Builds call context and runs every transport-specific identification strategy.
 pub(super) fn identify_message_edges(
     file: &TypedFileRecord,
     call: &CallStatement,
@@ -48,6 +50,7 @@ pub(super) fn identify_message_edges(
 }
 
 impl MessageEdgeIdentificationStrategy for RabbitMqStrategy {
+    /// Delegates a call to the RabbitMQ edge recognizer.
     fn identify(&self, ctx: &MessageEdgeContext<'_>) -> Vec<MessageEdge> {
         message_edges::identify_message_edge(ctx.call, ctx.file_path, &ctx.scope)
             .into_iter()
@@ -56,6 +59,7 @@ impl MessageEdgeIdentificationStrategy for RabbitMqStrategy {
 }
 
 impl MessageEdgeIdentificationStrategy for KafkaStrategy {
+    /// Delegates a call to the Kafka edge recognizer with import provenance.
     fn identify(&self, ctx: &MessageEdgeContext<'_>) -> Vec<MessageEdge> {
         kafka_message_edges::identify_message_edges(
             ctx.call,
