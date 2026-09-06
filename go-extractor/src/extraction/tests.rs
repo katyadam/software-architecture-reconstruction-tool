@@ -252,6 +252,7 @@ package messaging
 import (
     "os"
     "github.com/segmentio/kafka-go"
+    amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func publish(ctx any, writer any, producer any, syncProducer any, client any, channel any) {
@@ -293,6 +294,17 @@ func orderedWrapperTopics(ctx any, client any) {
     _ = client.Producer(nil, ctx, topic, "key")
     topic = os.Getenv("PAYMENT_SUCCEEDED_TOPIC")
     _ = client.Producer(nil, ctx, topic, "key")
+}
+
+func sharedKafkaWrappers(ctx any) {
+    topic := "ORDER_CREATED_TOPIC"
+    kafka.Publish(nil, nil, "OrderCreated", topic)
+    kafka.RegisterConsumer(topic, nil)
+}
+
+func sharedKafkaConfigWrappers(ctx any) {
+    kafka.Publish(nil, nil, "OrderCreated", config.AppConfig.KafkaOrderTopic)
+    kafka.RegisterConsumer(config.KafkaOrderTopic, nil)
 }
 "#;
 
@@ -343,6 +355,26 @@ func orderedWrapperTopics(ctx any, client any) {
     ));
     assert!(has_edge(
         models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "ORDER_CREATED_TOPIC"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Consumer,
+        "ORDER_CREATED_TOPIC"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "KafkaOrderTopic"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Consumer,
+        "KafkaOrderTopic"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
         models::MessageRole::Consumer,
         "PAYMENT_SUCCEEDED_TOPIC"
     ));
@@ -380,6 +412,28 @@ func orderedWrapperTopics(ctx any, client any) {
         models::MessageRole::Consumer,
         "billing"
     ));
+}
+
+#[test]
+fn handles_self_referential_selector_assignments() {
+    let code = r#"
+package main
+
+func readJSON(w any, r any) {
+    r.Body = http.MaxBytesReader(w, r.Body, int64(1024))
+    _ = json.NewDecoder(r.Body)
+}
+"#;
+
+    let record = extract_syntactic(code, "handler.go").expect("Go extraction should succeed");
+    assert!(
+        record
+            .call_statements
+            .iter()
+            .any(|call| call.function_name == "json.NewDecoder"),
+        "calls: {:?}",
+        record.call_statements
+    );
 }
 
 #[test]
