@@ -6,6 +6,7 @@ mod identify;
 mod imports;
 mod ir;
 mod kafka_message_edges;
+mod message_edge_project;
 mod message_edge_strategies;
 mod message_edges;
 mod package_resolution;
@@ -109,6 +110,10 @@ pub fn resolve_package_endpoint_handlers(files: &mut [TypedFileRecord]) {
 
 pub fn identify_project_restcalls(files: &mut [TypedFileRecord]) {
     project::identify_restcalls(files);
+}
+
+pub fn resolve_project_message_edges(files: &mut [TypedFileRecord]) {
+    message_edge_project::resolve_message_edges(files);
 }
 
 fn parse_go_tree(code: &str) -> Result<Tree, ExtractionError> {

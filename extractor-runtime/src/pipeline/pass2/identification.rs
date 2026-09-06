@@ -17,4 +17,5 @@ pub fn identify_edges(files: &mut [TypedFileRecord]) {
             Language::Go => go_extractor::extraction::identify(file),
         }
     }
+    go_extractor::extraction::resolve_project_message_edges(files);
 }
