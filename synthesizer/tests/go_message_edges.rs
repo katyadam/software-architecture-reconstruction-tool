@@ -75,12 +75,16 @@ fn links_go_rabbitmq_publisher_and_queue_binding_services() {
     let publisher = r#"
 package orders
 
+import amqp "github.com/rabbitmq/amqp091-go"
+
 func publish(channel any) {
     _ = channel.Publish("orders", "created", false, false, amqp.Publishing{})
 }
 "#;
     let binding = r#"
 package billing
+
+import amqp "github.com/rabbitmq/amqp091-go"
 
 func bind(channel any) {
     _ = channel.QueueBind("billing", "created", "orders", false, nil)

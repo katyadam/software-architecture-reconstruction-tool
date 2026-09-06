@@ -9,6 +9,7 @@ pub(super) struct MessageEdgeContext<'a> {
     pub file_path: &'a str,
     pub scope: HashMap<String, String>,
     pub is_kafka_file: bool,
+    pub is_rabbitmq_file: bool,
 }
 
 /// Identifies message edges for one transport family from a Go call statement.
@@ -42,6 +43,10 @@ pub(super) fn identify_message_edges(
             .imports
             .iter()
             .any(|import| import.orig_module.to_ascii_lowercase().contains("kafka")),
+        is_rabbitmq_file: file.imports.iter().any(|import| {
+            let module = import.orig_module.to_ascii_lowercase();
+            module.contains("rabbitmq") || module.contains("amqp")
+        }),
     };
     STRATEGIES
         .iter()
@@ -52,6 +57,9 @@ pub(super) fn identify_message_edges(
 impl MessageEdgeIdentificationStrategy for RabbitMqStrategy {
     /// Delegates a call to the RabbitMQ edge recognizer.
     fn identify(&self, ctx: &MessageEdgeContext<'_>) -> Vec<MessageEdge> {
+        if !ctx.is_rabbitmq_file {
+            return Vec::new();
+        }
         message_edges::identify_message_edge(ctx.call, ctx.file_path, &ctx.scope)
             .into_iter()
             .collect()

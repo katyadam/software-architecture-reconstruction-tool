@@ -37,6 +37,14 @@ pub(super) fn identify_message_edges(
             producer_from_argument(call, file_path, scope, 2)
         }
         "Consumer" if is_kafka_file => consumer_from_argument(call, file_path, scope, 0),
+        // Shared Kafka helper: Publish(key, payload, event_type, topic).
+        "Publish" if is_kafka_file && call.arguments.len() > 3 => {
+            producer_from_argument(call, file_path, scope, 3)
+        }
+        // Shared Kafka helper consumer registration methods accept the topic first.
+        "RegisterConsumer" | "CreatePartitionConsumer" if is_kafka_file => {
+            consumer_from_argument(call, file_path, scope, 0)
+        }
         _ => Vec::new(),
     }
 }
@@ -223,11 +231,19 @@ fn string_literals(raw: &str) -> Vec<String> {
 
 /// Removes Go address and string syntax from a topic candidate.
 fn clean_topic(raw: &str) -> String {
-    raw.trim()
+    let topic = raw
+        .trim()
         .trim_start_matches('&')
         .trim_matches('"')
         .trim_matches('`')
-        .to_string()
+        .to_string();
+    // A local Config value and the package-level AppConfig value describe the
+    // same mapstructure field, so preserve only that field as the destination.
+    topic
+        .strip_prefix("config.")
+        .and_then(|value| value.rsplit('.').next())
+        .map(str::to_string)
+        .unwrap_or(topic)
 }
 
 /// Builds a Kafka message edge with the source call metadata retained.
