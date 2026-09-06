@@ -7,6 +7,7 @@ use models::{
 const PRODUCER_METHODS: &[&str] = &["WriteMessages", "Produce", "ProduceSync", "SendMessage"];
 const CONSUMER_METHODS: &[&str] = &["Subscribe", "SubscribeTopics", "ConsumePartition"];
 
+/// Dispatches a Go call to the supported Kafka producer or consumer recognizer.
 pub(super) fn identify_message_edges(
     call: &CallStatement,
     file_path: &str,
@@ -40,6 +41,7 @@ pub(super) fn identify_message_edges(
     }
 }
 
+/// Creates producer edges from a wrapper method's topic argument.
 fn producer_from_argument(
     call: &CallStatement,
     file_path: &str,
@@ -54,6 +56,7 @@ fn producer_from_argument(
         .collect()
 }
 
+/// Creates producer edges from inline Kafka message records.
 fn producer_from_record(
     call: &CallStatement,
     file_path: &str,
@@ -70,6 +73,7 @@ fn producer_from_record(
         .collect()
 }
 
+/// Creates producer edges from a Kafka writer configuration.
 fn producer_from_config(
     call: &CallStatement,
     file_path: &str,
@@ -82,6 +86,7 @@ fn producer_from_config(
         .collect()
 }
 
+/// Creates consumer edges from a Kafka reader configuration.
 fn consumer_from_config(
     call: &CallStatement,
     file_path: &str,
@@ -94,6 +99,7 @@ fn consumer_from_config(
         .collect()
 }
 
+/// Creates consumer edges from a call argument at the supplied position.
 fn consumer_from_argument(
     call: &CallStatement,
     file_path: &str,
@@ -108,10 +114,12 @@ fn consumer_from_argument(
         .collect()
 }
 
+/// Extracts topic values from a Kafka message record.
 fn topics_from_record(raw: &str, scope: &HashMap<String, String>) -> Vec<String> {
     topics_from_field_or_literals(raw, "Topic", scope)
 }
 
+/// Extracts explicit field values, string literals, or resolved topic expressions.
 fn topics_from_field_or_literals(
     raw: &str,
     field: &str,
@@ -146,6 +154,7 @@ fn topics_from_field_or_literals(
     topics
 }
 
+/// Returns true for an unbound lowercase identifier that cannot name a topic reliably.
 fn is_unresolved_identifier(value: &str, scope: &HashMap<String, String>) -> bool {
     let mut characters = value.chars();
     let Some(first) = characters.next() else {
@@ -156,10 +165,12 @@ fn is_unresolved_identifier(value: &str, scope: &HashMap<String, String>) -> boo
         && !scope.contains_key(value)
 }
 
+/// Resolves a Go expression using values known in the enclosing callable scope.
 fn resolve_value(raw: &str, scope: &HashMap<String, String>) -> String {
     super::shared::evaluate_expression_text(raw, scope)
 }
 
+/// Returns the value assigned to a field in a composite literal.
 fn field_value(raw: &str, field: &str) -> Option<String> {
     let start = raw.find(&format!("{field}:"))? + field.len() + 1;
     let value = raw[start..].trim_start();
@@ -183,6 +194,7 @@ fn field_value(raw: &str, field: &str) -> Option<String> {
     Some(value[..end].trim().to_string())
 }
 
+/// Collects interpreted and raw Go string literals from an expression.
 fn string_literals(raw: &str) -> Vec<String> {
     let mut values = Vec::new();
     let bytes = raw.as_bytes();
@@ -214,6 +226,7 @@ fn string_literals(raw: &str) -> Vec<String> {
     values
 }
 
+/// Removes Go address and string syntax from a topic candidate.
 fn clean_topic(raw: &str) -> String {
     raw.trim()
         .trim_start_matches('&')
@@ -222,6 +235,7 @@ fn clean_topic(raw: &str) -> String {
         .to_string()
 }
 
+/// Builds a Kafka message edge with the source call metadata retained.
 fn edge(role: MessageRole, topic: String, call: &CallStatement, file_path: &str) -> MessageEdge {
     MessageEdge {
         protocol: CommunicationProtocol::Kafka,
@@ -247,6 +261,7 @@ mod tests {
     use super::topics_from_field_or_literals;
 
     #[test]
+    /// Verifies topic parsing for nested record fields and literal topic lists.
     fn extracts_topics_from_kafka_record_and_lists() {
         assert_eq!(
             topics_from_field_or_literals(
@@ -267,6 +282,7 @@ mod tests {
     }
 
     #[test]
+    /// Verifies bare unresolved identifiers do not create false Kafka topics.
     fn rejects_unresolved_topic_identifiers() {
         assert!(topics_from_field_or_literals("topic", "Topic", &HashMap::new()).is_empty());
         assert_eq!(
