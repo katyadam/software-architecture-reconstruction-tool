@@ -21,9 +21,11 @@ class UserClient {
     let mut project_ir = build_project_ir(vec![
         java_extract(code, "UserClient.java").expect("Java extraction should succeed"),
     ]);
-    project_ir.files[0]
-        .raw_restcalls
-        .push(java_restcall("void fetchUsers()", "url", "UserClient.java"));
+    project_ir.files[0].raw_restcalls.push(java_restcall(
+        "void fetchUsers()",
+        "url",
+        "UserClient.java",
+    ));
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),
@@ -120,7 +122,11 @@ class LocalClient {
         .find(|file| file.file_path == "LocalClient.java")
         .expect("LocalClient.java should exist")
         .raw_restcalls
-        .push(java_restcall("void fetchItems()", "url", "LocalClient.java"));
+        .push(java_restcall(
+            "void fetchItems()",
+            "url",
+            "LocalClient.java",
+        ));
     let evaluated = evaluate(
         project_ir,
         &HashMap::new(),

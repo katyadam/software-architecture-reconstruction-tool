@@ -245,6 +245,198 @@ func startRest() {
 }
 
 #[test]
+fn extracts_rabbitmq_and_kafka_message_edges() {
+    let code = r#"
+package messaging
+
+import (
+    "os"
+    "github.com/segmentio/kafka-go"
+    amqp "github.com/rabbitmq/amqp091-go"
+)
+
+func publish(ctx any, writer any, producer any, syncProducer any, client any, channel any) {
+    _ = writer.WriteMessages(ctx, kafka.Message{Topic: "segment.out"})
+    _ = producer.Produce(&ckafka.Message{TopicPartition: ckafka.TopicPartition{Topic: strPtr("confluent.out")}}, nil)
+    _ = syncProducer.SendMessage(&sarama.ProducerMessage{Topic: "sarama.out"})
+    _ = client.Produce(ctx, &kgo.Record{Topic: "franz.out"})
+    _ = channel.Publish("events", "rabbit.out", false, false, amqp.Publishing{})
+    _ = channel.QueueDeclare("billing", true, false, false, false, nil)
+    _ = channel.QueueBind("billing", "created", "events", false, nil)
+}
+
+func consume(reader any, consumer any, partitionConsumer any, group any, channel any) {
+    _ = kafka.NewReader(kafka.ReaderConfig{Topic: "segment.in"})
+    _ = consumer.SubscribeTopics([]string{"confluent.in", "confluent.retry"}, nil)
+    _, _ = partitionConsumer.ConsumePartition("sarama.in", 0, 0)
+    _ = group.Consume(ctx, []string{"sarama.group.in"}, handler)
+    _ = kgo.SeedTopics("franz.in")
+    _, _ = channel.Consume("billing", "", false, false, false, false, nil)
+}
+
+func resolveVariables(ctx any, writer any, channel any) {
+    topic := "orders.created"
+    msg := kafka.Message{Topic: topic}
+    exchange := "orders"
+    routingKey := "created"
+    _ = writer.WriteMessages(ctx, msg)
+    _ = channel.Publish(exchange, routingKey, false, false, amqp.Publishing{})
+}
+
+func wrapperTopics(ctx any, client any) {
+    topic := os.Getenv("PAYMENT_SUCCEEDED_TOPIC")
+    _ = client.Producer(nil, ctx, topic, "key")
+    _ = client.Consumer(topic, "group", handler)
+}
+
+func orderedWrapperTopics(ctx any, client any) {
+    topic := os.Getenv("PAYMENT_CREATED_TOPIC")
+    _ = client.Producer(nil, ctx, topic, "key")
+    topic = os.Getenv("PAYMENT_SUCCEEDED_TOPIC")
+    _ = client.Producer(nil, ctx, topic, "key")
+}
+
+func sharedKafkaWrappers(ctx any) {
+    topic := "ORDER_CREATED_TOPIC"
+    kafka.Publish(nil, nil, "OrderCreated", topic)
+    kafka.RegisterConsumer(topic, nil)
+}
+
+func sharedKafkaConfigWrappers(ctx any) {
+    kafka.Publish(nil, nil, "OrderCreated", config.AppConfig.KafkaOrderTopic)
+    kafka.RegisterConsumer(config.KafkaOrderTopic, nil)
+}
+"#;
+
+    let record = extract_syntactic(code, "messaging.go").expect("Go extraction should succeed");
+    let mut typed = models::ir::project::TypedFileRecord::from(record);
+    identify(&mut typed);
+
+    let has_edge = |protocol, role, destination: &str| {
+        typed.raw_message_edges.iter().any(|edge| {
+            edge.protocol == protocol && edge.role == role && edge.destination == destination
+        })
+    };
+
+    for destination in ["segment.out", "confluent.out", "sarama.out", "franz.out"] {
+        assert!(has_edge(
+            models::CommunicationProtocol::Kafka,
+            models::MessageRole::Producer,
+            destination
+        ));
+    }
+    assert!(
+        !has_edge(
+            models::CommunicationProtocol::Kafka,
+            models::MessageRole::Producer,
+            "ctx"
+        ),
+        "context arguments must not become Kafka topics"
+    );
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "orders.created"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::Producer,
+        "orders:created"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "PAYMENT_SUCCEEDED_TOPIC"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "PAYMENT_CREATED_TOPIC"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "ORDER_CREATED_TOPIC"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Consumer,
+        "ORDER_CREATED_TOPIC"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "KafkaOrderTopic"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Consumer,
+        "KafkaOrderTopic"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Consumer,
+        "PAYMENT_SUCCEEDED_TOPIC"
+    ));
+    for destination in [
+        "segment.in",
+        "confluent.in",
+        "confluent.retry",
+        "sarama.in",
+        "sarama.group.in",
+        "franz.in",
+    ] {
+        assert!(has_edge(
+            models::CommunicationProtocol::Kafka,
+            models::MessageRole::Consumer,
+            destination
+        ));
+    }
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::Producer,
+        "events:rabbit.out"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::QueueDeclaration,
+        "billing"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::Binding,
+        "events:created"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::Consumer,
+        "billing"
+    ));
+}
+
+#[test]
+fn handles_self_referential_selector_assignments() {
+    let code = r#"
+package main
+
+func readJSON(w any, r any) {
+    r.Body = http.MaxBytesReader(w, r.Body, int64(1024))
+    _ = json.NewDecoder(r.Body)
+}
+"#;
+
+    let record = extract_syntactic(code, "handler.go").expect("Go extraction should succeed");
+    assert!(
+        record
+            .call_statements
+            .iter()
+            .any(|call| call.function_name == "json.NewDecoder"),
+        "calls: {:?}",
+        record.call_statements
+    );
+}
+
+#[test]
 fn resolves_service_hosts_from_init_assignments() {
     let code = r#"
 package main
