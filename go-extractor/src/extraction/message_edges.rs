@@ -17,7 +17,7 @@ pub(super) fn identify_message_edge(
         "PublishWithContext" => identify_publish(call, file_path, scope),
         "Publish" => identify_publish_without_context(call, file_path, scope),
         "QueueBind" => identify_binding(call, file_path, scope),
-        "Consume" => identify_consume(call, file_path, scope),
+        "Consume" | "ConsumeWithContext" => identify_consume(call, file_path, scope),
         "QueueDeclare" => identify_queue_declaration(call, file_path, scope),
         _ => None,
     }
