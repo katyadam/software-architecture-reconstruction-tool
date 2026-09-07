@@ -32,7 +32,7 @@ pub(super) fn resolve_message_edges(files: &mut [TypedFileRecord]) {
                 };
                 let resolved = matching_calls(callable, file, &snapshots)
                     .into_iter()
-                    .flat_map(|call| resolve_edge(edge, callable, call))
+                    .flat_map(|invocation| resolve_edge(edge, callable, invocation))
                     .collect::<Vec<_>>();
                 if resolved.is_empty() {
                     vec![edge.clone()]
@@ -48,6 +48,11 @@ struct FileSnapshot {
     file_path: String,
     import_modules: Vec<String>,
     calls: Vec<CallStatement>,
+}
+
+struct Invocation<'a> {
+    call: &'a CallStatement,
+    file_path: &'a str,
 }
 
 impl From<&TypedFileRecord> for FileSnapshot {
@@ -70,14 +75,20 @@ fn matching_calls<'a>(
     callable: &'a ParsedCallable,
     target_file: &TypedFileRecord,
     files: &'a [FileSnapshot],
-) -> Vec<&'a CallStatement> {
+) -> Vec<Invocation<'a>> {
     files
         .iter()
         .filter(|file| package_matches(file, target_file))
-        .flat_map(|file| file.calls.iter())
-        .filter(|call| {
-            call.function_name.rsplit('.').next() == Some(callable.metadata.name.as_str())
-                && call.arguments.len() == callable.metadata.parameters.len()
+        .flat_map(|file| {
+            file.calls.iter().map(move |call| Invocation {
+                call,
+                file_path: &file.file_path,
+            })
+        })
+        .filter(|invocation| {
+            invocation.call.function_name.rsplit('.').next()
+                == Some(callable.metadata.name.as_str())
+                && invocation.call.arguments.len() == callable.metadata.parameters.len()
         })
         .collect()
 }
@@ -106,13 +117,13 @@ fn package_matches(caller: &FileSnapshot, target_file: &TypedFileRecord) -> bool
 fn resolve_edge(
     edge: &MessageEdge,
     callable: &ParsedCallable,
-    call: &CallStatement,
+    invocation: Invocation<'_>,
 ) -> Vec<MessageEdge> {
     let bindings = callable
         .metadata
         .parameters
         .iter()
-        .zip(&call.arguments)
+        .zip(&invocation.call.arguments)
         .map(|(parameter, argument)| (parameter.name.as_str(), argument.value.as_str()))
         .collect::<HashMap<_, _>>();
     let exchanges = values_for(edge.exchange.as_deref(), &bindings);
@@ -121,6 +132,12 @@ fn resolve_edge(
     let topics = values_for(edge.topic.as_deref(), &bindings);
 
     cartesian_edges(edge, exchanges, routing_keys, queues, topics)
+        .into_iter()
+        .map(|edge| MessageEdge {
+            file_path: invocation.file_path.to_string(),
+            ..edge
+        })
+        .collect()
 }
 
 /// Resolves a field through parameter bindings and expands Go string lists.
