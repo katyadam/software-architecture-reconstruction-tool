@@ -23,6 +23,122 @@ pub(super) fn identify_message_edge(
     }
 }
 
+/// Identifies RabbitMQ edges declared through the library's fluent configuration builder.
+pub(super) fn identify_configuration_builder_edges(
+    call: &CallStatement,
+    file_path: &str,
+) -> Vec<MessageEdge> {
+    let mut edges = Vec::new();
+    for message_name in fluent_builder_message_names(call, "AddProducer") {
+        edges.extend(
+            build_publish_edge(call, file_path, message_name.clone(), message_name).into_iter(),
+        );
+    }
+    for message_name in fluent_builder_message_names(call, "AddConsumer") {
+        edges.push(edge(
+            call,
+            file_path,
+            MessageRole::Binding,
+            MessageDestinationKind::ExchangeRoutingKey,
+            format!("{message_name}{DESTINATION_SEPARATOR}{message_name}"),
+            Some(message_name.clone()),
+            Some(message_name.clone()),
+            Some(message_name.clone()),
+        ));
+        edges.push(edge(
+            call,
+            file_path,
+            MessageRole::Consumer,
+            MessageDestinationKind::Queue,
+            message_name.clone(),
+            None,
+            None,
+            Some(message_name),
+        ));
+    }
+    if let Some(message_name) = fluent_publish_message_name(call) {
+        edges.extend(
+            build_publish_edge(call, file_path, message_name.clone(), message_name).into_iter(),
+        );
+    }
+    edges
+}
+
+/// Resolves the library's `RabbitmqProducer.PublishMessage` event constructor convention.
+fn fluent_publish_message_name(call: &CallStatement) -> Option<String> {
+    if !call
+        .function_name
+        .to_ascii_lowercase()
+        .contains("rabbitmqproducer.publishmessage")
+    {
+        return None;
+    }
+    let constructor = call.arguments.get(1)?.value.rsplit('.').next()?;
+    let constructor = constructor.split('(').next()?.trim_start_matches("New");
+    pascal_to_snake(constructor)
+}
+
+/// Extracts message struct literals from a flattened chain of builder method calls.
+fn fluent_builder_message_names(call: &CallStatement, method: &str) -> Vec<String> {
+    let marker = format!("{method}(");
+    let mut names = call
+        .function_name
+        .match_indices(&marker)
+        .filter_map(|(index, _)| {
+            let argument = &call.function_name[index + marker.len()..];
+            argument.split('{').next().and_then(fluent_message_name)
+        })
+        .collect::<Vec<_>>();
+    if call.function_name.rsplit('.').next().map(str::trim) == Some(method)
+        && let Some(name) = call
+            .arguments
+            .first()
+            .and_then(|argument| fluent_message_name(&argument.value))
+        && !names.contains(&name)
+    {
+        names.push(name);
+    }
+    names
+}
+
+/// Converts the builder's event struct literal into its default RabbitMQ destination name.
+fn fluent_message_name(raw: &str) -> Option<String> {
+    let type_name = raw
+        .trim()
+        .trim_start_matches('&')
+        .split('{')
+        .next()?
+        .trim()
+        .rsplit(|character: char| character.is_whitespace() || character == '(')
+        .next()?
+        .rsplit('.')
+        .next()?
+        .trim();
+    if type_name.is_empty() {
+        return None;
+    }
+    pascal_to_snake(type_name)
+}
+
+/// Converts a Go event type name into the library's default RabbitMQ destination name.
+fn pascal_to_snake(type_name: &str) -> Option<String> {
+    if type_name.is_empty() {
+        return None;
+    }
+    let mut result = String::new();
+    for (index, character) in type_name.chars().enumerate() {
+        if character.is_ascii_uppercase() {
+            if index > 0 {
+                result.push('_');
+            }
+            result.push(character.to_ascii_lowercase());
+        } else {
+            result.push(character);
+        }
+    }
+    Some(result)
+}
+
 /// Identifies `Channel.Publish` calls that do not take a context argument.
 fn identify_publish_without_context(
     call: &CallStatement,

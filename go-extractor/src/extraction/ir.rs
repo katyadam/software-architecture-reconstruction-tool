@@ -295,6 +295,19 @@ fn parse_composite_literal(node: Node, code: &str) -> Expr {
 }
 
 fn collect_composite_literal_fields(node: Node, code: &str, fields: &mut Vec<(String, Expr)>) {
+    collect_composite_literal_fields_at_depth(node, code, fields, 0);
+}
+
+/// Collects nested literal fields while guarding against pathological generated sources.
+fn collect_composite_literal_fields_at_depth(
+    node: Node,
+    code: &str,
+    fields: &mut Vec<(String, Expr)>,
+    depth: usize,
+) {
+    if depth >= 32 {
+        return;
+    }
     for child in node.named_children(&mut node.walk()) {
         if child.kind() == "keyed_element" {
             let mut cursor = child.walk();
@@ -312,7 +325,7 @@ fn collect_composite_literal_fields(node: Node, code: &str, fields: &mut Vec<(St
             continue;
         }
 
-        collect_composite_literal_fields(child, code, fields);
+        collect_composite_literal_fields_at_depth(child, code, fields, depth + 1);
     }
 }
 
@@ -522,19 +535,44 @@ fn collect_composite_field_assignments(
     scope_values: &HashMap<String, String>,
     assignments: &mut HashMap<AssignmentKey, Assignment>,
 ) {
+    collect_composite_field_assignments_at_depth(
+        base,
+        node,
+        code,
+        scope,
+        scope_values,
+        assignments,
+        0,
+    );
+}
+
+/// Traverses struct-literal wrappers without following arbitrarily deep syntax trees.
+fn collect_composite_field_assignments_at_depth(
+    base: &str,
+    node: Node,
+    code: &str,
+    scope: &Scope,
+    scope_values: &HashMap<String, String>,
+    assignments: &mut HashMap<AssignmentKey, Assignment>,
+    depth: usize,
+) {
+    if depth >= 8 {
+        return;
+    }
     if node.kind() != "composite_literal" {
         if matches!(
             node.kind(),
             "literal_element" | "literal_value" | "keyed_element"
         ) {
             for child in node.named_children(&mut node.walk()) {
-                collect_composite_field_assignments(
+                collect_composite_field_assignments_at_depth(
                     base,
                     child,
                     code,
                     scope,
                     scope_values,
                     assignments,
+                    depth + 1,
                 );
             }
         }
@@ -565,7 +603,15 @@ fn collect_composite_field_assignments(
                 value: resolved,
             },
         );
-        collect_composite_field_assignments(&name, value, code, scope, scope_values, assignments);
+        collect_composite_field_assignments_at_depth(
+            &name,
+            value,
+            code,
+            scope,
+            scope_values,
+            assignments,
+            depth + 1,
+        );
     }
 }
 
