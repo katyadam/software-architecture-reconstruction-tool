@@ -781,3 +781,37 @@ func load() {
         "http://inventory-service/items"
     );
 }
+
+#[test]
+fn records_nested_composite_configuration_fields() {
+    let code = r#"
+package main
+
+func main() {
+    config := Config{
+        Exchange: "orders",
+        Queue: QueueConfig{Name: "orders-created"},
+    }
+    _ = config
+}
+"#;
+
+    let record = extract_syntactic(code, "main.go").expect("Go extraction should succeed");
+    let assignments = record
+        .assignments
+        .values()
+        .map(|assignment| (&assignment.variable_name, &assignment.value))
+        .collect::<Vec<_>>();
+    assert!(
+        assignments
+            .iter()
+            .any(|(name, value)| *name == "config.Exchange" && *value == "\"orders\""),
+        "assignments: {assignments:?}"
+    );
+    assert!(
+        assignments
+            .iter()
+            .any(|(name, value)| *name == "config.Queue.Name" && *value == "\"orders-created\""),
+        "assignments: {assignments:?}"
+    );
+}
