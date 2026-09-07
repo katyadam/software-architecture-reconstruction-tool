@@ -742,6 +742,10 @@ fn skips_generated_go_files() {
     assert!(!should_extract_file(Path::new("service.pb.go")));
     assert!(!should_extract_file(Path::new("service_grpc.pb.go")));
     assert!(!should_extract_file(Path::new("gen/thriftgo/client.go")));
+    assert!(!should_extract_file(Path::new("service_test.go")));
+    assert!(!should_extract_file(Path::new(
+        "internal/pkg/test/helper.go"
+    )));
     assert!(should_extract_file(Path::new("service.go")));
 }
 
@@ -794,6 +798,7 @@ func main() {
     }
     _ = config
 }
+
 "#;
 
     let record = extract_syntactic(code, "main.go").expect("Go extraction should succeed");
@@ -814,4 +819,36 @@ func main() {
             .any(|(name, value)| *name == "config.Queue.Name" && *value == "\"orders-created\""),
         "assignments: {assignments:?}"
     );
+}
+
+#[test]
+fn extracts_fluent_rabbitmq_configuration_edges() {
+    let code = r#"
+package rabbitmq
+
+import "example/internal/pkg/rabbitmq/configurations"
+
+func configure(builder configurations.RabbitMQConfigurationBuilder) {
+    builder.AddProducer(events.ProductCreatedV1{}, nil).
+        AddConsumer(events.ProductCreatedV1{}, nil)
+}
+"#;
+
+    let mut typed = models::ir::project::TypedFileRecord::from(
+        extract_syntactic(code, "config/rabbitmq.go").expect("Go extraction should succeed"),
+    );
+    identify(&mut typed);
+    assert_eq!(
+        typed.raw_message_edges.len(),
+        3,
+        "{:?}",
+        typed.call_statements
+    );
+    assert!(typed.raw_message_edges.iter().any(|edge| {
+        edge.role == models::MessageRole::Producer
+            && edge.destination == "product_created_v1:product_created_v1"
+    }));
+    assert!(typed.raw_message_edges.iter().any(|edge| {
+        edge.role == models::MessageRole::Consumer && edge.destination == "product_created_v1"
+    }));
 }

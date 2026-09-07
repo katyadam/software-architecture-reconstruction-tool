@@ -118,6 +118,14 @@ fn matching_calls<'a>(
     if !calls.is_empty() || !matches!(callable.metadata.namespace, models::Namespace::Class(_)) {
         return calls;
     }
+    let matching_definitions = files
+        .iter()
+        .flat_map(|file| &file.callables)
+        .filter(|candidate| candidate.metadata.name == callable.metadata.name)
+        .count();
+    if matching_definitions != 1 {
+        return Vec::new();
+    }
 
     files
         .iter()
