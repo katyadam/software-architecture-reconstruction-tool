@@ -23,6 +23,8 @@ pub(super) fn identify_message_edges(
             producer_from_record(call, file_path, scope)
         }
         "NewWriter" => producer_from_config(call, file_path, scope),
+        // Sarama's async producer sends a ProducerMessage into Input().
+        "Input" if is_kafka_file => producer_from_record(call, file_path, scope),
         method if CONSUMER_METHODS.contains(&method) => {
             consumer_from_argument(call, file_path, scope, 0)
         }
@@ -148,6 +150,9 @@ fn topics_from_field_or_literals(
         topics = string_literals(&raw);
     }
     if topics.is_empty() {
+        topics = collection_values(&raw);
+    }
+    if topics.is_empty() {
         let candidate = clean_topic(&raw);
         if !candidate.is_empty() && !candidate.contains(['{', '}', '[', ']']) {
             topics.push(candidate);
@@ -157,6 +162,22 @@ fn topics_from_field_or_literals(
     topics.dedup();
     topics.retain(|topic| !is_unresolved_identifier(topic, scope));
     topics
+}
+
+/// Extracts selector expressions from a Go collection literal such as `[]string{c.topic}`.
+fn collection_values(raw: &str) -> Vec<String> {
+    let Some((_, values)) = raw.split_once('{') else {
+        return Vec::new();
+    };
+    let Some((values, _)) = values.rsplit_once('}') else {
+        return Vec::new();
+    };
+    values
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 /// Returns true for an unbound lowercase identifier that cannot name a topic reliably.
@@ -291,6 +312,10 @@ mod tests {
                 &HashMap::new()
             ),
             vec!["orders.created", "orders.retry"]
+        );
+        assert_eq!(
+            topics_from_field_or_literals("[]string{consumer.topic}", "Topic", &HashMap::new()),
+            vec!["consumer.topic"]
         );
     }
 

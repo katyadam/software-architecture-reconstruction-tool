@@ -2,7 +2,11 @@ use std::collections::{HashMap, HashSet};
 
 use models::{
     CallStatement, CommunicationProtocol, MessageDestinationKind, MessageEdge, MessageRole,
-    ParsedCallable, ir::project::TypedFileRecord,
+    ParsedCallable,
+    ir::{
+        ast::{Expr, Stmt},
+        project::TypedFileRecord,
+    },
 };
 
 use super::shared::package_path;
@@ -36,10 +40,12 @@ pub(super) fn resolve_message_edges(files: &mut [TypedFileRecord]) {
                 else {
                     return vec![edge.clone()];
                 };
-                let resolved = matching_calls(callable, source, &snapshots)
-                    .into_iter()
-                    .flat_map(|invocation| {
-                        resolve_invocation(
+                let declared =
+                    resolve_declared_edge(edge, callable, source, &snapshots, &known_values);
+                let mut resolved = Vec::new();
+                for invocation in matching_calls(callable, source, &snapshots) {
+                    for edge in &declared {
+                        resolved.extend(resolve_invocation(
                             edge,
                             callable,
                             invocation,
@@ -47,11 +53,11 @@ pub(super) fn resolve_message_edges(files: &mut [TypedFileRecord]) {
                             &known_values,
                             0,
                             &mut HashSet::new(),
-                        )
-                    })
-                    .collect::<Vec<_>>();
+                        ));
+                    }
+                }
                 if resolved.is_empty() {
-                    vec![edge.clone()]
+                    declared
                 } else {
                     resolved
                 }
@@ -68,6 +74,7 @@ struct FileSnapshot {
     assignments: Vec<(String, String)>,
 }
 
+#[derive(Clone, Copy)]
 struct Invocation<'a> {
     call: &'a CallStatement,
     file: &'a FileSnapshot,
@@ -231,18 +238,78 @@ fn resolve_edge(
         .zip(&invocation.call.arguments)
         .map(|(parameter, argument)| (parameter.name.as_str(), argument.value.as_str()))
         .collect::<HashMap<_, _>>();
+    resolve_edge_fields(
+        edge,
+        callable,
+        &bindings,
+        &invocation.file.file_path,
+        files,
+        known_values,
+    )
+}
+
+/// Resolves constructor-backed transport fields without applying any call arguments.
+fn resolve_declared_edge(
+    edge: &MessageEdge,
+    callable: &ParsedCallable,
+    source: &FileSnapshot,
+    files: &[FileSnapshot],
+    known_values: &HashMap<String, Vec<String>>,
+) -> Vec<MessageEdge> {
+    resolve_edge_fields(
+        edge,
+        callable,
+        &HashMap::new(),
+        &source.file_path,
+        files,
+        known_values,
+    )
+}
+
+/// Resolves transport fields using the supplied parameter bindings and source file path.
+fn resolve_edge_fields(
+    edge: &MessageEdge,
+    callable: &ParsedCallable,
+    bindings: &HashMap<&str, &str>,
+    file_path: &str,
+    files: &[FileSnapshot],
+    known_values: &HashMap<String, Vec<String>>,
+) -> Vec<MessageEdge> {
     let aliases = snapshot_for(files, &callable.metadata.file_path)
         .map(|file| file.assignments.iter().cloned().collect::<HashMap<_, _>>())
         .unwrap_or_default();
-    let exchanges = values_for(edge.exchange.as_deref(), &bindings, &aliases, known_values);
+    let exchanges = values_for(
+        edge.exchange.as_deref(),
+        &bindings,
+        &aliases,
+        known_values,
+        callable,
+        files,
+    );
     let routing_keys = values_for(
         edge.routing_key.as_deref(),
         &bindings,
         &aliases,
         known_values,
+        callable,
+        files,
     );
-    let queues = values_for(edge.queue.as_deref(), &bindings, &aliases, known_values);
-    let topics = values_for(edge.topic.as_deref(), &bindings, &aliases, known_values);
+    let queues = values_for(
+        edge.queue.as_deref(),
+        &bindings,
+        &aliases,
+        known_values,
+        callable,
+        files,
+    );
+    let topics = values_for(
+        edge.topic.as_deref(),
+        &bindings,
+        &aliases,
+        known_values,
+        callable,
+        files,
+    );
 
     cartesian_edges(edge, exchanges, routing_keys, queues, topics)
         .into_iter()
@@ -254,7 +321,7 @@ fn resolve_edge(
                 || resolved.queue == resolved.routing_key
         })
         .map(|edge| MessageEdge {
-            file_path: invocation.file.file_path.clone(),
+            file_path: file_path.to_string(),
             ..edge
         })
         .collect()
@@ -294,11 +361,14 @@ fn values_for(
     bindings: &HashMap<&str, &str>,
     aliases: &HashMap<String, String>,
     known_values: &HashMap<String, Vec<String>>,
+    callable: &ParsedCallable,
+    files: &[FileSnapshot],
 ) -> Vec<Option<String>> {
     let Some(value) = value else {
         return vec![None];
     };
-    let resolved = binding_values(value, bindings, aliases, 0);
+    let resolved = receiver_field_values(value, callable, files)
+        .unwrap_or_else(|| binding_values(value, bindings, aliases, 0));
     let values = resolved
         .iter()
         .flat_map(|value| concrete_values(value, known_values))
@@ -307,6 +377,98 @@ fn values_for(
         resolved.into_iter().map(Some).collect()
     } else {
         values.into_iter().map(Some).collect()
+    }
+}
+
+/// Resolves `receiver.field` values initialized in constructors for the receiver type.
+fn receiver_field_values(
+    value: &str,
+    callable: &ParsedCallable,
+    files: &[FileSnapshot],
+) -> Option<Vec<String>> {
+    let (receiver, field) = value.split_once('.')?;
+    let receiver_type = match &callable.metadata.namespace {
+        models::Namespace::Class(name) => name,
+        models::Namespace::Module(_) => return None,
+    };
+    if method_receiver_name(callable) != Some(receiver) {
+        return None;
+    }
+
+    files
+        .iter()
+        .flat_map(|file| &file.callables)
+        .filter(|candidate| candidate.metadata.name.starts_with("New"))
+        .filter_map(|constructor| constructor_field_value(constructor, receiver_type, field))
+        .next()
+}
+
+/// Extracts the variable name from a Go method receiver in its callable signature.
+fn method_receiver_name(callable: &ParsedCallable) -> Option<&str> {
+    callable
+        .metadata
+        .signature
+        .strip_prefix("func (")?
+        .split_once(')')?
+        .0
+        .split_whitespace()
+        .next()
+}
+
+/// Returns a constructor field after resolving constructor-local variables.
+fn constructor_field_value(
+    constructor: &ParsedCallable,
+    receiver_type: &str,
+    field: &str,
+) -> Option<Vec<String>> {
+    let mut locals = HashMap::new();
+    for statement in &constructor.ast.statements {
+        match statement {
+            Stmt::Declaration { name, value, .. } | Stmt::Assignment { name, value } => {
+                if let Some(value) = struct_field_value(value, receiver_type, field, &locals) {
+                    return Some(vec![value]);
+                }
+                locals.insert(name.as_str(), expression_text(value, &locals));
+            }
+            Stmt::Return(value) => {
+                if let Some(value) = struct_field_value(value, receiver_type, field, &locals) {
+                    return Some(vec![value]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Reads one field from a constructor's concrete receiver struct literal.
+fn struct_field_value(
+    expression: &Expr,
+    receiver_type: &str,
+    field: &str,
+    locals: &HashMap<&str, String>,
+) -> Option<String> {
+    let Expr::StructLiteral { type_name, fields } = expression else {
+        return None;
+    };
+    type_name
+        .as_deref()
+        .filter(|name| name.trim_start_matches('&').ends_with(receiver_type))?;
+    fields
+        .iter()
+        .find(|(name, _)| name == field)
+        .map(|(_, value)| expression_text(value, locals))
+}
+
+/// Converts the subset of constructor expressions used for transport fields into text.
+fn expression_text<'a>(expression: &'a Expr, locals: &HashMap<&str, String>) -> String {
+    match expression {
+        Expr::Literal(value) | Expr::Var(value) => locals
+            .get(value.as_str())
+            .cloned()
+            .unwrap_or_else(|| value.clone()),
+        Expr::Attr { object, field } => format!("{}.{}", expression_text(object, locals), field),
+        _ => String::new(),
     }
 }
 

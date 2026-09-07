@@ -723,6 +723,7 @@ fn collect_calls_in_source_order(
         Node(Node<'a>),
         ApplyAssignments(Vec<(String, Node<'a>)>),
         EmitCall(Node<'a>),
+        EmitChannelSend(Node<'a>),
     }
 
     let mut pending = vec![TraversalItem::Node(node)];
@@ -757,6 +758,36 @@ fn collect_calls_in_source_order(
                     is_decorator: false,
                 });
             }
+            TraversalItem::EmitChannelSend(node) => {
+                let Some(channel) = node.child_by_field_name("channel") else {
+                    continue;
+                };
+                let Some(message) = node.child_by_field_name("value") else {
+                    continue;
+                };
+                let channel_function = channel
+                    .child_by_field_name("function")
+                    .map(|function| node_text(function, code))
+                    .unwrap_or_else(|| node_text(channel, code));
+                call_statements.push(CallStatement {
+                    function_name: normalize_whitespace(channel_function),
+                    arguments: vec![Argument {
+                        assigned_variable: "".to_string(),
+                        value: evaluate_expression_node(message, code, scope),
+                        datatype: None,
+                    }],
+                    enclosing_function_name: Some(callable.signature.clone()),
+                    enclosing_class_name: match &callable.namespace {
+                        Namespace::Class(name) => Some(name.clone()),
+                        Namespace::Module(_) => None,
+                    },
+                    enclosing_function_hash: Some(callable.hash.clone()),
+                    is_self_invoke: false,
+                    is_super_invoke: false,
+                    invoked_on: None,
+                    is_decorator: false,
+                });
+            }
             TraversalItem::Node(node)
                 if matches!(
                     node.kind(),
@@ -778,6 +809,13 @@ fn collect_calls_in_source_order(
                     for argument in arguments.into_iter().rev() {
                         pending.push(TraversalItem::Node(argument));
                     }
+                }
+            }
+            TraversalItem::Node(node) if node.kind() == "send_statement" => {
+                pending.push(TraversalItem::EmitChannelSend(node));
+                let children = node.named_children(&mut node.walk()).collect::<Vec<_>>();
+                for child in children.into_iter().rev() {
+                    pending.push(TraversalItem::Node(child));
                 }
             }
             TraversalItem::Node(node) if node.kind() == "range_clause" => {
