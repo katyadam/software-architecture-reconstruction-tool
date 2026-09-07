@@ -703,6 +703,7 @@ fn parse_arguments(
         return Vec::new();
     };
     node.named_children(&mut node.walk())
+        .filter(|arg| arg.kind() != "comment")
         .map(|arg| Argument {
             assigned_variable: "".to_string(),
             value: evaluate_expression_node(arg, code, scope),
