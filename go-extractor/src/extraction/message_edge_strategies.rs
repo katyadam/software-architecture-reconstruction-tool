@@ -19,11 +19,15 @@ pub(super) trait MessageEdgeIdentificationStrategy: Sync {
 }
 
 struct RabbitMqStrategy;
+struct RabbitMqConfigurationBuilderStrategy;
 struct KafkaStrategy;
 
 static RABBIT_MQ: RabbitMqStrategy = RabbitMqStrategy;
+static RABBIT_MQ_CONFIGURATION_BUILDER: RabbitMqConfigurationBuilderStrategy =
+    RabbitMqConfigurationBuilderStrategy;
 static KAFKA: KafkaStrategy = KafkaStrategy;
-static STRATEGIES: &[&dyn MessageEdgeIdentificationStrategy] = &[&RABBIT_MQ, &KAFKA];
+static STRATEGIES: &[&dyn MessageEdgeIdentificationStrategy] =
+    &[&RABBIT_MQ, &RABBIT_MQ_CONFIGURATION_BUILDER, &KAFKA];
 
 /// Builds call context and runs every transport-specific identification strategy.
 pub(super) fn identify_message_edges(
@@ -68,6 +72,21 @@ impl MessageEdgeIdentificationStrategy for RabbitMqStrategy {
         message_edges::identify_message_edge(ctx.call, ctx.file_path, &ctx.scope)
             .into_iter()
             .collect()
+    }
+}
+
+impl MessageEdgeIdentificationStrategy for RabbitMqConfigurationBuilderStrategy {
+    /// Recognizes the food-delivery RabbitMQ configuration builder contract.
+    fn identify(&self, ctx: &MessageEdgeContext<'_>) -> Vec<MessageEdge> {
+        let is_library_producer = ctx
+            .call
+            .function_name
+            .to_ascii_lowercase()
+            .contains("rabbitmqproducer.publishmessage");
+        if !ctx.is_rabbitmq_file && !is_library_producer {
+            return Vec::new();
+        }
+        message_edges::identify_configuration_builder_edges(ctx.call, ctx.file_path)
     }
 }
 
