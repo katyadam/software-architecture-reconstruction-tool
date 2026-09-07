@@ -451,6 +451,14 @@ fn collect_local_assignments(
                     },
                 );
                 scope_values.insert(name.clone(), value);
+                collect_composite_field_assignments(
+                    &name,
+                    value_node,
+                    code,
+                    &scope,
+                    &scope_values,
+                    assignments,
+                );
                 if let Some(root) = selector_root(&name)
                     && scope_bindings(assignments, &Scope::Global).contains_key(root)
                 {
@@ -503,6 +511,62 @@ fn collect_local_assignments(
         }
         _ => {}
     });
+}
+
+/// Records literal fields of local Go configuration records for later selector resolution.
+fn collect_composite_field_assignments(
+    base: &str,
+    node: Node,
+    code: &str,
+    scope: &Scope,
+    scope_values: &HashMap<String, String>,
+    assignments: &mut HashMap<AssignmentKey, Assignment>,
+) {
+    if node.kind() != "composite_literal" {
+        if matches!(
+            node.kind(),
+            "literal_element" | "literal_value" | "keyed_element"
+        ) {
+            for child in node.named_children(&mut node.walk()) {
+                collect_composite_field_assignments(
+                    base,
+                    child,
+                    code,
+                    scope,
+                    scope_values,
+                    assignments,
+                );
+            }
+        }
+        return;
+    }
+    let Some(body) = node.child_by_field_name("body") else {
+        return;
+    };
+    for element in body.named_children(&mut body.walk()) {
+        if element.kind() != "keyed_element" {
+            continue;
+        }
+        let mut cursor = element.walk();
+        let mut children = element.named_children(&mut cursor);
+        let (Some(key), Some(value)) = (children.next(), children.next()) else {
+            continue;
+        };
+        let name = format!("{base}.{}", node_text(key, code));
+        let resolved = evaluate_expression_node(value, code, scope_values);
+        assignments.insert(
+            AssignmentKey {
+                scope: scope.clone(),
+                variable_name: name.clone(),
+            },
+            Assignment {
+                variable_name: name.clone(),
+                variable_type: String::new(),
+                value: resolved,
+            },
+        );
+        collect_composite_field_assignments(&name, value, code, scope, scope_values, assignments);
+    }
 }
 
 fn assignment_pairs<'a>(node: Node<'a>, code: &'a str) -> Vec<(String, Node<'a>)> {
