@@ -272,6 +272,97 @@ func Consume(channel any) {
     );
 }
 
+#[test]
+fn links_shared_rabbitmq_publishers_through_centralized_topology() {
+    let shared_publisher = r#"
+package publisher
+
+import amqp "github.com/rabbitmq/amqp091-go"
+
+func PublishMessage(channel any, exchangeName string, routingKey string) {
+    channel.Publish(exchangeName, routingKey, false, false, amqp.Publishing{})
+}
+"#;
+    let payment_publisher = r#"
+package payment
+
+import "example/common/publisher"
+
+func publish(channel any) {
+    publisher.PublishMessage(channel, "order-action-exchange", "payment-action-queue")
+}
+"#;
+    let broker = r#"
+package broker
+
+func setup(channel any) {
+    channel.QueueBind("payment-action-queue", "payment-action-queue", "order-action-exchange", false, nil)
+}
+"#;
+    let payment_consumer = r#"
+package productconsumer
+
+import amqp "github.com/rabbitmq/amqp091-go"
+
+func consume(channel any) {
+    channel.Consume("payment-action-queue", "", true, false, false, false, amqp.Table{})
+}
+"#;
+    let project_ir = build_project_ir(vec![
+        go_extract(shared_publisher, "common/publisher/publisher.go")
+            .expect("shared publisher should parse"),
+        go_extract(payment_publisher, "payment-service/publisher.go")
+            .expect("payment publisher should parse"),
+        go_extract(broker, "order-service/broker.go").expect("broker should parse"),
+        go_extract(payment_consumer, "product-service/consumer.go").expect("consumer should parse"),
+    ]);
+    let elements = CodeElementsAggregate::from(evaluate(
+        project_ir,
+        &HashMap::new(),
+        &HashMap::new(),
+        &HashMap::new(),
+    ));
+    let configuration = ConfigurationData {
+        service_descriptions: vec![
+            ServiceDescription {
+                name: "order-service".to_string(),
+                base_dir_path: "order-service".to_string(),
+                urls: vec![],
+            },
+            ServiceDescription {
+                name: "payment-service".to_string(),
+                base_dir_path: "payment-service".to_string(),
+                urls: vec![],
+            },
+            ServiceDescription {
+                name: "product-service".to_string(),
+                base_dir_path: "product-service".to_string(),
+                urls: vec![],
+            },
+            ServiceDescription {
+                name: "common".to_string(),
+                base_dir_path: "common".to_string(),
+                urls: vec![],
+            },
+        ],
+    };
+
+    let sdg = direct_sdg_build(&elements, &configuration, &[]);
+    assert_eq!(sdg.message_connections.len(), 1, "connections: {sdg:?}");
+    let connection = &sdg.message_connections[0];
+    assert_eq!(connection.source_id, "payment-service");
+    assert_eq!(connection.target_id, "product-service");
+    assert_eq!(connection.messages.len(), 1);
+    assert_eq!(
+        connection.messages[0].producer.destination,
+        "order-action-exchange:payment-action-queue"
+    );
+    assert_eq!(
+        connection.messages[0].consumer.destination,
+        "payment-action-queue"
+    );
+}
+
 fn messaging_configuration() -> ConfigurationData {
     ConfigurationData {
         service_descriptions: vec![
