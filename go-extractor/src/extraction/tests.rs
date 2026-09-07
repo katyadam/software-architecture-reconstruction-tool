@@ -415,6 +415,37 @@ func sharedKafkaConfigWrappers(ctx any) {
 }
 
 #[test]
+fn extracts_rabbitmq_bindings_from_shared_channel_packages() {
+    let code = r#"
+package consumer
+
+func consume(channel any) {
+    channel.QueueDeclare(
+        "inventory_queue", // queue name
+        true, false, false, false, nil,
+    )
+    channel.QueueBind(
+        "inventory_queue", // queue name
+        "", // fanout routing key
+        "order_created", // exchange name
+        false, nil,
+    )
+}
+"#;
+
+    let record = extract_syntactic(code, "consumer.go").expect("Go extraction should succeed");
+    let mut typed = models::ir::project::TypedFileRecord::from(record);
+    identify(&mut typed);
+
+    assert!(typed.raw_message_edges.iter().any(|edge| {
+        edge.protocol == models::CommunicationProtocol::RabbitMq
+            && edge.role == models::MessageRole::Binding
+            && edge.exchange.as_deref() == Some("order_created")
+            && edge.routing_key.is_none()
+    }));
+}
+
+#[test]
 fn handles_self_referential_selector_assignments() {
     let code = r#"
 package main

@@ -379,15 +379,18 @@ fn message_destinations_match(producer: &MessageEdge, consumer: &MessageEdge) ->
             }),
         MessageDestinationKind::ExchangeRoutingKey => {
             producer.exchange.as_ref().is_some_and(|exchange| {
-                producer.routing_key.as_ref().is_some_and(|routing_key| {
-                    consumer.exchange.as_ref().is_some_and(|consumer_exchange| {
-                        consumer
-                            .routing_key
-                            .as_ref()
-                            .is_some_and(|consumer_routing_key| {
-                                consumer_exchange == exchange && consumer_routing_key == routing_key
-                            })
-                    })
+                consumer.exchange.as_ref().is_some_and(|consumer_exchange| {
+                    if consumer_exchange != exchange {
+                        return false;
+                    }
+                    match (&producer.routing_key, &consumer.routing_key) {
+                        (Some(routing_key), Some(consumer_routing_key)) => {
+                            consumer_routing_key == routing_key
+                        }
+                        // Fanout exchanges intentionally use no routing key.
+                        (None, None) => true,
+                        _ => false,
+                    }
                 })
             })
         }

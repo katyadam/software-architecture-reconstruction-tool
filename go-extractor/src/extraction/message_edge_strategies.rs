@@ -57,7 +57,12 @@ pub(super) fn identify_message_edges(
 impl MessageEdgeIdentificationStrategy for RabbitMqStrategy {
     /// Delegates a call to the RabbitMQ edge recognizer.
     fn identify(&self, ctx: &MessageEdgeContext<'_>) -> Vec<MessageEdge> {
-        if !ctx.is_rabbitmq_file {
+        let method = ctx.call.function_name.rsplit('.').next();
+        // Queue declarations and bindings are specific to AMQP. Publish and
+        // Consume overlap with other transports, so require an AMQP import.
+        if !ctx.is_rabbitmq_file
+            && matches!(method, Some("Publish" | "PublishWithContext" | "Consume"))
+        {
             return Vec::new();
         }
         message_edges::identify_message_edge(ctx.call, ctx.file_path, &ctx.scope)
