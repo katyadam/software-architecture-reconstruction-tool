@@ -43,10 +43,10 @@ pub(super) fn identify_message_edges(
         call,
         file_path: &file.file_path,
         scope: merged_scope_bindings(&file.assignments, &scope),
-        is_kafka_file: file
-            .imports
-            .iter()
-            .any(|import| import.orig_module.to_ascii_lowercase().contains("kafka")),
+        is_kafka_file: file.imports.iter().any(|import| {
+            let module = import.orig_module.to_ascii_lowercase();
+            module.contains("kafka") || module.contains("sarama")
+        }),
         is_rabbitmq_file: file.imports.iter().any(|import| {
             let module = import.orig_module.to_ascii_lowercase();
             module.contains("rabbitmq") || module.contains("amqp")

@@ -252,6 +252,7 @@ package messaging
 import (
     "os"
     "github.com/segmentio/kafka-go"
+    "github.com/IBM/sarama"
     amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -263,6 +264,10 @@ func publish(ctx any, writer any, producer any, syncProducer any, client any, ch
     _ = channel.Publish("events", "rabbit.out", false, false, amqp.Publishing{})
     _ = channel.QueueDeclare("billing", true, false, false, false, nil)
     _ = channel.QueueBind("billing", "created", "events", false, nil)
+}
+
+func publishAsync(asyncProducer any) {
+    asyncProducer.Input() <- &sarama.ProducerMessage{Topic: "sarama.async.out"}
 }
 
 func consume(reader any, consumer any, partitionConsumer any, group any, channel any) {
@@ -318,7 +323,13 @@ func sharedKafkaConfigWrappers(ctx any) {
         })
     };
 
-    for destination in ["segment.out", "confluent.out", "sarama.out", "franz.out"] {
+    for destination in [
+        "segment.out",
+        "confluent.out",
+        "sarama.out",
+        "sarama.async.out",
+        "franz.out",
+    ] {
         assert!(has_edge(
             models::CommunicationProtocol::Kafka,
             models::MessageRole::Producer,
