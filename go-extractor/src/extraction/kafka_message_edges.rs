@@ -28,7 +28,9 @@ pub(super) fn identify_message_edges(
         }
         "NewReader" => consumer_from_config(call, file_path, scope),
         // Sarama ConsumerGroup.Consume(ctx, []string{"topic"}, handler).
-        "Consume" if call.arguments.len() > 1 => consumer_from_argument(call, file_path, scope, 1),
+        "Consume" if is_kafka_file && call.arguments.len() > 1 => {
+            consumer_from_argument(call, file_path, scope, 1)
+        }
         // franz-go uses SeedTopics to configure the topics consumed by a client.
         "SeedTopics" => consumer_from_argument(call, file_path, scope, 0),
         // Application wrappers commonly expose the Kafka topic as the third

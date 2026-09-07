@@ -213,6 +213,65 @@ func receive(consumer *event.Consumer) {
     );
 }
 
+#[test]
+fn links_go_rabbitmq_fanout_exchange_without_routing_key() {
+    let publisher = r#"
+package publisher
+
+import amqp "github.com/streadway/amqp"
+
+func Publish(channel any) {
+    channel.Publish("order_created", "", false, false, amqp.Publishing{})
+}
+"#;
+    let consumer = r#"
+package consumer
+
+import amqp "github.com/streadway/amqp"
+
+func Consume(channel any) {
+    channel.QueueBind("inventory_queue", "", "order_created", false, nil)
+}
+"#;
+    let project_ir = build_project_ir(vec![
+        go_extract(publisher, "services/order/publisher.go").expect("publisher should parse"),
+        go_extract(consumer, "services/inventory/consumer.go").expect("consumer should parse"),
+    ]);
+    let elements = CodeElementsAggregate::from(evaluate(
+        project_ir,
+        &HashMap::new(),
+        &HashMap::new(),
+        &HashMap::new(),
+    ));
+    let configuration = ConfigurationData {
+        service_descriptions: vec![
+            ServiceDescription {
+                name: "order".to_string(),
+                base_dir_path: "services/order".to_string(),
+                urls: vec![],
+            },
+            ServiceDescription {
+                name: "inventory".to_string(),
+                base_dir_path: "services/inventory".to_string(),
+                urls: vec![],
+            },
+        ],
+    };
+
+    let sdg = direct_sdg_build(&elements, &configuration, &[]);
+    assert_eq!(sdg.message_connections.len(), 1, "connections: {sdg:?}");
+    assert_eq!(sdg.message_connections[0].source_id, "order");
+    assert_eq!(sdg.message_connections[0].target_id, "inventory");
+    assert_eq!(
+        sdg.message_connections[0].messages[0].producer.destination,
+        "order_created"
+    );
+    assert_eq!(
+        sdg.message_connections[0].messages[0].consumer.destination,
+        "inventory_queue"
+    );
+}
+
 fn messaging_configuration() -> ConfigurationData {
     ConfigurationData {
         service_descriptions: vec![
