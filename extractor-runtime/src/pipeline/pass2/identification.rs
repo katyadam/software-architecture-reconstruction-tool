@@ -1,5 +1,9 @@
 use models::ir::{language::Language, project::TypedFileRecord};
 
+use self::language_backend::strategy;
+
+mod language_backend;
+
 /// Identify REST calls and message edges, once types are resolved.
 ///
 /// Identification is a Pass 2 stage for every language: Java's Spring strategy
@@ -11,11 +15,9 @@ use models::ir::{language::Language, project::TypedFileRecord};
 /// arm here.
 pub fn identify_edges(files: &mut [TypedFileRecord]) {
     for file in files.iter_mut() {
-        match file.language {
-            Language::Java => java_extractor::extraction::identify(file),
-            Language::Python => python_extractor::extraction::parse::identify(file),
-            Language::Go => go_extractor::extraction::identify(file),
-        }
+        strategy(&file.language).identify(file);
     }
-    go_extractor::extraction::resolve_project_message_edges(files);
+    for language in [Language::Java, Language::Python, Language::Go] {
+        strategy(&language).resolve_project_edges(files);
+    }
 }
