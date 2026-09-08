@@ -479,7 +479,10 @@ fn receiver_field_values(
     callable: &ParsedCallable,
     files: &[FileSnapshot],
 ) -> Option<Vec<String>> {
-    let (receiver, field) = value.split_once('.')?;
+    let (receiver, selector) = value.split_once('.')?;
+    let (field, suffix) = selector
+        .split_once('.')
+        .map_or((selector, None), |(field, suffix)| (field, Some(suffix)));
     let receiver_type = match &callable.metadata.namespace {
         models::Namespace::Class(name) => name,
         models::Namespace::Module(_) => return None,
@@ -493,6 +496,14 @@ fn receiver_field_values(
         .flat_map(|file| &file.callables)
         .filter(|candidate| candidate.metadata.name.starts_with("New"))
         .filter_map(|constructor| constructor_field_value(constructor, receiver_type, field))
+        .map(|values| {
+            suffix.map_or(values.clone(), |suffix| {
+                values
+                    .iter()
+                    .map(|value| format!("{value}.{suffix}"))
+                    .collect()
+            })
+        })
         .next()
 }
 
@@ -591,6 +602,10 @@ fn binding_values(
     let Some(bound) = bound else {
         return vec![value.to_string()];
     };
+    let bound = aliases.get(&bound).cloned().unwrap_or(bound);
+    if let Some(values) = composite_selector_values(&bound, suffix) {
+        return values;
+    }
     let items = composite_items(&bound);
     if items.is_empty() {
         binding_values(&format!("{bound}.{suffix}"), bindings, aliases, depth + 1)
@@ -600,6 +615,49 @@ fn binding_values(
             .map(|item| format!("{item}.{suffix}"))
             .collect()
     }
+}
+
+/// Resolves a selector path from a Go struct literal passed through a constructor.
+fn composite_selector_values(value: &str, selector: &str) -> Option<Vec<String>> {
+    let (field, remainder) = selector
+        .split_once('.')
+        .map_or((selector, None), |(field, remainder)| {
+            (field, Some(remainder))
+        });
+    let selected = composite_field_value(value, field)?;
+    match remainder {
+        Some(remainder) => composite_selector_values(selected, remainder),
+        None => Some(vec![selected.to_string()]),
+    }
+}
+
+/// Reads a named top-level field from a Go composite literal without flattening nested values.
+fn composite_field_value<'a>(value: &'a str, field: &str) -> Option<&'a str> {
+    let start = value.find('{')? + 1;
+    let end = value.rfind('}')?;
+    let body = &value[start..end];
+    let mut depth = 0usize;
+    let mut item_start = 0usize;
+    for (index, character) in body
+        .char_indices()
+        .chain(std::iter::once((body.len(), ',')))
+    {
+        match character {
+            '{' | '[' | '(' => depth += 1,
+            '}' | ']' | ')' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                let item = body[item_start..index].trim();
+                if let Some((name, value)) = item.split_once(':')
+                    && name.trim() == field
+                {
+                    return Some(value.trim());
+                }
+                item_start = index + 1;
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Converts literals and unambiguous selector values into concrete message fields.
@@ -735,4 +793,26 @@ fn string_literals(raw: &str) -> Vec<String> {
         }
     }
     values
+}
+
+#[cfg(test)]
+mod tests {
+    use super::composite_selector_values;
+
+    #[test]
+    fn resolves_nested_constructor_configuration_selectors() {
+        let config = r#"Config{
+            OrderActionExchange: "order-action-exchange",
+            PaymentQueue: QueueConfig{Name: "payment-action-queue"},
+        }"#;
+
+        assert_eq!(
+            composite_selector_values(config, "OrderActionExchange"),
+            Some(vec!["\"order-action-exchange\"".to_string()])
+        );
+        assert_eq!(
+            composite_selector_values(config, "PaymentQueue.Name"),
+            Some(vec!["\"payment-action-queue\"".to_string()])
+        );
+    }
 }
