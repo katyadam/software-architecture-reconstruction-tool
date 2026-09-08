@@ -1,346 +1,13 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use models::{
-    CallStatement, CommunicationProtocol, MessageDestinationKind, MessageEdge, MessageRole,
     ParsedCallable,
-    ir::{
-        ast::{Expr, Stmt},
-        project::TypedFileRecord,
-    },
+    ir::ast::{Expr, Stmt},
 };
 
-use super::shared::package_path;
+use super::FileSnapshot;
 
 const MAX_RESOLUTION_DEPTH: usize = 4;
-
-/// Replaces Go message edges with concrete variants derived from project call sites.
-pub(super) fn resolve_message_edges(files: &mut [TypedFileRecord]) {
-    let snapshots = files
-        .iter()
-        .filter(|file| file.language == models::ir::language::Language::Go)
-        .map(FileSnapshot::from)
-        .collect::<Vec<_>>();
-    for file in files
-        .iter_mut()
-        .filter(|file| file.language == models::ir::language::Language::Go)
-    {
-        file.raw_message_edges = file
-            .raw_message_edges
-            .iter()
-            .flat_map(|edge| {
-                let Some(source) = snapshot_for(&snapshots, &file.file_path) else {
-                    return vec![edge.clone()];
-                };
-                let Some(callable) = source
-                    .callables
-                    .iter()
-                    .find(|callable| callable.metadata.hash == edge.function_hash)
-                else {
-                    return vec![edge.clone()];
-                };
-                let known_values = known_values_for_source(&snapshots, &source.file_path);
-                let declared =
-                    resolve_declared_edge(edge, callable, source, &snapshots, &known_values);
-                if (edge.role != MessageRole::Producer && callable.metadata.name.starts_with("New"))
-                    || has_ambiguous_method_name(callable, &snapshots)
-                {
-                    return declared;
-                }
-                let mut resolved = Vec::new();
-                for invocation in matching_calls(callable, source, &snapshots) {
-                    for edge in &declared {
-                        resolved.extend(resolve_invocation(
-                            edge,
-                            callable,
-                            invocation,
-                            &snapshots,
-                            &known_values,
-                            0,
-                            &mut HashSet::new(),
-                        ));
-                    }
-                }
-                if resolved.is_empty() {
-                    declared
-                } else {
-                    resolved
-                }
-            })
-            .collect();
-    }
-}
-
-/// Returns true when multiple method implementations share a name across the project.
-fn has_ambiguous_method_name(callable: &ParsedCallable, files: &[FileSnapshot]) -> bool {
-    matches!(callable.metadata.namespace, models::Namespace::Class(_))
-        && files
-            .iter()
-            .flat_map(|file| &file.callables)
-            .filter(|candidate| candidate.metadata.name == callable.metadata.name)
-            .count()
-            > 1
-}
-
-struct FileSnapshot {
-    file_path: String,
-    import_modules: Vec<String>,
-    callables: Vec<ParsedCallable>,
-    calls: Vec<CallStatement>,
-    assignments: Vec<(String, String)>,
-}
-
-#[derive(Clone, Copy)]
-struct Invocation<'a> {
-    call: &'a CallStatement,
-    file: &'a FileSnapshot,
-}
-
-impl From<&TypedFileRecord> for FileSnapshot {
-    /// Retains the call, callable, and assignment metadata needed for project resolution.
-    fn from(file: &TypedFileRecord) -> Self {
-        Self {
-            file_path: file.file_path.clone(),
-            import_modules: file
-                .imports
-                .iter()
-                .map(|import| import.orig_module.clone())
-                .collect(),
-            callables: file.callables.clone(),
-            calls: file.call_statements.clone(),
-            assignments: file
-                .assignments
-                .values()
-                .map(|assignment| (assignment.variable_name.clone(), assignment.value.clone()))
-                .collect(),
-        }
-    }
-}
-
-/// Finds the snapshot belonging to a known project file.
-fn snapshot_for<'a>(files: &'a [FileSnapshot], file_path: &str) -> Option<&'a FileSnapshot> {
-    files.iter().find(|file| file.file_path == file_path)
-}
-
-/// Finds calls to a callable from its own package or an importing Go package.
-fn matching_calls<'a>(
-    callable: &'a ParsedCallable,
-    target_file: &FileSnapshot,
-    files: &'a [FileSnapshot],
-) -> Vec<Invocation<'a>> {
-    let calls = files
-        .iter()
-        .filter(|file| package_matches(file, target_file))
-        .flat_map(|file| file.calls.iter().map(move |call| Invocation { call, file }))
-        .filter(|invocation| {
-            invocation.call.function_name.rsplit('.').next()
-                == Some(callable.metadata.name.as_str())
-                && invocation.call.arguments.len() == callable.metadata.parameters.len()
-        })
-        .collect::<Vec<_>>();
-    if !calls.is_empty() || !matches!(callable.metadata.namespace, models::Namespace::Class(_)) {
-        return calls;
-    }
-    let matching_definitions = files
-        .iter()
-        .flat_map(|file| &file.callables)
-        .filter(|candidate| candidate.metadata.name == callable.metadata.name)
-        .count();
-    if matching_definitions != 1 {
-        return Vec::new();
-    }
-
-    files
-        .iter()
-        .flat_map(|file| file.calls.iter().map(move |call| Invocation { call, file }))
-        .filter(|invocation| {
-            invocation.call.function_name.rsplit('.').next()
-                == Some(callable.metadata.name.as_str())
-                && invocation.call.arguments.len() == callable.metadata.parameters.len()
-        })
-        .collect()
-}
-
-/// Checks whether a caller belongs to or imports the callable's package.
-fn package_matches(caller: &FileSnapshot, target_file: &FileSnapshot) -> bool {
-    let package = package_path(&target_file.file_path);
-    if package_path(&caller.file_path) == package {
-        return true;
-    }
-    let suffix = package
-        .rsplit('/')
-        .take(2)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect::<Vec<_>>()
-        .join("/");
-    caller
-        .import_modules
-        .iter()
-        .any(|module| module.replace('\\', "/").ends_with(&suffix))
-}
-
-/// Resolves one invocation and follows its enclosing wrapper when it has callers.
-fn resolve_invocation(
-    edge: &MessageEdge,
-    callable: &ParsedCallable,
-    invocation: Invocation<'_>,
-    files: &[FileSnapshot],
-    known_values: &HashMap<String, Vec<String>>,
-    depth: usize,
-    visited: &mut HashSet<String>,
-) -> Vec<MessageEdge> {
-    let resolved = resolve_edge(edge, callable, &invocation, files, known_values);
-    if depth >= MAX_RESOLUTION_DEPTH {
-        return resolved;
-    }
-    let Some(parent) = invocation.file.callables.iter().find(|candidate| {
-        invocation.call.enclosing_function_hash.as_ref() == Some(&candidate.metadata.hash)
-            || invocation.call.enclosing_function_name.as_deref()
-                == Some(candidate.metadata.name.as_str())
-            || invocation.call.enclosing_function_name.as_deref()
-                == Some(candidate.metadata.signature.as_str())
-    }) else {
-        return resolved;
-    };
-    let visit_key = format!("{}:{}", invocation.file.file_path, parent.metadata.hash);
-    if !visited.insert(visit_key) {
-        return resolved;
-    }
-    let parent_calls = matching_calls(parent, invocation.file, files);
-    if parent_calls.is_empty() {
-        return resolved;
-    }
-    let propagated = resolved
-        .iter()
-        .flat_map(|edge| {
-            parent_calls.iter().flat_map(|parent_call| {
-                let mut route = visited.clone();
-                resolve_invocation(
-                    edge,
-                    parent,
-                    Invocation {
-                        call: parent_call.call,
-                        file: parent_call.file,
-                    },
-                    files,
-                    known_values,
-                    depth + 1,
-                    &mut route,
-                )
-            })
-        })
-        .collect::<Vec<_>>();
-    if propagated.is_empty() {
-        resolved
-    } else {
-        propagated
-    }
-}
-
-/// Resolves all parameter-backed transport fields for one concrete invocation.
-fn resolve_edge(
-    edge: &MessageEdge,
-    callable: &ParsedCallable,
-    invocation: &Invocation<'_>,
-    files: &[FileSnapshot],
-    known_values: &HashMap<String, Vec<String>>,
-) -> Vec<MessageEdge> {
-    let bindings = callable
-        .metadata
-        .parameters
-        .iter()
-        .zip(&invocation.call.arguments)
-        .map(|(parameter, argument)| (parameter.name.as_str(), argument.value.as_str()))
-        .collect::<HashMap<_, _>>();
-    resolve_edge_fields(
-        edge,
-        callable,
-        &bindings,
-        &invocation.file.file_path,
-        files,
-        known_values,
-    )
-}
-
-/// Resolves constructor-backed transport fields without applying any call arguments.
-fn resolve_declared_edge(
-    edge: &MessageEdge,
-    callable: &ParsedCallable,
-    source: &FileSnapshot,
-    files: &[FileSnapshot],
-    known_values: &HashMap<String, Vec<String>>,
-) -> Vec<MessageEdge> {
-    resolve_edge_fields(
-        edge,
-        callable,
-        &HashMap::new(),
-        &source.file_path,
-        files,
-        known_values,
-    )
-}
-
-/// Resolves transport fields using the supplied parameter bindings and source file path.
-fn resolve_edge_fields(
-    edge: &MessageEdge,
-    callable: &ParsedCallable,
-    bindings: &HashMap<&str, &str>,
-    file_path: &str,
-    files: &[FileSnapshot],
-    known_values: &HashMap<String, Vec<String>>,
-) -> Vec<MessageEdge> {
-    let aliases = snapshot_for(files, &callable.metadata.file_path)
-        .map(|file| file.assignments.iter().cloned().collect::<HashMap<_, _>>())
-        .unwrap_or_default();
-    let exchanges = values_for(
-        edge.exchange.as_deref(),
-        &bindings,
-        &aliases,
-        known_values,
-        callable,
-        files,
-    );
-    let routing_keys = values_for(
-        edge.routing_key.as_deref(),
-        &bindings,
-        &aliases,
-        known_values,
-        callable,
-        files,
-    );
-    let queues = values_for(
-        edge.queue.as_deref(),
-        &bindings,
-        &aliases,
-        known_values,
-        callable,
-        files,
-    );
-    let topics = values_for(
-        edge.topic.as_deref(),
-        &bindings,
-        &aliases,
-        known_values,
-        callable,
-        files,
-    );
-
-    cartesian_edges(edge, exchanges, routing_keys, queues, topics)
-        .into_iter()
-        // QueueBind commonly reuses one loop variable for its queue and routing key.
-        // Keep those expansions paired instead of constructing a cross-product.
-        .filter(|resolved| {
-            edge.role != MessageRole::Binding
-                || edge.queue != edge.routing_key
-                || resolved.queue == resolved.routing_key
-        })
-        .map(|edge| MessageEdge {
-            file_path: file_path.to_string(),
-            ..edge
-        })
-        .collect()
-}
 
 /// Collects statically known configuration values by selector suffix.
 fn known_values(files: &[FileSnapshot]) -> HashMap<String, Vec<String>> {
@@ -370,7 +37,7 @@ fn known_values_from<'a>(
 }
 
 /// Collects constants from the service subtree containing the adapter source file.
-fn known_values_for_source(
+pub(super) fn known_values_for_source(
     files: &[FileSnapshot],
     file_path: &str,
 ) -> HashMap<String, Vec<String>> {
@@ -401,7 +68,7 @@ fn selector_suffixes(value: &str) -> Vec<String> {
 }
 
 /// Resolves a field through parameter bindings, queue lists, and known configuration selectors.
-fn values_for(
+pub(super) fn values_for(
     value: Option<&str>,
     bindings: &HashMap<&str, &str>,
     aliases: &HashMap<String, String>,
@@ -447,7 +114,7 @@ fn receiver_accessor_values(
         .flat_map(|file| &file.callables)
         .find(|candidate| {
             candidate.metadata.name == method
-                && matches!(&candidate.metadata.namespace, models::Namespace::Class(name) if name == receiver_type)
+                && matches!(&candidate.metadata.namespace, models::Namespace::Class(name) if *name == *receiver_type)
         })
         .and_then(|accessor| {
             accessor.ast.statements.iter().find_map(|statement| match statement {
@@ -496,7 +163,7 @@ fn receiver_field_values(
         .flat_map(|file| &file.callables)
         .filter(|candidate| candidate.metadata.name.starts_with("New"))
         .filter_map(|constructor| constructor_field_value(constructor, receiver_type, field))
-        .map(|values| {
+        .map(|values: Vec<String>| {
             suffix.map_or(values.clone(), |suffix| {
                 values
                     .iter()
@@ -707,63 +374,6 @@ fn composite_items(value: &str) -> Vec<String> {
         items.push(item.to_string());
     }
     items
-}
-
-/// Produces one edge for every concrete combination of resolved transport fields.
-fn cartesian_edges(
-    edge: &MessageEdge,
-    exchanges: Vec<Option<String>>,
-    routing_keys: Vec<Option<String>>,
-    queues: Vec<Option<String>>,
-    topics: Vec<Option<String>>,
-) -> Vec<MessageEdge> {
-    let mut edges = Vec::new();
-    for exchange in &exchanges {
-        for routing_key in &routing_keys {
-            for queue in &queues {
-                for topic in &topics {
-                    let destination = destination(edge, exchange, routing_key, queue, topic);
-                    edges.push(MessageEdge {
-                        destination,
-                        exchange: exchange.clone(),
-                        routing_key: routing_key.clone(),
-                        queue: queue.clone(),
-                        topic: topic.clone(),
-                        ..edge.clone()
-                    });
-                }
-            }
-        }
-    }
-    edges
-}
-
-/// Rebuilds the destination from resolved RabbitMQ or Kafka transport fields.
-fn destination(
-    edge: &MessageEdge,
-    exchange: &Option<String>,
-    routing_key: &Option<String>,
-    queue: &Option<String>,
-    topic: &Option<String>,
-) -> String {
-    if edge.protocol == CommunicationProtocol::Kafka
-        || matches!(edge.destination_kind, MessageDestinationKind::Topic)
-    {
-        return topic.clone().unwrap_or_else(|| edge.destination.clone());
-    }
-    match edge.role {
-        MessageRole::Producer | MessageRole::Binding => match (exchange, routing_key) {
-            (Some(exchange), Some(routing_key)) if !exchange.is_empty() => {
-                format!("{exchange}:{routing_key}")
-            }
-            (_, Some(routing_key)) => routing_key.clone(),
-            (Some(exchange), _) => exchange.clone(),
-            _ => queue.clone().unwrap_or_else(|| edge.destination.clone()),
-        },
-        MessageRole::Consumer | MessageRole::QueueDeclaration | MessageRole::TopicDeclaration => {
-            queue.clone().unwrap_or_else(|| edge.destination.clone())
-        }
-    }
 }
 
 /// Extracts interpreted and raw string literals from a Go expression.
