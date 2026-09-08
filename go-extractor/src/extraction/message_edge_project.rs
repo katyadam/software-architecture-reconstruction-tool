@@ -20,8 +20,6 @@ pub(super) fn resolve_message_edges(files: &mut [TypedFileRecord]) {
         .filter(|file| file.language == models::ir::language::Language::Go)
         .map(FileSnapshot::from)
         .collect::<Vec<_>>();
-    let known_values = known_values(&snapshots);
-
     for file in files
         .iter_mut()
         .filter(|file| file.language == models::ir::language::Language::Go)
@@ -40,8 +38,14 @@ pub(super) fn resolve_message_edges(files: &mut [TypedFileRecord]) {
                 else {
                     return vec![edge.clone()];
                 };
+                let known_values = known_values_for_source(&snapshots, &source.file_path);
                 let declared =
                     resolve_declared_edge(edge, callable, source, &snapshots, &known_values);
+                if (edge.role != MessageRole::Producer && callable.metadata.name.starts_with("New"))
+                    || has_ambiguous_method_name(callable, &snapshots)
+                {
+                    return declared;
+                }
                 let mut resolved = Vec::new();
                 for invocation in matching_calls(callable, source, &snapshots) {
                     for edge in &declared {
@@ -64,6 +68,17 @@ pub(super) fn resolve_message_edges(files: &mut [TypedFileRecord]) {
             })
             .collect();
     }
+}
+
+/// Returns true when multiple method implementations share a name across the project.
+fn has_ambiguous_method_name(callable: &ParsedCallable, files: &[FileSnapshot]) -> bool {
+    matches!(callable.metadata.namespace, models::Namespace::Class(_))
+        && files
+            .iter()
+            .flat_map(|file| &file.callables)
+            .filter(|candidate| candidate.metadata.name == callable.metadata.name)
+            .count()
+            > 1
 }
 
 struct FileSnapshot {
@@ -329,8 +344,15 @@ fn resolve_edge_fields(
 
 /// Collects statically known configuration values by selector suffix.
 fn known_values(files: &[FileSnapshot]) -> HashMap<String, Vec<String>> {
+    known_values_from(files.iter())
+}
+
+/// Collects statically known configuration values from a set of file snapshots.
+fn known_values_from<'a>(
+    files: impl IntoIterator<Item = &'a FileSnapshot>,
+) -> HashMap<String, Vec<String>> {
     let mut values = HashMap::<String, Vec<String>>::new();
-    for (name, value) in files.iter().flat_map(|file| &file.assignments) {
+    for (name, value) in files.into_iter().flat_map(|file| &file.assignments) {
         let literals = string_literals(value);
         if literals.is_empty() {
             continue;
@@ -345,6 +367,29 @@ fn known_values(files: &[FileSnapshot]) -> HashMap<String, Vec<String>> {
         }
     }
     values
+}
+
+/// Collects constants from the service subtree containing the adapter source file.
+fn known_values_for_source(
+    files: &[FileSnapshot],
+    file_path: &str,
+) -> HashMap<String, Vec<String>> {
+    let Some(root) = service_root(file_path) else {
+        return known_values(files);
+    };
+    known_values_from(
+        files
+            .iter()
+            .filter(|file| service_root(&file.file_path) == Some(root)),
+    )
+}
+
+/// Returns the path prefix preceding a Go service's `internal` package.
+fn service_root(file_path: &str) -> Option<&str> {
+    file_path
+        .split("/internal/")
+        .next()
+        .filter(|root| *root != file_path)
 }
 
 /// Produces selector suffixes that are specific enough to avoid field-name collisions.
@@ -367,7 +412,9 @@ fn values_for(
     let Some(value) = value else {
         return vec![None];
     };
-    let resolved = receiver_field_values(value, callable, files)
+    let resolved = receiver_accessor_values(value, callable, files)
+        .or_else(|| receiver_field_values(value, callable, files))
+        .or_else(|| producer_event_key(value, callable))
         .unwrap_or_else(|| binding_values(value, bindings, aliases, 0));
     let values = resolved
         .iter()
@@ -378,6 +425,52 @@ fn values_for(
     } else {
         values.into_iter().map(Some).collect()
     }
+}
+
+/// Resolves receiver accessor methods that return a constructor-backed field.
+fn receiver_accessor_values(
+    value: &str,
+    callable: &ParsedCallable,
+    files: &[FileSnapshot],
+) -> Option<Vec<String>> {
+    let value = value.strip_suffix("()")?;
+    let (receiver, method) = value.split_once('.')?;
+    let receiver_type = match &callable.metadata.namespace {
+        models::Namespace::Class(name) => name,
+        models::Namespace::Module(_) => return None,
+    };
+    if method_receiver_name(callable) != Some(receiver) {
+        return None;
+    }
+    files
+        .iter()
+        .flat_map(|file| &file.callables)
+        .find(|candidate| {
+            candidate.metadata.name == method
+                && matches!(&candidate.metadata.namespace, models::Namespace::Class(name) if name == receiver_type)
+        })
+        .and_then(|accessor| {
+            accessor.ast.statements.iter().find_map(|statement| match statement {
+                Stmt::Return(Expr::Attr { object, field })
+                    if matches!(object.as_ref(), Expr::Var(name) if name == receiver) =>
+                {
+                    receiver_field_values(&format!("{receiver}.{field}"), callable, files)
+                }
+                _ => None,
+            })
+        })
+}
+
+/// Derives a typed AMQP adapter's static routing-key constant from its producer name.
+fn producer_event_key(value: &str, callable: &ParsedCallable) -> Option<Vec<String>> {
+    if !value.ends_with(".Key()") {
+        return None;
+    }
+    let producer = match &callable.metadata.namespace {
+        models::Namespace::Class(name) => name.strip_suffix("Producer")?,
+        models::Namespace::Module(_) => return None,
+    };
+    Some(vec![format!("constant.{producer}Key")])
 }
 
 /// Resolves `receiver.field` values initialized in constructors for the receiver type.
