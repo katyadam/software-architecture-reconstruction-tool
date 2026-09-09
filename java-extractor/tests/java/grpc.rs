@@ -29,7 +29,6 @@ fn identifies_generated_blocking_stub_operations() {
 #[test]
 fn identifies_grpc_service_methods_as_operations() {
     let code = r#"
-        @GrpcService
         public class FlightServiceGrpcImpl extends FlightServiceGrpc.FlightServiceImplBase {
             public void getById(GetByIdRequest request, StreamObserver<Response> observer) {}
             public void reserveSeat(ReserveSeatRequest request, StreamObserver<Response> observer) {}

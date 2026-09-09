@@ -4,7 +4,8 @@
 //! type (for example `FlightServiceGrpc.FlightServiceBlockingStub`).  We use that
 //! stable convention to create a shared operation identifier:
 //! `grpc://FlightService/GetById`.  The normal SDG builder can then match a client
-//! call to an `@GrpcService` method without guessing from HTTP URLs.
+//! call to a generated `*ImplBase` implementation without guessing from HTTP
+//! URLs.
 
 use std::collections::HashMap;
 
@@ -69,9 +70,6 @@ fn extract_client_calls(code: &str, file_name: &str, calls: &[CallStatement]) ->
 }
 
 fn extract_server_endpoints(code: &str, tree: &Tree, file_name: &str) -> Vec<Endpoint> {
-    if !code.contains("@GrpcService") {
-        return vec![];
-    }
     let service_re = Regex::new(
         r"extends\s+(?P<service>[A-Za-z_][A-Za-z0-9_]*)Grpc\.[A-Za-z_][A-Za-z0-9_]*ImplBase",
     )
