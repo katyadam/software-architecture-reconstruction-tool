@@ -7,8 +7,7 @@ use statix::{class_hierarchy::build_class_hierarchy, import_graph::build_import_
 use crate::pipeline::pass2::{
     callables::build_project_global_callables, constants::collect_constants,
     endpoints::resolve_endpoint_handlers, entities::resolve_entity_fields,
-    identification::identify_edges,
-    type_inference::resolve_call_argument_types,
+    identification::identify_edges, type_inference::resolve_call_argument_types,
 };
 
 mod assignments;
