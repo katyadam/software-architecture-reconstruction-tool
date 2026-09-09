@@ -59,6 +59,17 @@ fn extract_client_calls(code: &str, file_name: &str, calls: &[CallStatement]) ->
                 .captures_iter(code)
                 .filter_map(|capture| imported_stubs.get(&capture["stub"]).map(|service| (capture["field"].to_string(), service.clone()))),
         )
+        .chain(
+            Regex::new(
+                r"(?m)\b(?P<field>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*GrpcClients\.(?:newClient\s*\([^;]*?|builder\s*\([^;]*?\)\s*\.build\s*\()(?P<stub>[A-Za-z_][A-Za-z0-9_]*Stub)\.class",
+            )
+            .expect("valid Armeria gRPC client factory regex")
+            .captures_iter(code)
+            .filter_map(|capture| {
+                service_from_stub_type(&capture["stub"])
+                    .map(|service| (capture["field"].to_string(), service))
+            }),
+        )
         .collect();
 
     let field_calls = receiver_call
@@ -195,6 +206,9 @@ fn extract_server_endpoints(code: &str, tree: &Tree, file_name: &str) -> Vec<End
             if !is_direct_method_of_class(method, service_class) {
                 return None;
             }
+            if !is_manual_service && !has_grpc_method_signature(method, code) {
+                return None;
+            }
             Some(Endpoint {
                 function_name: method
                     .utf8_text(code.as_bytes())
@@ -212,6 +226,28 @@ fn extract_server_endpoints(code: &str, tree: &Tree, file_name: &str) -> Vec<End
             })
         })
         .collect()
+}
+
+fn service_from_stub_type(stub: &str) -> Option<String> {
+    let service = stub
+        .strip_suffix("BlockingV2Stub")
+        .or_else(|| stub.strip_suffix("BlockingStub"))
+        .or_else(|| stub.strip_suffix("FutureStub"))
+        .or_else(|| stub.strip_suffix("Stub"))?;
+    (!service.is_empty()).then(|| service.to_string())
+}
+
+fn has_grpc_method_signature(method: tree_sitter::Node<'_>, code: &str) -> bool {
+    let Ok(method_text) = method.utf8_text(code.as_bytes()) else {
+        return false;
+    };
+    let declaration = method_text
+        .split('{')
+        .next()
+        .unwrap_or_default();
+    declaration.contains("StreamObserver<")
+        || declaration.contains("Mono<")
+        || declaration.contains("Flux<")
 }
 
 fn lower_camel_from_constant(value: &str) -> String {

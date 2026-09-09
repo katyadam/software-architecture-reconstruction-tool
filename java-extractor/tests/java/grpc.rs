@@ -147,3 +147,37 @@ fn identifies_grpc_spring_streaming_implementation_methods() {
         ]
     );
 }
+
+#[test]
+fn identifies_armeria_grpc_client_factories_and_excludes_service_helpers() {
+    let client = r#"
+        class Client {
+            void call(String uri) {
+                var blocking = GrpcClients.newClient(uri, HelloServiceBlockingStub.class);
+                var async = GrpcClients.builder(uri).build(HelloServiceStub.class);
+                blocking.sayHello(request);
+                async.streamHello(request);
+            }
+        }
+    "#;
+    let client_record = extract_syntactic(client, "Client.java").unwrap();
+    let uris: Vec<_> = client_record
+        .raw_restcalls
+        .iter()
+        .map(|call| call.target_uri.as_str())
+        .collect();
+    assert_eq!(
+        uris,
+        vec!["grpc://HelloService/SayHello", "grpc://HelloService/StreamHello"]
+    );
+
+    let server = r#"
+        class HelloService extends HelloServiceGrpc.HelloServiceImplBase {
+            public void sayHello(Request request, StreamObserver<Response> observer) {}
+            private static Response buildReply(Object value) { return null; }
+        }
+    "#;
+    let server_record = extract_syntactic(server, "HelloService.java").unwrap();
+    assert_eq!(server_record.endpoints.len(), 1);
+    assert_eq!(server_record.endpoints[0].uri, "grpc://HelloService/SayHello");
+}
