@@ -1,6 +1,6 @@
-//! Identification of Python gRPC aio stubs and servicers.
+//! Identification of Python gRPC stubs and servicers.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use models::{CallStatement, Endpoint, HttpMethod, RestCall};
 use regex::Regex;
@@ -20,25 +20,32 @@ pub fn extract(
 
 #[allow(clippy::unnecessary_filter_map)]
 fn extract_client_calls(code: &str, file_name: &str, calls: &[CallStatement]) -> Vec<RestCall> {
-    let stub_re =
-        Regex::new(r"\b[A-Za-z_][A-Za-z0-9_]*\.(?P<service>[A-Za-z_][A-Za-z0-9_]*)Stub\s*\(")
-            .expect("valid gRPC Python stub regex");
-    let operation_re = Regex::new(r"\bself\.stub\.(?P<operation>[A-Z][A-Za-z0-9_]*)\s*\(")
-        .expect("valid gRPC Python operation regex");
-    let services: HashSet<String> = stub_re
+    // Stubs can be assigned to instance attributes (`self.stub`) or to ordinary
+    // variables at module/function scope (`stub`). Generated stubs may also be
+    // imported directly, without their `_pb2_grpc` module qualifier.
+    let stub_re = Regex::new(
+        r"(?m)\b(?:(?:self)\.)?(?P<stub>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)*(?P<service>[A-Za-z_][A-Za-z0-9_]*)Stub\s*\(",
+    )
+    .expect("valid gRPC Python stub assignment regex");
+    let stubs: HashMap<String, String> = stub_re
         .captures_iter(code)
-        .map(|capture| capture["service"].to_string())
+        .map(|capture| (capture["stub"].to_string(), capture["service"].to_string()))
         .collect();
-    if services.len() != 1 {
+    if stubs.is_empty() {
         return vec![];
     }
-    let service = services.into_iter().next().expect("one service");
 
+    let operation_re = Regex::new(
+        r"\b(?:(?:self)\.)?(?P<stub>[A-Za-z_][A-Za-z0-9_]*)\.(?P<operation>[A-Z][A-Za-z0-9_]*)\s*\(",
+    )
+    .expect("valid gRPC Python operation regex");
     operation_re
         .captures_iter(code)
         .filter_map(|capture| {
+            let stub = &capture["stub"];
+            let service = stubs.get(stub)?;
             let operation = &capture["operation"];
-            let prefix = format!("self.stub.{operation}(");
+            let prefix = format!("{stub}.{operation}(");
             let call = calls.iter().find(|call| {
                 call.function_name.starts_with(&prefix) || call.function_name.ends_with(operation)
             });
@@ -51,7 +58,7 @@ fn extract_client_calls(code: &str, file_name: &str, calls: &[CallStatement]) ->
                     .unwrap_or_default(),
                 call_arguments: call.map(|call| call.arguments.clone()).unwrap_or_default(),
                 http_method: HttpMethod::POST,
-                target_uri: grpc_uri(&service, operation),
+                target_uri: grpc_uri(service, operation),
                 file_path: file_name.to_string(),
             })
         })
@@ -62,8 +69,9 @@ fn extract_server_endpoints(code: &str, tree: &Tree, file_name: &str) -> Vec<End
     let service_re = Regex::new(
         r"class\s+[A-Za-z_][A-Za-z0-9_]*\s*\([^\n)]*\.(?P<service>[A-Za-z_][A-Za-z0-9_]*)Servicer\)",
     ).expect("valid gRPC Python servicer regex");
-    let method_re = Regex::new(r"(?m)^\s*async\s+def\s+(?P<operation>[A-Z][A-Za-z0-9_]*)\s*\(")
-        .expect("valid gRPC Python method regex");
+    let method_re =
+        Regex::new(r"(?m)^\s*(?:async\s+)?def\s+(?P<operation>[A-Z][A-Za-z0-9_]*)\s*\(")
+            .expect("valid gRPC Python method regex");
     let Some(service) = service_re
         .captures(code)
         .map(|capture| capture["service"].to_string())
