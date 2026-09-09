@@ -134,22 +134,44 @@ fn extract_server_endpoints(code: &str, tree: &Tree, file_name: &str) -> Vec<End
     .captures_iter(code)
     .map(|capture| (capture["impl"].to_string(), capture["service"].to_string()))
     .collect();
+    let imported_impl_re = Regex::new(r"extends\s+(?P<impl>[A-Za-z_][A-Za-z0-9_]*ImplBase)")
+        .expect("valid imported gRPC implementation regex");
     let standard_service = service_re
         .captures(code)
-        .map(|capture| capture["service"].to_string())
+        .and_then(|capture| {
+            Some((
+                capture["service"].to_string(),
+                find_ancestor_class(tree.root_node().descendant_for_byte_range(
+                    capture.get(0)?.start(),
+                    capture.get(0)?.start(),
+                )?)?,
+            ))
+        })
         .or_else(|| {
-            Regex::new(r"extends\s+(?P<impl>[A-Za-z_][A-Za-z0-9_]*ImplBase)")
-                .expect("valid imported gRPC implementation regex")
-                .captures(code)
-                .and_then(|capture| imported_impls.get(&capture["impl"]).cloned())
+            imported_impl_re.captures(code).and_then(|capture| {
+                Some((
+                    imported_impls.get(&capture["impl"])?.clone(),
+                    find_ancestor_class(tree.root_node().descendant_for_byte_range(
+                        capture.get(0)?.start(),
+                        capture.get(0)?.start(),
+                    )?)?,
+                ))
+            })
         });
-    let manual_service = Regex::new(
+    let manual_service_re = Regex::new(
         r"(?s)\bimplements\s+[^\{]*\bBindableService\b.*?(?P<service>[A-Za-z_][A-Za-z0-9_]*)Grpc\.getServiceDescriptor\s*\(\)",
     )
-    .expect("valid manual gRPC service regex")
-    .captures(code)
-    .map(|capture| capture["service"].to_string());
-    let Some(service) = standard_service.or(manual_service) else {
+    .expect("valid manual gRPC service regex");
+    let manual_service = manual_service_re.captures(code).and_then(|capture| {
+        Some((
+            capture["service"].to_string(),
+            find_ancestor_class(
+                tree.root_node()
+                    .descendant_for_byte_range(capture.get(0)?.start(), capture.get(0)?.start())?,
+            )?,
+        ))
+    });
+    let Some((service, service_class)) = standard_service.or(manual_service) else {
         return vec![];
     };
 
@@ -170,6 +192,9 @@ fn extract_server_endpoints(code: &str, tree: &Tree, file_name: &str) -> Vec<End
                 .root_node()
                 .descendant_for_byte_range(method_start, method_start)?;
             let method = find_ancestor_method(node)?;
+            if !is_direct_method_of_class(method, service_class) {
+                return None;
+            }
             Some(Endpoint {
                 function_name: method
                     .utf8_text(code.as_bytes())
@@ -207,6 +232,25 @@ fn find_ancestor_method(mut node: tree_sitter::Node<'_>) -> Option<tree_sitter::
         }
         node = node.parent()?;
     }
+}
+
+fn find_ancestor_class(mut node: tree_sitter::Node<'_>) -> Option<tree_sitter::Node<'_>> {
+    loop {
+        if node.kind() == "class_declaration" {
+            return Some(node);
+        }
+        node = node.parent()?;
+    }
+}
+
+fn is_direct_method_of_class(method: tree_sitter::Node<'_>, class: tree_sitter::Node<'_>) -> bool {
+    let Some(class_body) = method.parent() else {
+        return false;
+    };
+    let Some(owner) = class_body.parent() else {
+        return false;
+    };
+    owner.start_byte() == class.start_byte() && owner.end_byte() == class.end_byte()
 }
 
 fn grpc_uri(service: &str, operation: &str) -> String {

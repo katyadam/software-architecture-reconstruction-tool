@@ -122,7 +122,13 @@ fn identifies_grpc_spring_streaming_implementation_methods() {
             public void serverStreamingRpc(ServerStreamingRequest request,
                 StreamObserver<ServerStreamingResponse> observer) {}
             public StreamObserver<BidiStreamingRequest> bidiStreamingRpc(
-                StreamObserver<BidiStreamingResponse> observer) { return null; }
+                StreamObserver<BidiStreamingResponse> observer) {
+                return new StreamObserver<>() {
+                    public void onNext(BidiStreamingRequest request) {}
+                    public void onError(Throwable error) {}
+                    public void onCompleted() {}
+                };
+            }
         }
     "#;
     let record = extract_syntactic(server, "Service.java").unwrap();
