@@ -17,6 +17,7 @@ pub fn resolve_entity_fields(files: &mut [TypedFileRecord], import_graph: &Impor
             Language::Python => {
                 python_evaluate_entity_fields(&mut file.entities, &file.file_path, import_graph)
             }
+            Language::Go => {}
         }
     }
 }

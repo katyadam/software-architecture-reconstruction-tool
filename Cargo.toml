@@ -4,6 +4,7 @@ members = ["cli",
     "constant-scanner",
     "env-scraper",
     "extractor-runtime",
+    "go-extractor",
     "java-extractor",
     "manager",
     "models",
@@ -20,6 +21,7 @@ statix = { path = "statix" }
 clients = { path = "clients" }
 java-extractor = { path = "java-extractor" }
 python-extractor = { path = "python-extractor" }
+go-extractor = { path = "go-extractor" }
 extractor-runtime = { path = "extractor-runtime" }
 synthesizer = { path = "synthesizer" }
 env-scraper = { path = "env-scraper" }
@@ -52,6 +54,7 @@ rust-s3 = "0.37.0"
 # Tree-sitter
 tree-sitter = "0.26.7"
 tree-sitter-java = "0.23.5"
+tree-sitter-go = "0.25.0"
 tree-sitter-python = "0.25.0"
 
 # API documentation

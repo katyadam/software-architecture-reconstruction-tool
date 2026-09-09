@@ -257,6 +257,7 @@ impl<'a> Visitor for SymbolicEvaluator<'a> {
                 receiver,
                 args,
             } => self.visit_call(name, receiver.as_deref(), args),
+            Expr::StructLiteral { .. } => Ok((None, Expr::Empty)),
             Expr::Empty => Ok((None, Expr::Empty)),
             Expr::Joined { vals } => Ok((None, Expr::Joined { vals: vals.clone() })),
             Expr::Attr { object, field } => {

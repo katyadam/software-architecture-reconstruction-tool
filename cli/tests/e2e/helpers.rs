@@ -17,7 +17,7 @@ pub fn collect_source_files(dir: &Path) -> Vec<PathBuf> {
             if path.is_dir() {
                 results.extend(collect_source_files(&path));
             } else if let Some(ext) = path.extension() {
-                if ext == "java" || ext == "py" {
+                if ext == "java" || ext == "py" || ext == "go" {
                     results.push(path);
                 }
             }

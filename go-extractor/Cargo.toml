@@ -1,0 +1,10 @@
+[package]
+name = "go-extractor"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+models = { workspace = true }
+statix = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-go = { workspace = true }

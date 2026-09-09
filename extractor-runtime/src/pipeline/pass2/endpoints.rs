@@ -1,5 +1,17 @@
 use models::ir::{language::Language, project::TypedFileRecord};
 
+pub fn resolve_endpoint_handlers(files: &mut [TypedFileRecord]) {
+    for language in files.iter().map(|file| file.language).collect::<Vec<_>>() {
+        match language {
+            Language::Go => {
+                go_extractor::extraction::resolve_package_endpoint_handlers(files);
+                break;
+            }
+            Language::Java | Language::Python => {}
+        }
+    }
+}
+
 trait EndpointPostProcessor {
     fn process(&self, files: &mut [TypedFileRecord]);
 }
@@ -29,11 +41,10 @@ fn strategy(language: &Language) -> &'static dyn EndpointPostProcessor {
     match language {
         Language::Java => &NOOP,
         Language::Python => &PYTHON,
+        Language::Go => &NOOP,
     }
 }
 
-/// Apply endpoint-specific enrichment without exposing language implementations
-/// to the project-building pipeline.
 pub fn post_process_endpoints(files: &mut [TypedFileRecord]) {
     if files.iter().any(|file| file.language == Language::Python) {
         strategy(&Language::Python).process(files);

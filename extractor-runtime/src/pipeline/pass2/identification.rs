@@ -14,6 +14,7 @@ pub fn identify_edges(files: &mut [TypedFileRecord]) {
         match file.language {
             Language::Java => java_extractor::extraction::identify(file),
             Language::Python => python_extractor::extraction::parse::identify(file),
+            Language::Go => go_extractor::extraction::identify(file),
         }
     }
 }
