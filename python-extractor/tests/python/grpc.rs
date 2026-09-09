@@ -63,3 +63,33 @@ class TodoServicer(todo_pb2_grpc.TodoServiceServicer):
     assert_eq!(record.endpoints.len(), 1);
     assert_eq!(record.endpoints[0].uri, "grpc://TodoService/List");
 }
+
+#[test]
+fn identifies_grpclib_stub_and_service_implementation() {
+    let client = r#"
+from grpclib.client import Channel
+from .helloworld_grpc import GreeterStub
+
+async def main():
+    async with Channel('127.0.0.1', 50051) as channel:
+        greeter = GreeterStub(channel)
+        return await greeter.SayHello(request)
+"#;
+    let client_record = extract_syntactic(client, "client.py").unwrap();
+    assert_eq!(client_record.raw_restcalls.len(), 1);
+    assert_eq!(
+        client_record.raw_restcalls[0].target_uri,
+        "grpc://Greeter/SayHello"
+    );
+
+    let server = r#"
+from .helloworld_grpc import GreeterBase
+
+class Greeter(GreeterBase):
+    async def SayHello(self, stream):
+        return None
+"#;
+    let server_record = extract_syntactic(server, "server.py").unwrap();
+    assert_eq!(server_record.endpoints.len(), 1);
+    assert_eq!(server_record.endpoints[0].uri, "grpc://Greeter/SayHello");
+}

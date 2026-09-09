@@ -66,15 +66,26 @@ fn extract_client_calls(code: &str, file_name: &str, calls: &[CallStatement]) ->
 }
 
 fn extract_server_endpoints(code: &str, tree: &Tree, file_name: &str) -> Vec<Endpoint> {
-    let service_re = Regex::new(
+    let grpcio_service_re = Regex::new(
         r"class\s+[A-Za-z_][A-Za-z0-9_]*\s*\([^\n)]*\.(?P<service>[A-Za-z_][A-Za-z0-9_]*)Servicer\)",
     ).expect("valid gRPC Python servicer regex");
+    // grpclib generated code exposes `<Service>Base`; applications implement
+    // it directly rather than using grpcio's `<Service>Servicer` convention.
+    let grpclib_service_re = Regex::new(
+        r"class\s+[A-Za-z_][A-Za-z0-9_]*\s*\(\s*(?P<service>[A-Za-z_][A-Za-z0-9_]*)Base\s*\)",
+    )
+    .expect("valid grpclib Python servicer regex");
     let method_re =
         Regex::new(r"(?m)^\s*(?:async\s+)?def\s+(?P<operation>[A-Z][A-Za-z0-9_]*)\s*\(")
             .expect("valid gRPC Python method regex");
-    let Some(service) = service_re
+    let Some(service) = grpcio_service_re
         .captures(code)
         .map(|capture| capture["service"].to_string())
+        .or_else(|| {
+            grpclib_service_re
+                .captures(code)
+                .map(|capture| capture["service"].to_string())
+        })
     else {
         return vec![];
     };

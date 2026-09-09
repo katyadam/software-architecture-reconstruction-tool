@@ -1,0 +1,9 @@
+{
+  "service_descriptions": [
+    {
+      "name": "grpclib",
+      "urls": [],
+      "base_dir_path": "../benchmark/polyglot/grpclib"
+    }
+  ]
+}
