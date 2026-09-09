@@ -43,3 +43,44 @@ fn identifies_grpc_service_methods_as_operations() {
         .collect();
     assert_eq!(uris, EXPECTED_FLIGHT_SERVICE_URIS.to_vec());
 }
+
+#[test]
+fn identifies_local_and_direct_stub_calls_and_manual_service_binding() {
+    let client = r#"
+        class Client {
+            void calls(Channel channel) {
+                GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(channel);
+                stub.sayHello(request);
+                GreeterGrpc.newFutureStub(channel).sayHello(request);
+            }
+        }
+    "#;
+    let client_record = extract_syntactic(client, "Client.java").unwrap();
+    let uris: Vec<_> = client_record
+        .raw_restcalls
+        .iter()
+        .map(|call| call.target_uri.as_str())
+        .collect();
+    assert_eq!(
+        uris,
+        vec!["grpc://Greeter/SayHello", "grpc://Greeter/SayHello"]
+    );
+
+    let server = r#"
+        class GreeterImpl implements BindableService {
+            private void sayHello(Request request, StreamObserver<Response> observer) {}
+            public ServerServiceDefinition bindService() {
+                return ServerServiceDefinition.builder(GreeterGrpc.getServiceDescriptor().getName())
+                    .addMethod(METHOD_SAY_HELLO, handler)
+                    .build();
+            }
+        }
+    "#;
+    let server_record = extract_syntactic(server, "GreeterImpl.java").unwrap();
+    let uris: Vec<_> = server_record
+        .endpoints
+        .iter()
+        .map(|endpoint| endpoint.uri.as_str())
+        .collect();
+    assert_eq!(uris, vec!["grpc://Greeter/SayHello"]);
+}
