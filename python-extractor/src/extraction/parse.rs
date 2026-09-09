@@ -91,6 +91,21 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
 
     parsed_callables.push(build_module_callable(&tree, code, file_name));
 
+    // Convert the Python-specific call records once for language-agnostic
+    // gRPC extraction. Ordinary REST calls are deliberately not identified in
+    // Pass 1; that belongs to the shared Pass 2 identification stage.
+    let language_calls: Vec<CallStatement> = calls
+        .iter()
+        .map(|call| call.call_statement.clone())
+        .collect();
+
+    // gRPC extraction is syntactic: generated stubs and servicers can be
+    // recognized before cross-file resolution, so those candidates are kept
+    // for Pass 2/Pass 3 contract processing.
+    let (grpc_endpoints, grpc_calls) =
+        crate::extraction::grpc::extract(code, &tree, file_name, &language_calls);
+    let mut endpoints = endpoints;
+    endpoints.extend(grpc_endpoints);
     let call_statements = calls
         .into_iter()
         .map(PythonCallStatement::to_language_agnostic)
@@ -106,6 +121,8 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         call_statements,
         assignments,
         enums,
+        raw_restcalls: grpc_calls,
+        proto_services: vec![],
         raw_message_edges: vec![],
     })
 }
@@ -121,11 +138,20 @@ pub fn identify(file: &mut TypedFileRecord) {
     let rabbitmq_strategy = RabbitMqIdentificationStrategy::new();
     let kafka_strategy = KafkaIdentificationStrategy::new();
 
-    let restcalls: Vec<_> = file
-        .call_statements
+    // Preserve only syntactically identified gRPC calls; ordinary Python REST
+    // calls are re-identified here after Pass 2 type resolution.
+    let mut restcalls = file
+        .raw_restcalls
         .iter()
-        .filter_map(|call| restcall_strategy.identify_restcall(call, &file.file_path))
-        .collect();
+        .filter(|call| call.target_uri.starts_with("grpc://"))
+        .cloned()
+        .collect::<Vec<_>>();
+    restcalls.extend(
+        file.call_statements
+            .iter()
+            .filter_map(|call| restcall_strategy.identify_restcall(call, &file.file_path))
+            .collect::<Vec<_>>(),
+    );
 
     let mut message_edges: Vec<_> = file
         .call_statements

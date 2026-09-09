@@ -1,0 +1,14 @@
+{
+  "service_descriptions": [
+    {
+      "name": "todo-api",
+      "urls": ["http://todo_api:8000"],
+      "base_dir_path": "../benchmark/python/FastApi-GRPC-Todo-Microservice-App/services/todo-api"
+    },
+    {
+      "name": "todo-grpc",
+      "urls": ["grpc://todo_grpc:50051"],
+      "base_dir_path": "../benchmark/python/FastApi-GRPC-Todo-Microservice-App/services/todo-grpc"
+    }
+  ]
+}

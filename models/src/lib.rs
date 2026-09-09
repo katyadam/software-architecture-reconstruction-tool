@@ -10,6 +10,7 @@ pub mod entities;
 pub mod enums;
 pub mod imports;
 pub mod ir;
+pub mod proto;
 pub mod restcalls;
 
 pub use api::CodeElementsAggregate;
@@ -22,4 +23,5 @@ pub use configuration::ConfigurationData;
 pub use endpoints::Endpoint;
 pub use entities::{Entity, Field};
 pub use imports::Import;
+pub use proto::ProtoService;
 pub use restcalls::RestCall;
