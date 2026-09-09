@@ -132,6 +132,11 @@ fn insert(
     producer: &AssignedMessageEdge,
     consumer: &AssignedMessageEdge,
 ) {
+    // Files outside configured service roots are deliberately retained during extraction, but
+    // they must not produce architecture links with an anonymous endpoint.
+    if producer.service.name.is_empty() || consumer.service.name.is_empty() {
+        return;
+    }
     let connection = connections
         .entry(format!(
             "{}__{}",
@@ -173,6 +178,27 @@ fn matches(producer: &AssignedMessageEdge, destination: &AssignedMessageEdge) ->
             producer.exchange == destination.exchange
                 && producer.routing_key == destination.routing_key
         }
+        MessageDestinationKind::GrpcService => {
+            grpc_service_matches(&producer.destination, &destination.destination)
+        }
         MessageDestinationKind::Unknown => false,
     }
+}
+
+/// A provider registers a service (`ProductService`), whereas a client invokes a method
+/// (`ProductService/GetProduct`). Match the shared service component.
+fn grpc_service_matches(producer: &str, consumer: &str) -> bool {
+    canonical_grpc_service(producer) == canonical_grpc_service(consumer)
+}
+
+/// Generated Go clients may be stored in fields such as `searchClient`, while their service
+/// registration is `RegisterSearchServer`. Other projects use `SearchService` for both. Treat
+/// the conventional `Service` suffix as optional only for gRPC service matching.
+fn canonical_grpc_service(destination: &str) -> &str {
+    destination
+        .split('/')
+        .next()
+        .unwrap_or_default()
+        .strip_suffix("Service")
+        .unwrap_or_else(|| destination.split('/').next().unwrap_or_default())
 }

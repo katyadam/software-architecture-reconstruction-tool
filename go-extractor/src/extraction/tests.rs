@@ -863,3 +863,74 @@ func configure(builder configurations.RabbitMQConfigurationBuilder) {
         edge.role == models::MessageRole::Consumer && edge.destination == "product_created_v1"
     }));
 }
+
+#[test]
+fn extracts_grpc_client_calls_and_server_registration() {
+    let client_code = r#"
+package gateway
+import "google.golang.org/grpc"
+func forward(conn *grpc.ClientConn) {
+    client := pb.NewProductServiceClient(conn)
+    client.GetProduct(ctx, &pb.GetProductRequest{})
+}
+"#;
+    let server_code = r#"
+package product
+import "google.golang.org/grpc"
+func serve(s *grpc.Server) {
+    pb.RegisterProductServiceServer(s, &ProductServer{})
+}
+"#;
+
+    let mut client = models::ir::project::TypedFileRecord::from(
+        extract_syntactic(client_code, "gateway/client.go").expect("Go extraction should succeed"),
+    );
+    let mut server = models::ir::project::TypedFileRecord::from(
+        extract_syntactic(server_code, "product/main.go").expect("Go extraction should succeed"),
+    );
+    identify(&mut client);
+    identify(&mut server);
+
+    assert!(
+        client.raw_message_edges.iter().any(|edge| {
+            edge.protocol == models::CommunicationProtocol::Grpc
+                && edge.role == models::MessageRole::Producer
+                && edge.destination == "ProductService/GetProduct"
+        }),
+        "{:?}",
+        client.call_statements
+    );
+    assert!(server.raw_message_edges.iter().any(|edge| {
+        edge.protocol == models::CommunicationProtocol::Grpc
+            && edge.role == models::MessageRole::Consumer
+            && edge.destination == "ProductService"
+    }));
+}
+
+#[test]
+fn extracts_grpc_client_from_multi_assignment() {
+    let code = r#"
+package broker
+import "google.golang.org/grpc"
+func forward() {
+    conn, err := grpc.Dial("logger-service:50001")
+    _ = err
+    c, err := logs.NewLogServiceClient(conn)
+    c.WriteLog(ctx, &logs.LogRequest{})
+}
+"#;
+    let mut typed = models::ir::project::TypedFileRecord::from(
+        extract_syntactic(code, "broker/handlers.go").expect("Go extraction should succeed"),
+    );
+    identify(&mut typed);
+    assert!(
+        typed.raw_message_edges.iter().any(|edge| {
+            edge.protocol == models::CommunicationProtocol::Grpc
+                && edge.role == models::MessageRole::Producer
+                && edge.destination == "LogService/WriteLog"
+        }),
+        "assignments: {:?}; calls: {:?}",
+        typed.assignments,
+        typed.call_statements
+    );
+}
