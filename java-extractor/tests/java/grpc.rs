@@ -84,3 +84,60 @@ fn identifies_local_and_direct_stub_calls_and_manual_service_binding() {
         .collect();
     assert_eq!(uris, vec!["grpc://Greeter/SayHello"]);
 }
+
+#[test]
+fn identifies_grpc_spring_imported_stubs_and_implementations() {
+    let client = r#"
+        import example.SimpleGrpc.SimpleBlockingStub;
+        class Client {
+            @GrpcClient("server")
+            private SimpleBlockingStub simpleStub;
+            void call() { this.simpleStub.sayHello(request); }
+        }
+    "#;
+    let client_record = extract_syntactic(client, "Client.java").unwrap();
+    assert_eq!(
+        client_record.raw_restcalls[0].target_uri,
+        "grpc://Simple/SayHello"
+    );
+
+    let server = r#"
+        import example.SimpleGrpc.SimpleImplBase;
+        class Service extends SimpleImplBase {
+            public StreamObserver<Request> stream(StreamObserver<Response> observer) { return null; }
+        }
+    "#;
+    let server_record = extract_syntactic(server, "Service.java").unwrap();
+    assert_eq!(server_record.endpoints[0].uri, "grpc://Simple/Stream");
+}
+
+#[test]
+fn identifies_grpc_spring_streaming_implementation_methods() {
+    let server = r#"
+        import example.ExampleServiceGrpc.ExampleServiceImplBase;
+        class Service extends ExampleServiceImplBase {
+            public void unaryRpc(UnaryRequest request, StreamObserver<UnaryResponse> observer) {}
+            public StreamObserver<ClientStreamingRequest> clientStreamingRpc(
+                StreamObserver<ClientStreamingResponse> observer) { return null; }
+            public void serverStreamingRpc(ServerStreamingRequest request,
+                StreamObserver<ServerStreamingResponse> observer) {}
+            public StreamObserver<BidiStreamingRequest> bidiStreamingRpc(
+                StreamObserver<BidiStreamingResponse> observer) { return null; }
+        }
+    "#;
+    let record = extract_syntactic(server, "Service.java").unwrap();
+    let uris: Vec<_> = record
+        .endpoints
+        .iter()
+        .map(|endpoint| endpoint.uri.as_str())
+        .collect();
+    assert_eq!(
+        uris,
+        vec![
+            "grpc://ExampleService/UnaryRpc",
+            "grpc://ExampleService/ClientStreamingRpc",
+            "grpc://ExampleService/ServerStreamingRpc",
+            "grpc://ExampleService/BidiStreamingRpc",
+        ]
+    );
+}

@@ -1,0 +1,12 @@
+{
+  "service_descriptions": [
+    {"name": "local-grpc-client", "urls": [], "base_dir_path": "../benchmark/java/grpc-spring/examples/local-grpc-client"},
+    {"name": "local-grpc-server", "urls": ["grpc://local-grpc-server:9090"], "base_dir_path": "../benchmark/java/grpc-spring/examples/local-grpc-server"},
+    {"name": "cloud-grpc-client", "urls": [], "base_dir_path": "../benchmark/java/grpc-spring/examples/cloud-grpc-client"},
+    {"name": "cloud-grpc-server", "urls": ["grpc://cloud-grpc-server:9090"], "base_dir_path": "../benchmark/java/grpc-spring/examples/cloud-grpc-server"},
+    {"name": "security-grpc-client", "urls": [], "base_dir_path": "../benchmark/java/grpc-spring/examples/security-grpc-client"},
+    {"name": "security-grpc-server", "urls": ["grpc://security-grpc-server:9090"], "base_dir_path": "../benchmark/java/grpc-spring/examples/security-grpc-server"},
+    {"name": "observability-frontend", "urls": [], "base_dir_path": "../benchmark/java/grpc-spring/examples/grpc-observability/frontend"},
+    {"name": "observability-backend", "urls": ["grpc://backend:9090"], "base_dir_path": "../benchmark/java/grpc-spring/examples/grpc-observability/backend"}
+  ]
+}

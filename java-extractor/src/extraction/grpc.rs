@@ -35,6 +35,13 @@ fn extract_client_calls(code: &str, file_name: &str, calls: &[CallStatement]) ->
         Regex::new(r"(?P<receiver>[A-Za-z_][A-Za-z0-9_]*)\.(?P<operation>[a-z][A-Za-z0-9_]*)\s*\(")
             .expect("valid gRPC call regex");
 
+    let imported_stubs: HashMap<String, String> = Regex::new(
+        r"(?m)import\s+[A-Za-z_][A-Za-z0-9_.]*\.(?P<service>[A-Za-z_][A-Za-z0-9_]*)Grpc\.(?P<stub>[A-Za-z_][A-Za-z0-9_]*Stub)\s*;",
+    )
+    .expect("valid gRPC stub import regex")
+    .captures_iter(code)
+    .map(|capture| (capture["stub"].to_string(), capture["service"].to_string()))
+    .collect();
     let stubs: HashMap<String, String> = stub_fields
         .captures_iter(code)
         .map(|capture| (capture["field"].to_string(), capture["service"].to_string()))
@@ -46,6 +53,12 @@ fn extract_client_calls(code: &str, file_name: &str, calls: &[CallStatement]) ->
             .captures_iter(code)
             .map(|capture| (capture["field"].to_string(), capture["service"].to_string())),
         )
+        .chain(
+            Regex::new(r"(?m)\b(?P<stub>[A-Za-z_][A-Za-z0-9_]*Stub)\s+(?P<field>[A-Za-z_][A-Za-z0-9_]*)\s*(?:;|=)")
+                .expect("valid imported gRPC stub field regex")
+                .captures_iter(code)
+                .filter_map(|capture| imported_stubs.get(&capture["stub"]).map(|service| (capture["field"].to_string(), service.clone()))),
+        )
         .collect();
 
     let field_calls = receiver_call
@@ -54,9 +67,11 @@ fn extract_client_calls(code: &str, file_name: &str, calls: &[CallStatement]) ->
             let service = stubs.get(&capture["receiver"])?;
             let operation = upper_first(&capture["operation"]);
             let call_prefix = format!("{}.{}(", &capture["receiver"], &capture["operation"]);
-            let call = calls
-                .iter()
-                .find(|call| call.function_name.starts_with(&call_prefix));
+            let this_call_prefix = format!("this.{call_prefix}");
+            let call = calls.iter().find(|call| {
+                call.function_name.starts_with(&call_prefix)
+                    || call.function_name.starts_with(&this_call_prefix)
+            });
 
             Some(RestCall {
                 function_name: call
@@ -109,12 +124,25 @@ fn extract_server_endpoints(code: &str, tree: &Tree, file_name: &str) -> Vec<End
     )
     .expect("valid gRPC implementation regex");
     let method_re = Regex::new(
-        r"(?m)\b(?:public|private|protected)\s+(?:static\s+)?void\s+(?P<operation>[a-z][A-Za-z0-9_]*)\s*\(",
+        r"(?m)\b(?:public|private|protected)\s+(?:static\s+)?(?:void|[A-Za-z_][A-Za-z0-9_]*(?:<[^>\n]+>)?(?:\[\])?)\s+(?P<operation>[a-z][A-Za-z0-9_]*)\s*\(",
     )
     .expect("valid gRPC method regex");
+    let imported_impls: HashMap<String, String> = Regex::new(
+        r"(?m)import\s+[A-Za-z_][A-Za-z0-9_.]*\.(?P<service>[A-Za-z_][A-Za-z0-9_]*)Grpc\.(?P<impl>[A-Za-z_][A-Za-z0-9_]*ImplBase)\s*;",
+    )
+    .expect("valid gRPC implementation import regex")
+    .captures_iter(code)
+    .map(|capture| (capture["impl"].to_string(), capture["service"].to_string()))
+    .collect();
     let standard_service = service_re
         .captures(code)
-        .map(|capture| capture["service"].to_string());
+        .map(|capture| capture["service"].to_string())
+        .or_else(|| {
+            Regex::new(r"extends\s+(?P<impl>[A-Za-z_][A-Za-z0-9_]*ImplBase)")
+                .expect("valid imported gRPC implementation regex")
+                .captures(code)
+                .and_then(|capture| imported_impls.get(&capture["impl"]).cloned())
+        });
     let manual_service = Regex::new(
         r"(?s)\bimplements\s+[^\{]*\bBindableService\b.*?(?P<service>[A-Za-z_][A-Za-z0-9_]*)Grpc\.getServiceDescriptor\s*\(\)",
     )
