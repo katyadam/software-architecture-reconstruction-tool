@@ -6,6 +6,116 @@ use models::{CodeElementsAggregate, ConfigurationData, configuration::ServiceDes
 use synthesizer::direct_sdg_build;
 
 #[test]
+fn links_go_grpc_client_and_registered_server() {
+    let client = r#"
+package gateway
+import "google.golang.org/grpc"
+func forward(conn *grpc.ClientConn) {
+    client := pb.NewProductServiceClient(conn)
+    client.GetProduct(ctx, &pb.GetProductRequest{})
+}
+"#;
+    let server = r#"
+package product
+import "google.golang.org/grpc"
+func serve(s *grpc.Server) {
+    pb.RegisterProductServiceServer(s, &ProductServer{})
+}
+"#;
+    let project_ir = build_project_ir(vec![
+        go_extract(client, "services/gateway/client.go").expect("client should parse"),
+        go_extract(server, "services/product/main.go").expect("server should parse"),
+    ]);
+    let elements = CodeElementsAggregate::from(evaluate(
+        project_ir,
+        &HashMap::new(),
+        &HashMap::new(),
+        &HashMap::new(),
+    ));
+    let configuration = ConfigurationData {
+        service_descriptions: vec![
+            ServiceDescription {
+                name: "gateway".to_string(),
+                base_dir_path: "services/gateway".to_string(),
+                urls: vec![],
+            },
+            ServiceDescription {
+                name: "product".to_string(),
+                base_dir_path: "services/product".to_string(),
+                urls: vec![],
+            },
+        ],
+    };
+
+    let sdg = direct_sdg_build(&elements, &configuration, &[]);
+    assert_eq!(sdg.message_connections.len(), 1, "connections: {sdg:?}");
+    let connection = &sdg.message_connections[0];
+    assert_eq!(connection.source_id, "gateway");
+    assert_eq!(connection.target_id, "product");
+    assert_eq!(
+        connection.messages[0].producer.destination,
+        "ProductService/GetProduct"
+    );
+    assert_eq!(
+        connection.messages[0].consumer.destination,
+        "ProductService"
+    );
+}
+
+#[test]
+fn resolves_go_grpc_client_fields_through_constructors() {
+    let gateway = r#"
+package gateway
+import "google.golang.org/grpc"
+type Gateway struct { productClient any }
+func New(conn *grpc.ClientConn) *Gateway {
+    return &Gateway{productClient: pb.NewProductServiceClient(conn)}
+}
+func (s *Gateway) Forward() {
+    s.productClient.GetProduct(ctx, &pb.GetProductRequest{})
+}
+"#;
+    let server = r#"
+package product
+import "google.golang.org/grpc"
+func serve(s *grpc.Server) {
+    pb.RegisterProductServiceServer(s, &ProductServer{})
+}
+"#;
+    let project_ir = build_project_ir(vec![
+        go_extract(gateway, "services/gateway/gateway.go").expect("gateway should parse"),
+        go_extract(server, "services/product/main.go").expect("server should parse"),
+    ]);
+    let elements = CodeElementsAggregate::from(evaluate(
+        project_ir,
+        &HashMap::new(),
+        &HashMap::new(),
+        &HashMap::new(),
+    ));
+    let configuration = ConfigurationData {
+        service_descriptions: vec![
+            ServiceDescription {
+                name: "gateway".to_string(),
+                base_dir_path: "services/gateway".to_string(),
+                urls: vec![],
+            },
+            ServiceDescription {
+                name: "product".to_string(),
+                base_dir_path: "services/product".to_string(),
+                urls: vec![],
+            },
+        ],
+    };
+
+    let sdg = direct_sdg_build(&elements, &configuration, &[]);
+    assert_eq!(sdg.message_connections.len(), 1, "connections: {sdg:?}");
+    assert_eq!(
+        sdg.message_connections[0].messages[0].producer.destination,
+        "ProductService/GetProduct"
+    );
+}
+
+#[test]
 fn links_go_kafka_producer_and_consumer_services() {
     let producer = r#"
 package orders

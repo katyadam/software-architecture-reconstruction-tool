@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use models::{CallStatement, MessageEdge, ir::project::TypedFileRecord};
 
-use super::{kafka_message_edges, message_edges, shared::merged_scope_bindings};
+use super::{
+    grpc_message_edges, kafka_message_edges, message_edges, shared::merged_scope_bindings,
+};
 
 pub(super) struct MessageEdgeContext<'a> {
     pub call: &'a CallStatement,
@@ -10,6 +12,7 @@ pub(super) struct MessageEdgeContext<'a> {
     pub scope: HashMap<String, String>,
     pub is_kafka_file: bool,
     pub is_rabbitmq_file: bool,
+    pub is_grpc_file: bool,
 }
 
 /// Identifies message edges for one transport family from a Go call statement.
@@ -21,13 +24,15 @@ pub(super) trait MessageEdgeIdentificationStrategy: Sync {
 struct RabbitMqStrategy;
 struct RabbitMqConfigurationBuilderStrategy;
 struct KafkaStrategy;
+struct GrpcStrategy;
 
 static RABBIT_MQ: RabbitMqStrategy = RabbitMqStrategy;
 static RABBIT_MQ_CONFIGURATION_BUILDER: RabbitMqConfigurationBuilderStrategy =
     RabbitMqConfigurationBuilderStrategy;
 static KAFKA: KafkaStrategy = KafkaStrategy;
+static GRPC: GrpcStrategy = GrpcStrategy;
 static STRATEGIES: &[&dyn MessageEdgeIdentificationStrategy] =
-    &[&RABBIT_MQ, &RABBIT_MQ_CONFIGURATION_BUILDER, &KAFKA];
+    &[&RABBIT_MQ, &RABBIT_MQ_CONFIGURATION_BUILDER, &KAFKA, &GRPC];
 
 /// Builds call context and runs every transport-specific identification strategy.
 pub(super) fn identify_message_edges(
@@ -50,6 +55,12 @@ pub(super) fn identify_message_edges(
         is_rabbitmq_file: file.imports.iter().any(|import| {
             let module = import.orig_module.to_ascii_lowercase();
             module.contains("rabbitmq") || module.contains("amqp")
+        }),
+        is_grpc_file: file.imports.iter().any(|import| {
+            import
+                .orig_module
+                .to_ascii_lowercase()
+                .contains("google.golang.org/grpc")
         }),
     };
     STRATEGIES
@@ -98,6 +109,18 @@ impl MessageEdgeIdentificationStrategy for KafkaStrategy {
             ctx.file_path,
             &ctx.scope,
             ctx.is_kafka_file,
+        )
+    }
+}
+
+impl MessageEdgeIdentificationStrategy for GrpcStrategy {
+    /// Recognizes Go's generated-client construction, RPC invocation, and server registration APIs.
+    fn identify(&self, ctx: &MessageEdgeContext<'_>) -> Vec<MessageEdge> {
+        grpc_message_edges::identify_message_edges(
+            ctx.call,
+            ctx.file_path,
+            &ctx.scope,
+            ctx.is_grpc_file,
         )
     }
 }
