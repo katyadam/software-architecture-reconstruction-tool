@@ -449,7 +449,7 @@ fn collect_local_assignments(
                 let value = evaluate_expression_node(value_node, code, &scope_values);
                 // Preserve the previous binding when the assignment references
                 // itself, e.g. `r.Body = wrap(r.Body)`.
-                if value.contains(&name) {
+                if references_binding(&value, &name) {
                     continue;
                 }
                 assignments.insert(
@@ -734,7 +734,7 @@ fn collect_calls_in_source_order(
                     let resolved = evaluate_expression_node(value, code, scope);
                     // Do not turn assignments such as `r.Body = wrap(r.Body)` into
                     // recursive scope bindings.
-                    if !resolved.contains(&name) {
+                    if !references_binding(&resolved, &name) {
                         scope.insert(name, resolved);
                     }
                 }
@@ -840,6 +840,21 @@ fn collect_calls_in_source_order(
             }
         }
     }
+}
+
+/// Checks whether an expression refers to the assignment target as a complete Go token.
+/// A substring check incorrectly treats `c := grpc.Dial(...)` as self-referential because
+/// the one-letter variable occurs within `grpc`.
+fn references_binding(value: &str, name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    value.match_indices(name).any(|(index, _)| {
+        let before = value[..index].chars().next_back();
+        let after = value[index + name.len()..].chars().next();
+        !before.is_some_and(|character| character.is_ascii_alphanumeric() || character == '_')
+            && !after.is_some_and(|character| character.is_ascii_alphanumeric() || character == '_')
+    })
 }
 
 fn parse_arguments(
