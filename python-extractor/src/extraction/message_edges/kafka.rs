@@ -30,7 +30,7 @@ impl KafkaIdentificationStrategy {
         let function_name = call.function_name.as_str();
         let method = function_name
             .split(METHOD_SEPARATOR)
-            .last()
+            .next_back()
             .unwrap_or(function_name);
 
         match method {

@@ -42,7 +42,10 @@ pub fn evaluate(
         external_constants,
         per_file_attrs,
         per_file_module_consts,
-    );
+    )
+    .into_iter()
+    .filter(|restcall| grpc_operation_is_declared(&restcall.target_uri, &project_ir))
+    .collect();
     let message_edges = message_edges::evaluate_message_edges(
         &project_ir,
         external_constants,
@@ -54,6 +57,7 @@ pub fn evaluate(
         .files
         .iter()
         .flat_map(|f| f.endpoints.clone())
+        .filter(|endpoint| grpc_operation_is_declared(&endpoint.uri, &project_ir))
         .collect();
 
     let entities = project_ir
@@ -83,4 +87,24 @@ pub fn evaluate(
         callables,
         call_statements,
     }
+}
+
+/// A declared protobuf contract narrows convention-based gRPC extraction.
+/// Without a matching service contract, preserve the previous behaviour.
+fn grpc_operation_is_declared(uri: &str, project_ir: &ProjectIR) -> bool {
+    let Some(path) = uri.strip_prefix("grpc://") else {
+        return true;
+    };
+    let Some((service, operation)) = path.split_once('/') else {
+        return true;
+    };
+    let contracts = project_ir
+        .proto_services
+        .iter()
+        .filter(|contract| contract.name == service)
+        .collect::<Vec<_>>();
+    contracts.is_empty()
+        || contracts
+            .iter()
+            .any(|contract| contract.operations.iter().any(|rpc| rpc == operation))
 }

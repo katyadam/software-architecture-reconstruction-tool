@@ -738,12 +738,12 @@ def add_routes(app) -> None:
 
     let mut inner_env = constants_env.clone();
     for var_name in &nested_ref.captured {
-        if let Some(val) = outer_result.final_env.get(var_name) {
-            if val.1 != Expr::Empty {
-                inner_env
-                    .entry(var_name.clone())
-                    .or_insert_with(|| val.clone());
-            }
+        if let Some(val) = outer_result.final_env.get(var_name)
+            && val.1 != Expr::Empty
+        {
+            inner_env
+                .entry(var_name.clone())
+                .or_insert_with(|| val.clone());
         }
     }
 

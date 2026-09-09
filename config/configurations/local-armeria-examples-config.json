@@ -1,0 +1,8 @@
+{
+  "service_descriptions": [
+    {"name": "armeria-grpc-envoy", "urls": [], "base_dir_path": "../benchmark/java/armeria-examples/grpc-envoy"},
+    {"name": "armeria-grpc-reactor", "urls": [], "base_dir_path": "../benchmark/java/armeria-examples/grpc-reactor"},
+    {"name": "armeria-grpc-tutorial", "urls": [], "base_dir_path": "../benchmark/java/armeria-examples/tutorials/grpc"},
+    {"name": "armeria-grpc", "urls": [], "base_dir_path": "../benchmark/java/armeria-examples/grpc"}
+  ]
+}

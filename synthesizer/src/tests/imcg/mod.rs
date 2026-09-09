@@ -28,7 +28,7 @@ mod tests {
                 &ConfigurationData {
                     service_descriptions: service_descs.clone(),
                 },
-                &vec![],
+                &[],
             )
             .expect("SDG in IMCG tests should be valid and buildable!");
 
@@ -37,6 +37,29 @@ mod tests {
             .expect("IMCG building should pass!");
 
         assert_eq!(imcg.calls.len(), 1, "There should be exactly 1 IMCG call");
+    }
+
+    #[test]
+    fn skips_inter_service_call_when_its_source_callable_is_unavailable() {
+        let sdg = SdgBuilderImpl::new()
+            .build(
+                &sample_endpoints(),
+                &sample_restcalls(),
+                &[],
+                &ConfigurationData {
+                    service_descriptions: sample_service_descriptions(),
+                },
+                &[],
+            )
+            .unwrap();
+        let mut callables = sample_callables();
+        callables.remove(1);
+
+        let imcg = ImcgBuilderImpl::new()
+            .build(&callables, &[], &sample_service_descriptions(), &sdg)
+            .unwrap();
+
+        assert!(imcg.calls.is_empty());
     }
 
     fn sample_service_descriptions() -> Vec<ServiceDescription> {

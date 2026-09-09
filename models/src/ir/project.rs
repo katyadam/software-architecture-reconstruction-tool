@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, MessageEdge,
-    ParsedCallable, RestCall,
+    ParsedCallable, ProtoService, RestCall,
     enums::EnumDefinition,
     ir::{language::Language, syntax::FileRecord},
 };
@@ -13,6 +13,7 @@ pub struct ProjectIR {
     pub class_hierarchy: ClassHierarchy,
     pub constants: HashMap<String, ConstantValue>,
     pub callable_map: HashMap<String, ParsedCallable>,
+    pub proto_services: Vec<ProtoService>,
 }
 
 /// A FileRecord with resolved types.
@@ -31,6 +32,7 @@ pub struct TypedFileRecord {
     // Identified in Pass 2 (see extractor-runtime/src/pipeline/pass2/identification.rs)
     // and consumed in Pass 3.
     pub raw_restcalls: Vec<RestCall>,
+    pub proto_services: Vec<ProtoService>,
     // Identified in Pass 2 (see extractor-runtime/src/pipeline/pass2/identification.rs)
     // and consumed in Pass 3.
     pub raw_message_edges: Vec<MessageEdge>,
@@ -98,7 +100,8 @@ impl From<FileRecord> for TypedFileRecord {
             call_statements: r.call_statements,
             assignments: r.assignments,
             enums: r.enums,
-            raw_restcalls: vec![],
+            raw_restcalls: r.raw_restcalls,
+            proto_services: r.proto_services,
             raw_message_edges: r.raw_message_edges,
         }
     }

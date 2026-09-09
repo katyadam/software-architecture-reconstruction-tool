@@ -1,0 +1,9 @@
+{
+  "service_descriptions": [
+    {
+      "name": "grpc-java-examples",
+      "urls": [],
+      "base_dir_path": "../benchmark/java/grpc-java/examples"
+    }
+  ]
+}

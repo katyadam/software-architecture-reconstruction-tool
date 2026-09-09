@@ -1,0 +1,14 @@
+{
+  "service_descriptions": [
+    {"name": "grpc-client", "urls": [], "base_dir_path": "../benchmark/java/spring-grpc/samples/grpc-client"},
+    {"name": "grpc-oauth2", "urls": ["grpc://grpc-oauth2:9090"], "base_dir_path": "../benchmark/java/spring-grpc/samples/grpc-oauth2"},
+    {"name": "grpc-reactive", "urls": ["grpc://grpc-reactive:9090"], "base_dir_path": "../benchmark/java/spring-grpc/samples/grpc-reactive"},
+    {"name": "grpc-secure", "urls": ["grpc://grpc-secure:9090"], "base_dir_path": "../benchmark/java/spring-grpc/samples/grpc-secure"},
+    {"name": "grpc-server", "urls": ["grpc://grpc-server:9090"], "base_dir_path": "../benchmark/java/spring-grpc/samples/grpc-server"},
+    {"name": "grpc-server-netty-shaded", "urls": ["grpc://grpc-server-netty-shaded:9090"], "base_dir_path": "../benchmark/java/spring-grpc/samples/grpc-server-netty-shaded"},
+    {"name": "grpc-tomcat", "urls": ["grpc://grpc-tomcat:9090"], "base_dir_path": "../benchmark/java/spring-grpc/samples/grpc-tomcat"},
+    {"name": "grpc-tomcat-secure", "urls": ["grpc://grpc-tomcat-secure:9090"], "base_dir_path": "../benchmark/java/spring-grpc/samples/grpc-tomcat-secure"},
+    {"name": "grpc-webflux", "urls": ["grpc://grpc-webflux:9090"], "base_dir_path": "../benchmark/java/spring-grpc/samples/grpc-webflux"},
+    {"name": "grpc-webflux-secure", "urls": ["grpc://grpc-webflux-secure:9090"], "base_dir_path": "../benchmark/java/spring-grpc/samples/grpc-webflux-secure"}
+  ]
+}

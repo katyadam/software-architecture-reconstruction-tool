@@ -30,7 +30,9 @@ pub fn extract_syntactic(text: &str, file_path: &str) -> Option<FileRecord> {
         call_statements: Vec::new(),
         assignments: HashMap::new(),
         enums: Vec::new(),
+        raw_restcalls: Vec::new(),
         raw_message_edges,
+        proto_services: Vec::new(),
     })
 }
 

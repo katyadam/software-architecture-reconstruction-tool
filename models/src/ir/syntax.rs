@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, MessageEdge,
-    ParsedCallable, enums::EnumDefinition, ir::language::Language,
+    ParsedCallable, ProtoService, RestCall, enums::EnumDefinition, ir::language::Language,
 };
 
 /// Pass 1 output: one per source file.
@@ -23,6 +23,11 @@ pub struct FileRecord {
 
     // Identified enums (Python: from entities, Java: from enum declarations)
     pub enums: Vec<EnumDefinition>,
+    // gRPC client calls are syntactically identified from generated stub names.
+    // They remain candidates until Pass 3 contract filtering.
+    pub raw_restcalls: Vec<RestCall>,
+    /// Protobuf contracts declared by this file. Populated only for `.proto` files.
+    pub proto_services: Vec<ProtoService>,
 
     // Java message extraction currently includes annotation- and interface-based
     // candidates that require the source tree and therefore remain Pass 1 data.

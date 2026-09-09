@@ -54,11 +54,14 @@ impl ImcgBuilderImpl {
         &self,
         sdg: &Sdg,
         callables_map: &HashMap<String, ServiceCallable>,
-    ) -> Result<Vec<Call>, BuilderError> {
+    ) -> Vec<Call> {
         sdg.connections
             .iter()
             .flat_map(|conn| conn.requests.iter())
-            .map(|rq| self.create_call_from_request(rq, callables_map))
+            // SDG construction can retain a request found in a lambda or other
+            // synthetic scope that has no callable representation in IMCG.
+            // Keep the SDG edge and omit only its unrepresentable IMCG edge.
+            .filter_map(|rq| self.create_call_from_request(rq, callables_map))
             .collect()
     }
 
@@ -66,20 +69,11 @@ impl ImcgBuilderImpl {
         &self,
         request: &Request,
         callables_map: &HashMap<String, ServiceCallable>,
-    ) -> Result<Call, BuilderError> {
-        let endpoint = callables_map
-            .get(&request.endpoint.function_hash)
-            .ok_or_else(|| {
-                BuilderError::Error(format!("Missing endpoint function: {:?}", request.endpoint))
-            })?;
+    ) -> Option<Call> {
+        let endpoint = callables_map.get(&request.endpoint.function_hash)?;
+        let restcall = callables_map.get(&request.restcall.function_hash)?;
 
-        let restcall = callables_map
-            .get(&request.restcall.function_hash)
-            .ok_or_else(|| {
-                BuilderError::Error(format!("Missing restcall function: {:?}", request.restcall))
-            })?;
-
-        Ok(Call::new(
+        Some(Call::new(
             restcall.callable.signature.clone(),
             endpoint.callable.signature.clone(),
             Some(request.clone()),
@@ -100,7 +94,7 @@ impl ImcgBuilder for ImcgBuilderImpl {
         let cg_builder = CallGraphBuilderImpl::new();
         let intra_cg = cg_builder.build(&service_callables, &callables_map, call_statements)?;
 
-        let mut imcg_calls = self.create_imcg_calls(sdg, &callables_map)?;
+        let mut imcg_calls = self.create_imcg_calls(sdg, &callables_map);
         let mut merged_calls = intra_cg.calls;
         merged_calls.append(&mut imcg_calls);
 
