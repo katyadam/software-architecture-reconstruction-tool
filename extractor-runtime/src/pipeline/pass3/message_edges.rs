@@ -104,7 +104,10 @@ fn evaluate_single_edge(edge: &MessageEdge, file: &TypedFileRecord, env: &Env) -
 
     let destination_kind = match edge.role {
         MessageRole::Producer
-            if !matches!(edge.destination_kind, MessageDestinationKind::Topic) =>
+            if !matches!(
+                edge.destination_kind,
+                MessageDestinationKind::Topic | MessageDestinationKind::GrpcService
+            ) =>
         {
             if exchange.as_ref().is_some_and(|value| !value.is_empty()) {
                 MessageDestinationKind::ExchangeRoutingKey

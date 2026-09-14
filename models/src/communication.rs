@@ -7,6 +7,7 @@ use crate::Argument;
 pub enum CommunicationProtocol {
     RabbitMq,
     Kafka,
+    Grpc,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema, Clone)]
@@ -23,6 +24,8 @@ pub enum MessageDestinationKind {
     Queue,
     Topic,
     ExchangeRoutingKey,
+    /// A gRPC service name, optionally followed by a slash and RPC method.
+    GrpcService,
     Unknown,
 }
 
