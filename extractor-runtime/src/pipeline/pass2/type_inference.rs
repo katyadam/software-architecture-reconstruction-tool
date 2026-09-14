@@ -16,6 +16,7 @@ pub fn resolve_call_argument_types(files: &mut [TypedFileRecord]) {
             Language::Python => {
                 python_evaluate_invocations_on_statements(&mut file.call_statements, &assignments)
             }
+            Language::Go => {}
         }
     }
 }

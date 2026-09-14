@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
+use go_extractor::extraction::restcalls::evaluation::uri_generator::generate_target_uris as go_generate_target_uris;
 use java_extractor::extraction::restcalls::evaluation::uri_generator::generate_target_uris as java_generate_target_uris;
 use models::ir::language::Language;
 use python_extractor::extraction::restcalls::evaluation::uri_generator::generate_target_uris as python_generate_target_uris;
 use statix::{
-    java::matcher::JavaCallableMatcher, matcher::CallableMatcher,
+    go::matcher::GoCallableMatcher, java::matcher::JavaCallableMatcher, matcher::CallableMatcher,
     python::matcher::PythonCallableMatcher, symbolic::AnalysisResult,
 };
 
@@ -24,27 +25,17 @@ pub(crate) trait LanguageSpecificEvaluator {
     ) -> Vec<String>;
 }
 
-struct JavaEvaluator;
-struct PythonEvaluator;
+type MatcherFactory = fn() -> Box<dyn CallableMatcher>;
+type UriGenerator = fn(&str, &AnalysisResult, &HashMap<String, Vec<String>>) -> Vec<String>;
 
-impl LanguageSpecificEvaluator for JavaEvaluator {
-    fn matcher(&self) -> Box<dyn CallableMatcher> {
-        Box::new(JavaCallableMatcher::new())
-    }
-
-    fn generate_uris(
-        &self,
-        template: &str,
-        analysis: &AnalysisResult,
-        _enums: &HashMap<String, Vec<String>>,
-    ) -> Vec<String> {
-        java_generate_target_uris(template, analysis)
-    }
+struct EvaluatorStrategy {
+    matcher_factory: MatcherFactory,
+    uri_generator: UriGenerator,
 }
 
-impl LanguageSpecificEvaluator for PythonEvaluator {
+impl LanguageSpecificEvaluator for EvaluatorStrategy {
     fn matcher(&self) -> Box<dyn CallableMatcher> {
-        Box::new(PythonCallableMatcher::new())
+        (self.matcher_factory)()
     }
 
     fn generate_uris(
@@ -53,16 +44,29 @@ impl LanguageSpecificEvaluator for PythonEvaluator {
         analysis: &AnalysisResult,
         enums: &HashMap<String, Vec<String>>,
     ) -> Vec<String> {
-        python_generate_target_uris(template, analysis, enums)
+        (self.uri_generator)(template, analysis, enums)
     }
 }
 
-static JAVA_EVALUATOR: JavaEvaluator = JavaEvaluator;
-static PYTHON_EVALUATOR: PythonEvaluator = PythonEvaluator;
+static JAVA_EVALUATOR: EvaluatorStrategy = EvaluatorStrategy {
+    matcher_factory: || Box::new(JavaCallableMatcher::new()),
+    uri_generator: |template, analysis, _enums| java_generate_target_uris(template, analysis),
+};
+
+static PYTHON_EVALUATOR: EvaluatorStrategy = EvaluatorStrategy {
+    matcher_factory: || Box::new(PythonCallableMatcher::new()),
+    uri_generator: python_generate_target_uris,
+};
+
+static GO_EVALUATOR: EvaluatorStrategy = EvaluatorStrategy {
+    matcher_factory: || Box::new(GoCallableMatcher::new()),
+    uri_generator: go_generate_target_uris,
+};
 
 pub(crate) fn evaluation_for(language: Language) -> &'static dyn LanguageSpecificEvaluator {
     match language {
         Language::Java => &JAVA_EVALUATOR,
         Language::Python => &PYTHON_EVALUATOR,
+        Language::Go => &GO_EVALUATOR,
     }
 }

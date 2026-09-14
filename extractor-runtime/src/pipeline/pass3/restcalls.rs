@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use log::info;
 use models::{
     ParsedCallable, RestCall,
-    ir::{language::Language, project::ProjectIR},
+    ir::{ast::Expr, language::Language, project::ProjectIR},
 };
 use statix::symbolic_evaluation_with_env;
 
@@ -131,7 +131,15 @@ fn evaluate_single_restcall(
                 "Symbolic Evaluation for REST call with target url: {} failed -- preserving raw REST call as-is",
                 restcall.target_uri
             );
-            vec![restcall.clone()]
+            let fallback_analysis = statix::symbolic::AnalysisResult {
+                return_value: Expr::Empty,
+                final_env: file_env.clone(),
+            };
+            evaluator
+                .generate_uris(&restcall.target_uri, &fallback_analysis, merged_enums)
+                .into_iter()
+                .map(|uri| restcall.clone_from_target_uri(&uri))
+                .collect()
         }
     }
 }

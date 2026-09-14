@@ -32,6 +32,7 @@ pub fn build_import_graph(file_records: &[FileRecord]) -> ImportGraph {
             let resolved = match record.language {
                 Language::Python => resolve_python_import(import, &index, &record.file_path),
                 Language::Java => resolve_java_import(import, &index),
+                Language::Go => None,
             };
             if let Some(ri) = resolved {
                 resolved_imports
