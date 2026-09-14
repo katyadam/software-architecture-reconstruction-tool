@@ -171,9 +171,13 @@ pub(super) fn lookup_callable(
 }
 
 pub(super) fn walk_named(node: Node, visit: &mut impl FnMut(Node)) {
-    visit(node);
-    for child in node.named_children(&mut node.walk()) {
-        walk_named(child, visit);
+    let mut pending = vec![node];
+    while let Some(node) = pending.pop() {
+        visit(node);
+        let children = node.named_children(&mut node.walk()).collect::<Vec<_>>();
+        for child in children.into_iter().rev() {
+            pending.push(child);
+        }
     }
 }
 
@@ -345,6 +349,9 @@ fn evaluate_special_call(
         .unwrap_or_default();
 
     match selector.as_str() {
+        "Getenv" => arguments
+            .first()
+            .map(|arg| strip_quotes(node_text(*arg, code)).to_string()),
         "PathEscape" => arguments.first().map(|arg| {
             let value = node_text(*arg, code).trim().to_string();
             format!("{{{value}}}")

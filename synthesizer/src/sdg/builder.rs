@@ -5,8 +5,7 @@ use std::{
 };
 
 use models::{
-    ConfigurationData, Endpoint, MessageDestinationKind, MessageEdge, MessageRole, RestCall,
-    configuration::ServiceDescription,
+    ConfigurationData, Endpoint, MessageEdge, RestCall, configuration::ServiceDescription,
 };
 use regex::Regex;
 use strsim::levenshtein;
@@ -14,9 +13,10 @@ use strsim::levenshtein;
 use crate::{
     connectors::dto::Constant,
     errors::builder::BuilderError,
+    sdg::message_connection_strategies,
     sdg::model::{
         AssignedEndpoint, AssignedMessageEdge, AssignedRestCall, Connection, MessageConnection,
-        MessageRequest, Request, Sdg, Service,
+        Request, Sdg, Service,
     },
     utils::assign_service_description_to_file,
 };
@@ -233,44 +233,7 @@ impl SdgBuilderImpl {
         &self,
         message_edges: Vec<AssignedMessageEdge>,
     ) -> Vec<MessageConnection> {
-        let producers = message_edges
-            .iter()
-            .filter(|edge| matches!(edge.data.role, MessageRole::Producer));
-        let consumers = message_edges
-            .iter()
-            .filter(|edge| matches!(edge.data.role, MessageRole::Consumer))
-            .collect::<Vec<_>>();
-
-        let mut connections_map: HashMap<String, MessageConnection> = HashMap::new();
-
-        for producer in producers {
-            for consumer in &consumers {
-                if producer.service.name == consumer.service.name {
-                    continue;
-                }
-                if !message_destinations_match(&producer.data, &consumer.data) {
-                    continue;
-                }
-
-                connections_map
-                    .entry(format!(
-                        "{}__{}",
-                        producer.service.name, consumer.service.name
-                    ))
-                    .or_insert_with(|| MessageConnection {
-                        source_id: producer.service.name.clone(),
-                        target_id: consumer.service.name.clone(),
-                        messages: Vec::new(),
-                    })
-                    .messages
-                    .push(MessageRequest {
-                        producer: producer.data.clone(),
-                        consumer: consumer.data.clone(),
-                    });
-            }
-        }
-
-        connections_map.into_values().collect()
+        message_connection_strategies::create(message_edges)
     }
 
     fn exact_match(&self, endpoint: &AssignedEndpoint, restcall: &AssignedRestCall) -> bool {
@@ -356,28 +319,5 @@ impl SdgBuilderImpl {
             }
         }
         restcall_endpoint
-    }
-}
-
-fn message_destinations_match(producer: &MessageEdge, consumer: &MessageEdge) -> bool {
-    match producer.destination_kind {
-        MessageDestinationKind::Topic => producer.topic.as_ref().is_some_and(|topic| {
-            consumer
-                .topic
-                .as_ref()
-                .is_some_and(|consumer_topic| consumer_topic == topic)
-        }),
-        MessageDestinationKind::Queue => producer
-            .queue
-            .as_ref()
-            .or(producer.routing_key.as_ref())
-            .is_some_and(|queue| {
-                consumer
-                    .queue
-                    .as_ref()
-                    .is_some_and(|consumer_queue| consumer_queue == queue)
-            }),
-        MessageDestinationKind::ExchangeRoutingKey => false,
-        MessageDestinationKind::Unknown => false,
     }
 }
