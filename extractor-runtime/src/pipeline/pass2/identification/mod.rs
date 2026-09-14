@@ -17,7 +17,7 @@ pub fn identify_edges(files: &mut [TypedFileRecord]) {
     for file in files.iter_mut() {
         strategy(&file.language).identify(file);
     }
-    for language in [Language::Java, Language::Python, Language::Go] {
+    for language in Language::ALL {
         strategy(&language).resolve_project_edges(files);
     }
 }

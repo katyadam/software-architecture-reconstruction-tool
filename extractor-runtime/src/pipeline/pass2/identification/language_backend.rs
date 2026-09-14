@@ -1,7 +1,7 @@
 use models::ir::{language::Language, project::TypedFileRecord};
 
 /// Runs language-owned edge identification stages from the shared Pass 2 pipeline.
-pub(super) trait IdentificationBackend: Sync {
+pub(crate) trait IdentificationBackend: Sync {
     /// Identifies edges in one type-resolved file.
     fn identify(&self, file: &mut TypedFileRecord);
 
@@ -18,7 +18,7 @@ static PYTHON: PythonBackend = PythonBackend;
 static GO: GoBackend = GoBackend;
 
 /// Returns the identification backend for one source language.
-pub(super) fn strategy(language: &Language) -> &'static dyn IdentificationBackend {
+pub(crate) fn strategy(language: &Language) -> &'static dyn IdentificationBackend {
     match language {
         Language::Java => &JAVA,
         Language::Python => &PYTHON,
