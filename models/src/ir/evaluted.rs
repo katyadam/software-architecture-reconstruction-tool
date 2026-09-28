@@ -1,5 +1,6 @@
 use crate::{
-    CallStatement, Callable, CodeElementsAggregate, Endpoint, Entity, MessageEdge, RestCall,
+    CallStatement, Callable, CodeElementsAggregate, Endpoint, Entity, MessageEdge,
+    ResolvedCallEdge, RestCall,
 };
 
 /// Pass 3 output: fully resolved, ready for synthesis.
@@ -12,6 +13,7 @@ pub struct EvaluatedIR {
     pub message_edges: Vec<MessageEdge>,
     pub callables: Vec<Callable>,
     pub call_statements: Vec<CallStatement>,
+    pub resolved_call_edges: Vec<ResolvedCallEdge>,
 }
 
 impl From<EvaluatedIR> for CodeElementsAggregate {
@@ -25,6 +27,7 @@ impl From<EvaluatedIR> for CodeElementsAggregate {
             ir.message_edges,
             ir.callables,
             ir.call_statements,
+            ir.resolved_call_edges,
         )
     }
 }
