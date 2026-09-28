@@ -28,6 +28,7 @@ struct Cli {
 
     #[arg(long, default_value_t = false)]
     scrape: bool,
+    /// Optional standalone WALA adapter used to enrich Java call edges.
     #[arg(long, value_name = "FILE")]
     wala_adapter_jar: Option<PathBuf>,
 }
