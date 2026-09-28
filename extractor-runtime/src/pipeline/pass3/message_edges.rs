@@ -85,13 +85,21 @@ fn evaluate_single_edge(edge: &MessageEdge, file: &TypedFileRecord, env: &Env) -
             (Some(exchange), _) => exchange.clone(),
             _ => edge.destination.clone(),
         },
-        MessageRole::Consumer
-        | MessageRole::QueueDeclaration
-        | MessageRole::TopicDeclaration
-        | MessageRole::Binding => topic
-            .clone()
-            .or_else(|| queue.clone())
-            .unwrap_or_else(|| edge.destination.clone()),
+        MessageRole::Binding => match (&exchange, &routing_key) {
+            (Some(exchange), Some(routing_key)) if !exchange.is_empty() => {
+                format!("{exchange}{DESTINATION_SEPARATOR}{routing_key}")
+            }
+            _ => topic
+                .clone()
+                .or_else(|| queue.clone())
+                .unwrap_or_else(|| edge.destination.clone()),
+        },
+        MessageRole::Consumer | MessageRole::QueueDeclaration | MessageRole::TopicDeclaration => {
+            topic
+                .clone()
+                .or_else(|| queue.clone())
+                .unwrap_or_else(|| edge.destination.clone())
+        }
     };
 
     let destination_kind = match edge.role {

@@ -2,6 +2,8 @@ use std::path::Path;
 
 const GENERATED_GO_SUFFIXES: &[&str] = &[".pb.go", "_grpc.pb.go"];
 const GENERATED_GO_DIRECTORIES: &[&str] = &["thriftgo"];
+const TEST_GO_DIRECTORIES: &[&str] = &["test", "tests", "testfixture", "testfixtures"];
+const TEST_GO_SUFFIX: &str = "_test.go";
 
 pub(super) fn is_generated(path: &Path) -> bool {
     let file_name = path
@@ -14,11 +16,13 @@ pub(super) fn is_generated(path: &Path) -> bool {
     {
         return true;
     }
+    if file_name.ends_with(TEST_GO_SUFFIX) {
+        return true;
+    }
 
     path.components().any(|component| {
-        component
-            .as_os_str()
-            .to_str()
-            .is_some_and(|value| GENERATED_GO_DIRECTORIES.contains(&value))
+        component.as_os_str().to_str().is_some_and(|value| {
+            GENERATED_GO_DIRECTORIES.contains(&value) || TEST_GO_DIRECTORIES.contains(&value)
+        })
     })
 }

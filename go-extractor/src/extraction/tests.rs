@@ -245,6 +245,240 @@ func startRest() {
 }
 
 #[test]
+fn extracts_rabbitmq_and_kafka_message_edges() {
+    let code = r#"
+package messaging
+
+import (
+    "os"
+    "github.com/segmentio/kafka-go"
+    "github.com/IBM/sarama"
+    amqp "github.com/rabbitmq/amqp091-go"
+)
+
+func publish(ctx any, writer any, producer any, syncProducer any, client any, channel any) {
+    _ = writer.WriteMessages(ctx, kafka.Message{Topic: "segment.out"})
+    _ = producer.Produce(&ckafka.Message{TopicPartition: ckafka.TopicPartition{Topic: strPtr("confluent.out")}}, nil)
+    _ = syncProducer.SendMessage(&sarama.ProducerMessage{Topic: "sarama.out"})
+    _ = client.Produce(ctx, &kgo.Record{Topic: "franz.out"})
+    _ = channel.Publish("events", "rabbit.out", false, false, amqp.Publishing{})
+    _ = channel.QueueDeclare("billing", true, false, false, false, nil)
+    _ = channel.QueueBind("billing", "created", "events", false, nil)
+}
+
+func publishAsync(asyncProducer any) {
+    asyncProducer.Input() <- &sarama.ProducerMessage{Topic: "sarama.async.out"}
+}
+
+func consume(reader any, consumer any, partitionConsumer any, group any, channel any) {
+    _ = kafka.NewReader(kafka.ReaderConfig{Topic: "segment.in"})
+    _ = consumer.SubscribeTopics([]string{"confluent.in", "confluent.retry"}, nil)
+    _, _ = partitionConsumer.ConsumePartition("sarama.in", 0, 0)
+    _ = group.Consume(ctx, []string{"sarama.group.in"}, handler)
+    _ = kgo.SeedTopics("franz.in")
+    _, _ = channel.Consume("billing", "", false, false, false, false, nil)
+}
+
+func resolveVariables(ctx any, writer any, channel any) {
+    topic := "orders.created"
+    msg := kafka.Message{Topic: topic}
+    exchange := "orders"
+    routingKey := "created"
+    _ = writer.WriteMessages(ctx, msg)
+    _ = channel.Publish(exchange, routingKey, false, false, amqp.Publishing{})
+}
+
+func wrapperTopics(ctx any, client any) {
+    topic := os.Getenv("PAYMENT_SUCCEEDED_TOPIC")
+    _ = client.Producer(nil, ctx, topic, "key")
+    _ = client.Consumer(topic, "group", handler)
+}
+
+func orderedWrapperTopics(ctx any, client any) {
+    topic := os.Getenv("PAYMENT_CREATED_TOPIC")
+    _ = client.Producer(nil, ctx, topic, "key")
+    topic = os.Getenv("PAYMENT_SUCCEEDED_TOPIC")
+    _ = client.Producer(nil, ctx, topic, "key")
+}
+
+func sharedKafkaWrappers(ctx any) {
+    topic := "ORDER_CREATED_TOPIC"
+    kafka.Publish(nil, nil, "OrderCreated", topic)
+    kafka.RegisterConsumer(topic, nil)
+}
+
+func sharedKafkaConfigWrappers(ctx any) {
+    kafka.Publish(nil, nil, "OrderCreated", config.AppConfig.KafkaOrderTopic)
+    kafka.RegisterConsumer(config.KafkaOrderTopic, nil)
+}
+"#;
+
+    let record = extract_syntactic(code, "messaging.go").expect("Go extraction should succeed");
+    let mut typed = models::ir::project::TypedFileRecord::from(record);
+    identify(&mut typed);
+
+    let has_edge = |protocol, role, destination: &str| {
+        typed.raw_message_edges.iter().any(|edge| {
+            edge.protocol == protocol && edge.role == role && edge.destination == destination
+        })
+    };
+
+    for destination in [
+        "segment.out",
+        "confluent.out",
+        "sarama.out",
+        "sarama.async.out",
+        "franz.out",
+    ] {
+        assert!(has_edge(
+            models::CommunicationProtocol::Kafka,
+            models::MessageRole::Producer,
+            destination
+        ));
+    }
+    assert!(
+        !has_edge(
+            models::CommunicationProtocol::Kafka,
+            models::MessageRole::Producer,
+            "ctx"
+        ),
+        "context arguments must not become Kafka topics"
+    );
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "orders.created"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::Producer,
+        "orders:created"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "PAYMENT_SUCCEEDED_TOPIC"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "PAYMENT_CREATED_TOPIC"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "ORDER_CREATED_TOPIC"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Consumer,
+        "ORDER_CREATED_TOPIC"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Producer,
+        "KafkaOrderTopic"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Consumer,
+        "KafkaOrderTopic"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::Kafka,
+        models::MessageRole::Consumer,
+        "PAYMENT_SUCCEEDED_TOPIC"
+    ));
+    for destination in [
+        "segment.in",
+        "confluent.in",
+        "confluent.retry",
+        "sarama.in",
+        "sarama.group.in",
+        "franz.in",
+    ] {
+        assert!(has_edge(
+            models::CommunicationProtocol::Kafka,
+            models::MessageRole::Consumer,
+            destination
+        ));
+    }
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::Producer,
+        "events:rabbit.out"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::QueueDeclaration,
+        "billing"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::Binding,
+        "events:created"
+    ));
+    assert!(has_edge(
+        models::CommunicationProtocol::RabbitMq,
+        models::MessageRole::Consumer,
+        "billing"
+    ));
+}
+
+#[test]
+fn extracts_rabbitmq_bindings_from_shared_channel_packages() {
+    let code = r#"
+package consumer
+
+func consume(channel any) {
+    channel.QueueDeclare(
+        "inventory_queue", // queue name
+        true, false, false, false, nil,
+    )
+    channel.QueueBind(
+        "inventory_queue", // queue name
+        "", // fanout routing key
+        "order_created", // exchange name
+        false, nil,
+    )
+}
+"#;
+
+    let record = extract_syntactic(code, "consumer.go").expect("Go extraction should succeed");
+    let mut typed = models::ir::project::TypedFileRecord::from(record);
+    identify(&mut typed);
+
+    assert!(typed.raw_message_edges.iter().any(|edge| {
+        edge.protocol == models::CommunicationProtocol::RabbitMq
+            && edge.role == models::MessageRole::Binding
+            && edge.exchange.as_deref() == Some("order_created")
+            && edge.routing_key.is_none()
+    }));
+}
+
+#[test]
+fn handles_self_referential_selector_assignments() {
+    let code = r#"
+package main
+
+func readJSON(w any, r any) {
+    r.Body = http.MaxBytesReader(w, r.Body, int64(1024))
+    _ = json.NewDecoder(r.Body)
+}
+"#;
+
+    let record = extract_syntactic(code, "handler.go").expect("Go extraction should succeed");
+    assert!(
+        record
+            .call_statements
+            .iter()
+            .any(|call| call.function_name == "json.NewDecoder"),
+        "calls: {:?}",
+        record.call_statements
+    );
+}
+
+#[test]
 fn resolves_service_hosts_from_init_assignments() {
     let code = r#"
 package main
@@ -519,6 +753,10 @@ fn skips_generated_go_files() {
     assert!(!should_extract_file(Path::new("service.pb.go")));
     assert!(!should_extract_file(Path::new("service_grpc.pb.go")));
     assert!(!should_extract_file(Path::new("gen/thriftgo/client.go")));
+    assert!(!should_extract_file(Path::new("service_test.go")));
+    assert!(!should_extract_file(Path::new(
+        "internal/pkg/test/helper.go"
+    )));
     assert!(should_extract_file(Path::new("service.go")));
 }
 
@@ -557,4 +795,71 @@ func load() {
         typed.raw_restcalls[0].target_uri,
         "http://inventory-service/items"
     );
+}
+
+#[test]
+fn records_nested_composite_configuration_fields() {
+    let code = r#"
+package main
+
+func main() {
+    config := Config{
+        Exchange: "orders",
+        Queue: QueueConfig{Name: "orders-created"},
+    }
+    _ = config
+}
+
+"#;
+
+    let record = extract_syntactic(code, "main.go").expect("Go extraction should succeed");
+    let assignments = record
+        .assignments
+        .values()
+        .map(|assignment| (&assignment.variable_name, &assignment.value))
+        .collect::<Vec<_>>();
+    assert!(
+        assignments
+            .iter()
+            .any(|(name, value)| *name == "config.Exchange" && *value == "\"orders\""),
+        "assignments: {assignments:?}"
+    );
+    assert!(
+        assignments
+            .iter()
+            .any(|(name, value)| *name == "config.Queue.Name" && *value == "\"orders-created\""),
+        "assignments: {assignments:?}"
+    );
+}
+
+#[test]
+fn extracts_fluent_rabbitmq_configuration_edges() {
+    let code = r#"
+package rabbitmq
+
+import "example/internal/pkg/rabbitmq/configurations"
+
+func configure(builder configurations.RabbitMQConfigurationBuilder) {
+    builder.AddProducer(events.ProductCreatedV1{}, nil).
+        AddConsumer(events.ProductCreatedV1{}, nil)
+}
+"#;
+
+    let mut typed = models::ir::project::TypedFileRecord::from(
+        extract_syntactic(code, "config/rabbitmq.go").expect("Go extraction should succeed"),
+    );
+    identify(&mut typed);
+    assert_eq!(
+        typed.raw_message_edges.len(),
+        3,
+        "{:?}",
+        typed.call_statements
+    );
+    assert!(typed.raw_message_edges.iter().any(|edge| {
+        edge.role == models::MessageRole::Producer
+            && edge.destination == "product_created_v1:product_created_v1"
+    }));
+    assert!(typed.raw_message_edges.iter().any(|edge| {
+        edge.role == models::MessageRole::Consumer && edge.destination == "product_created_v1"
+    }));
 }
