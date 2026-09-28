@@ -1,5 +1,6 @@
 pub mod api;
 pub mod assignments;
+pub mod call_graph;
 pub mod callables;
 pub mod calls;
 pub mod common;
@@ -14,6 +15,7 @@ pub mod restcalls;
 
 pub use api::CodeElementsAggregate;
 pub use assignments::{Assignment, AssignmentKey, Scope};
+pub use call_graph::ResolvedCallEdge;
 pub use callables::{Callable, Namespace, Parameter, ParsedCallable};
 pub use calls::{Argument, CallStatement};
 pub use common::HttpMethod;

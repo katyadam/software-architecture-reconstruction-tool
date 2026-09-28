@@ -82,5 +82,6 @@ pub fn evaluate(
         message_edges,
         callables,
         call_statements,
+        resolved_call_edges: vec![],
     }
 }
