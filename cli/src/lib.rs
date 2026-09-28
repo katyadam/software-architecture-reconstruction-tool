@@ -54,6 +54,9 @@ pub fn get_all_code_elements(
     Ok(CodeElementsAggregate::from(evaluated_ir))
 }
 
+/// Adds uniquely resolved WALA Java edges for configured service directories when enabled.
+///
+/// A missing adapter JAR or a non-Java service leaves the syntactic extraction unchanged.
 pub fn enrich_with_wala(
     mut aggregate: CodeElementsAggregate,
     project_dir: &PathBuf,
