@@ -13,6 +13,7 @@ pub struct EvaluatedIR {
     pub message_edges: Vec<MessageEdge>,
     pub callables: Vec<Callable>,
     pub call_statements: Vec<CallStatement>,
+    /// Enrichment edges resolved from an external static call-graph provider.
     pub resolved_call_edges: Vec<ResolvedCallEdge>,
 }
 

@@ -16,6 +16,7 @@ pub struct CodeElementsAggregate {
     pub message_edges: Vec<MessageEdge>,
     pub callables: Vec<Callable>,
     pub call_statements: Vec<CallStatement>,
+    /// Provider-derived call edges whose endpoints are known source callables.
     pub resolved_call_edges: Vec<ResolvedCallEdge>,
 }
 

@@ -2,6 +2,10 @@ use models::call_graph::{CallGraphOutcome, MethodRef, ResolvedCallEdge};
 use models::{Callable, Namespace};
 use std::path::Path;
 
+/// Maps provider method references to unique VoyantClair callable signatures.
+///
+/// Unresolvable endpoints are deliberately omitted so the synthesized graph remains
+/// conservative and diagnostics explain the omitted edges.
 pub fn resolve_edges(
     outcome: &CallGraphOutcome,
     root: &Path,
@@ -24,12 +28,15 @@ pub fn resolve_edges(
     }
     (edges, diagnostics)
 }
+
+/// Resolves one provider method reference only when exactly one source callable matches it.
 fn resolve(method: &MethodRef, root: &Path, callables: &[Callable]) -> Option<String> {
     let class = method
         .declaring_type
         .trim_start_matches('L')
         .rsplit('/')
         .next()?;
+    // Ambiguous matches are rejected rather than guessed to avoid false call-graph edges.
     let matches: Vec<_> = callables
         .iter()
         .filter(|c| {
