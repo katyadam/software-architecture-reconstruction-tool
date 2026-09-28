@@ -1,4 +1,4 @@
-use models::{CallStatement, Callable, Endpoint, Entity, MessageEdge, RestCall};
+use models::{CallStatement, Callable, Endpoint, Entity, MessageEdge, ResolvedCallEdge, RestCall};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -39,11 +39,21 @@ impl S3SdgCodeElements {
 pub struct S3ImcgCodeElements {
     pub callables: Vec<Callable>,
     pub calls: Vec<CallStatement>,
+    #[serde(default)]
+    pub resolved_call_edges: Vec<ResolvedCallEdge>,
 }
 
 #[allow(dead_code)]
 impl S3ImcgCodeElements {
-    pub fn new(callables: Vec<Callable>, calls: Vec<CallStatement>) -> Self {
-        Self { callables, calls }
+    pub fn new(
+        callables: Vec<Callable>,
+        calls: Vec<CallStatement>,
+        resolved_call_edges: Vec<ResolvedCallEdge>,
+    ) -> Self {
+        Self {
+            callables,
+            calls,
+            resolved_call_edges,
+        }
     }
 }

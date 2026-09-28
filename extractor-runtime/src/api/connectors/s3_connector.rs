@@ -23,7 +23,12 @@ impl S3Connector {
             .save_sdg(&ir.endpoints, &ir.restcalls, &ir.message_edges, path)
             .await?;
         self.s3_client
-            .save_imcg(&ir.callables, &ir.call_statements, path)
+            .save_imcg(
+                &ir.callables,
+                &ir.call_statements,
+                &ir.resolved_call_edges,
+                path,
+            )
             .await?;
         Ok(())
     }

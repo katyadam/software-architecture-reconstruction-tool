@@ -2,7 +2,7 @@
 mod tests {
     use models::{
         Argument, CallStatement, Callable, ConfigurationData, Endpoint, HttpMethod, Namespace,
-        Parameter, RestCall, configuration::ServiceDescription,
+        Parameter, ResolvedCallEdge, RestCall, configuration::ServiceDescription,
     };
 
     use crate::{
@@ -20,10 +20,27 @@ mod tests {
         let sdg = sample_sdg(&service_descs);
 
         let imcg = imcg_builder
-            .build(&callables, &call_statements, &service_descs, &sdg)
+            .build(&callables, &call_statements, &[], &service_descs, &sdg)
             .expect("IMCG building should pass!");
 
         assert_eq!(imcg.calls.len(), 1, "There should be exactly 1 IMCG call");
+    }
+
+    #[test]
+    fn includes_resolved_call_graph_edges() {
+        let callables = sample_callables();
+        let edge = ResolvedCallEdge {
+            source_id: callables[0].signature.clone(),
+            target_id: callables[1].signature.clone(),
+        };
+        let result = ImcgBuilderImpl::new().build(
+            &callables,
+            &[],
+            &[edge],
+            &[],
+            &sample_sdg(&sample_service_descriptions()),
+        );
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -38,6 +55,7 @@ mod tests {
         let result = ImcgBuilderImpl::new().build(
             &sample_callables(),
             &sample_call_statements(),
+            &[],
             &service_descs,
             &sdg,
         );
@@ -57,6 +75,7 @@ mod tests {
         let result = ImcgBuilderImpl::new().build(
             &sample_callables(),
             &sample_call_statements(),
+            &[],
             &service_descs,
             &sdg,
         );
