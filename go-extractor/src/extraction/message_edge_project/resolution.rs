@@ -5,6 +5,7 @@ use models::{
 };
 
 use super::{FileSnapshot, Invocation, matching_calls, snapshot_for, values::values_for};
+use crate::extraction::grpc_message_edges::client_service_name;
 
 const MAX_RESOLUTION_DEPTH: usize = 4;
 
@@ -154,8 +155,15 @@ fn resolve_edge_fields(
         files,
     );
 
+    let destinations = grpc_destinations(edge, callable, bindings, &aliases, known_values, files);
     cartesian_edges(edge, exchanges, routing_keys, queues, topics)
         .into_iter()
+        .flat_map(|edge| {
+            destinations.iter().map(move |destination| MessageEdge {
+                destination: destination.clone(),
+                ..edge.clone()
+            })
+        })
         // QueueBind commonly reuses one loop variable for its queue and routing key.
         // Keep those expansions paired instead of constructing a cross-product.
         .filter(|resolved| {
@@ -168,6 +176,59 @@ fn resolve_edge_fields(
             ..edge
         })
         .collect()
+}
+
+/// Resolves an RPC receiver retained by the Go gRPC extractor. For example,
+/// `s.geoClient/Nearby` becomes `Geo/Nearby` by following `geoClient` through `New()`.
+fn grpc_destinations(
+    edge: &MessageEdge,
+    callable: &ParsedCallable,
+    bindings: &HashMap<&str, &str>,
+    aliases: &HashMap<String, String>,
+    known_values: &HashMap<String, Vec<String>>,
+    files: &[FileSnapshot],
+) -> Vec<String> {
+    if edge.protocol != CommunicationProtocol::Grpc {
+        return vec![edge.destination.clone()];
+    }
+    let Some((receiver, method)) = edge.destination.split_once('/') else {
+        return vec![edge.destination.clone()];
+    };
+    let resolved = values_for(
+        Some(receiver),
+        bindings,
+        aliases,
+        known_values,
+        callable,
+        files,
+    )
+    .into_iter()
+    .flatten()
+    .filter_map(|value| client_service_name(&value).map(|service| format!("{service}/{method}")))
+    .collect::<std::collections::HashSet<_>>();
+    if resolved.is_empty() {
+        vec![
+            fallback_grpc_destination(receiver, method).unwrap_or_else(|| edge.destination.clone()),
+        ]
+    } else {
+        resolved.into_iter().collect()
+    }
+}
+
+/// Retains the extractor's conservative naming fallback when a receiver field cannot be
+/// traced to a constructor (for example, an externally initialized client).
+fn fallback_grpc_destination(receiver: &str, method: &str) -> Option<String> {
+    let field = receiver.rsplit('.').next()?;
+    let service = field.strip_suffix("Client")?;
+    (!service.is_empty()).then(|| {
+        let mut characters = service.chars();
+        let first = characters
+            .next()
+            .unwrap_or_default()
+            .to_uppercase()
+            .to_string();
+        format!("{first}{}Service/{method}", characters.as_str())
+    })
 }
 
 /// Produces one edge for every concrete combination of resolved transport fields.
