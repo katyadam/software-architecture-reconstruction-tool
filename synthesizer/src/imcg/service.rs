@@ -47,6 +47,7 @@ impl ImcgService for ImcgServiceImpl {
         let imcg: Imcg = self.builder.build(
             &imcg_payload.callables,
             &imcg_payload.call_statements,
+            &imcg_payload.resolved_call_edges,
             &codebase_configuration
                 .configuration_data
                 .service_descriptions,

@@ -55,6 +55,7 @@ pub fn direct_imcg_build(
         .build(
             &all_code_elements.callables,
             &all_code_elements.call_statements,
+            &all_code_elements.resolved_call_edges,
             &configuration.service_descriptions,
             sdg,
         )
