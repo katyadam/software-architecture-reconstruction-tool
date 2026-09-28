@@ -76,6 +76,7 @@ impl S3Service {
                 commit_hash: dto.identifier.commit_hash.clone(),
                 callables: loaded_imcg_elements.callables,
                 call_statements: loaded_imcg_elements.calls,
+                resolved_call_edges: loaded_imcg_elements.resolved_call_edges,
             })
             .await?;
 
@@ -157,16 +158,17 @@ impl S3Service {
         self.load_and_merge_chunks::<S3ImcgCodeElements, _, S3ImcgCodeElements>(
             &index_path,
             |chunks| {
-                let (callables, calls) = chunks.into_iter().fold(
-                    (Vec::new(), Vec::new()),
-                    |(mut callables_aggr, mut calls_aggr), chunk| {
+                let (callables, calls, resolved_call_edges) = chunks.into_iter().fold(
+                    (Vec::new(), Vec::new(), Vec::new()),
+                    |(mut callables_aggr, mut calls_aggr, mut edges_aggr), chunk| {
                         callables_aggr.extend(chunk.callables);
                         calls_aggr.extend(chunk.calls);
+                        edges_aggr.extend(chunk.resolved_call_edges);
 
-                        (callables_aggr, calls_aggr)
+                        (callables_aggr, calls_aggr, edges_aggr)
                     },
                 );
-                S3ImcgCodeElements::new(callables, calls)
+                S3ImcgCodeElements::new(callables, calls, resolved_call_edges)
             },
         )
         .await
