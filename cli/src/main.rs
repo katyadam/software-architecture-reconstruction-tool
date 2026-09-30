@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use cli::get_all_code_elements;
+use cli::{enrich_with_wala, get_all_code_elements};
 use models::ConfigurationData;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -28,6 +28,9 @@ struct Cli {
 
     #[arg(long, default_value_t = false)]
     scrape: bool,
+    /// Optional standalone WALA adapter used to enrich Java call edges.
+    #[arg(long, value_name = "FILE")]
+    wala_adapter_jar: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
@@ -95,7 +98,12 @@ async fn main() -> Result<()> {
     }
 
     let extraction = Instant::now();
-    let all_code_elements = get_all_code_elements(&args.project_dir, &external_constants)?;
+    let all_code_elements = enrich_with_wala(
+        get_all_code_elements(&args.project_dir, &external_constants)?,
+        &args.project_dir,
+        &config,
+        args.wala_adapter_jar.as_deref(),
+    );
     let extraction_elapsed = extraction.elapsed();
 
     println!("✅ Extraction successful!");
