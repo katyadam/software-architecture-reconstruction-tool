@@ -56,7 +56,13 @@ class WalaCallGraphMainTest {
     var result = WalaCallGraphMain.runBytecode(List.of(classesDir), List.of());
 
     assertEquals("ok", result.status());
-    assertEquals("zero_one_container_cfa_bytecode", result.algorithm());
+    assertEquals("cha_bytecode", result.algorithm());
+  }
+
+  @Test void parses_the_explicit_high_precision_bytecode_algorithm() {
+    assertEquals(
+        BytecodeCallGraph.Algorithm.ZERO_ONE_CONTAINER_CFA,
+        WalaCallGraphMain.parseBytecodeAlgorithm("zero-one-container-cfa"));
   }
   @Test void resolves_interface_dispatch() throws Exception {
     var root = Path.of(getClass().getResource("/fixtures/dispatch").toURI());
