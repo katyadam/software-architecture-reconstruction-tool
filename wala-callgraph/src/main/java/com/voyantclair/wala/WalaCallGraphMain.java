@@ -31,9 +31,29 @@ public final class WalaCallGraphMain {
    *
    * @param sourceDir source-tree root supplied by VoyantClair
    * @return a versioned provider-neutral result, including an empty result when no entry point exists
-   * @throws Exception when WALA cannot construct its analysis scope or call graph
    */
-  public static CallGraphResult run(Path sourceDir) throws Exception {
+  public static CallGraphResult run(Path sourceDir) {
+    return run(sourceDir, resolveMavenClasspath(sourceDir));
+  }
+
+  /**
+   * Builds a call graph using explicitly supplied dependency JARs in addition to the Java runtime.
+   *
+   * @param sourceDir source-tree root supplied by VoyantClair
+   * @param dependencyJars compile-time dependency JARs required to bind referenced external types
+   * @return a versioned provider-neutral result, including an empty result when no entry point exists
+   */
+  public static CallGraphResult run(Path sourceDir, List<Path> dependencyJars) {
+    try {
+      return runAnalysis(sourceDir, dependencyJars);
+    } catch (Throwable error) {
+      return failed(sourceDir, error);
+    }
+  }
+
+  /** Performs the WALA analysis after callers have resolved any required dependency JARs. */
+  private static CallGraphResult runAnalysis(Path sourceDir, List<Path> dependencyJars)
+      throws Exception {
     try (var files = Files.walk(sourceDir)) {
       // Avoid WALA setup for libraries and service modules without an executable entry point.
       if (files.filter(path -> path.toString().endsWith(".java")).noneMatch(WalaCallGraphMain::hasMain)) {
@@ -57,6 +77,9 @@ public final class WalaCallGraphMain {
                     "VOYANTCLAIR_WALA_RT_JAR",
                     "/Library/Java/JavaVirtualMachines/temurin-8.jdk/Contents/Home/jre/lib/rt.jar"));
     scope.addToScope(ClassLoaderReference.Primordial, new JarFile(runtimeJar));
+    for (Path dependencyJar : dependencyJars) {
+      scope.addToScope(ClassLoaderReference.Extension, new JarFile(dependencyJar.toFile()));
+    }
     scope.addToScope(JavaSourceAnalysisScope.SOURCE, new SourceDirectoryTreeModule(sourceDir.toFile()));
 
     IClassHierarchy cha =
@@ -99,6 +122,78 @@ public final class WalaCallGraphMain {
     return result("ok", sourceDir, edges);
   }
 
+  /**
+   * Locates the nearest Maven project and asks Maven for its compile dependency classpath.
+   *
+   * <p>Returns no JARs when the source tree is not inside a Maven project or Maven cannot resolve
+   * dependencies, allowing callers that supply an explicit classpath to remain independent of Maven.
+   */
+  private static List<Path> resolveMavenClasspath(Path sourceDir) {
+    Path pom = findMavenProject(sourceDir);
+    if (pom == null) {
+      return List.of();
+    }
+
+    try {
+      Path classpathFile = Files.createTempFile("voyantclair-wala-classpath-", ".txt");
+      try {
+        var process =
+            new ProcessBuilder(
+                    "mvn",
+                    "-q",
+                    "-f",
+                    pom.toString(),
+                    "-DincludeScope=compile",
+                    "dependency:build-classpath",
+                    "-Dmdep.outputFile=" + classpathFile)
+                .redirectErrorStream(true)
+                .start();
+        if (process.waitFor() != 0 || !Files.exists(classpathFile)) {
+          return List.of();
+        }
+        return parseClasspath(Files.readString(classpathFile));
+      } finally {
+        Files.deleteIfExists(classpathFile);
+      }
+    } catch (Exception ignored) {
+      return List.of();
+    }
+  }
+
+  /**
+   * Finds a Maven project only when the analyzed tree is its conventional main Java source root.
+   *
+   * <p>This avoids treating arbitrary directories nested inside another Maven project, such as
+   * adapter test fixtures, as application source trees.
+   */
+  private static Path findMavenProject(Path sourceDir) {
+    Path absoluteSourceRoot = sourceDir.toAbsolutePath().normalize();
+    Path main = absoluteSourceRoot.getParent();
+    Path source = main == null ? null : main.getParent();
+    Path project = source == null ? null : source.getParent();
+    if (main == null
+        || source == null
+        || project == null
+        || !absoluteSourceRoot.getFileName().toString().equals("java")
+        || !main.getFileName().toString().equals("main")
+        || !source.getFileName().toString().equals("src")) {
+      return null;
+    }
+    Path pom = project.resolve("pom.xml");
+    return Files.isRegularFile(pom) ? pom : null;
+  }
+
+  /** Converts Maven's platform-separated classpath output into readable dependency JAR paths. */
+  private static List<Path> parseClasspath(String classpath) {
+    return classpath.lines()
+        .flatMap(line -> List.of(line.split(java.util.regex.Pattern.quote(java.io.File.pathSeparator))).stream())
+        .map(String::trim)
+        .filter(entry -> !entry.isEmpty())
+        .map(Path::of)
+        .filter(Files::isRegularFile)
+        .toList();
+  }
+
   /** Returns whether a source file syntactically appears to contain a conventional Java entry point. */
   private static boolean hasMain(Path sourceFile) {
     try {
@@ -134,9 +229,34 @@ public final class WalaCallGraphMain {
         edges);
   }
 
-  /** Parses the CLI arguments, runs analysis, and writes exactly one JSON result to standard output. */
+  /** Converts an analysis exception into a JSON result that downstream providers can consume safely. */
+  private static CallGraphResult failed(Path root, Throwable error) {
+    return new CallGraphResult(
+        1,
+        "failed",
+        "wala-java",
+        root.toString(),
+        "zero_one_container_cfa",
+        List.of(error.getClass().getSimpleName() + ": " + error.getMessage()),
+        List.of());
+  }
+
+  /** Parses CLI arguments, runs analysis, and writes exactly one JSON result to standard output. */
   public static void main(String[] args) throws Exception {
-    Path root = Path.of(args[1]);
-    System.out.println(JSON.writeValueAsString(run(root)));
+    Path sourceDir = null;
+    var dependencyJars = new ArrayList<Path>();
+    for (int index = 0; index < args.length; index++) {
+      if (args[index].equals("--source-dir") && index + 1 < args.length) {
+        sourceDir = Path.of(args[++index]);
+      } else if (args[index].equals("--classpath") && index + 1 < args.length) {
+        dependencyJars.addAll(parseClasspath(args[++index]));
+      }
+    }
+    if (sourceDir == null) {
+      throw new IllegalArgumentException("Missing required --source-dir argument");
+    }
+    System.out.println(
+        JSON.writeValueAsString(
+            dependencyJars.isEmpty() ? run(sourceDir) : run(sourceDir, dependencyJars)));
   }
 }
