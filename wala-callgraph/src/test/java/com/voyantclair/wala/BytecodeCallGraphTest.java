@@ -23,7 +23,10 @@ class BytecodeCallGraphTest {
 
     assertEquals("ok", result.status());
     assertEquals("wala-java", result.provider_id());
-    assertEquals("zero_one_container_cfa_bytecode", result.algorithm());
+    assertEquals("cha_bytecode", result.algorithm());
+    assertTrue(
+        result.diagnostics().stream().anyMatch(value -> value.startsWith("analysis_duration_ms=")),
+        result.diagnostics().toString());
     assertTrue(
         result.edges().stream()
             .anyMatch(
@@ -32,6 +35,19 @@ class BytecodeCallGraphTest {
                         && edge.callee().declaring_type().equals("LImpl")
                         && edge.callee().member_name().equals("run")),
         result.edges().toString());
+  }
+
+  @Test
+  void uses_zero_one_container_cfa_only_when_explicitly_requested(@TempDir Path tempDir)
+      throws Exception {
+    Path classesDir = compileDispatchFixture(tempDir);
+
+    var result =
+        BytecodeCallGraph.analyze(
+            List.of(classesDir), List.of(), BytecodeCallGraph.Algorithm.ZERO_ONE_CONTAINER_CFA);
+
+    assertEquals("ok", result.status());
+    assertEquals("zero_one_container_cfa_bytecode", result.algorithm());
   }
 
   @Test
