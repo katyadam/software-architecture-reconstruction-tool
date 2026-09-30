@@ -11,13 +11,13 @@ the existing versioned JSON contract, Rust provider, resolver, and IMCG merge.
 
 The first increment supports conventional Maven Java service modules. Given a
 source root at `<module>/src/main/java`, the adapter identifies the module POM
-and an enclosing reactor POM, compiles the requested module and Maven-required
-reactor dependencies, and reads their output class directories. Gradle remains
+and an enclosing reactor POM, builds and installs the requested module and
+Maven-required reactor dependencies, and reads their output class directories. Gradle remains
 supported through explicit class-output and dependency-classpath arguments;
 automatic Gradle builds are a later increment.
 
 No source files in the analyzed project are modified. Maven may create normal
-`target/` outputs and use the local Maven artifact cache.
+`target/` outputs and install project artifacts in the local Maven artifact cache.
 
 ## Design
 
