@@ -44,6 +44,20 @@ class WalaCallGraphMainTest {
     assertEquals("failed", result.status());
     assertTrue(result.diagnostics().get(0).contains("UnimplementedError"));
   }
+
+  @Test void analyzes_compiled_method_references_without_using_the_source_frontend(@TempDir Path tempDir)
+      throws Exception {
+    Path source = tempDir.resolve("Main.java");
+    Files.writeString(source, "import java.util.function.Consumer; public class Main { public static void main(String[] args) { Consumer<String> printer = System.out::println; printer.accept(\"test\"); } }");
+    Path classesDir = tempDir.resolve("classes");
+    Files.createDirectories(classesDir);
+    assertEquals(0, ToolProvider.getSystemJavaCompiler().run(null, null, null, "--release", "8", "-d", classesDir.toString(), source.toString()));
+
+    var result = WalaCallGraphMain.runBytecode(List.of(classesDir), List.of());
+
+    assertEquals("ok", result.status());
+    assertEquals("zero_one_container_cfa_bytecode", result.algorithm());
+  }
   @Test void resolves_interface_dispatch() throws Exception {
     var root = Path.of(getClass().getResource("/fixtures/dispatch").toURI());
     var result = WalaCallGraphMain.run(root);

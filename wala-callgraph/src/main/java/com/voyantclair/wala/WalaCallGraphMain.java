@@ -51,6 +51,27 @@ public final class WalaCallGraphMain {
     }
   }
 
+  /** Runs the binary WALA backend over already-compiled application class directories. */
+  public static CallGraphResult runBytecode(
+      List<Path> applicationClassDirs, List<Path> dependencyJars) {
+    return BytecodeCallGraph.analyze(applicationClassDirs, dependencyJars);
+  }
+
+  /** Prefers Maven-prepared bytecode and falls back to source analysis when preparation is unavailable. */
+  public static CallGraphResult runPreferred(Path sourceDir, List<Path> explicitClassDirs, List<Path> dependencyJars) {
+    if (!explicitClassDirs.isEmpty()) {
+      return runBytecode(explicitClassDirs, dependencyJars);
+    }
+    var preparation = MavenBytecodeArtifacts.prepare(sourceDir);
+    if (preparation.succeeded()) {
+      var artifacts = preparation.artifacts();
+      var combinedDependencies = new ArrayList<Path>(artifacts.dependencyJars());
+      combinedDependencies.addAll(dependencyJars);
+      return runBytecode(artifacts.applicationClassDirs(), combinedDependencies);
+    }
+    return run(sourceDir, dependencyJars);
+  }
+
   /** Performs the WALA analysis after callers have resolved any required dependency JARs. */
   private static CallGraphResult runAnalysis(Path sourceDir, List<Path> dependencyJars)
       throws Exception {
@@ -245,11 +266,14 @@ public final class WalaCallGraphMain {
   public static void main(String[] args) throws Exception {
     Path sourceDir = null;
     var dependencyJars = new ArrayList<Path>();
+    var applicationClassDirs = new ArrayList<Path>();
     for (int index = 0; index < args.length; index++) {
       if (args[index].equals("--source-dir") && index + 1 < args.length) {
         sourceDir = Path.of(args[++index]);
       } else if (args[index].equals("--classpath") && index + 1 < args.length) {
         dependencyJars.addAll(parseClasspath(args[++index]));
+      } else if (args[index].equals("--classes-dir") && index + 1 < args.length) {
+        applicationClassDirs.add(Path.of(args[++index]));
       }
     }
     if (sourceDir == null) {
@@ -257,6 +281,6 @@ public final class WalaCallGraphMain {
     }
     System.out.println(
         JSON.writeValueAsString(
-            dependencyJars.isEmpty() ? run(sourceDir) : run(sourceDir, dependencyJars)));
+            runPreferred(sourceDir, applicationClassDirs, dependencyJars)));
   }
 }
