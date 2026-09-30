@@ -57,19 +57,47 @@ public final class WalaCallGraphMain {
     return BytecodeCallGraph.analyze(applicationClassDirs, dependencyJars);
   }
 
+  /** Runs the binary WALA backend with an explicitly selected precision strategy. */
+  public static CallGraphResult runBytecode(
+      List<Path> applicationClassDirs,
+      List<Path> dependencyJars,
+      BytecodeCallGraph.Algorithm algorithm) {
+    return BytecodeCallGraph.analyze(applicationClassDirs, dependencyJars, algorithm);
+  }
+
   /** Prefers Maven-prepared bytecode and falls back to source analysis when preparation is unavailable. */
   public static CallGraphResult runPreferred(Path sourceDir, List<Path> explicitClassDirs, List<Path> dependencyJars) {
+    return runPreferred(
+        sourceDir, explicitClassDirs, dependencyJars, BytecodeCallGraph.Algorithm.CHA);
+  }
+
+  /** Prefers Maven-prepared bytecode using a caller-selected strategy before source fallback. */
+  public static CallGraphResult runPreferred(
+      Path sourceDir,
+      List<Path> explicitClassDirs,
+      List<Path> dependencyJars,
+      BytecodeCallGraph.Algorithm algorithm) {
     if (!explicitClassDirs.isEmpty()) {
-      return runBytecode(explicitClassDirs, dependencyJars);
+      return runBytecode(explicitClassDirs, dependencyJars, algorithm);
     }
     var preparation = MavenBytecodeArtifacts.prepare(sourceDir);
     if (preparation.succeeded()) {
       var artifacts = preparation.artifacts();
       var combinedDependencies = new ArrayList<Path>(artifacts.dependencyJars());
       combinedDependencies.addAll(dependencyJars);
-      return runBytecode(artifacts.applicationClassDirs(), combinedDependencies);
+      return runBytecode(artifacts.applicationClassDirs(), combinedDependencies, algorithm);
     }
     return run(sourceDir, dependencyJars);
+  }
+
+  /** Converts the public CLI algorithm name to the corresponding binary WALA strategy. */
+  static BytecodeCallGraph.Algorithm parseBytecodeAlgorithm(String value) {
+    return switch (value) {
+      case "cha" -> BytecodeCallGraph.Algorithm.CHA;
+      case "rta" -> BytecodeCallGraph.Algorithm.RTA;
+      case "zero-one-container-cfa" -> BytecodeCallGraph.Algorithm.ZERO_ONE_CONTAINER_CFA;
+      default -> throw new IllegalArgumentException("Unsupported bytecode algorithm: " + value);
+    };
   }
 
   /** Performs the WALA analysis after callers have resolved any required dependency JARs. */
@@ -267,6 +295,7 @@ public final class WalaCallGraphMain {
     Path sourceDir = null;
     var dependencyJars = new ArrayList<Path>();
     var applicationClassDirs = new ArrayList<Path>();
+    var bytecodeAlgorithm = BytecodeCallGraph.Algorithm.CHA;
     for (int index = 0; index < args.length; index++) {
       if (args[index].equals("--source-dir") && index + 1 < args.length) {
         sourceDir = Path.of(args[++index]);
@@ -274,6 +303,8 @@ public final class WalaCallGraphMain {
         dependencyJars.addAll(parseClasspath(args[++index]));
       } else if (args[index].equals("--classes-dir") && index + 1 < args.length) {
         applicationClassDirs.add(Path.of(args[++index]));
+      } else if (args[index].equals("--algorithm") && index + 1 < args.length) {
+        bytecodeAlgorithm = parseBytecodeAlgorithm(args[++index]);
       }
     }
     if (sourceDir == null) {
@@ -281,6 +312,6 @@ public final class WalaCallGraphMain {
     }
     System.out.println(
         JSON.writeValueAsString(
-            runPreferred(sourceDir, applicationClassDirs, dependencyJars)));
+            runPreferred(sourceDir, applicationClassDirs, dependencyJars, bytecodeAlgorithm)));
   }
 }
