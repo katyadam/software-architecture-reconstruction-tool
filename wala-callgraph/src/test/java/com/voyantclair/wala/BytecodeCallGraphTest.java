@@ -22,6 +22,8 @@ class BytecodeCallGraphTest {
     var result = BytecodeCallGraph.analyze(List.of(classesDir), List.of());
 
     assertEquals("ok", result.status());
+    assertEquals("wala-java", result.provider_id());
+    assertEquals("zero_one_container_cfa_bytecode", result.algorithm());
     assertTrue(
         result.edges().stream()
             .anyMatch(
