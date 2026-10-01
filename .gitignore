@@ -14,3 +14,4 @@ perf_testing.pdf
 empaia-llm-envscrape/
 docs/junk/
 results/
+.env
