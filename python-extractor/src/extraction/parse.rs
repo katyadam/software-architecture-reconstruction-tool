@@ -1,7 +1,7 @@
 use models::{
     CallStatement, ParsedCallable,
     api::ExtractionError,
-    ir::{ast::CallableAst, language::Language, syntax::FileRecord},
+    ir::{ast::CallableAst, language::Language, project::TypedFileRecord, syntax::FileRecord},
 };
 use statix::parse_python;
 use tree_sitter::Parser;
@@ -10,11 +10,12 @@ use crate::extraction::{
     assignments::map::get_assignments_map,
     callables::extractor::CallablesExtractor,
     calls::{PythonCallStatement, extractor::CallsExtractor},
-    endpoints::extractor::EndpointsExtractor,
+    endpoints::{EndpointStrategy, PythonEndpointStrategy},
     entities::extractor::EntitiesExtractor,
     enums::identification::EnumIdentificator,
     extractor::{ExtractParams, Extractor},
     imports::extractor::ImportsExtractor,
+    message_edges::{kafka::KafkaIdentificationStrategy, rabbitmq::RabbitMqIdentificationStrategy},
     module::build_module_callable,
     restcalls::identification::{
         method_call::MethodCallIdentificationStrategy, strategy::IdentificationStrategy,
@@ -43,7 +44,10 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
     rayon::scope(|s| {
         s.spawn(|_| assignments = Some(get_assignments_map(&tree, code)));
         s.spawn(|_| imports = Some(ImportsExtractor.extract(params)));
-        s.spawn(|_| endpoints = Some(EndpointsExtractor.extract(params)));
+        s.spawn(|_| {
+            let endpoint_strategy = PythonEndpointStrategy;
+            endpoints = Some(EndpointStrategy::extract(&endpoint_strategy, params));
+        });
         s.spawn(|_| entities = Some(EntitiesExtractor.extract(params)));
         s.spawn(|_| callables = Some(CallablesExtractor.extract(params)));
         s.spawn(|_| calls = Some(CallsExtractor.extract(ExtractParams::new(&tree, code))));
@@ -87,13 +91,6 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
 
     parsed_callables.push(build_module_callable(&tree, code, file_name));
 
-    // Identification-only: no symbolic evaluation or URI resolution
-    let identification_strategy = MethodCallIdentificationStrategy::new();
-    let raw_restcalls = calls
-        .iter()
-        .filter_map(|call| identification_strategy.identify_restcall(call, file_name))
-        .collect();
-
     let call_statements = calls
         .into_iter()
         .map(PythonCallStatement::to_language_agnostic)
@@ -109,6 +106,38 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         call_statements,
         assignments,
         enums,
-        raw_restcalls,
+        raw_message_edges: vec![],
     })
+}
+
+/// Pass 2: identify Python REST calls and message edges from type-resolved
+/// call statements.
+///
+/// Runs at Pass 2 rather than Pass 1 so that identification is one stage for
+/// every language. Python's strategies do not need resolved types, but Java's
+/// do, and a single stage is worth more than the earlier result.
+pub fn identify(file: &mut TypedFileRecord) {
+    let restcall_strategy = MethodCallIdentificationStrategy::new();
+    let rabbitmq_strategy = RabbitMqIdentificationStrategy::new();
+    let kafka_strategy = KafkaIdentificationStrategy::new();
+
+    let restcalls: Vec<_> = file
+        .call_statements
+        .iter()
+        .filter_map(|call| restcall_strategy.identify_restcall(call, &file.file_path))
+        .collect();
+
+    let mut message_edges: Vec<_> = file
+        .call_statements
+        .iter()
+        .filter_map(|call| rabbitmq_strategy.identify_message_edge(call, &file.file_path))
+        .collect();
+    message_edges.extend(
+        file.call_statements
+            .iter()
+            .flat_map(|call| kafka_strategy.identify_message_edges(call, &file.file_path)),
+    );
+
+    file.raw_restcalls = restcalls;
+    file.raw_message_edges = message_edges;
 }

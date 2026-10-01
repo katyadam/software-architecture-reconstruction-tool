@@ -1,4 +1,6 @@
-use crate::{CallStatement, Callable, CodeElementsAggregate, Endpoint, Entity, RestCall};
+use crate::{
+    CallStatement, Callable, CodeElementsAggregate, Endpoint, Entity, MessageEdge, RestCall,
+};
 
 /// Pass 3 output: fully resolved, ready for synthesis.
 /// This replaces the current CodeElementsAggregate stored in S3.
@@ -7,6 +9,7 @@ pub struct EvaluatedIR {
     pub entities: Vec<Entity>,
     pub endpoints: Vec<Endpoint>, // Fully resolved URIs (with prefix chains)
     pub restcalls: Vec<RestCall>, // Fully resolved target URIs
+    pub message_edges: Vec<MessageEdge>,
     pub callables: Vec<Callable>,
     pub call_statements: Vec<CallStatement>,
 }
@@ -19,6 +22,7 @@ impl From<EvaluatedIR> for CodeElementsAggregate {
             ir.entities,
             ir.endpoints,
             ir.restcalls,
+            ir.message_edges,
             ir.callables,
             ir.call_statements,
         )

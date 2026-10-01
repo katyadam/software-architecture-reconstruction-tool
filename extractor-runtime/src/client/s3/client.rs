@@ -1,4 +1,4 @@
-use models::{CallStatement, Callable, Endpoint, Entity, RestCall};
+use models::{CallStatement, Callable, Endpoint, Entity, MessageEdge, RestCall};
 use s3::Bucket;
 use serde::Serialize;
 
@@ -32,10 +32,11 @@ impl S3Client {
         &self,
         endpoints: &Vec<Endpoint>,
         restcalls: &Vec<RestCall>,
+        message_edges: &Vec<MessageEdge>,
         path: &str,
     ) -> Result<(), S3ClientError> {
         self.save_chunk(
-            &S3SdgCodeElements::new(endpoints, restcalls),
+            &S3SdgCodeElements::new(endpoints, restcalls, message_edges),
             &format!("{path}/sdg"),
         )
         .await

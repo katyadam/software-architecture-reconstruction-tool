@@ -71,8 +71,10 @@ mod tests {
     /// stripped -- not survive as a quoted residual that fails the `http` gate.
     #[test]
     fn pure_literal_url_resolves_without_env() {
-        let uris =
-            generate_target_uris("\"http://ts-x-service:8000/api/v1\"", &AnalysisResult::default());
+        let uris = generate_target_uris(
+            "\"http://ts-x-service:8000/api/v1\"",
+            &AnalysisResult::default(),
+        );
         assert_eq!(uris, vec!["http://ts-x-service:8000/api/v1".to_string()]);
     }
 

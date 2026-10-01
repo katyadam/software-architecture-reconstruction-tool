@@ -10,6 +10,7 @@ clients = { workspace = true }
 python-extractor = { workspace = true }
 java-extractor = { workspace = true }
 sage = { workspace = true }
+go-extractor = { workspace = true }
 
 actix-web = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

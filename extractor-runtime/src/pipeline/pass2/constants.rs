@@ -14,7 +14,9 @@ pub fn collect_constants(files: &[TypedFileRecord]) -> HashMap<String, ConstantV
     let mut constants = HashMap::new();
     for file in files {
         for (key, assignment) in &file.assignments {
-            if matches!(key.scope, Scope::Global) && is_constant_name(&key.variable_name) {
+            if matches!(key.scope, Scope::Global | Scope::Class(_))
+                && is_constant_name(&key.variable_name)
+            {
                 constants
                     .entry(key.variable_name.clone())
                     .or_insert_with(|| ConstantValue {

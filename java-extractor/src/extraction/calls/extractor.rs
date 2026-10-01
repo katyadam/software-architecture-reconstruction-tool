@@ -130,6 +130,7 @@ impl Extractor<CallStatement> for CallStatementsExtractor {
                 is_super_invoke,
                 invoked_on: None,
                 source_span,
+                is_decorator: false,
             });
         }
         calls

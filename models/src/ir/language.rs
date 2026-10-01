@@ -4,6 +4,7 @@ use std::fmt::Display;
 pub enum Language {
     Java,
     Python,
+    Go,
     Unknown,
 }
 
@@ -20,6 +21,7 @@ impl Language {
         match ext {
             Some("java") => Language::Java,
             Some("py") => Language::Python,
+            Some("go") => Language::Go,
             _ => Language::Unknown,
         }
     }
@@ -30,6 +32,7 @@ impl Display for Language {
         match self {
             Language::Java => write!(f, "Java"),
             Language::Python => write!(f, "Python"),
+            Language::Go => write!(f, "Go"),
             Language::Unknown => write!(f, "Unknown"),
         }
     }
@@ -60,11 +63,12 @@ mod tests {
     fn from_path_maps_known_extensions() {
         assert_eq!(Language::from_path("a/b/Foo.java"), Language::Java);
         assert_eq!(Language::from_path("a/b/foo.py"), Language::Python);
+        assert_eq!(Language::from_path("a/b/main.go"), Language::Go);
     }
 
     #[test]
     fn from_path_is_unknown_for_everything_else() {
-        assert_eq!(Language::from_path("a/b/main.go"), Language::Unknown);
+        assert_eq!(Language::from_path("a/b/config.yml"), Language::Unknown);
         assert_eq!(Language::from_path("a/b/README"), Language::Unknown);
         assert_eq!(Language::from_path(""), Language::Unknown);
     }

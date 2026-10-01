@@ -57,8 +57,8 @@ impl ImcgBuilderImpl {
     ) -> Result<Vec<Call>, BuilderError> {
         sdg.connections
             .iter()
-            .flat_map(|conn| conn.requests.iter())
-            .map(|rq| self.create_call_from_request(rq, callables_map))
+            .flat_map(|connection| connection.requests.iter())
+            .map(|request| self.create_call_from_request(request, callables_map))
             .collect()
     }
 

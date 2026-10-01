@@ -4,7 +4,10 @@ use std::{
     collections::HashMap,
 };
 
-use models::{ConfigurationData, Endpoint, RestCall, configuration::ServiceDescription};
+use models::{
+    ConfigurationData, Endpoint, MessageDestinationKind, MessageEdge, MessageRole, RestCall,
+    configuration::ServiceDescription,
+};
 use regex::Regex;
 use strsim::levenshtein;
 
@@ -12,7 +15,10 @@ use crate::{
     connectors::dto::Constant,
     errors::builder::BuilderError,
     sdg::interaction_kind::{InteractionKind, InteractionSignals, classify, is_reflexive},
-    sdg::model::{AssignedEndpoint, AssignedRestCall, Connection, Request, Sdg, Service},
+    sdg::model::{
+        AssignedEndpoint, AssignedMessageEdge, AssignedRestCall, Connection, MessageConnection,
+        MessageRequest, Request, Sdg, Service,
+    },
     utils::assign_service_description_to_file,
 };
 
@@ -21,6 +27,7 @@ pub trait SdgBuilder {
         &self,
         endpoints: &[Endpoint],
         restcalls: &[RestCall],
+        message_edges: &[MessageEdge],
         configuration: &ConfigurationData,
         constants: &[Constant],
     ) -> Result<Sdg, BuilderError>;
@@ -33,6 +40,7 @@ impl SdgBuilder for SdgBuilderImpl {
         &self,
         endpoints: &[Endpoint],
         restcalls: &[RestCall],
+        message_edges: &[MessageEdge],
         configuration: &ConfigurationData,
         constants: &[Constant],
     ) -> Result<Sdg, BuilderError> {
@@ -57,9 +65,13 @@ impl SdgBuilder for SdgBuilderImpl {
 
         let connections =
             self.create_connections(assigned_endpoints, assigned_restcalls, &all_urls);
+        let assigned_message_edges =
+            self.get_assigned_message_edges(message_edges, &configuration.service_descriptions);
+        let message_connections = self.create_message_connections(assigned_message_edges);
         Ok(Sdg {
             services,
             connections,
+            message_connections,
         })
     }
 }
@@ -137,6 +149,21 @@ impl SdgBuilderImpl {
                 let service_desc =
                     assign_service_description_to_file(&restcall.file_path, service_descs);
                 AssignedRestCall::new(restcall.clone(), service_desc)
+            })
+            .collect()
+    }
+
+    fn get_assigned_message_edges(
+        &self,
+        message_edges: &[MessageEdge],
+        service_descs: &[ServiceDescription],
+    ) -> Vec<AssignedMessageEdge> {
+        message_edges
+            .iter()
+            .map(|edge| {
+                let service_desc =
+                    assign_service_description_to_file(&edge.file_path, service_descs);
+                AssignedMessageEdge::new(edge.clone(), service_desc)
             })
             .collect()
     }
@@ -237,6 +264,50 @@ impl SdgBuilderImpl {
         connections
     }
 
+    fn create_message_connections(
+        &self,
+        message_edges: Vec<AssignedMessageEdge>,
+    ) -> Vec<MessageConnection> {
+        let producers = message_edges
+            .iter()
+            .filter(|edge| matches!(edge.data.role, MessageRole::Producer));
+        let consumers = message_edges
+            .iter()
+            .filter(|edge| matches!(edge.data.role, MessageRole::Consumer))
+            .collect::<Vec<_>>();
+
+        let mut connections_map: HashMap<String, MessageConnection> = HashMap::new();
+
+        for producer in producers {
+            for consumer in &consumers {
+                if producer.service.name == consumer.service.name {
+                    continue;
+                }
+                if !message_destinations_match(&producer.data, &consumer.data) {
+                    continue;
+                }
+
+                connections_map
+                    .entry(format!(
+                        "{}__{}",
+                        producer.service.name, consumer.service.name
+                    ))
+                    .or_insert_with(|| MessageConnection {
+                        source_id: producer.service.name.clone(),
+                        target_id: consumer.service.name.clone(),
+                        messages: Vec::new(),
+                    })
+                    .messages
+                    .push(MessageRequest {
+                        producer: producer.data.clone(),
+                        consumer: consumer.data.clone(),
+                    });
+            }
+        }
+
+        connections_map.into_values().collect()
+    }
+
     fn exact_match(&self, endpoint: &AssignedEndpoint, restcall: &AssignedRestCall) -> bool {
         if !endpoint.data.uri.starts_with("http") {
             for url in &endpoint.service.urls {
@@ -334,5 +405,28 @@ impl SdgBuilderImpl {
 fn interaction_kind_rollup_connection(connections: &mut Vec<Connection>) {
     for connection in connections {
         connection.kind = InteractionKind::rollup(connection.requests.iter().map(|r| r.kind));
+    }
+}
+
+fn message_destinations_match(producer: &MessageEdge, consumer: &MessageEdge) -> bool {
+    match producer.destination_kind {
+        MessageDestinationKind::Topic => producer.topic.as_ref().is_some_and(|topic| {
+            consumer
+                .topic
+                .as_ref()
+                .is_some_and(|consumer_topic| consumer_topic == topic)
+        }),
+        MessageDestinationKind::Queue => producer
+            .queue
+            .as_ref()
+            .or(producer.routing_key.as_ref())
+            .is_some_and(|queue| {
+                consumer
+                    .queue
+                    .as_ref()
+                    .is_some_and(|consumer_queue| consumer_queue == queue)
+            }),
+        MessageDestinationKind::ExchangeRoutingKey => false,
+        MessageDestinationKind::Unknown => false,
     }
 }

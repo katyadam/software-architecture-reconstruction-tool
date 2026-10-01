@@ -1,4 +1,4 @@
-use models::{CallStatement, Callable, Endpoint, Entity, RestCall};
+use models::{CallStatement, Callable, Endpoint, Entity, MessageEdge, RestCall};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -16,13 +16,19 @@ impl<'a> S3ContextMapCodeElements<'a> {
 pub struct S3SdgCodeElements<'a> {
     endpoints: &'a Vec<Endpoint>,
     restcalls: &'a Vec<RestCall>,
+    message_edges: &'a Vec<MessageEdge>,
 }
 
 impl<'a> S3SdgCodeElements<'a> {
-    pub fn new(endpoints: &'a Vec<Endpoint>, restcalls: &'a Vec<RestCall>) -> Self {
+    pub fn new(
+        endpoints: &'a Vec<Endpoint>,
+        restcalls: &'a Vec<RestCall>,
+        message_edges: &'a Vec<MessageEdge>,
+    ) -> Self {
         Self {
             endpoints,
             restcalls,
+            message_edges,
         }
     }
 }

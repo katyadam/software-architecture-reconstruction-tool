@@ -146,6 +146,7 @@ mod tests {
             assignments: HashMap::new(),
             enums: vec![],
             raw_restcalls: vec![],
+            raw_message_edges: vec![],
         }
     }
 

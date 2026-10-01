@@ -3,6 +3,7 @@ mod constants;
 mod env;
 pub(crate) mod language_backend;
 mod llm_enhance;
+mod message_edges;
 pub mod pass_attr;
 pub mod pass_module;
 mod restcalls;
@@ -47,6 +48,12 @@ pub fn evaluate(
         per_file_attrs,
         per_file_module_consts,
     );
+    let message_edges = message_edges::evaluate_message_edges(
+        &project_ir,
+        external_constants,
+        per_file_attrs,
+        per_file_module_consts,
+    );
 
     let endpoints: Vec<Endpoint> = project_ir
         .files
@@ -77,6 +84,7 @@ pub fn evaluate(
         entities,
         endpoints,
         restcalls,
+        message_edges,
         callables,
         call_statements,
     }
@@ -101,6 +109,12 @@ pub async fn evaluate_with_llm(
     );
 
     evaluate_restcalls_with_llm(&mut restcalls, config, sage, &project_ir).await;
+    let message_edges = message_edges::evaluate_message_edges(
+        &project_ir,
+        external_constants,
+        per_file_attrs,
+        per_file_module_consts,
+    );
 
     let endpoints: Vec<Endpoint> = project_ir
         .files
@@ -131,6 +145,7 @@ pub async fn evaluate_with_llm(
         entities,
         endpoints,
         restcalls,
+        message_edges,
         callables,
         call_statements,
     }

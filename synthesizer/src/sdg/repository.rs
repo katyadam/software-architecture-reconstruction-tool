@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{
     errors::database::DatabaseError,
     sdg::{
-        model::{Connection, Sdg, Service},
+        model::{Connection, MessageConnection, Sdg, Service},
         queries::{CREATE_SDG, DELETE_SDG, GET_SDG},
     },
 };
@@ -49,11 +49,14 @@ impl SdgRepository for SdgRepositoryImpl {
         let mut sdg = Sdg {
             services: Vec::new(),
             connections: Vec::new(),
+            message_connections: Vec::new(),
         };
 
         if let Some(record) = result.next().await? {
             let services_bolt_type: Vec<neo4rs::BoltType> = record.get("all_services")?;
             let connections_bolt_type: Vec<neo4rs::BoltType> = record.get("all_connections")?;
+            let message_connections_bolt_type: Vec<neo4rs::BoltType> =
+                record.get("all_message_connections")?;
 
             for bolt_service in services_bolt_type {
                 if let BoltType::Node(node) = bolt_service {
@@ -75,6 +78,18 @@ impl SdgRepository for SdgRepositoryImpl {
                     warn!("Unexpected BoltType for connection: {bolt_dep:?}");
                 }
             }
+
+            for bolt_message_connection in message_connections_bolt_type {
+                if let BoltType::Map(map) = bolt_message_connection {
+                    if let Ok(message_connection) = MessageConnection::try_from(map) {
+                        sdg.message_connections.push(message_connection)
+                    }
+                } else {
+                    warn!(
+                        "Unexpected BoltType for message connection: {bolt_message_connection:?}"
+                    );
+                }
+            }
         }
         Ok(sdg)
     }
@@ -90,6 +105,7 @@ impl SdgRepository for SdgRepositoryImpl {
                 query(CREATE_SDG)
                     .param("services", sdg.services.clone())
                     .param("connections", sdg.connections.clone())
+                    .param("message_connections", sdg.message_connections.clone())
                     .param("codebase_uuid", codebase_uuid.to_string())
                     .param("commit_hash", commit_hash.to_string()),
             )

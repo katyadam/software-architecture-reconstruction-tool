@@ -1,7 +1,7 @@
 pub mod bolt;
 
 use crate::sdg::interaction_kind::InteractionKind;
-use models::{Endpoint, RestCall, configuration::ServiceDescription};
+use models::{Endpoint, MessageEdge, RestCall, configuration::ServiceDescription};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -9,6 +9,8 @@ use utoipa::ToSchema;
 pub struct Sdg {
     pub services: Vec<Service>,
     pub connections: Vec<Connection>,
+    #[serde(default)]
+    pub message_connections: Vec<MessageConnection>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, PartialEq, Eq)]
@@ -37,6 +39,19 @@ pub struct Request {
     pub kind: InteractionKind,
 }
 
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, PartialEq, Eq)]
+pub struct MessageConnection {
+    pub source_id: String,
+    pub target_id: String,
+    pub messages: Vec<MessageRequest>,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone, PartialEq, Eq)]
+pub struct MessageRequest {
+    pub producer: MessageEdge,
+    pub consumer: MessageEdge,
+}
+
 #[derive(Debug, Clone)]
 pub struct AssignedEndpoint {
     pub data: Endpoint,
@@ -53,6 +68,18 @@ impl AssignedEndpoint {
 pub struct AssignedRestCall {
     pub data: RestCall,
     pub service: ServiceDescription,
+}
+
+#[derive(Debug, Clone)]
+pub struct AssignedMessageEdge {
+    pub data: MessageEdge,
+    pub service: ServiceDescription,
+}
+
+impl AssignedMessageEdge {
+    pub fn new(data: MessageEdge, service: ServiceDescription) -> Self {
+        Self { data, service }
+    }
 }
 
 impl AssignedRestCall {

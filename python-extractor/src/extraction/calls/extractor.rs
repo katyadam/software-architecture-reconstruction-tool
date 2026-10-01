@@ -157,6 +157,9 @@ impl Extractor for CallsExtractor {
                     is_super_invoke: false,
                     invoked_on: None,
                     source_span: last_class_last_function_span(&node, params.code),
+                    is_decorator: node
+                        .parent()
+                        .is_some_and(|parent| parent.kind() == "decorator"),
                 };
                 call_statements.push(PythonCallStatement {
                     call_statement,

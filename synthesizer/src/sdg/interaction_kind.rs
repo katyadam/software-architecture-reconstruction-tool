@@ -191,8 +191,8 @@ pub fn host_of(uri: &str) -> &str {
 /// Does this call site live in test code?
 ///
 /// The only rule that varies by language. Adding a language means adding one
-/// arm here and one arm in [`Language::from_path`] -- e.g. Go would match
-/// `*_test.go`, TypeScript `*.spec.ts` and a `__tests__` segment.
+/// arm here and one arm in [`Language::from_path`] -- e.g. TypeScript would
+/// match `*.spec.ts` and a `__tests__` segment.
 fn is_test_path(lang: Language, path: &str) -> bool {
     let file_name = path.rsplit('/').next().unwrap_or(path);
 
@@ -209,6 +209,7 @@ fn is_test_path(lang: Language, path: &str) -> bool {
                 || (file_name.starts_with("test_") && file_name.ends_with(".py"))
                 || file_name.ends_with("_test.py")
         }
+        Language::Go => has_test_segment(path) || file_name.ends_with("_test.go"),
         // A language whose arm has not been added yet still gets the safe,
         // convention-independent part of the rule.
         Language::Unknown => has_test_segment(path),

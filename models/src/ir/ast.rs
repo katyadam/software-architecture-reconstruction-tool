@@ -4,6 +4,10 @@ pub enum Expr {
     Literal(String),
     Var(String),
     Concat(Box<Expr>, Box<Expr>),
+    StructLiteral {
+        type_name: Option<String>,
+        fields: Vec<(String, Expr)>,
+    },
     Call {
         name: String,
         receiver: Option<Box<Expr>>,

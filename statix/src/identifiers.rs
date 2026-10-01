@@ -26,7 +26,8 @@ pub fn identifiers_in_snippet(code: &str, language: Language) -> HashSet<String>
             crate::python::ts_language(),
             crate::python::IDENTIFIER_KINDS,
         ),
-        Language::Unknown => return HashSet::new(),
+        // ponytail: no Go identifier kinds yet, so Go call sites give the LLM no operand signal.
+        Language::Go | Language::Unknown => return HashSet::new(),
     };
     let mut parser = tree_sitter::Parser::new();
     if parser.set_language(&ts_lang).is_err() {

@@ -35,6 +35,7 @@ fn simple_test() {
             start_byte: 20,
             end_byte: 36,
         },
+        is_decorator: false,
     }];
     assert_eq!(
         calls
@@ -68,6 +69,7 @@ fn nested_test() {
                 start_byte: 0,
                 end_byte: 23,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("A"),
@@ -88,6 +90,7 @@ fn nested_test() {
                 start_byte: 26,
                 end_byte: 50,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("B"),
@@ -108,6 +111,7 @@ fn nested_test() {
                 start_byte: 81,
                 end_byte: 100,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("C"),
@@ -124,6 +128,7 @@ fn nested_test() {
                 start_byte: 81,
                 end_byte: 100,
             },
+            is_decorator: false,
         },
     ];
 
@@ -159,6 +164,7 @@ fn classes_test() {
                 start_byte: 0,
                 end_byte: 299,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("sum"),
@@ -186,6 +192,7 @@ fn classes_test() {
                 start_byte: 0,
                 end_byte: 299,
             },
+            is_decorator: false,
         },
     ];
 
@@ -232,6 +239,7 @@ fn classes_imports_test() {
                 start_byte: 113,
                 end_byte: 443,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("divider.divide"),
@@ -248,6 +256,7 @@ fn classes_imports_test() {
                 start_byte: 113,
                 end_byte: 443,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("sum"),
@@ -275,6 +284,7 @@ fn classes_imports_test() {
                 start_byte: 113,
                 end_byte: 443,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("classes.sum"),
@@ -302,6 +312,7 @@ fn classes_imports_test() {
                 start_byte: 113,
                 end_byte: 443,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("product"),
@@ -329,6 +340,7 @@ fn classes_imports_test() {
                 start_byte: 113,
                 end_byte: 443,
             },
+            is_decorator: false,
         },
     ];
 
@@ -370,6 +382,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
                 start_byte: 96,
                 end_byte: 946,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("ValueError"),
@@ -390,6 +403,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
                 start_byte: 96,
                 end_byte: 946,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("User"),
@@ -422,6 +436,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
                 start_byte: 96,
                 end_byte: 946,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("len"),
@@ -442,6 +457,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
                 start_byte: 96,
                 end_byte: 946,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("self.repository.get_all"),
@@ -458,6 +474,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
                 start_byte: 96,
                 end_byte: 946,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("self.repository.save"),
@@ -478,6 +495,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
                 start_byte: 96,
                 end_byte: 946,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("self.repository.get_by_id"),
@@ -498,6 +516,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
                 start_byte: 96,
                 end_byte: 946,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("self.repository.get_all"),
@@ -514,6 +533,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
                 start_byte: 96,
                 end_byte: 946,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("self.repository.delete"),
@@ -534,6 +554,7 @@ fn should_assign_correct_invoke_on_using_assignment_type_inference() {
                 start_byte: 96,
                 end_byte: 946,
             },
+            is_decorator: false,
         },
     ];
 
@@ -580,6 +601,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
                 start_byte: 34,
                 end_byte: 938,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("str"),
@@ -600,6 +622,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
                 start_byte: 34,
                 end_byte: 938,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("self.service.get_user"),
@@ -620,6 +643,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
                 start_byte: 34,
                 end_byte: 938,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("self.service.list_users"),
@@ -636,6 +660,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
                 start_byte: 34,
                 end_byte: 938,
             },
+            is_decorator: false,
         },
         CallStatement {
             function_name: s!("self.service.delete_user"),
@@ -656,6 +681,7 @@ fn should_assign_correct_invoke_on_using_function_and_assignment_type_inference(
                 start_byte: 34,
                 end_byte: 938,
             },
+            is_decorator: false,
         },
     ];
 
@@ -787,5 +813,34 @@ fn test_call_edge_cases() {
     assert!(
         !isinstance_call.is_self_invoke,
         "isinstance is not a self-invoke"
+    );
+}
+
+#[test]
+fn flags_calls_inside_decorators() {
+    let code = r#"
+@app.get("/items")
+def read_items():
+    return requests.get("http://inventory/data")
+"#;
+    let tree = get_tree(code);
+    let calls = CallsExtractor.extract(ExtractParams::new(&tree, code));
+
+    let decorator_call = calls
+        .iter()
+        .find(|c| c.call_statement.function_name.starts_with("app.get"))
+        .expect("app.get(...) inside the decorator must be extracted");
+    assert!(
+        decorator_call.call_statement.is_decorator,
+        "a call whose parent node is a decorator must be flagged"
+    );
+
+    let outbound = calls
+        .iter()
+        .find(|c| c.call_statement.function_name.starts_with("requests.get"))
+        .expect("requests.get(...) in the body must be extracted");
+    assert!(
+        !outbound.call_statement.is_decorator,
+        "a call in the function body must not be flagged"
     );
 }

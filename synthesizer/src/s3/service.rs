@@ -66,6 +66,7 @@ impl S3Service {
                 commit_hash: dto.identifier.commit_hash.clone(),
                 endpoints: loaded_sdg_elements.endpoints,
                 restcalls: loaded_sdg_elements.restcalls,
+                message_edges: loaded_sdg_elements.message_edges,
             })
             .await?;
 
@@ -132,16 +133,17 @@ impl S3Service {
         self.load_and_merge_chunks::<S3SdgCodeElements, _, S3SdgCodeElements>(
             &index_path,
             |chunks| {
-                let (endpoints, restcalls) = chunks.into_iter().fold(
-                    (Vec::new(), Vec::new()),
-                    |(mut endpoints_aggr, mut restcalls_aggr), chunk| {
+                let (endpoints, restcalls, message_edges) = chunks.into_iter().fold(
+                    (Vec::new(), Vec::new(), Vec::new()),
+                    |(mut endpoints_aggr, mut restcalls_aggr, mut message_edges_aggr), chunk| {
                         endpoints_aggr.extend(chunk.endpoints);
                         restcalls_aggr.extend(chunk.restcalls);
+                        message_edges_aggr.extend(chunk.message_edges);
 
-                        (endpoints_aggr, restcalls_aggr)
+                        (endpoints_aggr, restcalls_aggr, message_edges_aggr)
                     },
                 );
-                S3SdgCodeElements::new(endpoints, restcalls)
+                S3SdgCodeElements::new(endpoints, restcalls, message_edges)
             },
         )
         .await
