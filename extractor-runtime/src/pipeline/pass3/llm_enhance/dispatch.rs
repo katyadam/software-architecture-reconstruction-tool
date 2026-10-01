@@ -36,19 +36,11 @@ pub async fn evaluate_restcalls_with_llm(
     sage: &SageClient,
     project_ir: &ProjectIR,
 ) {
-    let excluded_non_edges = restcalls
-        .iter()
-        .filter(|rc| triage(rc, project_ir, config) == ResidualTriage::NonEdge)
-        .count();
-    info!(
-        "residual edge filter: excluded {excluded_non_edges} non-edge residual(s) from resolution"
-    );
-
     // Snapshot operands before rewrites change `target_uri`; used for scoring.
     let scored_residuals: Vec<(usize, Vec<String>)> = restcalls
         .iter()
         .enumerate()
-        .filter(|(_, rc)| triage(rc, project_ir, config) == ResidualTriage::NeedsResolution)
+        .filter(|(_, rc)| triage(rc) == ResidualTriage::NeedsResolution)
         .map(|(i, rc)| {
             (
                 i,
@@ -120,7 +112,7 @@ fn resolve_deterministically(
     let mut resolved = 0usize;
     let mut candidates = 0usize;
     for rc in restcalls.iter_mut() {
-        if triage(rc, project_ir, config) != ResidualTriage::NeedsResolution {
+        if triage(rc) != ResidualTriage::NeedsResolution {
             continue;
         }
         candidates += 1;
@@ -144,7 +136,7 @@ fn collect_pending_queries(
     restcalls
         .iter()
         .enumerate()
-        .filter(|(_, rc)| triage(rc, project_ir, config) == ResidualTriage::NeedsResolution)
+        .filter(|(_, rc)| triage(rc) == ResidualTriage::NeedsResolution)
         .filter_map(|(index, rc)| {
             let query = build_query_for_restcall(rc, config, project_ir).or_else(|| {
                 warn!(
