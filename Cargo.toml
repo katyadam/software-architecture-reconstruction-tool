@@ -33,6 +33,7 @@ actix-web = "4.12.0"
 actix-cors = "0.7.1"
 actix-multipart = "0.7.2"
 awc = "3.8.1"
+reqwest = { version = "0.12.23", default-features = false, features = ["json", "rustls-tls-native-roots"] }
 
 # Async runtime
 tokio = "1.49.0"
