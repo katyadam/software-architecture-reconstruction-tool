@@ -1,6 +1,6 @@
 use actix_web::{HttpResponse, ResponseError};
 use awc::error::{PayloadError, SendRequestError};
-use clients::http::error::HttpClientError;
+use clients::error::HttpClientError;
 use models::api::ExtractionError;
 use s3::error::S3Error;
 use serde::Serialize;

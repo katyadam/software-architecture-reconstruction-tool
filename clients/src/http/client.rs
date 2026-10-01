@@ -4,7 +4,7 @@ use awc::Client;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
-use crate::http::error::HttpClientError;
+use crate::error::HttpClientError;
 
 pub struct HttpClient {
     base_url: String,

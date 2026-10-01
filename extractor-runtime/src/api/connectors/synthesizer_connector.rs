@@ -1,4 +1,4 @@
-use clients::http::{client::HttpClient, error::HttpClientError};
+use clients::{error::HttpClientError, http::client::HttpClient};
 use log::info;
 use models::api::ProcessFilesIdentifier;
 

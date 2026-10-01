@@ -1,4 +1,4 @@
-use clients::http::error::HttpClientError;
+use clients::error::HttpClientError;
 
 use crate::errors::{builder::BuilderError, database::DatabaseError};
 

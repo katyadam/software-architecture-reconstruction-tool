@@ -1,4 +1,4 @@
-use clients::http::error::HttpClientError;
+use clients::error::HttpClientError;
 use s3::error::S3Error;
 use thiserror::Error;
 
