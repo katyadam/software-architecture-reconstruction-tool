@@ -5,12 +5,7 @@ use sage::resolver::query::{CandidateService, ClassifyContext, QueryKind, SageQu
 
 use crate::pipeline::pass3::llm_enhance::signals;
 
-/// Build a closed-set classification query for a residual REST call.
-///
-/// Candidates are the configured services minus (a) the origin service (a call
-/// site is never a self-loop) and (b) any service carrying no URL (e.g. `models`
-/// -- not a runtime target). Returns `None` only when no candidate remains,
-/// leaving nothing for the LLM to classify.
+/// Candidates: services with a URL, minus origin. `None` if none remain.
 pub(super) fn build_query_for_restcall(
     rc: &RestCall,
     config: &ConfigurationData,
@@ -46,11 +41,7 @@ pub(super) fn build_query_for_restcall(
     })
 }
 
-/// Best-effort path-literal suffix of a residual target URI expression.
-///
-/// Returns the first `/`-leading path fragment, cleaned of surrounding quote or
-/// concat syntax; `""` if none. Heuristic char scan: from the first `/`, take up
-/// to the next quote, whitespace, or `+`. Deliberately partial -- not a parser.
+/// `base + "/cases" + id` -> `/cases`. Heuristic scan, not a parser.
 fn path_suffix(original_uri: &str) -> String {
     let start = match original_uri.find('/') {
         Some(i) => i,
@@ -66,8 +57,6 @@ fn path_suffix(original_uri: &str) -> String {
     out.trim_end_matches(['"', '\'']).to_string()
 }
 
-/// Splice the residual's path suffix onto a resolved `base`, normalising the
-/// join so the base's trailing slash never doubles the suffix's leading one.
 pub(super) fn rewrite_onto_base(original_uri: &str, base: &str) -> String {
     format!(
         "{}{}",
@@ -76,9 +65,7 @@ pub(super) fn rewrite_onto_base(original_uri: &str, base: &str) -> String {
     )
 }
 
-/// Rewrite a residual target URI onto a deterministically matched service's
-/// canonical base URL. If the service carries no URL, returns `original_uri`
-/// unchanged so the caller can treat it as an abstain (no resolution applied).
+/// No service URL -> `original_uri` unchanged (abstain).
 pub(super) fn rewrite_target_uri_to_service(
     original_uri: &str,
     service: &ServiceDescription,

@@ -1,15 +1,6 @@
-//! Shared identifier token splitters.
-//!
-//! `split_snake` and `split_camel` are used by the deterministic service
-//! matcher ([`super::matcher`]).
-
-/// Receiver / self-reference keywords across the supported languages
-/// (`self` -> Python/Rust, `this` -> Java/JS). They are not service-name
-/// evidence, so both the ranker and the matcher skip them. Add a language's
-/// keyword here to teach both sites at once.
+/// Not service-name evidence; skipped when matching.
 pub(super) const RECEIVER_KEYWORDS: &[&str] = &["self", "this"];
 
-/// Split `s` on underscores, dropping empty pieces.
 pub(super) fn split_snake(s: &str) -> Vec<String> {
     s.split('_')
         .filter(|p| !p.is_empty())
@@ -17,7 +8,6 @@ pub(super) fn split_snake(s: &str) -> Vec<String> {
         .collect()
 }
 
-/// Split `s` at each uppercase boundary (camelCase / PascalCase).
 pub(super) fn split_camel(s: &str) -> Vec<String> {
     let mut parts = Vec::new();
     let mut current = String::new();

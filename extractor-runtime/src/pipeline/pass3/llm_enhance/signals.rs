@@ -1,10 +1,4 @@
-//! Signal extraction for unresolved (residual) REST calls.
-//!
-//! Given a residual [`models::RestCall`] -- one whose `target_uri` could not be
-//! resolved to a concrete host by symbolic evaluation -- this gathers the
-//! evidence around the call site that hints at which microservice it targets.
-//! It is the foundation for a later deterministic matcher and an LLM classifier;
-//! this module only produces the evidence, it does not decide anything.
+//! Call-site evidence for residual REST calls. Gathers, never decides.
 
 use std::collections::BTreeSet;
 
@@ -15,19 +9,16 @@ use models::{
 
 use crate::pipeline::pass3::llm_enhance::variables::microservice_for_file;
 
-/// Evidence gathered around a single residual REST call site.
 pub(super) struct CallSiteSignals {
-    /// The CALLER service. The answer is never the origin, so this is excluded.
+    /// Caller; never the answer.
     pub origin_service: String,
-    /// Enclosing class name, if the call sits inside a class -- strongest signal.
+    /// Strongest signal.
     pub client_class: Option<String>,
-    /// Import module/name strings present in the call's source file.
     pub imports: Vec<String>,
-    /// Identifiers appearing in the residual `target_uri` expression.
+    /// Identifiers in `target_uri`.
     pub operand_identifiers: Vec<String>,
 }
 
-/// Extract [`CallSiteSignals`] for a residual REST call.
 pub(super) fn extract(
     rc: &RestCall,
     project_ir: &ProjectIR,
@@ -35,9 +26,7 @@ pub(super) fn extract(
 ) -> CallSiteSignals {
     let origin_service = microservice_for_file(&rc.file_path, config);
 
-    // Resolve the enclosing callable via the `(file_path, hash)` index (built in
-    // pass2). `function_hash` is a content hash -- not unique across files -- so
-    // the index is scoped by file_path; see `ProjectIR::enclosing_callable`.
+    // `function_hash` is not unique across files; lookup is per file.
     let client_class = project_ir
         .enclosing_callable(&rc.file_path, &rc.function_hash)
         .and_then(|callable| match &callable.metadata.namespace {
@@ -68,8 +57,7 @@ pub(super) fn extract(
     }
 }
 
-/// Render an [`models::Import`] into a readable `module.name` string, appending
-/// the local codeword when it differs (i.e. the symbol is aliased).
+/// `module.name`, plus ` as alias` when aliased.
 fn render_import(import: &models::Import) -> String {
     let base = if import.orig_module.is_empty() {
         import.orig_name.clone()
@@ -151,9 +139,6 @@ mod tests {
     }
 
     fn project_ir(files: Vec<TypedFileRecord>) -> ProjectIR {
-        // callable_map (mangled name) is unused by the signal extractor, so it
-        // stays empty; the `(file_path, hash)` index IS used for client_class, so
-        // build it from the files exactly as production does.
         let callables_by_file_hash =
             crate::pipeline::pass2::callables::build_callables_by_file_hash(&files);
         ProjectIR {

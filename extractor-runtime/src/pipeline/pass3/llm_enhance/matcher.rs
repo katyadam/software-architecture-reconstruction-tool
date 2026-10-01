@@ -1,10 +1,4 @@
-//! Deterministic identifier -> service matcher (Phase 2a).
-//!
-//! Lexically matches a residual call site's signals
-//! ([`super::signals::CallSiteSignals`]) against the configured service set.
-//! No LLM. High precision, deliberately partial recall: accepts only an
-//! unambiguous match at the strongest available signal and abstains (returns
-//! `None`) on ambiguity or no match, deferring to the LLM. See plan §5.
+//! Lexical call-site -> service matcher. Abstains on ambiguity.
 
 use std::collections::BTreeSet;
 
@@ -13,28 +7,18 @@ use models::{ConfigurationData, configuration::ServiceDescription};
 use crate::pipeline::pass3::llm_enhance::signals::CallSiteSignals;
 use crate::pipeline::pass3::llm_enhance::tokens::{RECEIVER_KEYWORDS, split_camel, split_snake};
 
-/// Tokens stripped before matching so they cannot cause spurious hits.
 const GENERIC_TOKENS: [&str; 6] = ["service", "client", "url", "uri", "api", "http"];
 
-/// A configured service reduced to its match keys.
 pub(super) struct IndexedService<'a> {
     desc: &'a ServiceDescription,
-    /// Stripped, lowercased token set (generics removed). e.g. {medical,data}.
+    /// e.g. {medical, data}
     tokens: BTreeSet<String>,
-    /// First char of every full-name token (before stripping). e.g. `mds`.
+    /// e.g. `mds`
     acronym: String,
 }
 
-/// Build the per-service match index over the configured service set. Build it
-/// ONCE and reuse it across call sites -- [`deterministic_match`] takes the index
-/// rather than the config so the per-residual loop does not rebuild it.
-///
-/// Config entries with no URL (e.g. empaia's `models` -- a shared data-models
-/// package, `urls: []`, not a microservice) are excluded: they can never be a
-/// resolution target (the service->URL rewrite abstains on no-URL), and keeping
-/// them in the index only lets a generic token (`models`) shadow a real
-/// second-place match into a spurious `>1` ambiguous abstention. Dropping them
-/// can therefore only unmask real matches -- never lose one.
+/// Build once, reuse per call site. No-URL entries (shared packages) are
+/// skipped: never a target, only cause false ambiguity.
 pub(super) fn build_index(config: &ConfigurationData) -> Vec<IndexedService<'_>> {
     config
         .service_descriptions
@@ -57,8 +41,6 @@ pub(super) fn build_index(config: &ConfigurationData) -> Vec<IndexedService<'_>>
         .collect()
 }
 
-/// Tokenize an identifier: split on non-alphanumerics, then camel/snake split
-/// each piece, lowercased. Generics are NOT stripped here.
 fn tokenize(s: &str) -> Vec<String> {
     s.split(|c: char| !c.is_alphanumeric())
         .filter(|p| !p.is_empty())
@@ -69,7 +51,6 @@ fn tokenize(s: &str) -> Vec<String> {
         .collect()
 }
 
-/// Lowercase token set with generic tokens removed.
 fn strip_generics(tokens: Vec<String>) -> BTreeSet<String> {
     tokens
         .into_iter()
@@ -77,16 +58,11 @@ fn strip_generics(tokens: Vec<String>) -> BTreeSet<String> {
         .collect()
 }
 
-/// Reduce a signal string to its stripped token set.
 fn signal_tokens(s: &str) -> BTreeSet<String> {
     strip_generics(tokenize(s))
 }
 
-/// An operand identifier -> acronym/word match key: drop bare receiver
-/// keywords, strip leading underscores, and strip a trailing `_url`/`_uri`
-/// suffix. e.g. `_mds_url` -> `mds`, `cds_url` -> `cds`, `annotation_url` ->
-/// `annotation`, `self` -> `` (skipped by the caller). The identifier tokenizer
-/// splits on `.`, so a receiver arrives as its own token, not a `self.` prefix.
+/// `_mds_url` -> `mds`, `annotation_url` -> `annotation`, `self` -> ``.
 fn operand_key(ident: &str) -> String {
     let s = ident.trim();
     if RECEIVER_KEYWORDS.contains(&s) {
@@ -100,13 +76,10 @@ fn operand_key(ident: &str) -> String {
     s.to_string()
 }
 
-/// A service's stripped tokens are contained in (subset-or-equal) the signal's
-/// tokens. Empty token sets never match.
 fn service_tokens_subset(svc: &IndexedService, signal: &BTreeSet<String>) -> bool {
     !svc.tokens.is_empty() && !signal.is_empty() && svc.tokens.is_subset(signal)
 }
 
-/// Indices of services matched by any key in the `client_class` signal group.
 fn match_client_class(index: &[IndexedService], class: &str) -> Vec<usize> {
     let signal = signal_tokens(class);
     index
@@ -117,7 +90,6 @@ fn match_client_class(index: &[IndexedService], class: &str) -> Vec<usize> {
         .collect()
 }
 
-/// Indices matched by any import string (token-subset).
 fn match_imports(index: &[IndexedService], imports: &[String]) -> Vec<usize> {
     let mut hits = BTreeSet::new();
     for imp in imports {
@@ -131,8 +103,7 @@ fn match_imports(index: &[IndexedService], imports: &[String]) -> Vec<usize> {
     hits.into_iter().collect()
 }
 
-/// Indices matched by any operand identifier: acronym equality OR token-subset
-/// (so a full-word identifier like `annotation` also matches).
+/// Acronym equality or token subset.
 fn match_operands(index: &[IndexedService], identifiers: &[String]) -> Vec<usize> {
     let mut hits = BTreeSet::new();
     for ident in identifiers {
@@ -150,13 +121,8 @@ fn match_operands(index: &[IndexedService], identifiers: &[String]) -> Vec<usize
     hits.into_iter().collect()
 }
 
-/// Deterministically resolve the target service for a residual call site.
-///
-/// Tries signal groups strongest-first (`client_class`, `imports`,
-/// `operand_identifiers`), always excluding the origin (caller) service. The
-/// first group that yields exactly one non-origin hit wins; a group with
-/// multiple hits is ambiguous and abstains; an empty group falls through to the
-/// next. Returns the matched service, or `None` to defer to the LLM.
+/// Groups strongest-first: class, imports, operands. Origin excluded.
+/// One hit wins, many abstain, none falls through.
 pub(super) fn deterministic_match(
     signals: &CallSiteSignals,
     index: &[IndexedService],
@@ -203,8 +169,6 @@ mod tests {
         }
     }
 
-    /// Build the index from a config and match in one step (mirrors how callers
-    /// build the index once, then match per call site).
     fn resolve(s: &CallSiteSignals, cfg: &ConfigurationData) -> Option<ServiceDescription> {
         deterministic_match(s, &build_index(cfg))
     }
@@ -282,8 +246,7 @@ mod tests {
 
     #[test]
     fn origin_service_hit_is_excluded() {
-        // The only matching service is the origin -> excluded -> falls through
-        // -> None (no self-loop).
+        // Only match is origin -> no self-loop.
         let cfg = config(&["medical-data-service", "app-service"]);
         let s = signals(
             "medical-data-service",
@@ -313,9 +276,6 @@ mod tests {
 
     #[test]
     fn no_url_service_excluded_from_index() {
-        // A no-URL config entry (a shared data-models package, not a service)
-        // whose token would otherwise match is excluded, so it neither resolves
-        // nor shadows a real match into an ambiguous abstention.
         let cfg = ConfigurationData {
             service_descriptions: vec![
                 svc("annotation-service"),
@@ -327,8 +287,7 @@ mod tests {
                 svc("app-service"),
             ],
         };
-        // Without the no-URL exclusion, `annotation` would match BOTH
-        // annotation-service and annotation-models -> ambiguous -> None.
+        // Else `annotation` matches both -> ambiguous.
         let s = signals("app-service", None, &[], &["annotation_url"]);
         let hit = resolve(&s, &cfg).expect("no-URL entry excluded -> unique match");
         assert_eq!(hit.name, "annotation-service");

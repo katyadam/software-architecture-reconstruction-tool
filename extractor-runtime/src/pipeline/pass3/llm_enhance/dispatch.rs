@@ -36,9 +36,6 @@ pub async fn evaluate_restcalls_with_llm(
     sage: &SageClient,
     project_ir: &ProjectIR,
 ) {
-    // S1.7: report how many residuals the unified triage drops as non-edges
-    // (intra-service DB/dict/route reads the lexical identifier swept in) before
-    // they would have reached the LLM. Cheap second pass; signals are lazy.
     let excluded_non_edges = restcalls
         .iter()
         .filter(|rc| triage(rc, project_ir, config) == ResidualTriage::NonEdge)
@@ -47,10 +44,7 @@ pub async fn evaluate_restcalls_with_llm(
         "residual edge filter: excluded {excluded_non_edges} non-edge residual(s) from resolution"
     );
 
-    // S3.1: snapshot the residual population and its operand identifiers BEFORE
-    // any rewrite. The identifiers can shift meaning once `target_uri` is
-    // rewritten onto a canonical service base, so capture them now to score the
-    // final resolution against the auto-derived oracle.
+    // Snapshot operands before rewrites change `target_uri`; used for scoring.
     let scored_residuals: Vec<(usize, Vec<String>)> = restcalls
         .iter()
         .enumerate()
@@ -76,10 +70,8 @@ pub async fn evaluate_restcalls_with_llm(
     score_run(&scored_residuals, restcalls, config);
 }
 
-/// S3.1: score the final resolution against the auto-derived oracle, gated on
-/// the `SAGE_SCORE` env var (a path to a constants file). Unset -> silent no-op,
-/// mirroring the `SAGE_TRACE` pattern. Scoring must never break a real run, so
-/// an oracle load failure only warns.
+/// Score against the oracle when `SAGE_SCORE` (constants file path) is set.
+/// Never fails the run.
 fn score_run(
     residuals: &[(usize, Vec<String>)],
     restcalls: &[RestCall],
@@ -117,13 +109,8 @@ fn score_run(
     );
 }
 
-/// S2.3: deterministic identifier -> service resolution pass, run BEFORE the
-/// LLM. For each cross-service residual the lexical matcher resolves
-/// unambiguously, rewrite its `target_uri` onto the matched service's canonical
-/// base in place. The rewritten uri then reads as `ResolvedURL`, so
-/// `collect_pending_queries` naturally excludes it from the LLM batch. A matched
-/// service with no configured URL leaves the uri unchanged -- the `!=` guard
-/// treats that as an abstain (no-op).
+/// Rewrite residuals the lexical matcher resolves onto the service URL.
+/// Rewritten ones become `Resolved` and skip the LLM.
 fn resolve_deterministically(
     restcalls: &mut [RestCall],
     config: &ConfigurationData,
@@ -193,9 +180,7 @@ async fn dispatch_queries_concurrently(
         .await
 }
 
-/// Apply the LLM's closed-set choices. A chosen service is rewritten onto its
-/// canonical config URL via `rewrite_target_uri_to_service`; an abstain (`None`)
-/// or an error leaves the residual untouched.
+/// Rewrite onto the chosen service URL; abstain or error leaves it untouched.
 fn apply_query_outcomes(
     restcalls: &mut [RestCall],
     outcomes: Vec<QueryOutcome>,

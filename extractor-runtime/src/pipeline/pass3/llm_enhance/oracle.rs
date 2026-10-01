@@ -1,19 +1,5 @@
-//! Auto-derived ground-truth oracle for scoring the service matcher (S0.2).
-//!
-//! Ground truth is NOT hand-supplied. It is derived by joining a curated
-//! constants file (identifier -> URL) with the config file (URL -> service):
-//!
-//! ```text
-//! constants: mds_url -> http://medical-data-service:5000
-//! config:    http://medical-data-service:8000 -> medical-data-service
-//! join on HOST (medical-data-service) -> oracle edge: mds_url -> medical-data-service
-//! ```
-//!
-//! The join is on **host**, not the full URL, so a port mismatch between the
-//! constants and config (expected) is tolerated. This is not circular: the
-//! classifier under test resolves from names/classes/imports, never from the
-//! constants' URL values. The oracle is deliberately partial -- identifiers
-//! whose host maps to zero or multiple services are dropped.
+//! Ground truth: constants (identifier -> URL) joined with config (URL ->
+//! service) on host. Unknown or ambiguous hosts are dropped.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -22,28 +8,24 @@ use anyhow::Context;
 use models::ConfigurationData;
 use serde::Deserialize;
 
-/// One curated constant: an identifier and the URL it resolves to.
 #[derive(Debug, Deserialize)]
 pub(super) struct OracleConstant {
     pub name: String,
     pub value: String,
 }
 
-/// The constants file shape (`{ commit_hash, constants: [...] }`).
 #[derive(Debug, Deserialize)]
 struct ConstantsFile {
     constants: Vec<OracleConstant>,
 }
 
-/// Maps a normalized identifier to the service it provably targets.
+/// Normalized identifier -> service.
 pub(super) struct ServiceOracle {
     edges: HashMap<String, String>,
-    /// Count of constants dropped (host unknown / ambiguous in config).
     dropped: usize,
 }
 
-/// Extract the bare host from a URL: strip scheme, `:port`, and any path.
-/// e.g. `http://medical-data-service:5000/v1` -> `medical-data-service`.
+/// `http://medical-data-service:5000/v1` -> `medical-data-service`.
 fn host_of(url: &str) -> Option<String> {
     let after_scheme = url.split("://").last().unwrap_or(url);
     let host_port = after_scheme.split('/').next().unwrap_or(after_scheme);
@@ -52,10 +34,7 @@ fn host_of(url: &str) -> Option<String> {
     (!host.is_empty()).then(|| host.to_string())
 }
 
-/// Map a (possibly rewritten) URL back to the config service it now targets:
-/// return the name of the service any of whose `urls` shares the same host as
-/// `url`. `None` when `url` has no host or no service matches. Used to turn a
-/// final `target_uri` into the service it points at for scoring.
+/// Config service whose URL shares `url`'s host.
 pub(super) fn service_for_url(url: &str, config: &ConfigurationData) -> Option<String> {
     let host = host_of(url)?;
     config
@@ -69,9 +48,7 @@ pub(super) fn service_for_url(url: &str, config: &ConfigurationData) -> Option<S
         .map(|svc| svc.name.clone())
 }
 
-/// Normalize an identifier to its oracle/scorer join key: keep the last dotted
-/// segment (drops `settings.` / `self.` prefixes), strip leading underscores,
-/// lowercase. e.g. `settings.mps_url` -> `mps_url`, `_mds_url` -> `mds_url`.
+/// `settings.mps_url` -> `mps_url`, `_MDS_URL` -> `mds_url`.
 pub(super) fn normalize(identifier: &str) -> String {
     identifier
         .rsplit('.')
@@ -82,11 +59,7 @@ pub(super) fn normalize(identifier: &str) -> String {
 }
 
 impl ServiceOracle {
-    /// Build the oracle from already-parsed parts. Used by
-    /// [`from_constants_file`] and the unit tests (so tests need no files on
-    /// disk).
     pub(super) fn from_parts(constants: &[OracleConstant], config: &ConfigurationData) -> Self {
-        // host -> set of service names (a host should map to one service).
         let mut host_to_services: HashMap<String, Vec<String>> = HashMap::new();
         for svc in &config.service_descriptions {
             for url in &svc.urls {
@@ -110,7 +83,6 @@ impl ServiceOracle {
                 Some(services) if services.len() == 1 => {
                     edges.insert(normalize(&c.name), services[0].clone());
                 }
-                // host unknown in config, or ambiguous -> drop (partial oracle).
                 _ => dropped += 1,
             }
         }
@@ -118,9 +90,6 @@ impl ServiceOracle {
         ServiceOracle { edges, dropped }
     }
 
-    /// Load the oracle from a constants file on disk plus an in-memory config.
-    /// The config is already held by the caller, so only the constants file is
-    /// read and parsed here.
     pub(super) fn from_constants_file(
         constants_path: impl AsRef<Path>,
         config: &ConfigurationData,
@@ -133,10 +102,7 @@ impl ServiceOracle {
         Ok(Self::from_parts(&file.constants, config))
     }
 
-    /// The expected service for a set of operand identifiers: normalize each,
-    /// look each up, and return the service only if all that match agree on a
-    /// single one. Returns `None` when none match or when they conflict
-    /// (unscoreable).
+    /// `None` when no identifier matches or matches conflict.
     pub(super) fn expected_service(&self, identifiers: &[String]) -> Option<&str> {
         let mut found: Option<&str> = None;
         for ident in identifiers {
@@ -144,19 +110,17 @@ impl ServiceOracle {
                 match found {
                     None => found = Some(service),
                     Some(prev) if prev == service => {}
-                    Some(_) => return None, // conflicting -> unscoreable
+                    Some(_) => return None,
                 }
             }
         }
         found
     }
 
-    /// Number of oracle edges (the scoreable universe).
     pub(super) fn len(&self) -> usize {
         self.edges.len()
     }
 
-    /// Number of constants dropped during the join (host unknown / ambiguous).
     pub(super) fn dropped(&self) -> usize {
         self.dropped
     }
@@ -301,7 +265,6 @@ mod tests {
 
     #[test]
     fn from_constants_file_reads_only_constants() {
-        // Config held in memory; only the constants file is read from disk.
         let config = ConfigurationData {
             service_descriptions: vec![svc(
                 "medical-data-service",
@@ -313,8 +276,6 @@ mod tests {
             &config,
         )
         .expect("empaia constants load");
-        // Only mds_url's host is in the in-memory config, so it resolves;
-        // constants for other hosts are dropped (partial oracle).
         assert_eq!(
             oracle.expected_service(&["mds_url".to_string()]),
             Some("medical-data-service")
