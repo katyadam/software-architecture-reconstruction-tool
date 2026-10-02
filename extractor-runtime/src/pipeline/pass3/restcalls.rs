@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use log::info;
 use models::{
@@ -20,12 +20,16 @@ use crate::pipeline::{
 use super::callables::{build_file_local_callables, build_merged_enums};
 use super::language_backend::evaluation_for;
 
+/// Residual operand -> rendered `final_env` binding, e.g. `self._mds_url` -> `settings.mds_url`.
+pub(crate) type OperandBindings = BTreeMap<String, String>;
+
+/// Bindings are empty unless the output is a residual.
 pub(super) fn evaluate_restcalls(
     project_ir: &ProjectIR,
     external_constants: &HashMap<String, String>,
     per_file_attrs: &HashMap<String, HashMap<String, String>>,
     per_file_module_consts: &PerFileModuleConsts,
-) -> Vec<RestCall> {
+) -> Vec<(RestCall, OperandBindings)> {
     let merged_enums = build_merged_enums(&project_ir.files);
     let constants_env = build_constants_env(&project_ir.constants, external_constants);
 
@@ -53,7 +57,7 @@ fn evaluate_file_restcalls(
     constants_env: &Env,
     per_file_attrs: &HashMap<String, HashMap<String, String>>,
     per_file_module_consts: &PerFileModuleConsts,
-) -> Vec<RestCall> {
+) -> Vec<(RestCall, OperandBindings)> {
     let callables = build_file_local_callables(file, &project_ir.callable_map);
     let Some(evaluator) = evaluation_for(file.language) else {
         return vec![];
@@ -100,9 +104,9 @@ fn evaluate_single_restcall(
     file_env: &Env,
     merged_enums: &HashMap<String, Vec<String>>,
     language: Language,
-) -> Vec<RestCall> {
+) -> Vec<(RestCall, OperandBindings)> {
     if restcall.function_name.is_empty() {
-        return vec![restcall.clone()];
+        return vec![(restcall.clone(), OperandBindings::new())];
     }
 
     // Prefer hash-keyed lookup to avoid mangled-name collisions between anonymous
@@ -123,11 +127,11 @@ fn evaluate_single_restcall(
     }
 
     match symbolic_evaluation_with_env(callables, &lookup_key, evaluator.matcher(), &eval_env) {
-        Ok(analysis) => evaluator
-            .generate_uris(&restcall.target_uri, &analysis, merged_enums)
-            .into_iter()
-            .map(|uri| restcall.clone_from_target_uri(&uri))
-            .collect(),
+        Ok(analysis) => with_bindings(
+            restcall,
+            evaluator.generate_uris(&restcall.target_uri, &analysis, merged_enums),
+            &analysis.final_env,
+        ),
         Err(_) => {
             // Symbolic evaluation needs the enclosing callable's env; when that
             // lookup fails (e.g. a Java test method absent from the callable map)
@@ -146,12 +150,82 @@ fn evaluate_single_restcall(
                 return_value: Expr::Empty,
                 final_env: file_env.clone(),
             };
-            evaluator
-                .generate_uris(&restcall.target_uri, &fallback_analysis, merged_enums)
-                .into_iter()
-                .map(|uri| restcall.clone_from_target_uri(&uri))
-                .collect()
+            with_bindings(
+                restcall,
+                evaluator.generate_uris(&restcall.target_uri, &fallback_analysis, merged_enums),
+                &fallback_analysis.final_env,
+            )
         }
+    }
+}
+
+fn with_bindings(
+    restcall: &RestCall,
+    uris: Vec<String>,
+    env: &Env,
+) -> Vec<(RestCall, OperandBindings)> {
+    uris.into_iter()
+        .map(|uri| {
+            let rc = restcall.clone_from_target_uri(&uri);
+            let bindings = if is_restcall_evaluated_enough(&rc) == EvalState::NeedsResolution {
+                operand_bindings(&restcall.target_uri, env)
+            } else {
+                OperandBindings::new()
+            };
+            (rc, bindings)
+        })
+        .collect()
+}
+
+/// Operands are read off the template, not the residual: residual text is
+/// language-specific (Python drops `+`, f-strings keep `{var}`).
+/// Literal-bound operands were resolved, so they are skipped.
+// ponytail: `final_env` is end-of-function state, not call-site state.
+fn operand_bindings(template: &str, env: &Env) -> OperandBindings {
+    template
+        .split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '.'))
+        .map(|token| token.trim_end_matches(".value"))
+        .filter_map(|token| match env.get(token)? {
+            (_, Expr::Literal(_)) => None,
+            (dtype, expr) => Some((token.to_string(), render_binding(token, dtype, expr))),
+        })
+        .collect()
+}
+
+/// `url` bound to itself -> `unresolved: str`; else the expression, plus type.
+fn render_binding(name: &str, dtype: &Option<String>, expr: &Expr) -> String {
+    let value = match expr {
+        Expr::Var(v) if v == name => "unresolved".to_string(),
+        e => render_expr(e),
+    };
+    match dtype {
+        Some(t) => format!("{value}: {t}"),
+        None => value,
+    }
+}
+
+fn render_expr(expr: &Expr) -> String {
+    match expr {
+        Expr::Literal(s) => format!("{s:?}"),
+        Expr::Var(v) => v.clone(),
+        Expr::Concat(a, b) => format!("{} + {}", render_expr(a), render_expr(b)),
+        Expr::StructLiteral { type_name, .. } => {
+            format!("{}{{..}}", type_name.as_deref().unwrap_or_default())
+        }
+        Expr::Call {
+            name,
+            receiver,
+            args,
+        } => {
+            let args: Vec<String> = args.iter().map(render_expr).collect();
+            match receiver {
+                Some(r) => format!("{}.{name}({})", render_expr(r), args.join(", ")),
+                None => format!("{name}({})", args.join(", ")),
+            }
+        }
+        Expr::Empty => "?".to_string(),
+        Expr::Joined { vals } => vals.iter().map(render_expr).collect::<Vec<_>>().join(" | "),
+        Expr::Attr { object, field } => format!("{}.{field}", render_expr(object)),
     }
 }
 
@@ -240,6 +314,40 @@ mod tests {
         assert!(
             is_restcall_evaluated_enough(&restcall("self._client_base + path"))
                 == EvalState::NeedsResolution
+        );
+    }
+
+    #[test]
+    fn operand_bindings_render_non_literal_operands() {
+        let env: Env = HashMap::from([
+            (
+                "self._mds_url".to_string(),
+                (
+                    None,
+                    Expr::Attr {
+                        object: Box::new(Expr::Var("settings".to_string())),
+                        field: "mds_url".to_string(),
+                    },
+                ),
+            ),
+            (
+                "case_id".to_string(),
+                (Some("str".to_string()), Expr::Var("case_id".to_string())),
+            ),
+            (
+                "PREFIX".to_string(),
+                (None, Expr::Literal("/v1".to_string())),
+            ),
+        ]);
+
+        let bindings = operand_bindings("self._mds_url + PREFIX + \"/cases/\" + case_id", &env);
+
+        assert_eq!(
+            bindings,
+            OperandBindings::from([
+                ("case_id".to_string(), "unresolved: str".to_string()),
+                ("self._mds_url".to_string(), "settings.mds_url".to_string()),
+            ])
         );
     }
 }

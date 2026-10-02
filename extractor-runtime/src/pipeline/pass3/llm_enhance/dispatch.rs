@@ -15,6 +15,7 @@ use crate::pipeline::pass3::llm_enhance::{
     scorer::{ProducedEdge, score},
     signals,
 };
+use crate::pipeline::pass3::restcalls::OperandBindings;
 
 const MAX_CONCURRENT_LLM_QUERIES: usize = 4;
 
@@ -30,8 +31,10 @@ struct QueryOutcome {
     result: Result<SageResponse, SageError>,
 }
 
+/// `bindings` is index-aligned with `restcalls`.
 pub async fn evaluate_restcalls_with_llm(
     restcalls: &mut [RestCall],
+    bindings: &[OperandBindings],
     config: &ConfigurationData,
     sage: &SageClient,
     project_ir: &ProjectIR,

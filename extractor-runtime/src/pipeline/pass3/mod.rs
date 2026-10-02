@@ -47,7 +47,10 @@ pub fn evaluate(
         external_constants,
         per_file_attrs,
         per_file_module_consts,
-    );
+    )
+    .into_iter()
+    .map(|(rc, _)| rc)
+    .collect();
     let message_edges = message_edges::evaluate_message_edges(
         &project_ir,
         external_constants,
@@ -101,14 +104,16 @@ pub async fn evaluate_with_llm(
     config: &ConfigurationData,
     sage: &SageClient,
 ) -> EvaluatedIR {
-    let mut restcalls = restcalls::evaluate_restcalls(
+    let (mut restcalls, bindings): (Vec<_>, Vec<_>) = restcalls::evaluate_restcalls(
         &project_ir,
         external_constants,
         per_file_attrs,
         per_file_module_consts,
-    );
+    )
+    .into_iter()
+    .unzip();
 
-    evaluate_restcalls_with_llm(&mut restcalls, config, sage, &project_ir).await;
+    evaluate_restcalls_with_llm(&mut restcalls, &bindings, config, sage, &project_ir).await;
     let message_edges = message_edges::evaluate_message_edges(
         &project_ir,
         external_constants,

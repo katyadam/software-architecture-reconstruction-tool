@@ -9,13 +9,16 @@ use serde::Serialize;
 /// stable and can be hashed as a decision-cache key.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ResidualCallState {
-    /// Full call expression as written, e.g. `self._client.get(url, timeout=10)`.
+    /// Call as written, e.g. `self._client.get(url, timeout=10)`.
     pub call: String,
-    pub receiver: Receiver,
+    /// Omitted when the callee has no receiver.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receiver: Option<Receiver>,
     /// `target_uri` left after symbolic evaluation.
     pub residual: String,
     /// Residual operand -> where its value comes from,
     /// e.g. `self._mds_url` -> `settings.mds_url`, `case_id` -> `parameter: case_id: str`.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub operand_bindings: BTreeMap<String, String>,
     pub enclosing: Enclosing,
     /// Source file path, relative to the project root.
@@ -47,10 +50,10 @@ mod tests {
     fn serializes_stable_and_omits_unknowns() {
         let state = ResidualCallState {
             call: "self._client.get(url)".to_string(),
-            receiver: Receiver {
+            receiver: Some(Receiver {
                 expr: "self._client".to_string(),
                 datatype: None,
-            },
+            }),
             residual: "self._mds_url + url".to_string(),
             operand_bindings: BTreeMap::from([
                 ("url".to_string(), "parameter: url: str".to_string()),
