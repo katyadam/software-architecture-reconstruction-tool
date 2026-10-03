@@ -179,7 +179,7 @@ fn changed_targets<'a>(change: &ChangedElement, edges: &'a [ResolvedCallEdge]) -
             .flat_map(|signature| {
                 edges
                     .iter()
-                    .filter(move |edge| edge.target_id == signature)
+                    .filter(move |edge| callable_signature_matches(&edge.target_id, signature))
                     .map(|edge| edge.target_id.as_str())
             })
             .collect(),
@@ -218,6 +218,23 @@ fn reverse_reachable<'a>(
 /// Recognizes the existing class-qualified callable-signature convention without guessing owners.
 fn signature_belongs_to_class(signature: &str, class_name: &str) -> bool {
     signature.starts_with(&format!("class:{class_name}/"))
+}
+
+/// Matches exact graph IDs and the simple `Class.method()` identities produced by Git mapping.
+fn callable_signature_matches(graph_signature: &str, changed_signature: &str) -> bool {
+    if graph_signature == changed_signature {
+        return true;
+    }
+    let Some((class_name, method_with_parentheses)) = changed_signature.split_once('.') else {
+        return false;
+    };
+    let Some(method_name) = method_with_parentheses.strip_suffix("()") else {
+        return false;
+    };
+    signature_belongs_to_class(graph_signature, class_name)
+        && graph_signature
+            .split_once('/')
+            .is_some_and(|(_, declaration)| declaration.contains(&format!(" {method_name}(")))
 }
 
 /// Records a module fallback when no sound path from the changed element to a discovered test exists.

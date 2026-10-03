@@ -22,7 +22,7 @@ fn callable_change() -> ChangedElement {
         module_root: "orders".into(),
         source_path: "src/main/java/orders/OrderService.java".into(),
         kind: ChangedElementKind::Callable,
-        callable_signature: Some("class:OrderService/void changed()".into()),
+        callable_signature: Some("OrderService.changed()".into()),
     }
 }
 
@@ -55,7 +55,7 @@ fn selects_only_the_test_that_reaches_a_changed_callable() {
     assert_eq!(
         result.selected_tests[0].reasons,
         vec![SelectionReason::ChangedCallable {
-            signature: "class:OrderService/void changed()".into(),
+            signature: "OrderService.changed()".into(),
         }]
     );
     assert_eq!(result.unselected_tests, vec![unrelated]);
