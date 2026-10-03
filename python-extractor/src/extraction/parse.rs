@@ -1,5 +1,5 @@
 use models::{
-    CallStatement, ParsedCallable,
+    ParsedCallable,
     api::ExtractionError,
     ir::{ast::CallableAst, language::Language, project::TypedFileRecord, syntax::FileRecord},
 };
@@ -93,8 +93,8 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
 
     let call_statements = calls
         .into_iter()
-        .map(PythonCallStatement::to_language_agnostic)
-        .collect::<Vec<CallStatement>>();
+        .map(PythonCallStatement::into_parsed)
+        .collect::<Vec<_>>();
 
     Ok(FileRecord {
         file_path: file_name.to_string(),
@@ -124,18 +124,18 @@ pub fn identify(file: &mut TypedFileRecord) {
     let restcalls: Vec<_> = file
         .call_statements
         .iter()
-        .filter_map(|call| restcall_strategy.identify_restcall(call, &file.file_path))
+        .filter_map(|call| restcall_strategy.identify_restcall(&call.metadata, &file.file_path))
         .collect();
 
     let mut message_edges: Vec<_> = file
         .call_statements
         .iter()
-        .filter_map(|call| rabbitmq_strategy.identify_message_edge(call, &file.file_path))
+        .filter_map(|call| rabbitmq_strategy.identify_message_edge(&call.metadata, &file.file_path))
         .collect();
     message_edges.extend(
-        file.call_statements
-            .iter()
-            .flat_map(|call| kafka_strategy.identify_message_edges(call, &file.file_path)),
+        file.call_statements.iter().flat_map(|call| {
+            kafka_strategy.identify_message_edges(&call.metadata, &file.file_path)
+        }),
     );
 
     file.raw_restcalls = restcalls;

@@ -30,6 +30,23 @@ pub struct CallStatement {
     pub is_decorator: bool,
 }
 
+/// Call statement with byte spans into its file. Pass 1-3 only;
+/// `EvaluatedIR` carries the plain [`CallStatement`].
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ParsedCallStatement {
+    pub metadata: CallStatement,
+    /// Bytes of the call expression.
+    pub call_span: SourceSpan,
+    /// Bytes of the innermost enclosing function; `None` at module level.
+    pub function_span: Option<SourceSpan>,
+}
+
+impl From<ParsedCallStatement> for CallStatement {
+    fn from(pc: ParsedCallStatement) -> Self {
+        pc.metadata
+    }
+}
+
 impl Display for CallStatement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let args = self

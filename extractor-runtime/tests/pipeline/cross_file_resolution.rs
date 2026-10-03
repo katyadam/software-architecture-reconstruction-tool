@@ -126,6 +126,7 @@ fn java_cross_file_project_ir() {
     let get_order_call = controller_ir
         .call_statements
         .iter()
+        .map(|c| &c.metadata)
         .find(|c| c.function_name.contains("getOrder"))
         .expect("getOrder call should exist in OrderController");
 

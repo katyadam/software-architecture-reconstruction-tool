@@ -81,7 +81,7 @@ pub fn evaluate(
     let call_statements = project_ir
         .files
         .iter()
-        .flat_map(|f| f.call_statements.clone())
+        .flat_map(|f| f.call_statements.iter().map(|c| c.metadata.clone()))
         .collect();
 
     EvaluatedIR {
@@ -153,7 +153,7 @@ pub async fn evaluate_with_llm(
     let call_statements = project_ir
         .files
         .iter()
-        .flat_map(|f| f.call_statements.clone())
+        .flat_map(|f| f.call_statements.iter().map(|c| c.metadata.clone()))
         .collect();
 
     EvaluatedIR {

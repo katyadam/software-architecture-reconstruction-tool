@@ -16,7 +16,7 @@ pub mod source_code;
 pub use api::CodeElementsAggregate;
 pub use assignments::{Assignment, AssignmentKey, Scope};
 pub use callables::{Callable, Namespace, Parameter, ParsedCallable};
-pub use calls::{Argument, CallStatement};
+pub use calls::{Argument, CallStatement, ParsedCallStatement};
 pub use common::HttpMethod;
 pub use communication::{CommunicationProtocol, MessageDestinationKind, MessageEdge, MessageRole};
 pub use configuration::ConfigurationData;

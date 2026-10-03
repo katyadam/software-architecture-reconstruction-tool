@@ -15,7 +15,8 @@ use clients::typesafe::{
 };
 use log::warn;
 use models::{
-    CallStatement, ConfigurationData, RestCall, callables::Namespace, ir::project::ProjectIR,
+    CallStatement, ConfigurationData, ParsedCallStatement, RestCall, callables::Namespace,
+    ir::project::ProjectIR, source_code::SourceSpan,
 };
 
 use crate::pipeline::pass3::llm_enhance::signals::render_import;
@@ -181,7 +182,8 @@ fn residual_call_state(
         .files
         .iter()
         .find(|f| f.file_path == rc.file_path);
-    let source = file.and_then(|f| source_call(rc, &f.call_statements));
+    let parsed = file.and_then(|f| source_call(rc, &f.call_statements));
+    let source = parsed.map(|c| &c.metadata);
 
     ResidualCallState {
         call: render_call(rc, source.map(|c| strip_args(&c.function_name))),
@@ -195,6 +197,9 @@ fn residual_call_state(
                 Namespace::Module(_) => None,
             }),
         },
+        snippet: parsed
+            .and_then(|c| c.function_span.as_ref())
+            .and_then(|span| read_span(&rc.file_path, span)),
         imports: file.map_or_else(Vec::new, |f| f.imports.iter().map(render_import).collect()),
         file: relative_file(&rc.file_path, config),
     }
@@ -202,11 +207,35 @@ fn residual_call_state(
 
 /// `CallStatement` `rc` was identified from: same file, enclosing function and arguments.
 // ponytail: same function + same args on two receivers -> first wins; add a call-site span to RestCall if it bites.
-fn source_call<'a>(rc: &RestCall, calls: &'a [CallStatement]) -> Option<&'a CallStatement> {
+fn source_call<'a>(
+    rc: &RestCall,
+    calls: &'a [ParsedCallStatement],
+) -> Option<&'a ParsedCallStatement> {
     calls.iter().find(|c| {
-        c.enclosing_function_hash.as_deref().unwrap_or_default() == rc.function_hash
-            && c.arguments == rc.call_arguments
+        c.metadata
+            .enclosing_function_hash
+            .as_deref()
+            .unwrap_or_default()
+            == rc.function_hash
+            && c.metadata.arguments == rc.call_arguments
     })
+}
+
+/// Source text of `span`, read from disk on demand; `None` if unreadable.
+fn read_span(file_path: &str, span: &SourceSpan) -> Option<String> {
+    match std::fs::read(file_path) {
+        Ok(bytes) => slice_span(&bytes, span),
+        Err(e) => {
+            warn!("jev: cannot read {file_path} for snippet: {e}");
+            None
+        }
+    }
+}
+
+/// `None` if `span` is out of range or not UTF-8.
+fn slice_span(bytes: &[u8], span: &SourceSpan) -> Option<String> {
+    let text = bytes.get(span.start_byte as usize..span.end_byte as usize)?;
+    std::str::from_utf8(text).ok().map(str::to_string)
 }
 
 /// `self._client.get` -> `self._client`, typed by pass2 `invoked_on`.
@@ -366,18 +395,22 @@ mod tests {
         function_name: &str,
         hash: &str,
         args: Vec<models::Argument>,
-    ) -> CallStatement {
-        CallStatement {
-            function_name: function_name.to_string(),
-            arguments: args,
-            enclosing_function_name: None,
-            enclosing_class_name: None,
-            enclosing_function_hash: Some(hash.to_string()),
-            is_self_invoke: false,
-            is_super_invoke: false,
-            invoked_on: Some("httpx.Client".to_string()),
-            source_span: SourceSpan::new(0, 0),
-            is_decorator: false,
+    ) -> ParsedCallStatement {
+        ParsedCallStatement {
+            metadata: CallStatement {
+                function_name: function_name.to_string(),
+                arguments: args,
+                enclosing_function_name: None,
+                enclosing_class_name: None,
+                enclosing_function_hash: Some(hash.to_string()),
+                is_self_invoke: false,
+                is_super_invoke: false,
+                invoked_on: Some("httpx.Client".to_string()),
+                source_span: SourceSpan::new(0, 0),
+                is_decorator: false,
+            },
+            call_span: SourceSpan::new(0, 0),
+            function_span: None,
         }
     }
 
@@ -398,7 +431,7 @@ mod tests {
             ..restcall("url")
         };
 
-        let found = source_call(&rc, &calls).expect("match");
+        let found = &source_call(&rc, &calls).expect("match").metadata;
         assert_eq!(found.enclosing_function_hash.as_deref(), Some("h1"));
         assert_eq!(
             render_call(&rc, Some(strip_args(&found.function_name))),
@@ -407,6 +440,19 @@ mod tests {
         let r = receiver(found).expect("receiver");
         assert_eq!(r.expr, "self._client");
         assert_eq!(r.datatype.as_deref(), Some("httpx.Client"));
+    }
+
+    #[test]
+    fn slice_span_cuts_function_and_rejects_bad_spans() {
+        let code = "import x\n\ndef f(s):\n    return s.get(u)\n";
+        let start = code.find("def").expect("def") as u32;
+        let end = code.trim_end().len() as u32;
+        assert_eq!(
+            slice_span(code.as_bytes(), &SourceSpan::new(start, end)).as_deref(),
+            Some("def f(s):\n    return s.get(u)")
+        );
+        assert_eq!(slice_span(code.as_bytes(), &SourceSpan::new(0, 999)), None);
+        assert_eq!(slice_span("é".as_bytes(), &SourceSpan::new(0, 1)), None);
     }
 
     #[test]

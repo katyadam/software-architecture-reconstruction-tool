@@ -27,3 +27,15 @@ pub fn last_class_last_function_span(call_node: &Node, code: &str) -> SourceSpan
         SourceSpan::new(0, code.as_bytes().len() as u32)
     }
 }
+
+/// Innermost `function_definition` around the call; `None` at module level.
+pub fn innermost_function_span(call_node: &Node) -> Option<SourceSpan> {
+    let mut node = call_node.parent();
+    while let Some(n) = node {
+        if n.kind() == "function_definition" {
+            return Some(SourceSpan::new(n.start_byte() as u32, n.end_byte() as u32));
+        }
+        node = n.parent();
+    }
+    None
+}

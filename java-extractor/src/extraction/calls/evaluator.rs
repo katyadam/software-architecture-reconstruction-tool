@@ -6,8 +6,8 @@ use models::{Assignment, AssignmentKey, CallStatement};
 use std::collections::HashMap;
 
 /// Evaluates invocations and determines on what type each function is called.
-pub fn evaluate_invocations(
-    calls: &mut [CallStatement],
+pub fn evaluate_invocations<'a>(
+    calls: impl IntoIterator<Item = &'a mut CallStatement>,
     assignments_map: &HashMap<AssignmentKey, Assignment>,
 ) {
     for call in calls {

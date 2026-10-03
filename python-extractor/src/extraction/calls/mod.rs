@@ -1,4 +1,4 @@
-use models::CallStatement;
+use models::{CallStatement, ParsedCallStatement, source_code::SourceSpan};
 use tree_sitter::Node;
 
 pub mod evaluator;
@@ -23,5 +23,13 @@ impl<'a> PythonCallStatement<'a> {
 
     pub fn to_language_agnostic(call_statement: PythonCallStatement) -> CallStatement {
         call_statement.call_statement
+    }
+
+    pub fn into_parsed(self) -> ParsedCallStatement {
+        ParsedCallStatement {
+            call_span: SourceSpan::new(self.node.start_byte() as u32, self.node.end_byte() as u32),
+            function_span: source_span::innermost_function_span(&self.node),
+            metadata: self.call_statement,
+        }
     }
 }

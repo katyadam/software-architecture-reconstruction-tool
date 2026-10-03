@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 /// Pass 2 variant: operates on language-agnostic `CallStatement`s.
 /// Mirrors `evaluate_invocations` but without the `PythonCallStatement` wrapper.
-pub fn evaluate_invocations_on_statements(
-    calls: &mut [CallStatement],
+pub fn evaluate_invocations_on_statements<'a>(
+    calls: impl IntoIterator<Item = &'a mut CallStatement>,
     assignments_map: &HashMap<AssignmentKey, Assignment>,
 ) {
     for call in calls {

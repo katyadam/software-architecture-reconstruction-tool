@@ -1,5 +1,5 @@
 use models::{
-    ParsedCallable,
+    CallStatement, ParsedCallable,
     api::ExtractionError,
     ir::{language::Language, project::TypedFileRecord, syntax::FileRecord},
 };
@@ -58,7 +58,7 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         s.spawn(|_| endpoints = Some(EndpointsExtractor.extract(code, &tree, file_name)));
         s.spawn(|_| entities = Some(EntitiesExtractor.extract(code, &tree, file_name)));
         s.spawn(|_| callables = Some(CallablesExtractor.extract(code, &tree, file_name)));
-        s.spawn(|_| calls = Some(CallStatementsExtractor.extract(code, &tree, file_name)));
+        s.spawn(|_| calls = Some(CallStatementsExtractor.extract_parsed(code, &tree)));
     });
 
     let assignments = assignments
@@ -87,14 +87,19 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
         })
         .collect();
 
+    let plain_calls: Vec<CallStatement> = calls.iter().map(|c| c.metadata.clone()).collect();
     let rabbitmq_strategy = RabbitMqIdentificationStrategy::new();
-    let mut raw_message_edges = rabbitmq_strategy.identify_from_calls(&calls, file_name);
+    let mut raw_message_edges = rabbitmq_strategy.identify_from_calls(&plain_calls, file_name);
     raw_message_edges.extend(rabbitmq_strategy.identify_from_annotations(code, &tree, file_name));
     raw_message_edges
         .extend(rabbitmq_strategy.identify_from_message_handlers(code, &tree, file_name));
     let kafka_strategy = KafkaIdentificationStrategy::new();
-    raw_message_edges.extend(kafka_strategy.identify_from_calls(&calls, code, file_name));
-    raw_message_edges.extend(kafka_strategy.identify_stream_chain_outputs(&calls, code, file_name));
+    raw_message_edges.extend(kafka_strategy.identify_from_calls(&plain_calls, code, file_name));
+    raw_message_edges.extend(kafka_strategy.identify_stream_chain_outputs(
+        &plain_calls,
+        code,
+        file_name,
+    ));
     raw_message_edges.extend(kafka_strategy.identify_from_annotations(code, &tree, file_name));
 
     Ok(FileRecord {
@@ -121,7 +126,7 @@ pub fn identify(file: &mut TypedFileRecord) {
     let identified: Vec<_> = file
         .call_statements
         .iter()
-        .filter_map(|call| strategy.identify_restcall(call, &file.file_path))
+        .filter_map(|call| strategy.identify_restcall(&call.metadata, &file.file_path))
         .collect();
     file.raw_restcalls = identified;
 }

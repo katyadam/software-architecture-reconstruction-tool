@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use models::{
     Argument, Assignment, AssignmentKey, CallStatement, Callable, Namespace, Parameter,
-    ParsedCallable, Scope,
+    ParsedCallStatement, ParsedCallable, Scope,
     ir::ast::{CallableAst, Expr, Stmt},
+    source_code::SourceSpan,
 };
 use statix::strings::{hash_text, normalize_whitespace, strip_quotes};
 use tree_sitter::Node;
@@ -33,7 +34,7 @@ pub(super) fn collect_callable_ir(
     file_path: &str,
     callables: &mut Vec<ParsedCallable>,
     callable_lookup: &mut HashMap<String, Callable>,
-    call_statements: &mut Vec<CallStatement>,
+    call_statements: &mut Vec<ParsedCallStatement>,
     assignments: &mut HashMap<AssignmentKey, Assignment>,
 ) {
     for child in root.named_children(&mut root.walk()) {
@@ -561,8 +562,11 @@ fn collect_call_statements(
     body: Node,
     code: &str,
     callable: &Callable,
-    call_statements: &mut Vec<CallStatement>,
+    call_statements: &mut Vec<ParsedCallStatement>,
 ) {
+    let function_span = body
+        .parent()
+        .map(|f| SourceSpan::new(f.start_byte() as u32, f.end_byte() as u32));
     walk_named(body, &mut |node| {
         if node.kind() != "call_expression" {
             return;
@@ -577,20 +581,24 @@ fn collect_call_statements(
             .map(|args| parse_arguments(args, code))
             .unwrap_or_default();
 
-        call_statements.push(CallStatement {
-            function_name,
-            arguments,
-            enclosing_function_name: Some(callable.signature.clone()),
-            enclosing_class_name: match &callable.namespace {
-                Namespace::Class(name) => Some(name.clone()),
-                Namespace::Module(_) => None,
+        call_statements.push(ParsedCallStatement {
+            metadata: CallStatement {
+                function_name,
+                arguments,
+                enclosing_function_name: Some(callable.signature.clone()),
+                enclosing_class_name: match &callable.namespace {
+                    Namespace::Class(name) => Some(name.clone()),
+                    Namespace::Module(_) => None,
+                },
+                enclosing_function_hash: Some(callable.hash.clone()),
+                is_self_invoke: false,
+                is_super_invoke: false,
+                invoked_on: None,
+                source_span: SourceSpan::default(),
+                is_decorator: false,
             },
-            enclosing_function_hash: Some(callable.hash.clone()),
-            is_self_invoke: false,
-            is_super_invoke: false,
-            invoked_on: None,
-            source_span: models::source_code::SourceSpan::default(),
-            is_decorator: false,
+            call_span: SourceSpan::new(node.start_byte() as u32, node.end_byte() as u32),
+            function_span: function_span.clone(),
         });
     });
 }

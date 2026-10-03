@@ -11,11 +11,10 @@ pub fn resolve_call_argument_types(files: &mut [TypedFileRecord]) {
 
     for file in files.iter_mut() {
         let assignments = merged_assignments(&file.assignments, &cross_file_globals);
+        let calls = file.call_statements.iter_mut().map(|c| &mut c.metadata);
         match file.language {
-            Language::Java => java_evaluate_invocations(&mut file.call_statements, &assignments),
-            Language::Python => {
-                python_evaluate_invocations_on_statements(&mut file.call_statements, &assignments)
-            }
+            Language::Java => java_evaluate_invocations(calls, &assignments),
+            Language::Python => python_evaluate_invocations_on_statements(calls, &assignments),
             Language::Go => {}
             Language::Unknown => continue,
         }

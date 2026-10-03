@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use models::{Argument, CallStatement, source_code::SourceSpan};
+use models::{Argument, CallStatement, ParsedCallStatement, source_code::SourceSpan};
 use tree_sitter::{Query, QueryCursor, StreamingIterator, Tree};
 
 use crate::{
@@ -27,6 +27,16 @@ impl Extractor<CallStatement> for CallStatementsExtractor {
     }
 
     fn extract(&self, code: &str, tree: &Tree, _file_name: &str) -> Vec<CallStatement> {
+        self.extract_parsed(code, tree)
+            .into_iter()
+            .map(CallStatement::from)
+            .collect()
+    }
+}
+
+impl CallStatementsExtractor {
+    /// Like [`Extractor::extract`], plus byte spans of the call and its enclosing method.
+    pub fn extract_parsed(&self, code: &str, tree: &Tree) -> Vec<ParsedCallStatement> {
         let query = self.query();
         let mut query_cursor = QueryCursor::new();
         let mut matches = query_cursor.matches(query, tree.root_node(), code.as_bytes());
@@ -44,6 +54,8 @@ impl Extractor<CallStatement> for CallStatementsExtractor {
             let mut is_self_invoke = false;
             let mut is_super_invoke = false;
             let mut source_span = SourceSpan::default();
+            let mut call_span = SourceSpan::default();
+            let mut function_span = None;
 
             for capture in m.captures {
                 let capture_text =
@@ -75,11 +87,17 @@ impl Extractor<CallStatement> for CallStatementsExtractor {
                     }
                     "call" => {
                         source_span = last_class_first_function_span(&capture.node, code);
+                        call_span = SourceSpan::new(
+                            capture.node.start_byte() as u32,
+                            capture.node.end_byte() as u32,
+                        );
 
                         let n = ["method_declaration", "constructor_declaration"]
                             .iter()
                             .find_map(|kind| get_enclosing_node_by_kind(capture.node, kind));
 
+                        function_span =
+                            n.map(|n| SourceSpan::new(n.start_byte() as u32, n.end_byte() as u32));
                         if let Some(n) = n
                             && let (possible_ftype, Some(fname), Some(params)) = (
                                 get_field_string_from_node(n, "type", code),
@@ -119,18 +137,22 @@ impl Extractor<CallStatement> for CallStatementsExtractor {
 
             let joined_trimmed_name = joined_name.trim_matches('.');
 
-            calls.push(CallStatement {
-                function_name: joined_trimmed_name.to_string()
-                    + &statix::strings::normalize_whitespace(&args_string),
-                arguments,
-                enclosing_function_name,
-                enclosing_class_name,
-                enclosing_function_hash,
-                is_self_invoke,
-                is_super_invoke,
-                invoked_on: None,
-                source_span,
-                is_decorator: false,
+            calls.push(ParsedCallStatement {
+                metadata: CallStatement {
+                    function_name: joined_trimmed_name.to_string()
+                        + &statix::strings::normalize_whitespace(&args_string),
+                    arguments,
+                    enclosing_function_name,
+                    enclosing_class_name,
+                    enclosing_function_hash,
+                    is_self_invoke,
+                    is_super_invoke,
+                    invoked_on: None,
+                    source_span,
+                    is_decorator: false,
+                },
+                call_span,
+                function_span,
             });
         }
         calls

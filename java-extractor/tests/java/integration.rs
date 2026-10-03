@@ -158,7 +158,7 @@ fn should_parse_restcall_service_and_populate_aggregate_correctly() {
     let exchange_calls: Vec<_> = record
         .call_statements
         .iter()
-        .filter(|cs| cs.function_name.contains(".exchange("))
+        .filter(|cs| cs.metadata.function_name.contains(".exchange("))
         .collect();
     assert_eq!(
         exchange_calls.len(),

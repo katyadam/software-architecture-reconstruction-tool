@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    Assignment, AssignmentKey, CallStatement, Endpoint, Entity, Import, MessageEdge,
+    Assignment, AssignmentKey, Endpoint, Entity, Import, MessageEdge, ParsedCallStatement,
     ParsedCallable, RestCall,
     enums::EnumDefinition,
     ir::{language::Language, syntax::FileRecord},
@@ -43,7 +43,7 @@ pub struct TypedFileRecord {
     pub entities: Vec<Entity>,    // Field.datatype_signature NOW resolved
     pub endpoints: Vec<Endpoint>, // Still may need prefix resolution
     pub callables: Vec<ParsedCallable>,
-    pub call_statements: Vec<CallStatement>, // Argument.datatype NOW resolved where possible
+    pub call_statements: Vec<ParsedCallStatement>, // Argument.datatype NOW resolved where possible
     pub assignments: HashMap<AssignmentKey, Assignment>,
 
     pub enums: Vec<EnumDefinition>,

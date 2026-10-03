@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use extractor_runtime::pipeline::build_project_ir;
 use models::{
-    Argument, Assignment, AssignmentKey, CallStatement, Scope,
+    Argument, Assignment, AssignmentKey, CallStatement, ParsedCallStatement, Scope,
     ir::{language::Language, syntax::FileRecord},
 };
 
@@ -34,18 +34,22 @@ fn make_call_statement(
     enclosing_function: Option<&str>,
     enclosing_class: Option<&str>,
     arguments: Vec<Argument>,
-) -> CallStatement {
-    CallStatement {
-        function_name: function_name.to_string(),
-        arguments,
-        enclosing_function_name: enclosing_function.map(str::to_string),
-        enclosing_class_name: enclosing_class.map(str::to_string),
-        enclosing_function_hash: None,
-        is_self_invoke: false,
-        is_super_invoke: false,
-        invoked_on: None,
-        source_span: Default::default(),
-        is_decorator: false,
+) -> ParsedCallStatement {
+    ParsedCallStatement {
+        metadata: CallStatement {
+            function_name: function_name.to_string(),
+            arguments,
+            enclosing_function_name: enclosing_function.map(str::to_string),
+            enclosing_class_name: enclosing_class.map(str::to_string),
+            enclosing_function_hash: None,
+            is_self_invoke: false,
+            is_super_invoke: false,
+            invoked_on: None,
+            source_span: Default::default(),
+            is_decorator: false,
+        },
+        call_span: Default::default(),
+        function_span: None,
     }
 }
 
@@ -88,7 +92,7 @@ fn java_invoked_on_resolved_via_assignment() {
 
     let ir = build_project_ir(vec![file]);
 
-    let call = &ir.files[0].call_statements[0];
+    let call = &ir.files[0].call_statements[0].metadata;
     assert_eq!(
         call.invoked_on.as_deref(),
         Some("OrderService"),
@@ -115,7 +119,7 @@ fn java_argument_datatype_resolved_via_local_assignment() {
 
     let ir = build_project_ir(vec![file]);
 
-    let arg = &ir.files[0].call_statements[0].arguments[0];
+    let arg = &ir.files[0].call_statements[0].metadata.arguments[0];
     assert_eq!(
         arg.datatype.as_deref(),
         Some("Order"),
@@ -154,7 +158,7 @@ fn java_multiple_arguments_all_resolved() {
 
     let ir = build_project_ir(vec![file]);
 
-    let args = &ir.files[0].call_statements[0].arguments;
+    let args = &ir.files[0].call_statements[0].metadata.arguments;
     assert_eq!(args[0].datatype.as_deref(), Some("Customer"));
     assert_eq!(args[1].datatype.as_deref(), Some("Product"));
     assert_eq!(args[2].datatype.as_deref(), Some("int"));
@@ -185,7 +189,7 @@ fn java_argument_datatype_resolved_via_cross_file_global() {
         .iter()
         .find(|f| f.file_path.contains("Client"))
         .expect("Client file should be in IR");
-    let arg = &client_file_ir.call_statements[0].arguments[0];
+    let arg = &client_file_ir.call_statements[0].metadata.arguments[0];
     assert_eq!(
         arg.datatype.as_deref(),
         Some("String"),
@@ -206,7 +210,7 @@ fn java_unresolvable_call_leaves_invoked_on_none() {
 
     let ir = build_project_ir(vec![file]);
 
-    let call = &ir.files[0].call_statements[0];
+    let call = &ir.files[0].call_statements[0].metadata;
     assert!(
         call.invoked_on.is_none(),
         "invoked_on should remain None when no assignment matches"
@@ -237,7 +241,7 @@ fn python_invoked_on_resolved_via_assignment() {
 
     let ir = build_project_ir(vec![file]);
 
-    let call = &ir.files[0].call_statements[0];
+    let call = &ir.files[0].call_statements[0].metadata;
     assert_eq!(
         call.invoked_on.as_deref(),
         Some("OrderService"),
@@ -262,7 +266,7 @@ fn python_argument_datatype_resolved_via_local_assignment() {
 
     let ir = build_project_ir(vec![file]);
 
-    let arg = &ir.files[0].call_statements[0].arguments[0];
+    let arg = &ir.files[0].call_statements[0].metadata.arguments[0];
     assert_eq!(
         arg.datatype.as_deref(),
         Some("Invoice"),
@@ -293,7 +297,7 @@ fn python_multiple_arguments_all_resolved() {
 
     let ir = build_project_ir(vec![file]);
 
-    let args = &ir.files[0].call_statements[0].arguments;
+    let args = &ir.files[0].call_statements[0].metadata.arguments;
     assert_eq!(args[0].datatype.as_deref(), Some("Order"));
     assert_eq!(args[1].datatype.as_deref(), Some("Context"));
 }
@@ -311,7 +315,7 @@ fn python_unresolvable_call_leaves_invoked_on_none() {
 
     let ir = build_project_ir(vec![file]);
 
-    let call = &ir.files[0].call_statements[0];
+    let call = &ir.files[0].call_statements[0].metadata;
     assert!(
         call.invoked_on.is_none(),
         "invoked_on should remain None when no assignment matches"

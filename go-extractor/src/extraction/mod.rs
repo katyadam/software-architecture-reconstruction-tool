@@ -90,7 +90,12 @@ pub fn identify_with_package_context(
         .call_statements
         .iter()
         .filter_map(|call| {
-            identify::identify_restcall(file, call, Some(package_globals), package_callables)
+            identify::identify_restcall(
+                file,
+                &call.metadata,
+                Some(package_globals),
+                package_callables,
+            )
         })
         .collect();
 }

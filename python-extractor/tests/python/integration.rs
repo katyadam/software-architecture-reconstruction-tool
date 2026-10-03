@@ -119,3 +119,28 @@ fn should_extract_syntactic_from_restcalls_file_without_evaluation() {
             .collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn call_statements_carry_call_and_innermost_function_spans() {
+    let code = "import aiohttp\n\nclass M:\n    async def fetch(self, slide_id):\n        async with aiohttp.ClientSession() as session:\n            return session.get(self.url)\n\nprint(1)\n";
+    let record = extract_syntactic(code, "m.py").unwrap();
+    let text =
+        |s: &models::source_code::SourceSpan| &code[s.start_byte as usize..s.end_byte as usize];
+
+    let get = record
+        .call_statements
+        .iter()
+        .find(|c| c.metadata.function_name == "session.get")
+        .expect("session.get call");
+    assert_eq!(text(&get.call_span), "session.get(self.url)");
+    let function = text(get.function_span.as_ref().expect("inside a function"));
+    assert!(function.starts_with("async def fetch(self, slide_id):"));
+    assert!(function.ends_with("return session.get(self.url)"));
+
+    let print = record
+        .call_statements
+        .iter()
+        .find(|c| c.metadata.function_name == "print")
+        .expect("module-level print call");
+    assert_eq!(print.function_span, None);
+}
