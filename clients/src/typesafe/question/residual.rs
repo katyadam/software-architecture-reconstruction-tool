@@ -18,11 +18,20 @@ pub fn residual_classification() -> BTreeMap<String, Question> {
         (
             IS_HTTP.to_string(),
             Question::Noul {
-                instructions: "Does this call send an HTTP request over the network?".to_string(),
-                criteria: Some(NoulCriteria {
-                    yes: "HTTP client call (requests, httpx, aiohttp, RestTemplate, ...)"
+                instructions:
+                    "Does this call send a request to a web service or REST API endpoint?"
                         .to_string(),
-                    no: "Database/ORM, cache, dict or collection lookup, no network".to_string(),
+                criteria: Some(NoulCriteria {
+                    yes: "HTTP client call to a web service, or a wrapper around one. \
+                          Python: requests, httpx, aiohttp (ClientSession, session.get), urllib3. \
+                          Java: RestTemplate, WebClient, Feign, OkHttp, java.net.http.HttpClient. \
+                          Go: net/http, resty."
+                        .to_string(),
+                    no: "Not a web service call. Database driver or ORM (asyncpg, SQLAlchemy, \
+                         psycopg, JDBC, JPA, gorm), cache or key-value store (redis, memcached), \
+                         container engine SDK (docker, aiodocker), message broker client \
+                         (kafka, pika), dict/map/collection lookup."
+                        .to_string(),
                 }),
             },
         ),
