@@ -2,10 +2,12 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use cli::metadata::{self, RunMetadataInput};
 use cli::{get_all_code_elements, save_json};
+use clients::typesafe::TypeSafeClient;
 use models::ConfigurationData;
 use sage::resolver::client::SageClient;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::default;
 use std::path::PathBuf;
 use std::{fs, time::Instant};
 use synthesizer::{
@@ -39,6 +41,9 @@ struct Cli {
 
     #[arg(long, default_value = "qwen2.5-coder:7b")]
     llm_model: String,
+
+    #[arg(long, default_value_t = false)]
+    typesafe: bool,
 }
 
 #[derive(Deserialize)]
@@ -110,12 +115,17 @@ async fn main() -> Result<()> {
         .llm
         .then(|| SageClient::new(&args.llm_url, &args.llm_model));
 
+    let typesafe_client = args
+        .typesafe
+        .then(|| TypeSafeClient::new().expect("TypeSafe client to instantiate"));
+
     let extraction = Instant::now();
     let all_code_elements = get_all_code_elements(
         &args.project_dir,
         &external_constants,
         &config,
         sage.as_ref(),
+        typesafe_client.as_ref(),
     )
     .await?;
     let extraction_elapsed = extraction.elapsed();

@@ -10,6 +10,7 @@ mod restcalls;
 
 use std::collections::HashMap;
 
+use clients::typesafe::TypeSafeClient;
 use models::{
     ConfigurationData, Endpoint,
     ir::{evaluted::EvaluatedIR, project::ProjectIR},
@@ -103,6 +104,7 @@ pub async fn evaluate_with_llm(
     per_file_module_consts: &PerFileModuleConsts,
     config: &ConfigurationData,
     sage: &SageClient,
+    typesafe_client: Option<&TypeSafeClient>,
 ) -> EvaluatedIR {
     let (mut restcalls, bindings): (Vec<_>, Vec<_>) = restcalls::evaluate_restcalls(
         &project_ir,
@@ -113,7 +115,15 @@ pub async fn evaluate_with_llm(
     .into_iter()
     .unzip();
 
-    evaluate_restcalls_with_llm(&mut restcalls, &bindings, config, sage, &project_ir).await;
+    evaluate_restcalls_with_llm(
+        &mut restcalls,
+        &bindings,
+        config,
+        sage,
+        typesafe_client,
+        &project_ir,
+    )
+    .await;
     let message_edges = message_edges::evaluate_message_edges(
         &project_ir,
         external_constants,

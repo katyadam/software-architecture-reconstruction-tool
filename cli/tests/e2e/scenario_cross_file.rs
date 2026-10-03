@@ -16,7 +16,7 @@ async fn cross_file_constant_resolution() {
         service_descriptions: vec![],
     };
 
-    let result = cli::get_all_code_elements(&fixture_dir, &external_constants, &config, None)
+    let result = cli::get_all_code_elements(&fixture_dir, &external_constants, &config, None, None)
         .await
         .expect("get_all_code_elements failed on cross-file fixture");
 
@@ -70,7 +70,7 @@ async fn cross_file_relative_dot_import_resolution() {
         service_descriptions: vec![],
     };
 
-    let result = cli::get_all_code_elements(&fixture_dir, &external_constants, &config, None)
+    let result = cli::get_all_code_elements(&fixture_dir, &external_constants, &config, None, None)
         .await
         .expect("get_all_code_elements failed on cross-file-nested fixture");
 

@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
+pub mod residual;
+
 /// One entry of the request `questions` map. See https://docs.typesafe.ai/api.md
 ///
 /// The API also accepts objects/arrays for instructions and criteria; plain

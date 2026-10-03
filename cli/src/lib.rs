@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use clients::typesafe::TypeSafeClient;
 use extractor_runtime::pipeline::pass3::{evaluate, evaluate_with_llm, pass_attr, pass_module};
 use extractor_runtime::pipeline::{build_project_ir, dispatch_syntactic};
 use models::{CodeElementsAggregate, ConfigurationData};
@@ -14,6 +15,7 @@ pub async fn get_all_code_elements(
     external_constants: &HashMap<String, String>,
     config: &ConfigurationData,
     sage: Option<&SageClient>,
+    typesafe_client: Option<&TypeSafeClient>,
 ) -> Result<CodeElementsAggregate> {
     let paths = collect_files(project_dir)?;
     let files_to_process = paths.len();
@@ -58,6 +60,7 @@ pub async fn get_all_code_elements(
             &per_file_module_consts,
             config,
             sage,
+            typesafe_client,
         )
         .await
     } else {

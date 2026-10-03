@@ -18,3 +18,4 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 env_logger = { workspace = true }
 env-scraper = { path = "../env-scraper" }
+clients = { path = "../clients" }

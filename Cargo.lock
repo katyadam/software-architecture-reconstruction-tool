@@ -810,6 +810,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "clients",
  "env-scraper",
  "env_logger",
  "extractor-runtime",

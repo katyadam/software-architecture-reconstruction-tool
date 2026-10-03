@@ -1,37 +1,73 @@
-//! Gate for residual REST calls: resolved, empty, or needing resolution.
+//! Triage of REST calls: resolved, empty, non-edge, or needing resolution.
 
+use std::collections::HashMap;
 use std::path::Path;
 
-use clients::typesafe::state::{Enclosing, Receiver, ResidualCallState};
+use clients::error::TypeSafeError;
+use clients::typesafe::{
+    SystemOneRequest, TypeSafeClient,
+    question::residual::{IS_EXTERNAL, IS_HTTP, residual_classification},
+    response::Answer,
+    state::{Enclosing, Receiver, ResidualCallState},
+};
 use models::{
     CallStatement, ConfigurationData, RestCall, callables::Namespace, ir::project::ProjectIR,
 };
 
 use crate::pipeline::pass3::restcalls::{EvalState, OperandBindings, is_restcall_evaluated_enough};
 
+/// Minimum `noul` for a yes.
+const JEV_THRESHOLD: f64 = 0.5;
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(super) enum ResidualTriage {
     Resolved,
     Empty,
+    NonEdge,
     NeedsResolution,
 }
 
-pub(super) fn triage(rc: &RestCall) -> ResidualTriage {
-    match is_restcall_evaluated_enough(rc) {
-        EvalState::ResolvedURL => ResidualTriage::Resolved,
-        EvalState::Junk => ResidualTriage::Empty,
-        EvalState::NeedsResolution => ResidualTriage::NeedsResolution,
-    }
-}
-
-fn typesafe_jev_classify(
+/// Structural gate; with a client, Jev splits residuals into edges and non-edges.
+pub(super) async fn triage(
     rc: &RestCall,
     bindings: &OperandBindings,
     project_ir: &ProjectIR,
     config: &ConfigurationData,
-) -> ResidualTriage {
-    let _state = residual_call_state(rc, bindings, project_ir, config);
-    ResidualTriage::Empty
+    typesafe_client: Option<&TypeSafeClient>,
+) -> Result<ResidualTriage, TypeSafeError> {
+    match is_restcall_evaluated_enough(rc) {
+        EvalState::ResolvedURL => Ok(ResidualTriage::Resolved),
+        EvalState::Junk => Ok(ResidualTriage::Empty),
+        EvalState::NeedsResolution => match typesafe_client {
+            Some(client) => typesafe_jev_classify(rc, bindings, project_ir, config, client).await,
+            None => Ok(ResidualTriage::NeedsResolution),
+        },
+    }
+}
+
+async fn typesafe_jev_classify(
+    rc: &RestCall,
+    bindings: &OperandBindings,
+    project_ir: &ProjectIR,
+    config: &ConfigurationData,
+    typesafe_client: &TypeSafeClient,
+) -> Result<ResidualTriage, TypeSafeError> {
+    let state = residual_call_state(rc, bindings, project_ir, config);
+    let response = typesafe_client
+        .system_one(&SystemOneRequest::new(state, residual_classification()))
+        .await?;
+    Ok(decide(&response.answers))
+}
+
+/// Edge iff both `is_http` and `is_internal` reach [`JEV_THRESHOLD`]; a missing answer is a no.
+fn decide(answers: &HashMap<String, Answer>) -> ResidualTriage {
+    let yes =
+        |id: &str| matches!(answers.get(id), Some(Answer::Noul { noul }) if *noul >= JEV_THRESHOLD);
+    if yes(IS_HTTP) && yes(IS_EXTERNAL) {
+        ResidualTriage::NeedsResolution
+    } else {
+        ResidualTriage::NonEdge
+    }
 }
 
 fn residual_call_state(
@@ -147,7 +183,43 @@ fn relative_file(file_path: &str, config: &ConfigurationData) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use models::configuration::ServiceDescription;
+    use models::ir::project::{ClassHierarchy, ImportGraph};
     use models::{RestCall, source_code::SourceSpan};
+    use std::collections::HashMap;
+
+    fn config() -> ConfigurationData {
+        ConfigurationData {
+            service_descriptions: vec![ServiceDescription {
+                name: "caller".to_string(),
+                base_dir_path: "proj/caller".to_string(),
+                urls: vec![],
+            }],
+        }
+    }
+
+    fn pir() -> ProjectIR {
+        ProjectIR {
+            files: vec![],
+            import_graph: ImportGraph {
+                resolved_imports: HashMap::new(),
+            },
+            class_hierarchy: ClassHierarchy {
+                parents: HashMap::new(),
+                children: HashMap::new(),
+            },
+            constants: HashMap::new(),
+            callable_map: HashMap::new(),
+            callables_by_file_hash: HashMap::new(),
+        }
+    }
+
+    /// No Jev client -> structural gate only.
+    async fn gate(rc: &RestCall) -> ResidualTriage {
+        triage(rc, &OperandBindings::new(), &pir(), &config(), None)
+            .await
+            .expect("no client -> no Jev error")
+    }
 
     fn restcall(target_uri: &str) -> RestCall {
         RestCall {
@@ -161,50 +233,26 @@ mod tests {
         }
     }
 
-    #[test]
-    fn triage_http_target_is_resolved() {
+    #[tokio::test]
+    async fn triage_http_target_is_resolved() {
         let rc = restcall("http://medical-data-service:8000/x");
-        assert_eq!(triage(&rc), ResidualTriage::Resolved);
+        assert_eq!(gate(&rc).await, ResidualTriage::Resolved);
     }
 
-    #[test]
-    fn triage_empty_target_is_empty() {
-        assert_eq!(triage(&restcall("")), ResidualTriage::Empty);
+    #[tokio::test]
+    async fn triage_empty_target_is_empty() {
+        assert_eq!(gate(&restcall("")).await, ResidualTriage::Empty);
     }
 
-    #[test]
-    fn triage_residual_needs_resolution() {
+    #[tokio::test]
+    async fn triage_residual_needs_resolution() {
         let rc = restcall("self._mds_url + url");
-        assert_eq!(triage(&rc), ResidualTriage::NeedsResolution);
+        assert_eq!(gate(&rc).await, ResidualTriage::NeedsResolution);
     }
 
     #[test]
     fn state_carries_bindings_and_strips_absolute_path() {
-        use models::configuration::ServiceDescription;
-        use models::ir::project::{ClassHierarchy, ImportGraph};
-        use std::collections::HashMap;
-
-        let config = ConfigurationData {
-            service_descriptions: vec![ServiceDescription {
-                name: "caller".to_string(),
-                base_dir_path: "proj/caller".to_string(),
-                urls: vec![],
-            }],
-        };
-        let pir = ProjectIR {
-            files: vec![],
-            import_graph: ImportGraph {
-                resolved_imports: HashMap::new(),
-            },
-            class_hierarchy: ClassHierarchy {
-                parents: HashMap::new(),
-                children: HashMap::new(),
-            },
-            constants: HashMap::new(),
-            callable_map: HashMap::new(),
-            callables_by_file_hash: HashMap::new(),
-        };
-
+        let (config, pir) = (config(), pir());
         let bindings =
             OperandBindings::from([("self._mds_url".to_string(), "settings.mds_url".to_string())]);
         let state = residual_call_state(&restcall("self._mds_url + url"), &bindings, &pir, &config);
@@ -271,5 +319,19 @@ mod tests {
             strip_args("requests.Session().get"),
             "requests.Session().get"
         );
+    }
+
+    #[test]
+    fn decide_needs_both_yes() {
+        let answers = |http: f64, internal: f64| {
+            HashMap::from([
+                (IS_HTTP.to_string(), Answer::Noul { noul: http }),
+                (IS_EXTERNAL.to_string(), Answer::Noul { noul: internal }),
+            ])
+        };
+        assert_eq!(decide(&answers(0.9, 0.8)), ResidualTriage::NeedsResolution);
+        assert_eq!(decide(&answers(0.9, 0.2)), ResidualTriage::NonEdge);
+        assert_eq!(decide(&answers(0.1, 0.9)), ResidualTriage::NonEdge);
+        assert_eq!(decide(&HashMap::new()), ResidualTriage::NonEdge);
     }
 }
