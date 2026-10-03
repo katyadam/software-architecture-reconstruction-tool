@@ -57,6 +57,33 @@ Spring proxies, dependency injection, and message-listener callbacks are not
 yet modeled as synthetic edges. Missing entrypoints, failed builds, and adapter
 failures are diagnostic only; existing Tree-sitter extraction still runs.
 
+## Conservative Java test impact analysis
+
+Build the adapter first, then compare the checked-out candidate `HEAD` against
+any resolvable Git baseline revision:
+
+```bash
+mvn -q -f wala-callgraph/pom.xml package
+cargo run -p cli --bin test-impact -- \
+  --project-dir <candidate-checkout> \
+  --baseline-revision <baseline-revision> \
+  --wala-adapter-jar wala-callgraph/target/wala-callgraph-all.jar \
+  --output <candidate-checkout>/test-impact.json
+```
+
+The command maps candidate Git hunks to Java methods/classes with Tree-sitter,
+discovers JUnit 4/5-style tests, compiles Maven test bytecode, and runs WALA
+with every discovered test method as an explicit root. It writes a JSON result
+even when analysis is uncertain. A method-level change selects reverse-reachable
+tests; class changes select tests reaching any callable in that class.
+
+Deletion, rename, resource, POM/configuration, unresolved mapping, missing test
+root, provider diagnostic, timeout, or failed analysis selects every discovered
+test in the affected Maven module. This baseline intentionally does not infer
+Spring dependency injection/proxies, reflection, framework callbacks, dynamic
+test factories, Gradle project builds, or cross-service paths. Those cases must
+remain broad until explicitly modeled.
+
 ## Adding a provider
 
 Implement `CallGraphProvider` for the language, emit the shared `MethodRef` /
