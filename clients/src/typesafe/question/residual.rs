@@ -16,7 +16,7 @@ pub fn residual_classification() -> BTreeMap<String, Question> {
                 .to_string(),
             criteria: Some(NoulCriteria {
                 yes: "HTTP client call to a web service, or a wrapper around one. \
-                          Python: requests, httpx, aiohttp (ClientSession, session.get), urllib3. \
+                          Python: requests, httpx, aiohttp, urllib3. \
                           Java: RestTemplate, WebClient, Feign, OkHttp, java.net.http.HttpClient. \
                           Go: net/http, resty."
                     .to_string(),
