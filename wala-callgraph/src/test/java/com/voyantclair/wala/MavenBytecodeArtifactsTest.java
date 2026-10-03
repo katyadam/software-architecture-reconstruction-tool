@@ -16,19 +16,21 @@ class MavenBytecodeArtifactsTest {
   void prepares_sibling_module_classes_and_dependency_jars(@TempDir Path tempDir) throws Exception {
     Path sourceRoot = createReactor(tempDir);
 
-    var preparation = MavenBytecodeArtifacts.prepare(sourceRoot);
+    var preparation = new MavenBytecodeArtifacts().prepare(sourceRoot);
 
     assertTrue(preparation.succeeded(), preparation.diagnostic());
+    BytecodeArtifacts.PreparedArtifacts artifacts = preparation.artifacts();
+    assertTrue(artifacts.moduleRoot().endsWith("service"));
     assertTrue(
-        preparation.artifacts().applicationClassDirs().stream()
+        artifacts.applicationClassDirs().stream()
             .anyMatch(path -> path.endsWith("base/target/classes")));
     assertTrue(
         preparation.artifacts().applicationClassDirs().stream()
             .anyMatch(path -> path.endsWith("service/target/classes")));
     assertTrue(
-        preparation.artifacts().testClassDirs().stream()
+        artifacts.testClassDirs().stream()
             .anyMatch(path -> path.endsWith("service/target/test-classes")));
-    assertFalse(preparation.artifacts().dependencyJars().isEmpty());
+    assertFalse(artifacts.dependencyJars().isEmpty());
   }
 
   @Test
@@ -37,7 +39,7 @@ class MavenBytecodeArtifactsTest {
     Files.createDirectories(sourceRoot);
     Files.writeString(tempDir.resolve("service/pom.xml"), "<project>invalid</project>");
 
-    var preparation = MavenBytecodeArtifacts.prepare(sourceRoot);
+    var preparation = new MavenBytecodeArtifacts().prepare(sourceRoot);
 
     assertFalse(preparation.succeeded());
     assertFalse(preparation.diagnostic().isBlank());

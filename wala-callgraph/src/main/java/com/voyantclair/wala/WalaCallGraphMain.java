@@ -100,7 +100,7 @@ public final class WalaCallGraphMain {
     if (!explicitClassDirs.isEmpty()) {
       return runBytecode(explicitClassDirs, dependencyJars, entrypointSelectors, algorithm);
     }
-    var preparation = MavenBytecodeArtifacts.prepare(sourceDir);
+    var preparation = new MavenBytecodeArtifacts().prepare(sourceDir);
     if (preparation.succeeded()) {
       var artifacts = preparation.artifacts();
       var combinedDependencies = new ArrayList<Path>(artifacts.dependencyJars());
