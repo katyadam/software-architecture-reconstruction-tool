@@ -46,6 +46,11 @@ public final class GradleBytecodeArtifacts implements BytecodeArtifactPreparer {
     }
   }
 
+  /** Returns whether the source root belongs to a conventional Gradle Java module. */
+  public static boolean owns(Path sourceRoot) {
+    return findModuleRoot(sourceRoot) != null;
+  }
+
   /** Supplies a DSL-independent Gradle task that prints Java source-set artifacts for one project. */
   private static String artifactInitScript() {
     return "allprojects { tasks.register('voyantclairWalaArtifacts') { doLast { def sets = extensions.findByName('sourceSets'); if (sets != null) { println 'VOYANTCLAIR_MAIN=' + sets.main.output.classesDirs.asPath; println 'VOYANTCLAIR_TEST=' + sets.test.output.classesDirs.asPath; println 'VOYANTCLAIR_TEST_RUNTIME=' + configurations.testRuntimeClasspath.asPath } } } }";
