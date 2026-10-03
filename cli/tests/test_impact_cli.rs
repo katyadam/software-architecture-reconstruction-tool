@@ -14,13 +14,51 @@ fn selects_the_junit_test_that_reaches_a_changed_method() {
     git(&fixture, &["add", "."]);
     git(&fixture, &["commit", "-m", "candidate"]);
 
+    let result = run_tia(&fixture, &baseline);
+    assert_eq!(result.selected_tests.len(), 1, "{:?}", result.diagnostics);
+    assert_eq!(result.selected_tests[0].test.method_name, "coversChanged");
+    assert!(matches!(
+        result.selected_tests[0].reasons.as_slice(),
+        [models::SelectionReason::ChangedCallable { .. }]
+    ));
+}
+
+#[test]
+fn selects_every_module_test_for_a_non_java_configuration_change() {
+    let fixture = create_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "src/main/resources/application.properties",
+        "service.mode=changed",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "configuration candidate"]);
+
+    assert_module_fallback(run_tia(&fixture, &baseline));
+}
+
+#[test]
+fn selects_every_module_test_for_a_deleted_java_source_file() {
+    let fixture = create_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    fs::remove_file(fixture.path().join("src/main/java/fixture/Service.java"))
+        .expect("candidate source deletes");
+    git(&fixture, &["add", "-u"]);
+    git(&fixture, &["commit", "-m", "deletion candidate"]);
+
+    assert_module_fallback(run_tia(&fixture, &baseline));
+}
+
+/// Executes the binary for one candidate fixture and deserializes its persisted selection result.
+fn run_tia(fixture: &TempDir, baseline: &str) -> models::TestImpactResult {
     let output = fixture.path().join("impact.json");
     let status = Command::new(env!("CARGO_BIN_EXE_test-impact"))
         .args([
             "--project-dir",
             fixture.path().to_str().expect("fixture path is UTF-8"),
             "--baseline-revision",
-            &baseline,
+            baseline,
             "--wala-adapter-jar",
             wala_jar().to_str().expect("adapter path is UTF-8"),
             "--output",
@@ -28,17 +66,21 @@ fn selects_the_junit_test_that_reaches_a_changed_method() {
         ])
         .status()
         .expect("TIA binary starts");
-
     assert!(status.success());
-    let result: models::TestImpactResult =
-        serde_json::from_str(&fs::read_to_string(output).expect("TIA result is written"))
-            .expect("TIA result is JSON");
-    assert_eq!(result.selected_tests.len(), 1, "{:?}", result.diagnostics);
-    assert_eq!(result.selected_tests[0].test.method_name, "coversChanged");
-    assert!(matches!(
-        result.selected_tests[0].reasons.as_slice(),
-        [models::SelectionReason::ChangedCallable { .. }]
-    ));
+    serde_json::from_str(&fs::read_to_string(output).expect("TIA result is written"))
+        .expect("TIA result is JSON")
+}
+
+/// Verifies the controlled fallback contract keeps every discovered module test.
+fn assert_module_fallback(result: models::TestImpactResult) {
+    assert_eq!(result.selected_tests.len(), 2, "{:?}", result.diagnostics);
+    assert!(result.unselected_tests.is_empty());
+    assert!(result.selected_tests.iter().all(|selected| {
+        selected
+            .reasons
+            .iter()
+            .any(|reason| matches!(reason, models::SelectionReason::ModuleFallback { .. }))
+    }));
 }
 
 /// Creates and commits a compile-only Maven project with one recognized JUnit-style test.
