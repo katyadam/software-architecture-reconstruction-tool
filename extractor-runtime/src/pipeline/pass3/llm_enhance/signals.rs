@@ -58,7 +58,7 @@ pub(super) fn extract(
 }
 
 /// `module.name`, plus ` as alias` when aliased.
-fn render_import(import: &models::Import) -> String {
+pub(super) fn render_import(import: &models::Import) -> String {
     let base = if import.orig_module.is_empty() {
         import.orig_name.clone()
     } else if import.orig_name.is_empty() {

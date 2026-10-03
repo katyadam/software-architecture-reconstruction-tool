@@ -21,6 +21,9 @@ pub struct ResidualCallState {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub operand_bindings: BTreeMap<String, String>,
     pub enclosing: Enclosing,
+    /// Imports of the call's file, e.g. `aiohttp`, `asyncpg.exceptions.PostgresError`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub imports: Vec<String>,
     /// Source file path, relative to the project root.
     pub file: String,
 }
@@ -63,12 +66,13 @@ mod tests {
                 function: "get(self, url: str)".to_string(),
                 class: Some("MdsClient".to_string()),
             },
+            imports: vec!["httpx".to_string()],
             file: "wbs/clients/mds.py".to_string(),
         };
         let json = serde_json::to_string(&state).expect("serializable");
         assert_eq!(
             json,
-            r#"{"call":"self._client.get(url)","receiver":{"expr":"self._client"},"residual":"self._mds_url + url","operand_bindings":{"self._mds_url":"settings.mds_url","url":"parameter: url: str"},"enclosing":{"function":"get(self, url: str)","class":"MdsClient"},"file":"wbs/clients/mds.py"}"#
+            r#"{"call":"self._client.get(url)","receiver":{"expr":"self._client"},"residual":"self._mds_url + url","operand_bindings":{"self._mds_url":"settings.mds_url","url":"parameter: url: str"},"enclosing":{"function":"get(self, url: str)","class":"MdsClient"},"imports":["httpx"],"file":"wbs/clients/mds.py"}"#
         );
     }
 }

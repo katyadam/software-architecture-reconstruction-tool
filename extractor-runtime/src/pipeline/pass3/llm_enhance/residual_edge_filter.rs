@@ -18,10 +18,11 @@ use models::{
     CallStatement, ConfigurationData, RestCall, callables::Namespace, ir::project::ProjectIR,
 };
 
+use crate::pipeline::pass3::llm_enhance::signals::render_import;
 use crate::pipeline::pass3::restcalls::{EvalState, OperandBindings, is_restcall_evaluated_enough};
 
 /// Minimum `is_http` for an edge candidate; `JEV_THRESHOLD` env overrides.
-/// Tuned on empaia (`jev_triage_runs/results.md`).
+/// Tuned on empaia (`jev_triage_runs/v1-is_http/results.md`).
 const DEFAULT_JEV_THRESHOLD: f64 = 0.7;
 
 fn jev_threshold() -> f64 {
@@ -176,11 +177,11 @@ fn residual_call_state(
         .enclosing_callable(&rc.file_path, &rc.function_hash)
         .map(|c| &c.metadata);
 
-    let source = project_ir
+    let file = project_ir
         .files
         .iter()
-        .find(|f| f.file_path == rc.file_path)
-        .and_then(|f| source_call(rc, &f.call_statements));
+        .find(|f| f.file_path == rc.file_path);
+    let source = file.and_then(|f| source_call(rc, &f.call_statements));
 
     ResidualCallState {
         call: render_call(rc, source.map(|c| strip_args(&c.function_name))),
@@ -194,6 +195,7 @@ fn residual_call_state(
                 Namespace::Module(_) => None,
             }),
         },
+        imports: file.map_or_else(Vec::new, |f| f.imports.iter().map(render_import).collect()),
         file: relative_file(&rc.file_path, config),
     }
 }
