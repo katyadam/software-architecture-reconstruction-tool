@@ -64,6 +64,47 @@ class BytecodeCallGraphTest {
         result.edges().toString());
   }
 
+  @Test
+  void resolves_calls_originating_at_an_explicit_test_entrypoint(@TempDir Path tempDir)
+      throws Exception {
+    Path classesDir = compileTestRootFixture(tempDir);
+
+    var result =
+        BytecodeCallGraph.analyze(
+            List.of(classesDir),
+            List.of(),
+            List.of(new BytecodeCallGraph.MethodSelector("LExampleTest", "testChanged", "()V")),
+            BytecodeCallGraph.Algorithm.CHA);
+
+    assertEquals("ok", result.status());
+    assertTrue(
+        result.edges().stream()
+            .anyMatch(
+                edge ->
+                    edge.caller().declaring_type().equals("LExampleTest")
+                        && edge.caller().member_name().equals("testChanged")
+                        && edge.callee().declaring_type().equals("LService")
+                        && edge.callee().member_name().equals("changed")),
+        result.edges().toString());
+  }
+
+  @Test
+  void reports_an_unmatched_test_entrypoint_without_silently_claiming_complete_coverage(
+      @TempDir Path tempDir) throws Exception {
+    Path classesDir = compileTestRootFixture(tempDir);
+
+    var result =
+        BytecodeCallGraph.analyze(
+            List.of(classesDir),
+            List.of(),
+            List.of(new BytecodeCallGraph.MethodSelector("LExampleTest", "missing", "()V")),
+            BytecodeCallGraph.Algorithm.CHA);
+
+    assertTrue(
+        result.diagnostics().contains("unmatched_entrypoint=LExampleTest#missing()V"),
+        result.diagnostics().toString());
+  }
+
   /** Compiles a Java 8 fixture whose virtual dispatch has a known concrete target. */
   private static Path compileDispatchFixture(Path tempDir) throws IOException {
     Path source = tempDir.resolve("Main.java");
@@ -71,6 +112,21 @@ class BytecodeCallGraphTest {
         source,
         "interface Worker { void run(); } class Impl implements Worker { public void run() {} } public class Main { public static void main(String[] args) { Worker worker = new Impl(); worker.run(); } }");
     Path classesDir = tempDir.resolve("classes");
+    Files.createDirectories(classesDir);
+    assertEquals(
+        0,
+        ToolProvider.getSystemJavaCompiler()
+            .run(null, null, null, "--release", "8", "-d", classesDir.toString(), source.toString()));
+    return classesDir;
+  }
+
+  /** Compiles an application method and a test method that invokes it directly. */
+  private static Path compileTestRootFixture(Path tempDir) throws IOException {
+    Path source = tempDir.resolve("ExampleTest.java");
+    Files.writeString(
+        source,
+        "class Service { static void changed() {} } class ExampleTest { void testChanged() { Service.changed(); } }");
+    Path classesDir = tempDir.resolve("test-classes");
     Files.createDirectories(classesDir);
     assertEquals(
         0,
