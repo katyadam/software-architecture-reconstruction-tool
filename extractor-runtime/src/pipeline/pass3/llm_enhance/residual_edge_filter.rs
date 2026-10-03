@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use clients::error::TypeSafeError;
 use clients::typesafe::{
     SystemOneRequest, TypeSafeClient,
-    question::residual::{IS_HTTP, residual_classification},
+    question::residual::{HTTP_API, IS_HTTP, RECEIVER_KIND, residual_classification},
     response::Answer,
     state::{Enclosing, Receiver, ResidualCallState},
 };
@@ -24,6 +24,8 @@ use crate::pipeline::pass3::restcalls::{EvalState, OperandBindings, is_restcall_
 /// Minimum `is_http` for an edge candidate; `JEV_THRESHOLD` env overrides.
 /// Tuned on empaia (`jev_triage_runs/v1-is_http/results.md`).
 const DEFAULT_JEV_THRESHOLD: f64 = 0.7;
+/// `is_http` at or above -> edge without consulting `receiver_kind`.
+const CONFIDENT_IS_HTTP: f64 = 0.9;
 
 fn jev_threshold() -> f64 {
     std::env::var("JEV_THRESHOLD")
@@ -49,7 +51,7 @@ pub(super) async fn triage(
     typesafe_client: Option<&TypeSafeClient>,
 ) -> Result<ResidualTriage, TypeSafeError> {
     let without_jev = |verdict: ResidualTriage| {
-        emit(&triage_row(&format!("{verdict:?}"), "-", "-", "-", rc));
+        emit(&triage_row(&format!("{verdict:?}"), "-", "-", "-", "-", rc));
         verdict
     };
     match is_restcall_evaluated_enough(rc) {
@@ -75,12 +77,12 @@ pub(super) fn print_triage_header() {
         warn!("jev log: cannot create {path}: {e}");
     }
     emit(&format!(
-        "[triage] threshold {IS_HTTP} >= {}",
+        "[triage] threshold {IS_HTTP} >= {CONFIDENT_IS_HTTP}, or >= {} with {RECEIVER_KIND} = {HTTP_API}",
         jev_threshold()
     ));
     emit(&format!(
-        "[triage] {:<15} {:>8} {:>6} {:>6} | target | file",
-        "verdict", IS_HTTP, "tokens", "ms"
+        "[triage] {:<15} {:>8} {:>26} {:>6} {:>6} | target | file",
+        "verdict", IS_HTTP, RECEIVER_KIND, "tokens", "ms"
     ));
 }
 
@@ -105,13 +107,20 @@ fn emit(text: &str) {
     }
 }
 
-fn triage_row(verdict: &str, http: &str, tokens: &str, ms: &str, rc: &RestCall) -> String {
+fn triage_row(
+    verdict: &str,
+    http: &str,
+    kind: &str,
+    tokens: &str,
+    ms: &str,
+    rc: &RestCall,
+) -> String {
     let file = Path::new(&rc.file_path)
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or(&rc.file_path);
     format!(
-        "[triage] {verdict:<15} {http:>8} {tokens:>6} {ms:>6} | {} | {file}",
+        "[triage] {verdict:<15} {http:>8} {kind:>26} {tokens:>6} {ms:>6} | {} | {file}",
         rc.target_uri
     )
 }
@@ -139,7 +148,10 @@ async fn typesafe_jev_classify(
     let response = match result {
         Ok(response) => response,
         Err(e) => {
-            emit_with_state(triage_row("JevError", "-", "-", &ms, rc), &request.state);
+            emit_with_state(
+                triage_row("JevError", "-", "-", "-", &ms, rc),
+                &request.state,
+            );
             return Err(e);
         }
     };
@@ -147,10 +159,19 @@ async fn typesafe_jev_classify(
         Some(Answer::Noul { noul }) => format!("{noul:.2}"),
         _ => "-".to_string(),
     };
+    let kind = match response.answers.get(RECEIVER_KIND) {
+        Some(Answer::Choice {
+            choice,
+            probabilities,
+            ..
+        }) => format!("{choice}:{:.2}", probabilities.get(choice).unwrap_or(&0.0)),
+        _ => "-".to_string(),
+    };
     let verdict = decide(&response.answers, jev_threshold());
     let row = triage_row(
         &format!("{verdict:?}"),
         &noul(IS_HTTP),
+        &kind,
         &response.usage.input_tokens.to_string(),
         &ms,
         rc,
@@ -159,11 +180,21 @@ async fn typesafe_jev_classify(
     Ok(verdict)
 }
 
-/// Edge candidate iff `is_http` reaches `threshold`; a missing answer is a no.
+/// Edge candidate iff `is_http >= CONFIDENT_IS_HTTP`, or `is_http >= threshold`
+/// and `receiver_kind` is `http_api`. A missing answer is a no.
 fn decide(answers: &HashMap<String, Answer>, threshold: f64) -> ResidualTriage {
-    match answers.get(IS_HTTP) {
-        Some(Answer::Noul { noul }) if *noul >= threshold => ResidualTriage::NeedsResolution,
-        _ => ResidualTriage::NonEdge,
+    let is_http = match answers.get(IS_HTTP) {
+        Some(Answer::Noul { noul }) => *noul,
+        _ => return ResidualTriage::NonEdge,
+    };
+    let http_api = matches!(
+        answers.get(RECEIVER_KIND),
+        Some(Answer::Choice { choice, .. }) if choice == HTTP_API
+    );
+    if is_http >= CONFIDENT_IS_HTTP || (is_http >= threshold && http_api) {
+        ResidualTriage::NeedsResolution
+    } else {
+        ResidualTriage::NonEdge
     }
 }
 
@@ -420,13 +451,30 @@ mod tests {
     }
 
     #[test]
-    fn decide_thresholds_is_http() {
-        let answers =
-            |http: f64| HashMap::from([(IS_HTTP.to_string(), Answer::Noul { noul: http })]);
+    fn decide_band_consults_receiver_kind() {
+        let answers = |http: f64, kind: &str| {
+            HashMap::from([
+                (IS_HTTP.to_string(), Answer::Noul { noul: http }),
+                (
+                    RECEIVER_KIND.to_string(),
+                    Answer::Choice {
+                        choice: kind.to_string(),
+                        probabilities: HashMap::new(),
+                        confidence: 1.0,
+                    },
+                ),
+            ])
+        };
         let t = DEFAULT_JEV_THRESHOLD;
-        assert_eq!(decide(&answers(0.78), t), ResidualTriage::NeedsResolution);
-        assert_eq!(decide(&answers(t), t), ResidualTriage::NeedsResolution);
-        assert_eq!(decide(&answers(0.69), t), ResidualTriage::NonEdge);
+        let edge = ResidualTriage::NeedsResolution;
+        assert_eq!(decide(&answers(0.95, "database"), t), edge);
+        assert_eq!(decide(&answers(0.78, HTTP_API), t), edge);
+        assert_eq!(decide(&answers(t, HTTP_API), t), edge);
+        assert_eq!(
+            decide(&answers(0.78, "container_runtime"), t),
+            ResidualTriage::NonEdge
+        );
+        assert_eq!(decide(&answers(0.69, HTTP_API), t), ResidualTriage::NonEdge);
         assert_eq!(decide(&HashMap::new(), t), ResidualTriage::NonEdge);
     }
 }
