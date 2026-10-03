@@ -32,8 +32,10 @@ baseline only after its safety policy and evaluation are established.
 ## Inputs and Changed-Element Model
 
 The workflow accepts a baseline and candidate Git revision. It obtains changed
-paths, status, and zero-context changed line ranges with `git diff --name-status
---unified=0`.
+paths/status with `git diff --name-status --find-renames` and candidate-side
+zero-context changed line ranges with a separate `git diff --unified=0
+--find-renames` invocation. The commands are separate because name-status
+output does not contain patch hunk ranges.
 
 For modified or added Java files, Tree-sitter maps candidate-side ranges to the
 smallest containing callable. If no callable contains a changed range, the
