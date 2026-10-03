@@ -7,26 +7,13 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /** Prepares compiled class directories and dependency JARs for a conventional Maven service. */
-public final class MavenBytecodeArtifacts {
-  private MavenBytecodeArtifacts() {}
-
-  /** Holds bytecode inputs produced for one selected Maven module. */
-  public record PreparedArtifacts(
-      List<Path> applicationClassDirs,
-      List<Path> testClassDirs,
-      List<Path> dependencyJars,
-      Path moduleRoot) {}
-
-  /** Carries either prepared artifacts or a diagnostic explaining why Maven preparation failed. */
-  public record Preparation(PreparedArtifacts artifacts, String diagnostic) {
-    /** Returns whether Maven preparation completed and produced usable artifact metadata. */
-    public boolean succeeded() {
-      return artifacts != null;
-    }
-  }
+public final class MavenBytecodeArtifacts implements BytecodeArtifactPreparer {
+  /** Creates a Maven artifact preparer for conventional Java source roots. */
+  public MavenBytecodeArtifacts() {}
 
   /** Builds the selected module with upstream reactor modules and collects WALA bytecode inputs. */
-  public static Preparation prepare(Path sourceRoot) {
+  @Override
+  public BytecodeArtifacts.Preparation prepare(Path sourceRoot) {
     Path modulePom = findModulePom(sourceRoot);
     if (modulePom == null) {
       return failure("No conventional Maven module POM found for " + sourceRoot);
@@ -49,8 +36,8 @@ public final class MavenBytecodeArtifacts {
       Path classpathFile = moduleRoot.resolve("target/wala-classpath.txt");
       List<Path> dependencyJars =
           Files.exists(classpathFile) ? parseClasspath(Files.readString(classpathFile)) : List.of();
-      return new Preparation(
-          new PreparedArtifacts(
+      return new BytecodeArtifacts.Preparation(
+          new BytecodeArtifacts.PreparedArtifacts(
               findClassDirs(reactorPom.getParent()),
               findTestClassDirs(reactorPom.getParent()),
               dependencyJars,
@@ -59,6 +46,11 @@ public final class MavenBytecodeArtifacts {
     } catch (IOException error) {
       return failure(error.toString());
     }
+  }
+
+  /** Returns whether the source root belongs to a conventional Maven Java module. */
+  public static boolean owns(Path sourceRoot) {
+    return findModulePom(sourceRoot) != null;
   }
 
   /** Finds the module POM only for the conventional Maven {@code src/main/java} layout. */
@@ -133,8 +125,9 @@ public final class MavenBytecodeArtifacts {
   }
 
   /** Creates a failed preparation result without exposing process failures as exceptions. */
-  private static Preparation failure(String diagnostic) {
-    return new Preparation(null, diagnostic.isBlank() ? "Maven preparation failed" : diagnostic);
+  private static BytecodeArtifacts.Preparation failure(String diagnostic) {
+    return new BytecodeArtifacts.Preparation(
+        null, diagnostic.isBlank() ? "Maven preparation failed" : diagnostic);
   }
 
   /** Represents one completed Maven process invocation. */

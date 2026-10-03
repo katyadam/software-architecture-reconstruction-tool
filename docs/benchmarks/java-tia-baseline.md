@@ -39,7 +39,9 @@ pairs validate that missing static evidence cannot silently reduce the suite.
 The measurable suite reduction in this fixture is 50% only for the isolated,
 direct static call. Current limitations are intentionally conservative:
 
-- Maven is automated; Gradle requires explicit compiled-class inputs.
+- Maven and conventional Gradle Java projects are automated. Gradle uses
+  `testClasses` and `testRuntimeClasspath` through its wrapper/init-script path;
+  explicit compiled-class inputs remain available for CI artifacts.
 - Spring DI, AOP/proxies, reflection, dynamic tests, and framework callbacks
   are not converted into graph edges.
 - Cross-service HTTP, gRPC, Kafka, and RabbitMQ paths are not part of this
