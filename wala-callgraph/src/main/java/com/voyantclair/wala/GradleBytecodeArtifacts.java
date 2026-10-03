@@ -15,10 +15,11 @@ public final class GradleBytecodeArtifacts implements BytecodeArtifactPreparer {
       return failure("No conventional Gradle module found for " + sourceRoot);
     }
     Path gradleRoot = findGradleRoot(moduleRoot);
-    Path command = gradleRoot.resolve("gradlew");
-    if (!Files.isExecutable(command)) {
-      return failure("No executable Gradle wrapper found for " + moduleRoot);
-    }
+    Path wrapper = gradleRoot.resolve("gradlew");
+    Path command =
+        Files.isExecutable(wrapper)
+            ? wrapper
+            : Path.of(System.getProperty("voyantclair.gradle.command", "gradle"));
     try {
       String projectPath = projectPath(gradleRoot, moduleRoot);
       ProcessResult compilation = run(command, gradleRoot, List.of(projectPath + ":testClasses"));
