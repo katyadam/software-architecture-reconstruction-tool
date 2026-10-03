@@ -17,7 +17,9 @@ import com.ibm.wala.types.ClassLoaderReference;
 import com.ibm.wala.util.config.PatternsFilter;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.jar.JarFile;
 
 /** Builds a WALA call graph from compiled application classes and dependency JARs. */
@@ -46,6 +48,9 @@ public final class BytecodeCallGraph {
     }
   }
 
+  /** Identifies one compiled application or test method that must be a WALA entry point. */
+  public record MethodSelector(String declaringType, String memberName, String descriptor) {}
+
   private BytecodeCallGraph() {}
 
   /**
@@ -70,10 +75,19 @@ public final class BytecodeCallGraph {
    */
   public static CallGraphResult analyze(
       List<Path> applicationClassDirs, List<Path> dependencyJars, Algorithm algorithm) {
+    return analyze(applicationClassDirs, dependencyJars, List.of(), algorithm);
+  }
+
+  /** Analyzes bytecode with explicit method roots in addition to conventional Java main methods. */
+  public static CallGraphResult analyze(
+      List<Path> applicationClassDirs,
+      List<Path> dependencyJars,
+      List<MethodSelector> entrypointSelectors,
+      Algorithm algorithm) {
     long startedAtNanos = System.nanoTime();
     try {
       return withDuration(
-          analyzeScope(applicationClassDirs, dependencyJars, algorithm), startedAtNanos);
+          analyzeScope(applicationClassDirs, dependencyJars, entrypointSelectors, algorithm), startedAtNanos);
     } catch (Throwable error) {
       return withDuration(failed(applicationClassDirs, algorithm, error), startedAtNanos);
     }
@@ -95,7 +109,11 @@ public final class BytecodeCallGraph {
 
   /** Creates the binary WALA scope, discovers entry points, and extracts application-originating edges. */
   private static CallGraphResult analyzeScope(
-      List<Path> applicationClassDirs, List<Path> dependencyJars, Algorithm algorithm) throws Exception {
+      List<Path> applicationClassDirs,
+      List<Path> dependencyJars,
+      List<MethodSelector> entrypointSelectors,
+      Algorithm algorithm)
+      throws Exception {
     var scope = AnalysisScope.createJavaAnalysisScope();
     scope.setExclusions(
         PatternsFilter.builder()
@@ -115,8 +133,15 @@ public final class BytecodeCallGraph {
 
     IClassHierarchy hierarchy = ClassHierarchyFactory.make(scope);
     var entryPoints = applicationEntrypoints(hierarchy);
+    var selectedEntrypoints = selectedEntrypoints(hierarchy, entrypointSelectors);
+    entryPoints.addAll(selectedEntrypoints.entryPoints());
     if (entryPoints.isEmpty()) {
-      return result("no_entrypoints", applicationClassDirs, algorithm, List.of());
+      return result(
+          "no_entrypoints",
+          applicationClassDirs,
+          algorithm,
+          selectedEntrypoints.diagnostics(),
+          List.of());
     }
 
     var options = new AnalysisOptions(scope, entryPoints);
@@ -139,8 +164,44 @@ public final class BytecodeCallGraph {
                 1f));
       }
     }
-    return result("ok", applicationClassDirs, algorithm, edges);
+    return result(
+        "ok", applicationClassDirs, algorithm, selectedEntrypoints.diagnostics(), edges);
   }
+
+  /** Resolves explicit compiled method selectors only when they refer to application classes. */
+  private static SelectedEntrypoints selectedEntrypoints(
+      IClassHierarchy hierarchy, List<MethodSelector> selectors) {
+    var entryPoints = new ArrayList<Entrypoint>();
+    Set<MethodSelector> matchedSelectors = new HashSet<>();
+    for (var clazz : hierarchy) {
+      if (!clazz.getClassLoader().getReference().equals(ClassLoaderReference.Application)) {
+        continue;
+      }
+      for (var selector : selectors) {
+        if (!clazz.getName().toString().equals(selector.declaringType())) {
+          continue;
+        }
+        for (var method : clazz.getDeclaredMethods()) {
+          if (method.getName().toString().equals(selector.memberName())
+              && method.getDescriptor().toString().equals(selector.descriptor())) {
+            entryPoints.add(new DefaultEntrypoint(method, hierarchy));
+            matchedSelectors.add(selector);
+          }
+        }
+      }
+    }
+    var diagnostics = new ArrayList<String>();
+    for (var selector : selectors) {
+      if (!matchedSelectors.contains(selector)) {
+        diagnostics.add("unmatched_entrypoint=" + selector.declaringType() + "#"
+            + selector.memberName() + selector.descriptor());
+      }
+    }
+    return new SelectedEntrypoints(entryPoints, diagnostics);
+  }
+
+  /** Couples resolved explicit entry points with diagnostics for selectors that could not bind. */
+  private record SelectedEntrypoints(List<Entrypoint> entryPoints, List<String> diagnostics) {}
 
   /** Builds a WALA call graph with the requested precision strategy. */
   private static CallGraph buildCallGraph(
@@ -210,13 +271,23 @@ public final class BytecodeCallGraph {
       List<Path> applicationClassDirs,
       Algorithm algorithm,
       List<CallGraphResult.Edge> edges) {
+    return result(status, applicationClassDirs, algorithm, List.of(), edges);
+  }
+
+  /** Builds a result while preserving warnings that must cause conservative TIA fallback. */
+  private static CallGraphResult result(
+      String status,
+      List<Path> applicationClassDirs,
+      Algorithm algorithm,
+      List<String> diagnostics,
+      List<CallGraphResult.Edge> edges) {
     return new CallGraphResult(
         1,
         status,
         PROVIDER_ID,
         applicationClassDirs.toString(),
         algorithm.identifier(),
-        List.of(),
+        diagnostics,
         edges);
   }
 

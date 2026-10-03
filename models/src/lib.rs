@@ -9,8 +9,8 @@ pub mod configuration;
 pub mod endpoints;
 pub mod entities;
 pub mod enums;
-pub mod imports;
 pub mod impact;
+pub mod imports;
 pub mod ir;
 pub mod restcalls;
 
@@ -24,9 +24,9 @@ pub use communication::{CommunicationProtocol, MessageDestinationKind, MessageEd
 pub use configuration::ConfigurationData;
 pub use endpoints::Endpoint;
 pub use entities::{Entity, Field};
-pub use imports::Import;
 pub use impact::{
     ChangedElement, ChangedElementKind, JavaTestCase, SelectedTest, SelectionReason,
     TestImpactResult,
 };
+pub use imports::Import;
 pub use restcalls::RestCall;
