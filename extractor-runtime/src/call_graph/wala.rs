@@ -1,5 +1,8 @@
 use super::registry::CallGraphProvider;
-use models::call_graph::{CallGraphOutcome, CallGraphRequest, CallGraphStatus, Language};
+use models::{
+    JavaTestCase,
+    call_graph::{CallGraphOutcome, CallGraphRequest, CallGraphStatus, Language},
+};
 use std::{
     path::PathBuf,
     process::{Child, Command, Output, Stdio},
@@ -27,21 +30,23 @@ impl WalaJavaProvider {
             timeout,
         }
     }
-}
-impl CallGraphProvider for WalaJavaProvider {
-    /// Declares that this adapter accepts Java source code.
-    fn language(&self) -> Language {
-        Language::Java
+
+    /// Analyzes a Maven module from discovered JUnit methods instead of only Java main methods.
+    pub fn analyze_test_roots(
+        &self,
+        source_root: &std::path::Path,
+        test_roots: &[JavaTestCase],
+    ) -> CallGraphOutcome {
+        let request = CallGraphRequest::new(source_root.to_string_lossy(), Language::Java);
+        self.invoke(&request, test_root_arguments(source_root, test_roots))
     }
-    /// Executes WALA and validates its versioned JSON response before returning it.
-    fn analyze(&self, request: &CallGraphRequest) -> CallGraphOutcome {
+
+    /// Launches the adapter with the supplied fully formed argument vector.
+    fn invoke(&self, request: &CallGraphRequest, arguments: Vec<String>) -> CallGraphOutcome {
         let child = Command::new("java")
-            .args([
-                "-jar",
-                self.jar.to_string_lossy().as_ref(),
-                "--source-dir",
-                &request.source_root,
-            ])
+            .arg("-jar")
+            .arg(&self.jar)
+            .args(arguments)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn();
@@ -63,6 +68,35 @@ impl CallGraphProvider for WalaJavaProvider {
             Err(error) => failed(request, &error.to_string()),
         }
     }
+}
+impl CallGraphProvider for WalaJavaProvider {
+    /// Declares that this adapter accepts Java source code.
+    fn language(&self) -> Language {
+        Language::Java
+    }
+    /// Executes WALA and validates its versioned JSON response before returning it.
+    fn analyze(&self, request: &CallGraphRequest) -> CallGraphOutcome {
+        self.invoke(
+            request,
+            vec!["--source-dir".to_owned(), request.source_root.clone()],
+        )
+    }
+}
+
+/// Builds the repeatable adapter entrypoint arguments for discovered JUnit methods.
+fn test_root_arguments(source_root: &std::path::Path, test_roots: &[JavaTestCase]) -> Vec<String> {
+    let mut arguments = vec![
+        "--source-dir".to_owned(),
+        source_root.to_string_lossy().into_owned(),
+    ];
+    for test in test_roots {
+        arguments.push("--entrypoint".to_owned());
+        arguments.push(format!(
+            "{}#{}{}",
+            test.class_name, test.method_name, test.descriptor
+        ));
+    }
+    arguments
 }
 
 /// Waits for an adapter process and terminates it when it exceeds the configured deadline.
@@ -97,8 +131,9 @@ fn failed(request: &CallGraphRequest, diagnostic: &str) -> CallGraphOutcome {
 
 #[cfg(test)]
 mod tests {
-    use super::wait_for_output;
-    use std::{process::Command, time::Duration};
+    use super::{test_root_arguments, wait_for_output};
+    use models::JavaTestCase;
+    use std::{path::Path, process::Command, time::Duration};
 
     #[test]
     fn stops_a_child_process_that_exceeds_the_deadline() {
@@ -111,5 +146,27 @@ mod tests {
             .expect_err("a process that sleeps longer than its deadline must time out");
 
         assert!(error.contains("timed out"), "{error}");
+    }
+
+    #[test]
+    fn serializes_each_test_root_as_an_adapter_entrypoint() {
+        let tests = vec![JavaTestCase {
+            module_root: "module".into(),
+            class_name: "Lexample/ServiceTest".into(),
+            method_name: "changesService".into(),
+            descriptor: "()V".into(),
+            callable_signature: "ServiceTest.changesService()V".into(),
+            source_path: "src/test/java/example/ServiceTest.java".into(),
+        }];
+
+        assert_eq!(
+            test_root_arguments(Path::new("module/src/main/java"), &tests),
+            vec![
+                "--source-dir".to_owned(),
+                "module/src/main/java".to_owned(),
+                "--entrypoint".to_owned(),
+                "Lexample/ServiceTest#changesService()V".to_owned(),
+            ]
+        );
     }
 }

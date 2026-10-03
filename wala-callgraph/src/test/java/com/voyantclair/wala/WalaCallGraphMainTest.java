@@ -64,6 +64,25 @@ class WalaCallGraphMainTest {
         BytecodeCallGraph.Algorithm.ZERO_ONE_CONTAINER_CFA,
         WalaCallGraphMain.parseBytecodeAlgorithm("zero-one-container-cfa"));
   }
+
+  @Test void parses_a_junit_method_as_an_explicit_bytecode_entrypoint() {
+    assertEquals(
+        new BytecodeCallGraph.MethodSelector("Lexample/ServiceTest", "changesService", "()V"),
+        WalaCallGraphMain.parseMethodSelector("Lexample/ServiceTest#changesService()V"));
+  }
+
+  @Test void fails_test_root_analysis_when_maven_cannot_prepare_test_bytecode(@TempDir Path tempDir) {
+    var result =
+        WalaCallGraphMain.runPreferred(
+            tempDir,
+            List.of(),
+            List.of(),
+            List.of(new BytecodeCallGraph.MethodSelector("LExampleTest", "testChanged", "()V")),
+            BytecodeCallGraph.Algorithm.CHA);
+
+    assertEquals("failed", result.status());
+    assertTrue(result.diagnostics().get(0).startsWith("test_root_preparation_failed="));
+  }
   @Test void resolves_interface_dispatch() throws Exception {
     var root = Path.of(getClass().getResource("/fixtures/dispatch").toURI());
     var result = WalaCallGraphMain.run(root);
