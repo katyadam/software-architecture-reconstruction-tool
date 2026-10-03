@@ -39,8 +39,15 @@ java -jar wala-callgraph/target/wala-callgraph-all.jar \
   --algorithm zero-one-container-cfa
 ```
 
-For Gradle projects or CI-produced artifacts, invoke the adapter directly with
-compiled application outputs and a path-separated dependency classpath:
+For conventional Gradle Java projects, the adapter automatically prefers the
+project wrapper, runs the selected module's `testClasses`, and queries main/test
+outputs plus `testRuntimeClasspath` through a temporary Gradle init script. This
+works for Groovy and Kotlin DSL projects, including nested modules. If no wrapper
+exists it invokes `gradle` from `PATH`; `voyantclair.gradle.command` can override
+that command for controlled environments. Failures remain conservative for TIA.
+
+For CI-produced Gradle artifacts, invoke the adapter directly with compiled
+application outputs and a path-separated dependency classpath:
 
 ```bash
 java -jar wala-callgraph/target/wala-callgraph-all.jar \
