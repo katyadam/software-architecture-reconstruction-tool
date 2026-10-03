@@ -15,3 +15,6 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
 env-scraper = { path = "../env-scraper" }
+
+[dev-dependencies]
+tempfile = "3.22.0"

@@ -12,7 +12,10 @@ public final class MavenBytecodeArtifacts {
 
   /** Holds bytecode inputs produced for one selected Maven module. */
   public record PreparedArtifacts(
-      List<Path> applicationClassDirs, List<Path> dependencyJars, Path moduleRoot) {}
+      List<Path> applicationClassDirs,
+      List<Path> testClassDirs,
+      List<Path> dependencyJars,
+      Path moduleRoot) {}
 
   /** Carries either prepared artifacts or a diagnostic explaining why Maven preparation failed. */
   public record Preparation(PreparedArtifacts artifacts, String diagnostic) {
@@ -38,7 +41,7 @@ public final class MavenBytecodeArtifacts {
     var classpath =
         runMaven(
             modulePom,
-            List.of("-DincludeScope=compile", "dependency:build-classpath", "-Dmdep.outputFile=target/wala-classpath.txt"));
+            List.of("-DincludeScope=test", "dependency:build-classpath", "-Dmdep.outputFile=target/wala-classpath.txt"));
     if (classpath.exitCode() != 0) {
       return failure(classpath.output());
     }
@@ -47,7 +50,12 @@ public final class MavenBytecodeArtifacts {
       List<Path> dependencyJars =
           Files.exists(classpathFile) ? parseClasspath(Files.readString(classpathFile)) : List.of();
       return new Preparation(
-          new PreparedArtifacts(findClassDirs(reactorPom.getParent()), dependencyJars, moduleRoot), "");
+          new PreparedArtifacts(
+              findClassDirs(reactorPom.getParent()),
+              findTestClassDirs(reactorPom.getParent()),
+              dependencyJars,
+              moduleRoot),
+          "");
     } catch (IOException error) {
       return failure(error.toString());
     }
@@ -103,6 +111,15 @@ public final class MavenBytecodeArtifacts {
   private static List<Path> findClassDirs(Path reactorRoot) throws IOException {
     try (Stream<Path> paths = Files.walk(reactorRoot, 4)) {
       return paths.filter(path -> path.endsWith("target/classes") && Files.isDirectory(path)).toList();
+    }
+  }
+
+  /** Locates test class directories produced below a direct-child Maven reactor. */
+  private static List<Path> findTestClassDirs(Path reactorRoot) throws IOException {
+    try (Stream<Path> paths = Files.walk(reactorRoot, 4)) {
+      return paths
+          .filter(path -> path.endsWith("target/test-classes") && Files.isDirectory(path))
+          .toList();
     }
   }
 

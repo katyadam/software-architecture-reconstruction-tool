@@ -6,6 +6,7 @@ use models::{CodeElementsAggregate, ConfigurationData};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::time::Duration;
 
 pub fn get_all_code_elements(
     project_dir: &PathBuf,
@@ -56,17 +57,18 @@ pub fn get_all_code_elements(
 
 /// Adds uniquely resolved WALA Java edges for configured service directories when enabled.
 ///
-/// A missing adapter JAR or a non-Java service leaves the syntactic extraction unchanged.
+/// A missing adapter JAR, a deadline breach, or a non-Java service leaves syntactic extraction unchanged.
 pub fn enrich_with_wala(
     mut aggregate: CodeElementsAggregate,
     project_dir: &PathBuf,
     configuration: &ConfigurationData,
     jar: Option<&std::path::Path>,
+    wala_timeout: Duration,
 ) -> CodeElementsAggregate {
     let Some(jar) = jar else {
         return aggregate;
     };
-    let provider = WalaJavaProvider::new(jar);
+    let provider = WalaJavaProvider::with_timeout(jar, wala_timeout);
     for service in &configuration.service_descriptions {
         let root = project_dir.join(&service.base_dir_path);
         if !root.is_dir() {
@@ -85,12 +87,16 @@ pub fn enrich_with_wala(
     aggregate
 }
 
+/// Recursively collects project files while excluding Git metadata and generated build output.
 pub fn collect_files(dir: &PathBuf) -> Result<Vec<PathBuf>> {
     let mut results = Vec::new();
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
+            if matches!(entry.file_name().to_str(), Some(".git" | "target")) {
+                continue;
+            }
             if path.is_dir() {
                 results.extend(collect_files(&path)?);
             } else {
