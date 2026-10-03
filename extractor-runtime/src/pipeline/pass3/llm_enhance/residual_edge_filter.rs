@@ -23,8 +23,9 @@ use crate::pipeline::pass3::llm_enhance::signals::render_import;
 use crate::pipeline::pass3::restcalls::{EvalState, OperandBindings, is_restcall_evaluated_enough};
 
 /// Minimum `is_http` for an edge candidate; `JEV_THRESHOLD` env overrides.
-/// Tuned on empaia (`jev_triage_runs/v1-is_http/results.md`).
-const DEFAULT_JEV_THRESHOLD: f64 = 0.7;
+/// Mid of the V5 gap on empaia: HTTP >= 0.96, non-HTTP <= 0.72
+/// (`jev_triage_runs/v5-function-snippet/results.md`).
+const DEFAULT_JEV_THRESHOLD: f64 = 0.8;
 
 fn jev_threshold() -> f64 {
     std::env::var("JEV_THRESHOLD")
@@ -470,9 +471,9 @@ mod tests {
         let answers =
             |http: f64| HashMap::from([(IS_HTTP.to_string(), Answer::Noul { noul: http })]);
         let t = DEFAULT_JEV_THRESHOLD;
-        assert_eq!(decide(&answers(0.78), t), ResidualTriage::NeedsResolution);
+        assert_eq!(decide(&answers(0.96), t), ResidualTriage::NeedsResolution);
         assert_eq!(decide(&answers(t), t), ResidualTriage::NeedsResolution);
-        assert_eq!(decide(&answers(0.69), t), ResidualTriage::NonEdge);
+        assert_eq!(decide(&answers(0.72), t), ResidualTriage::NonEdge);
         assert_eq!(decide(&HashMap::new(), t), ResidualTriage::NonEdge);
     }
 }
