@@ -148,7 +148,9 @@ fn select_reaching_tests(
     let mut matched_test = false;
     for (index, test) in tests.iter().enumerate() {
         if test.module_root != change.module_root
-            || !reached.contains(test.callable_signature.as_str())
+            || !reached
+                .iter()
+                .any(|signature| graph_signature_matches_test(signature, test))
         {
             continue;
         }
@@ -217,7 +219,13 @@ fn reverse_reachable<'a>(
 
 /// Recognizes the existing class-qualified callable-signature convention without guessing owners.
 fn signature_belongs_to_class(signature: &str, class_name: &str) -> bool {
-    signature.starts_with(&format!("class:{class_name}/"))
+    let Some(owner) = signature
+        .strip_prefix("class:")
+        .and_then(|value| value.split_once('/'))
+    else {
+        return false;
+    };
+    owner.0 == class_name || owner.0.rsplit('.').next() == Some(class_name)
 }
 
 /// Matches exact graph IDs and the simple `Class.method()` identities produced by Git mapping.
@@ -235,6 +243,22 @@ fn callable_signature_matches(graph_signature: &str, changed_signature: &str) ->
         && graph_signature
             .split_once('/')
             .is_some_and(|(_, declaration)| declaration.contains(&format!(" {method_name}(")))
+}
+
+/// Matches resolved callable IDs and JVM test identities emitted by JUnit source discovery.
+fn graph_signature_matches_test(graph_signature: &str, test: &JavaTestCase) -> bool {
+    if graph_signature == test.callable_signature {
+        return true;
+    }
+    let Some(class_name) = test.class_name.trim_start_matches('L').rsplit('/').next() else {
+        return false;
+    };
+    signature_belongs_to_class(graph_signature, class_name)
+        && graph_signature
+            .split_once('/')
+            .is_some_and(|(_, declaration)| {
+                declaration.contains(&format!(" {}(", test.method_name))
+            })
 }
 
 /// Records a module fallback when no sound path from the changed element to a discovered test exists.
@@ -282,4 +306,33 @@ fn failure_diagnostic(outcome: &CallGraphOutcome) -> String {
         .first()
         .cloned()
         .unwrap_or_else(|| format!("call graph status: {:?}", outcome.status))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{callable_signature_matches, graph_signature_matches_test};
+    use models::JavaTestCase;
+
+    #[test]
+    fn matches_simple_git_callable_to_extractor_signature() {
+        assert!(callable_signature_matches(
+            "class:Service/void changed()",
+            "Service.changed()"
+        ));
+    }
+
+    #[test]
+    fn matches_discovered_junit_identity_to_extractor_signature() {
+        assert!(graph_signature_matches_test(
+            "class:ServiceTest/void coversChanged()",
+            &JavaTestCase {
+                module_root: "module".into(),
+                class_name: "Lfixture/ServiceTest".into(),
+                method_name: "coversChanged".into(),
+                descriptor: "()V".into(),
+                callable_signature: "ServiceTest.coversChanged()V".into(),
+                source_path: "test.java".into(),
+            }
+        ));
+    }
 }
