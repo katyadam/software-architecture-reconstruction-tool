@@ -48,6 +48,11 @@ public final class MavenBytecodeArtifacts implements BytecodeArtifactPreparer {
     }
   }
 
+  /** Returns whether the source root belongs to a conventional Maven Java module. */
+  public static boolean owns(Path sourceRoot) {
+    return findModulePom(sourceRoot) != null;
+  }
+
   /** Finds the module POM only for the conventional Maven {@code src/main/java} layout. */
   private static Path findModulePom(Path sourceRoot) {
     Path absolute = sourceRoot.toAbsolutePath().normalize();

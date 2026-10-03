@@ -151,7 +151,10 @@ pub(super) fn find_module_root(project_root: &Path, source_path: &str) -> PathBu
         current.pop();
     }
     while current.starts_with(project_root) {
-        if current.join("pom.xml").is_file() {
+        if current.join("pom.xml").is_file()
+            || current.join("build.gradle").is_file()
+            || current.join("build.gradle.kts").is_file()
+        {
             return current;
         }
         if !current.pop() {
