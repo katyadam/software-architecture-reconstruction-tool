@@ -61,6 +61,7 @@ struct ConstantsDto {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    dotenvy::dotenv().ok();
     env_logger::init();
     let args = Cli::parse();
 

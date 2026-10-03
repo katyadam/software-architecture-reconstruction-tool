@@ -1,23 +1,35 @@
 //! Triage of REST calls: resolved, empty, non-edge, or needing resolution.
 
 use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use clients::error::TypeSafeError;
 use clients::typesafe::{
     SystemOneRequest, TypeSafeClient,
-    question::residual::{IS_EXTERNAL, IS_HTTP, residual_classification},
+    question::residual::{IS_HTTP, residual_classification},
     response::Answer,
     state::{Enclosing, Receiver, ResidualCallState},
 };
+use log::warn;
 use models::{
     CallStatement, ConfigurationData, RestCall, callables::Namespace, ir::project::ProjectIR,
 };
 
 use crate::pipeline::pass3::restcalls::{EvalState, OperandBindings, is_restcall_evaluated_enough};
 
-/// Minimum `noul` for a yes.
-const JEV_THRESHOLD: f64 = 0.5;
+/// Minimum `is_http` for an edge candidate; `JEV_THRESHOLD` env overrides.
+/// Tuned on empaia (`jev_triage_runs/results.md`).
+const DEFAULT_JEV_THRESHOLD: f64 = 0.7;
+
+fn jev_threshold() -> f64 {
+    std::env::var("JEV_THRESHOLD")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(DEFAULT_JEV_THRESHOLD)
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(super) enum ResidualTriage {
@@ -35,14 +47,78 @@ pub(super) async fn triage(
     config: &ConfigurationData,
     typesafe_client: Option<&TypeSafeClient>,
 ) -> Result<ResidualTriage, TypeSafeError> {
+    let without_jev = |verdict: ResidualTriage| {
+        emit(&triage_row(&format!("{verdict:?}"), "-", "-", "-", rc));
+        verdict
+    };
     match is_restcall_evaluated_enough(rc) {
-        EvalState::ResolvedURL => Ok(ResidualTriage::Resolved),
-        EvalState::Junk => Ok(ResidualTriage::Empty),
+        EvalState::ResolvedURL => Ok(without_jev(ResidualTriage::Resolved)),
+        EvalState::Junk => Ok(without_jev(ResidualTriage::Empty)),
         EvalState::NeedsResolution => match typesafe_client {
             Some(client) => typesafe_jev_classify(rc, bindings, project_ir, config, client).await,
-            None => Ok(ResidualTriage::NeedsResolution),
+            None => Ok(without_jev(ResidualTriage::NeedsResolution)),
         },
     }
+}
+
+/// Triage log file from `JEV_LOG` env; unset -> stdout only.
+fn jev_log_path() -> Option<String> {
+    std::env::var("JEV_LOG").ok()
+}
+
+/// Truncates the log and writes the threshold and column header.
+pub(super) fn print_triage_header() {
+    if let Some(path) = jev_log_path()
+        && let Err(e) = File::create(&path)
+    {
+        warn!("jev log: cannot create {path}: {e}");
+    }
+    emit(&format!(
+        "[triage] threshold {IS_HTTP} >= {}",
+        jev_threshold()
+    ));
+    emit(&format!(
+        "[triage] {:<15} {:>8} {:>6} {:>6} | target | file",
+        "verdict", IS_HTTP, "tokens", "ms"
+    ));
+}
+
+/// Wall time of the whole triage + resolution stream.
+pub(super) fn print_triage_footer(wall: Duration) {
+    emit(&format!("[triage] wall {} ms", wall.as_millis()));
+}
+
+/// Stdout and the log; one `write_all` per entry so concurrent appends stay whole.
+fn emit(text: &str) {
+    println!("{text}");
+    let Some(path) = jev_log_path() else {
+        return;
+    };
+    let written = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&path)
+        .and_then(|mut f| f.write_all(format!("{text}\n").as_bytes()));
+    if let Err(e) = written {
+        warn!("jev log: cannot write {path}: {e}");
+    }
+}
+
+fn triage_row(verdict: &str, http: &str, tokens: &str, ms: &str, rc: &RestCall) -> String {
+    let file = Path::new(&rc.file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&rc.file_path);
+    format!(
+        "[triage] {verdict:<15} {http:>8} {tokens:>6} {ms:>6} | {} | {file}",
+        rc.target_uri
+    )
+}
+
+/// Row followed by the state sent to Jev.
+fn emit_with_state(row: String, state: &ResidualCallState) {
+    let state = serde_json::to_string_pretty(state).unwrap_or_else(|e| format!("<state: {e}>"));
+    emit(&format!("{row}\n{state}"));
 }
 
 async fn typesafe_jev_classify(
@@ -52,21 +128,41 @@ async fn typesafe_jev_classify(
     config: &ConfigurationData,
     typesafe_client: &TypeSafeClient,
 ) -> Result<ResidualTriage, TypeSafeError> {
-    let state = residual_call_state(rc, bindings, project_ir, config);
-    let response = typesafe_client
-        .system_one(&SystemOneRequest::new(state, residual_classification()))
-        .await?;
-    Ok(decide(&response.answers))
+    let request = SystemOneRequest::new(
+        residual_call_state(rc, bindings, project_ir, config),
+        residual_classification(),
+    );
+    let started = Instant::now();
+    let result = typesafe_client.system_one(&request).await;
+    let ms = started.elapsed().as_millis().to_string();
+    let response = match result {
+        Ok(response) => response,
+        Err(e) => {
+            emit_with_state(triage_row("JevError", "-", "-", &ms, rc), &request.state);
+            return Err(e);
+        }
+    };
+    let noul = |id: &str| match response.answers.get(id) {
+        Some(Answer::Noul { noul }) => format!("{noul:.2}"),
+        _ => "-".to_string(),
+    };
+    let verdict = decide(&response.answers, jev_threshold());
+    let row = triage_row(
+        &format!("{verdict:?}"),
+        &noul(IS_HTTP),
+        &response.usage.input_tokens.to_string(),
+        &ms,
+        rc,
+    );
+    emit_with_state(row, &request.state);
+    Ok(verdict)
 }
 
-/// Edge iff both `is_http` and `is_internal` reach [`JEV_THRESHOLD`]; a missing answer is a no.
-fn decide(answers: &HashMap<String, Answer>) -> ResidualTriage {
-    let yes =
-        |id: &str| matches!(answers.get(id), Some(Answer::Noul { noul }) if *noul >= JEV_THRESHOLD);
-    if yes(IS_HTTP) && yes(IS_EXTERNAL) {
-        ResidualTriage::NeedsResolution
-    } else {
-        ResidualTriage::NonEdge
+/// Edge candidate iff `is_http` reaches `threshold`; a missing answer is a no.
+fn decide(answers: &HashMap<String, Answer>, threshold: f64) -> ResidualTriage {
+    match answers.get(IS_HTTP) {
+        Some(Answer::Noul { noul }) if *noul >= threshold => ResidualTriage::NeedsResolution,
+        _ => ResidualTriage::NonEdge,
     }
 }
 
@@ -322,16 +418,13 @@ mod tests {
     }
 
     #[test]
-    fn decide_needs_both_yes() {
-        let answers = |http: f64, internal: f64| {
-            HashMap::from([
-                (IS_HTTP.to_string(), Answer::Noul { noul: http }),
-                (IS_EXTERNAL.to_string(), Answer::Noul { noul: internal }),
-            ])
-        };
-        assert_eq!(decide(&answers(0.9, 0.8)), ResidualTriage::NeedsResolution);
-        assert_eq!(decide(&answers(0.9, 0.2)), ResidualTriage::NonEdge);
-        assert_eq!(decide(&answers(0.1, 0.9)), ResidualTriage::NonEdge);
-        assert_eq!(decide(&HashMap::new()), ResidualTriage::NonEdge);
+    fn decide_thresholds_is_http() {
+        let answers =
+            |http: f64| HashMap::from([(IS_HTTP.to_string(), Answer::Noul { noul: http })]);
+        let t = DEFAULT_JEV_THRESHOLD;
+        assert_eq!(decide(&answers(0.78), t), ResidualTriage::NeedsResolution);
+        assert_eq!(decide(&answers(t), t), ResidualTriage::NeedsResolution);
+        assert_eq!(decide(&answers(0.69), t), ResidualTriage::NonEdge);
+        assert_eq!(decide(&HashMap::new(), t), ResidualTriage::NonEdge);
     }
 }

@@ -811,6 +811,7 @@ dependencies = [
  "chrono",
  "clap",
  "clients",
+ "dotenvy",
  "env-scraper",
  "env_logger",
  "extractor-runtime",

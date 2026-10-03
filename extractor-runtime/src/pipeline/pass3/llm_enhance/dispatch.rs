@@ -8,7 +8,7 @@ use crate::pipeline::pass3::llm_enhance::{
     matcher::{IndexedService, build_index, deterministic_match},
     oracle::{ServiceOracle, service_for_url},
     query_builder::{build_query_for_restcall, rewrite_target_uri_to_service},
-    residual_edge_filter::{ResidualTriage, triage},
+    residual_edge_filter::{ResidualTriage, print_triage_footer, print_triage_header, triage},
     scorer::{ProducedEdge, score},
     signals,
 };
@@ -61,6 +61,8 @@ pub async fn evaluate_restcalls_with_llm(
         index: build_index(config),
     };
 
+    print_triage_header();
+    let started = std::time::Instant::now();
     let outcomes: Vec<(usize, Outcome)> = stream::iter(restcalls.iter().enumerate())
         .map(|(i, rc)| {
             let ctx = &ctx;
@@ -69,6 +71,7 @@ pub async fn evaluate_restcalls_with_llm(
         .buffer_unordered(MAX_CONCURRENT_LLM_QUERIES)
         .collect()
         .await;
+    print_triage_footer(started.elapsed());
 
     let (mut residuals, mut deterministic, mut queried) = (0usize, 0usize, 0usize);
     let (mut non_edges, mut jev_errors) = (0usize, 0usize);
