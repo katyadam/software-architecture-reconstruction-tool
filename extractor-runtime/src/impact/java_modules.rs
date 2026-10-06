@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 /// Records declared Java build modules or a conservative reason that metadata is unusable.
 pub struct ModuleCatalog {
@@ -24,7 +24,9 @@ impl ModuleCatalog {
     pub fn owner_for(&self, source_path: &str) -> PathBuf {
         match &self.state {
             CatalogState::Complete(modules) => {
-                let candidate = self.root.join(source_path);
+                let Some(candidate) = normalized_candidate(&self.root, source_path) else {
+                    return self.root.clone();
+                };
                 modules
                     .iter()
                     .filter(|module| candidate.starts_with(module))
@@ -76,6 +78,25 @@ fn normalized(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
+/// Resolves a Git-relative path without letting it escape the catalog root.
+fn normalized_candidate(root: &Path, source_path: &str) -> Option<PathBuf> {
+    let mut candidate = root.to_path_buf();
+    for component in Path::new(source_path).components() {
+        match component {
+            Component::Normal(part) => candidate.push(part),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if candidate == root {
+                    return None;
+                }
+                candidate.pop();
+            }
+            Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+    Some(candidate)
+}
+
 #[cfg(test)]
 mod tests {
     use super::ModuleCatalog;
@@ -111,5 +132,23 @@ mod tests {
         );
         assert_eq!(catalog.descendants_of(&root), vec![root, orders]);
         assert!(catalog.diagnostic().is_none());
+    }
+
+    #[test]
+    fn normalizes_candidate_paths_before_matching_declared_modules() {
+        let directory = tempfile::tempdir().expect("temporary project root exists");
+        let root = directory.path().canonicalize().expect("root canonicalizes");
+        let orders = root.join("orders");
+        let billing = root.join("billing");
+        fs::create_dir_all(&orders).expect("orders module exists");
+        fs::create_dir_all(&billing).expect("billing module exists");
+        let catalog =
+            ModuleCatalog::complete(root.clone(), vec![root.clone(), orders, billing.clone()]);
+
+        assert_eq!(
+            catalog.owner_for("orders/../billing/src/main/java/example/Billing.java"),
+            billing
+        );
+        assert_eq!(catalog.owner_for("../outside/Service.java"), root);
     }
 }
