@@ -1466,6 +1466,7 @@ dependencies = [
  "models",
  "once_cell",
  "python-extractor",
+ "quick-xml",
  "regex",
  "rust-s3",
  "serde",
