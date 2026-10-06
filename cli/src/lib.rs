@@ -87,12 +87,16 @@ pub fn enrich_with_wala(
     aggregate
 }
 
+/// Recursively collects project files while excluding Git metadata and generated build output.
 pub fn collect_files(dir: &PathBuf) -> Result<Vec<PathBuf>> {
     let mut results = Vec::new();
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
+            if matches!(entry.file_name().to_str(), Some(".git" | "target")) {
+                continue;
+            }
             if path.is_dir() {
                 results.extend(collect_files(&path)?);
             } else {

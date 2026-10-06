@@ -65,6 +65,16 @@ public final class WalaCallGraphMain {
     return BytecodeCallGraph.analyze(applicationClassDirs, dependencyJars, algorithm);
   }
 
+  /** Runs binary WALA with explicit compiled methods as additional graph roots. */
+  public static CallGraphResult runBytecode(
+      List<Path> applicationClassDirs,
+      List<Path> dependencyJars,
+      List<BytecodeCallGraph.MethodSelector> entrypointSelectors,
+      BytecodeCallGraph.Algorithm algorithm) {
+    return BytecodeCallGraph.analyze(
+        applicationClassDirs, dependencyJars, entrypointSelectors, algorithm);
+  }
+
   /** Prefers Maven-prepared bytecode and falls back to source analysis when preparation is unavailable. */
   public static CallGraphResult runPreferred(Path sourceDir, List<Path> explicitClassDirs, List<Path> dependencyJars) {
     return runPreferred(
@@ -77,17 +87,45 @@ public final class WalaCallGraphMain {
       List<Path> explicitClassDirs,
       List<Path> dependencyJars,
       BytecodeCallGraph.Algorithm algorithm) {
+    return runPreferred(sourceDir, explicitClassDirs, dependencyJars, List.of(), algorithm);
+  }
+
+  /** Prefers Maven bytecode and binds selected test methods as explicit WALA graph roots. */
+  public static CallGraphResult runPreferred(
+      Path sourceDir,
+      List<Path> explicitClassDirs,
+      List<Path> dependencyJars,
+      List<BytecodeCallGraph.MethodSelector> entrypointSelectors,
+      BytecodeCallGraph.Algorithm algorithm) {
     if (!explicitClassDirs.isEmpty()) {
-      return runBytecode(explicitClassDirs, dependencyJars, algorithm);
+      return runBytecode(explicitClassDirs, dependencyJars, entrypointSelectors, algorithm);
     }
     var preparation = MavenBytecodeArtifacts.prepare(sourceDir);
     if (preparation.succeeded()) {
       var artifacts = preparation.artifacts();
       var combinedDependencies = new ArrayList<Path>(artifacts.dependencyJars());
       combinedDependencies.addAll(dependencyJars);
-      return runBytecode(artifacts.applicationClassDirs(), combinedDependencies, algorithm);
+      var combinedClassDirs = new ArrayList<Path>(artifacts.applicationClassDirs());
+      combinedClassDirs.addAll(artifacts.testClassDirs());
+      return runBytecode(combinedClassDirs, combinedDependencies, entrypointSelectors, algorithm);
+    }
+    if (!entrypointSelectors.isEmpty()) {
+      return testRootPreparationFailed(sourceDir, algorithm, preparation.diagnostic());
     }
     return run(sourceDir, dependencyJars);
+  }
+
+  /** Reports Maven preparation failure instead of analyzing unrelated main-method paths for TIA. */
+  private static CallGraphResult testRootPreparationFailed(
+      Path sourceDir, BytecodeCallGraph.Algorithm algorithm, String diagnostic) {
+    return new CallGraphResult(
+        1,
+        "failed",
+        "wala-java",
+        sourceDir.toString(),
+        algorithm.identifier(),
+        List.of("test_root_preparation_failed=" + diagnostic),
+        List.of());
   }
 
   /** Converts the public CLI algorithm name to the corresponding binary WALA strategy. */
@@ -98,6 +136,23 @@ public final class WalaCallGraphMain {
       case "zero-one-container-cfa" -> BytecodeCallGraph.Algorithm.ZERO_ONE_CONTAINER_CFA;
       default -> throw new IllegalArgumentException("Unsupported bytecode algorithm: " + value);
     };
+  }
+
+  /** Parses one stable {@code Lpackage/Class#method(descriptor)} command-line selector. */
+  static BytecodeCallGraph.MethodSelector parseMethodSelector(String value) {
+    int separator = value.indexOf('#');
+    int descriptorStart = value.indexOf('(', separator + 1);
+    int descriptorEnd = value.indexOf(')', descriptorStart + 1);
+    if (separator <= 0
+        || descriptorStart <= separator + 1
+        || descriptorEnd < descriptorStart
+        || descriptorEnd == value.length() - 1) {
+      throw new IllegalArgumentException("Invalid --entrypoint selector: " + value);
+    }
+    return new BytecodeCallGraph.MethodSelector(
+        value.substring(0, separator),
+        value.substring(separator + 1, descriptorStart),
+        value.substring(descriptorStart));
   }
 
   /** Performs the WALA analysis after callers have resolved any required dependency JARs. */
@@ -295,6 +350,7 @@ public final class WalaCallGraphMain {
     Path sourceDir = null;
     var dependencyJars = new ArrayList<Path>();
     var applicationClassDirs = new ArrayList<Path>();
+    var entrypointSelectors = new ArrayList<BytecodeCallGraph.MethodSelector>();
     var bytecodeAlgorithm = BytecodeCallGraph.Algorithm.CHA;
     for (int index = 0; index < args.length; index++) {
       if (args[index].equals("--source-dir") && index + 1 < args.length) {
@@ -303,6 +359,10 @@ public final class WalaCallGraphMain {
         dependencyJars.addAll(parseClasspath(args[++index]));
       } else if (args[index].equals("--classes-dir") && index + 1 < args.length) {
         applicationClassDirs.add(Path.of(args[++index]));
+      } else if (args[index].equals("--test-classes-dir") && index + 1 < args.length) {
+        applicationClassDirs.add(Path.of(args[++index]));
+      } else if (args[index].equals("--entrypoint") && index + 1 < args.length) {
+        entrypointSelectors.add(parseMethodSelector(args[++index]));
       } else if (args[index].equals("--algorithm") && index + 1 < args.length) {
         bytecodeAlgorithm = parseBytecodeAlgorithm(args[++index]);
       }
@@ -312,6 +372,11 @@ public final class WalaCallGraphMain {
     }
     System.out.println(
         JSON.writeValueAsString(
-            runPreferred(sourceDir, applicationClassDirs, dependencyJars, bytecodeAlgorithm)));
+            runPreferred(
+                sourceDir,
+                applicationClassDirs,
+                dependencyJars,
+                entrypointSelectors,
+                bytecodeAlgorithm)));
   }
 }
