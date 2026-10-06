@@ -24,6 +24,17 @@ fn selects_the_junit_test_that_reaches_a_changed_method() {
         result.selected_tests[0].reasons.as_slice(),
         [models::SelectionReason::ChangedCallable { .. }]
     ));
+    assert_timing_diagnostics(
+        &result,
+        [
+            "git diff",
+            "source extraction",
+            "test discovery",
+            "WALA analysis",
+            "edge resolution",
+            "test selection",
+        ],
+    );
 }
 
 #[test]
@@ -38,7 +49,36 @@ fn selects_every_module_test_for_a_non_java_configuration_change() {
     git(&fixture, &["add", "."]);
     git(&fixture, &["commit", "-m", "configuration candidate"]);
 
-    assert_module_fallback(run_tia(&fixture, &baseline));
+    assert_module_fallback(&run_tia(&fixture, &baseline));
+}
+
+#[test]
+fn selects_module_tests_without_a_wala_adapter_for_a_configuration_change() {
+    let fixture = create_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "src/main/resources/application.properties",
+        "service.mode=changed",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "configuration candidate"]);
+
+    let result = run_tia_with_jar(
+        &fixture,
+        &baseline,
+        &fixture.path().join("missing-wala.jar"),
+    );
+
+    assert_module_fallback(&result);
+    assert_timing_diagnostics(
+        &result,
+        [
+            "git diff",
+            "module fallback test discovery",
+            "module fallback selection",
+        ],
+    );
 }
 
 #[test]
@@ -50,7 +90,7 @@ fn selects_every_module_test_for_a_deleted_java_source_file() {
     git(&fixture, &["add", "-u"]);
     git(&fixture, &["commit", "-m", "deletion candidate"]);
 
-    assert_module_fallback(run_tia(&fixture, &baseline));
+    assert_module_fallback(&run_tia(&fixture, &baseline));
 }
 
 #[test]
@@ -68,7 +108,7 @@ fn selects_descendant_module_tests_for_a_reactor_root_configuration_change() {
         &["commit", "-m", "reactor configuration candidate"],
     );
 
-    assert_module_fallback(run_tia(&fixture, &baseline));
+    assert_module_fallback(&run_tia(&fixture, &baseline));
 }
 
 #[test]
@@ -91,11 +131,20 @@ fn selects_each_descendant_test_once_when_root_and_child_modules_change() {
         &["commit", "-m", "root and child module candidate"],
     );
 
-    assert_module_fallback(run_tia(&fixture, &baseline));
+    assert_module_fallback(&run_tia(&fixture, &baseline));
 }
 
 /// Executes the binary for one candidate fixture and deserializes its persisted selection result.
 fn run_tia(fixture: &TempDir, baseline: &str) -> models::TestImpactResult {
+    run_tia_with_jar(fixture, baseline, &wala_jar())
+}
+
+/// Runs TIA with an explicit adapter path so fallback paths can prove they do not require WALA.
+fn run_tia_with_jar(
+    fixture: &TempDir,
+    baseline: &str,
+    wala_adapter_jar: &Path,
+) -> models::TestImpactResult {
     let _process_guard = TIA_PROCESS_LOCK
         .lock()
         .expect("TIA process lock is available");
@@ -107,7 +156,7 @@ fn run_tia(fixture: &TempDir, baseline: &str) -> models::TestImpactResult {
             "--baseline-revision",
             baseline,
             "--wala-adapter-jar",
-            wala_jar().to_str().expect("adapter path is UTF-8"),
+            wala_adapter_jar.to_str().expect("adapter path is UTF-8"),
             "--output",
             output.to_str().expect("output path is UTF-8"),
         ])
@@ -123,7 +172,7 @@ fn run_tia(fixture: &TempDir, baseline: &str) -> models::TestImpactResult {
 }
 
 /// Verifies the controlled fallback contract keeps every discovered module test.
-fn assert_module_fallback(result: models::TestImpactResult) {
+fn assert_module_fallback(result: &models::TestImpactResult) {
     assert_eq!(result.selected_tests.len(), 2, "{:?}", result.diagnostics);
     assert!(result.unselected_tests.is_empty());
     assert!(result.selected_tests.iter().all(|selected| {
@@ -132,6 +181,23 @@ fn assert_module_fallback(result: models::TestImpactResult) {
             .iter()
             .any(|reason| matches!(reason, models::SelectionReason::ModuleFallback { .. }))
     }));
+}
+
+/// Verifies timing diagnostics have stable stage labels while allowing variable durations.
+fn assert_timing_diagnostics<const N: usize>(
+    result: &models::TestImpactResult,
+    expected_stages: [&str; N],
+) {
+    for stage in expected_stages {
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.starts_with(&format!("timing: {stage}="))),
+            "missing timing diagnostic for {stage}: {:?}",
+            result.diagnostics
+        );
+    }
 }
 
 /// Creates and commits a compile-only Maven project with one recognized JUnit-style test.

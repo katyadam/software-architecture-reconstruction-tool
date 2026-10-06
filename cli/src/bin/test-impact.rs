@@ -11,7 +11,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 /// Defines the standalone conservative Java test-impact command-line interface.
@@ -37,26 +37,35 @@ struct Arguments {
 
 /// Runs conservative TIA and writes a JSON result even when analysis must fall back broadly.
 fn run(arguments: Arguments) -> Result<()> {
-    validate_arguments(&arguments)?;
+    validate_project_and_revision(&arguments)?;
     let candidate_revision = git_revision(&arguments.project_dir, "HEAD")?;
+    let change_analysis_started = Instant::now();
     let changes = analyze_changes(&arguments.project_dir, &arguments.baseline_revision)
         .context("Unable to determine candidate changes from Git")?;
+    let mut diagnostics = vec![timing_diagnostic(
+        "git diff",
+        change_analysis_started.elapsed(),
+    )];
+    if changes_are_module_only(&changes) {
+        return write_module_fallback_result(&arguments, candidate_revision, changes, diagnostics);
+    }
+    validate_wala_adapter(&arguments)?;
+    let extraction_started = Instant::now();
     let aggregate = get_all_code_elements(&arguments.project_dir, &HashMap::new())
         .context("Unable to extract source callables for call-graph resolution")?;
+    diagnostics.push(timing_diagnostic(
+        "source extraction",
+        extraction_started.elapsed(),
+    ));
     let provider = WalaJavaProvider::with_timeout(
         &arguments.wala_adapter_jar,
         Duration::from_secs(arguments.wala_timeout_seconds),
     );
     let mut selected_tests = Vec::new();
     let mut unselected_tests = Vec::new();
-    let mut diagnostics = Vec::new();
 
     for module in changed_modules(&changes) {
-        let module_changes: Vec<_> = changes
-            .iter()
-            .filter(|change| Path::new(&change.module_root).starts_with(Path::new(&module)))
-            .cloned()
-            .collect();
+        let module_changes = changes_for_module(&changes, &module);
         let module_result =
             analyze_module(&provider, &module, module_changes, &aggregate.callables);
         selected_tests.extend(module_result.selected_tests);
@@ -76,16 +85,55 @@ fn run(arguments: Arguments) -> Result<()> {
 }
 
 /// Validates paths and Git revisions before any potentially costly source or Maven analysis begins.
-fn validate_arguments(arguments: &Arguments) -> Result<()> {
+fn validate_project_and_revision(arguments: &Arguments) -> Result<()> {
     if !arguments.project_dir.is_dir() || !arguments.project_dir.join(".git").exists() {
         anyhow::bail!("--project-dir must be a Git checkout");
-    }
-    if !arguments.wala_adapter_jar.is_file() {
-        anyhow::bail!("--wala-adapter-jar must be an existing file");
     }
     git_revision(&arguments.project_dir, &arguments.baseline_revision)
         .context("--baseline-revision is not a resolvable Git revision")?;
     Ok(())
+}
+
+/// Requires an adapter JAR only when callable-level analysis needs WALA.
+fn validate_wala_adapter(arguments: &Arguments) -> Result<()> {
+    if !arguments.wala_adapter_jar.is_file() {
+        anyhow::bail!("--wala-adapter-jar must be an existing file");
+    }
+    Ok(())
+}
+
+/// Returns whether every change is already required to use module-wide fallback.
+fn changes_are_module_only(changes: &[ChangedElement]) -> bool {
+    changes
+        .iter()
+        .all(|change| matches!(change.kind, models::ChangedElementKind::Module))
+}
+
+/// Selects module tests without source extraction or WALA when the diff cannot be narrowed.
+fn write_module_fallback_result(
+    arguments: &Arguments,
+    candidate_revision: String,
+    changes: Vec<ChangedElement>,
+    mut diagnostics: Vec<String>,
+) -> Result<()> {
+    let mut selected_tests = Vec::new();
+    let mut unselected_tests = Vec::new();
+    diagnostics.push("skipped call-graph analysis for module-only changes".into());
+    for module in changed_modules(&changes) {
+        let module_result = select_module_fallback(&module, changes_for_module(&changes, &module));
+        selected_tests.extend(module_result.selected_tests);
+        unselected_tests.extend(module_result.unselected_tests);
+        diagnostics.extend(module_result.diagnostics);
+    }
+    let mut result = TestImpactResult::new(
+        arguments.baseline_revision.clone(),
+        candidate_revision,
+        changes,
+        selected_tests,
+        unselected_tests,
+    );
+    result.diagnostics.append(&mut diagnostics);
+    write_result(&arguments.output, &result)
 }
 
 /// Runs discovery, WALA, resolution, and selection for one independently affected Maven module.
@@ -96,9 +144,12 @@ fn analyze_module(
     callables: &[models::Callable],
 ) -> TestImpactResult {
     let module_path = Path::new(module);
+    let discovery_started = Instant::now();
     let tests = match discover_java_tests(module_path) {
         Ok(tests) => tests,
         Err(error) => {
+            let discovery_elapsed = discovery_started.elapsed();
+            let selection_started = Instant::now();
             let mut result = select_tests(
                 changes,
                 Vec::new(),
@@ -108,14 +159,96 @@ fn analyze_module(
             result
                 .diagnostics
                 .push(format!("test discovery failed: {error}"));
+            result
+                .diagnostics
+                .push(timing_diagnostic("test discovery", discovery_elapsed));
+            result.diagnostics.push(timing_diagnostic(
+                "test selection",
+                selection_started.elapsed(),
+            ));
             return result;
         }
     };
     let source_root = module_path.join("src/main/java");
+    let wala_started = Instant::now();
     let mut outcome = provider.analyze_test_roots(&source_root, &tests);
+    let resolution_started = Instant::now();
     let (resolved_edges, resolution_diagnostics) = resolve_edges(&outcome, module_path, callables);
     outcome.diagnostics.extend(resolution_diagnostics);
-    select_tests(changes, tests, outcome, resolved_edges)
+    let selection_started = Instant::now();
+    let mut result = select_tests(changes, tests, outcome, resolved_edges);
+    result.diagnostics.push(timing_diagnostic(
+        "test discovery",
+        wala_started.duration_since(discovery_started),
+    ));
+    result.diagnostics.push(timing_diagnostic(
+        "WALA analysis",
+        resolution_started.duration_since(wala_started),
+    ));
+    result.diagnostics.push(timing_diagnostic(
+        "edge resolution",
+        selection_started.duration_since(resolution_started),
+    ));
+    result.diagnostics.push(timing_diagnostic(
+        "test selection",
+        selection_started.elapsed(),
+    ));
+    result
+}
+
+/// Discovers tests and selects the required broad fallback without invoking the adapter.
+fn select_module_fallback(module: &str, changes: Vec<ChangedElement>) -> TestImpactResult {
+    let discovery_started = Instant::now();
+    let tests = match discover_java_tests(Path::new(module)) {
+        Ok(tests) => tests,
+        Err(error) => {
+            let discovery_elapsed = discovery_started.elapsed();
+            let selection_started = Instant::now();
+            let mut result = select_tests(
+                changes,
+                Vec::new(),
+                failed_outcome(module, format!("test discovery failed: {error}")),
+                Vec::new(),
+            );
+            result
+                .diagnostics
+                .push(format!("test discovery failed: {error}"));
+            result.diagnostics.push(timing_diagnostic(
+                "module fallback test discovery",
+                discovery_elapsed,
+            ));
+            result.diagnostics.push(timing_diagnostic(
+                "module fallback selection",
+                selection_started.elapsed(),
+            ));
+            return result;
+        }
+    };
+    let selection_started = Instant::now();
+    let mut result = select_tests(
+        changes,
+        tests,
+        models::call_graph::CallGraphOutcome::ok(
+            models::call_graph::CallGraphRequest::new(module, models::call_graph::Language::Java),
+            "not-run",
+            "module-fallback",
+        ),
+        Vec::new(),
+    );
+    result.diagnostics.push(timing_diagnostic(
+        "module fallback test discovery",
+        selection_started.duration_since(discovery_started),
+    ));
+    result.diagnostics.push(timing_diagnostic(
+        "module fallback selection",
+        selection_started.elapsed(),
+    ));
+    result
+}
+
+/// Formats elapsed work as a machine-readable, low-overhead diagnostic.
+fn timing_diagnostic(stage: &str, elapsed: Duration) -> String {
+    format!("timing: {stage}={}ms", elapsed.as_millis())
 }
 
 /// Produces a provider-shaped failure that lets the selector retain its module fallback policy.
@@ -144,6 +277,15 @@ fn changed_modules(changes: &[ChangedElement]) -> BTreeSet<String> {
                 .iter()
                 .any(|other| other != *module && Path::new(module).starts_with(Path::new(other)))
         })
+        .cloned()
+        .collect()
+}
+
+/// Returns the changes owned by a module root, including descendant modules in a reactor.
+fn changes_for_module(changes: &[ChangedElement], module: &str) -> Vec<ChangedElement> {
+    changes
+        .iter()
+        .filter(|change| Path::new(&change.module_root).starts_with(Path::new(module)))
         .cloned()
         .collect()
 }

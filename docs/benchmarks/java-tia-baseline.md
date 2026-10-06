@@ -53,3 +53,12 @@ Future benchmark work should add real multi-module Spring applications,
 framework-mediated calls, asynchronous communication, known-failing tests, and
 larger version histories. Report affected-test recall, selection reduction,
 WALA time, Maven preparation time, and total wall-clock time separately.
+
+## Local real-project check
+
+Run `scripts/run-java-tia-benchmarks.sh` from this repository to compare each
+selected sibling benchmark project's `HEAD~1` to `HEAD`. It defaults to the
+two Spring projects exercised during development, writes JSON results to a new
+`/tmp/sar-java-tia-benchmark.*` directory, and prints selection counts plus
+the TIA stage timings. Pass one or more project names to override that default
+set, or set `JAVA_BENCHMARK_ROOT` when the sibling checkout is elsewhere.
