@@ -1,11 +1,14 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use cli::get_all_code_elements;
+use cli::{enrich_with_wala, get_all_code_elements};
 use models::ConfigurationData;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::{fs, time::Instant};
+use std::{
+    fs,
+    time::{Duration, Instant},
+};
 use synthesizer::{
     connectors::dto::Constant, direct_cm_build, direct_imcg_build, direct_sdg_build,
 };
@@ -28,6 +31,12 @@ struct Cli {
 
     #[arg(long, default_value_t = false)]
     scrape: bool,
+    /// Optional standalone WALA adapter used to enrich Java call edges.
+    #[arg(long, value_name = "FILE")]
+    wala_adapter_jar: Option<PathBuf>,
+    /// Maximum time allowed for one WALA call-graph analysis.
+    #[arg(long, default_value_t = 300, value_name = "SECONDS")]
+    wala_timeout_seconds: u64,
 }
 
 #[derive(Deserialize)]
@@ -95,7 +104,13 @@ async fn main() -> Result<()> {
     }
 
     let extraction = Instant::now();
-    let all_code_elements = get_all_code_elements(&args.project_dir, &external_constants)?;
+    let all_code_elements = enrich_with_wala(
+        get_all_code_elements(&args.project_dir, &external_constants)?,
+        &args.project_dir,
+        &config,
+        args.wala_adapter_jar.as_deref(),
+        Duration::from_secs(args.wala_timeout_seconds),
+    );
     let extraction_elapsed = extraction.elapsed();
 
     println!("✅ Extraction successful!");
@@ -138,4 +153,28 @@ fn save_json<T: serde::Serialize>(dir: &Path, filename: &str, data: &T) -> Resul
 
     println!("   📄 Generated: {}", filename);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::Parser;
+
+    #[test]
+    fn accepts_a_wala_analysis_timeout() {
+        let cli = Cli::try_parse_from([
+            "voyantclair",
+            "--project-dir",
+            "project",
+            "--config-file",
+            "config.json",
+            "--output-dir",
+            "output",
+            "--wala-timeout-seconds",
+            "12",
+        ])
+        .expect("the CLI should accept a WALA timeout");
+
+        assert_eq!(cli.wala_timeout_seconds, 12);
+    }
 }
