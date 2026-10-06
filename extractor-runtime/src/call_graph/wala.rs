@@ -6,9 +6,12 @@ use models::{
 use std::{
     path::PathBuf,
     process::{Child, Command, Output, Stdio},
-    thread,
-    time::{Duration, Instant},
+    sync::mpsc,
+    time::Duration,
 };
+
+#[cfg(not(unix))]
+use std::{thread, time::Instant};
 
 const DEFAULT_ANALYSIS_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -43,13 +46,15 @@ impl WalaJavaProvider {
 
     /// Launches the adapter with the supplied fully formed argument vector.
     fn invoke(&self, request: &CallGraphRequest, arguments: Vec<String>) -> CallGraphOutcome {
-        let child = Command::new("java")
+        let mut command = Command::new("java");
+        command
             .arg("-jar")
             .arg(&self.jar)
             .args(arguments)
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn();
+            .stderr(Stdio::piped());
+        isolate_process_group(&mut command);
+        let child = command.spawn();
         let output = child
             .and_then(|child| wait_for_output(child, self.timeout).map_err(std::io::Error::other));
         match output {
@@ -100,6 +105,33 @@ fn test_root_arguments(source_root: &std::path::Path, test_roots: &[JavaTestCase
 }
 
 /// Waits for an adapter process and terminates it when it exceeds the configured deadline.
+#[cfg(unix)]
+fn wait_for_output(child: Child, timeout: Duration) -> Result<Output, String> {
+    let process_id = child.id();
+    let (sender, receiver) = mpsc::sync_channel(1);
+    let collector = std::thread::spawn(move || {
+        let _ = sender.send(child.wait_with_output().map_err(|error| error.to_string()));
+    });
+    let result = receiver.recv_timeout(timeout);
+    if matches!(result, Err(mpsc::RecvTimeoutError::Timeout)) {
+        terminate_process_group(process_id);
+    }
+    if collector.join().is_err() {
+        return Err("WALA process-output collector stopped unexpectedly".into());
+    }
+
+    match result {
+        Ok(output) => output,
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            Err(format!("WALA analysis timed out after {timeout:?}"))
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            Err("WALA process-output collector stopped unexpectedly".into())
+        }
+    }
+}
+
+#[cfg(not(unix))]
 fn wait_for_output(mut child: Child, timeout: Duration) -> Result<Output, String> {
     let deadline = Instant::now() + timeout;
     loop {
@@ -113,6 +145,25 @@ fn wait_for_output(mut child: Child, timeout: Duration) -> Result<Output, String
             Ok(None) => thread::sleep(Duration::from_millis(10)),
             Err(error) => return Err(error.to_string()),
         }
+    }
+}
+
+#[cfg(unix)]
+fn isolate_process_group(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+
+    command.process_group(0);
+}
+
+#[cfg(not(unix))]
+fn isolate_process_group(_: &mut Command) {}
+
+#[cfg(unix)]
+fn terminate_process_group(process_id: u32) {
+    let process_group = -(process_id as i32);
+    let killed_group = unsafe { libc::kill(process_group, libc::SIGKILL) } == 0;
+    if !killed_group {
+        unsafe { libc::kill(process_id as i32, libc::SIGKILL) };
     }
 }
 
@@ -131,9 +182,15 @@ fn failed(request: &CallGraphRequest, diagnostic: &str) -> CallGraphOutcome {
 
 #[cfg(test)]
 mod tests {
-    use super::{test_root_arguments, wait_for_output};
+    use super::{isolate_process_group, test_root_arguments, wait_for_output};
     use models::JavaTestCase;
-    use std::{path::Path, process::Command, time::Duration};
+    use std::{
+        path::Path,
+        process::Command,
+        thread,
+        time::{Duration, Instant},
+    };
+    use tempfile::tempdir;
 
     #[test]
     fn stops_a_child_process_that_exceeds_the_deadline() {
@@ -141,11 +198,89 @@ mod tests {
             .arg("1")
             .spawn()
             .expect("test command should start");
+        let child_pid = child.id().to_string();
 
         let error = wait_for_output(child, Duration::from_millis(10))
             .expect_err("a process that sleeps longer than its deadline must time out");
 
         assert!(error.contains("timed out"), "{error}");
+        assert!(
+            !process_exists(&child_pid),
+            "direct adapter process {child_pid} should be reaped before timeout returns"
+        );
+    }
+
+    #[test]
+    fn stops_descendants_when_a_process_group_exceeds_the_deadline() {
+        let directory = tempdir().expect("temporary directory should exist");
+        let pid_file = directory.path().join("descendant.pid");
+        let script = format!("sleep 30 & echo $! > '{}' && wait", pid_file.display());
+        let mut command = Command::new("sh");
+        command.args(["-c", &script]);
+        isolate_process_group(&mut command);
+        let child = command.spawn().expect("test command should start");
+
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while !pid_file.exists() && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+        let descendant_pid = std::fs::read_to_string(&pid_file)
+            .expect("parent should record the descendant PID")
+            .trim()
+            .to_owned();
+
+        let error = wait_for_output(child, Duration::from_millis(10))
+            .expect_err("a process group that exceeds its deadline must time out");
+
+        assert!(error.contains("timed out"), "{error}");
+        assert!(
+            !process_exists(&descendant_pid),
+            "descendant process {descendant_pid} should be terminated with its parent"
+        );
+    }
+
+    #[test]
+    fn stops_descendants_that_hold_output_pipes_after_the_parent_exits() {
+        let directory = tempdir().expect("temporary directory should exist");
+        let pid_file = directory.path().join("descendant.pid");
+        let script = format!("sleep 1 & echo $! > '{}'", pid_file.display());
+        let mut command = Command::new("sh");
+        command
+            .args(["-c", &script])
+            .stdout(std::process::Stdio::piped());
+        isolate_process_group(&mut command);
+        let child = command.spawn().expect("test command should start");
+
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while !pid_file.exists() && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+        let descendant_pid = std::fs::read_to_string(&pid_file)
+            .expect("parent should record the descendant PID")
+            .trim()
+            .to_owned();
+
+        let started = Instant::now();
+        let error = wait_for_output(child, Duration::from_millis(10))
+            .expect_err("descendants retaining output pipes must still time out");
+
+        assert!(error.contains("timed out"), "{error}");
+        assert!(
+            started.elapsed() < Duration::from_millis(250),
+            "timeout should remain effective while collecting output"
+        );
+        assert!(
+            !process_exists(&descendant_pid),
+            "descendant process {descendant_pid} should be terminated"
+        );
+    }
+
+    fn process_exists(pid: &str) -> bool {
+        Command::new("kill")
+            .args(["-0", pid])
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
     }
 
     #[test]
