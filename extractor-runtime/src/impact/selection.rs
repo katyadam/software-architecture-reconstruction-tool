@@ -3,7 +3,10 @@ use models::{
     TestImpactResult,
     call_graph::{CallGraphOutcome, CallGraphStatus, ResolvedCallEdge},
 };
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::{
+    collections::{BTreeSet, HashMap, HashSet},
+    path::Path,
+};
 
 /// Selects tests reached from changed code and widens to an affected module on any uncertainty.
 pub fn select_tests(
@@ -123,10 +126,17 @@ fn select_module_tests(
     for (index, _) in tests
         .iter()
         .enumerate()
-        .filter(|(_, test)| test.module_root == module_root)
+        .filter(|(_, test)| module_contains_test(module_root, &test.module_root))
     {
         add_reason(selected_reasons, index, reason.clone());
     }
+}
+
+/// Returns whether a changed module owns the discovered test module, including reactor descendants.
+fn module_contains_test(module_root: &str, test_module_root: &str) -> bool {
+    let module_root = Path::new(module_root);
+    let test_module_root = Path::new(test_module_root);
+    test_module_root == module_root || test_module_root.starts_with(module_root)
 }
 
 /// Traverses all reverse paths from a changed callable or class to discovered test callables.
