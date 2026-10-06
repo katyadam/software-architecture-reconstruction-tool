@@ -54,7 +54,7 @@ fn run(arguments: Arguments) -> Result<()> {
     for module in changed_modules(&changes) {
         let module_changes: Vec<_> = changes
             .iter()
-            .filter(|change| change.module_root == module)
+            .filter(|change| Path::new(&change.module_root).starts_with(Path::new(&module)))
             .cloned()
             .collect();
         let module_result =
@@ -131,11 +131,20 @@ fn failed_outcome(module: &str, diagnostic: String) -> models::call_graph::CallG
     }
 }
 
-/// Returns unique module paths in stable order so result serialization is deterministic.
+/// Returns outermost affected module paths so descendant tests are analyzed exactly once.
 fn changed_modules(changes: &[ChangedElement]) -> BTreeSet<String> {
-    changes
+    let modules: BTreeSet<_> = changes
         .iter()
         .map(|change| change.module_root.clone())
+        .collect();
+    modules
+        .iter()
+        .filter(|module| {
+            !modules
+                .iter()
+                .any(|other| other != *module && Path::new(module).starts_with(Path::new(other)))
+        })
+        .cloned()
         .collect()
 }
 

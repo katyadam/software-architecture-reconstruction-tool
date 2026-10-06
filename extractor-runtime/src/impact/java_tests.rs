@@ -7,12 +7,56 @@ const TEST_ANNOTATIONS: &[&str] = &["Test", "ParameterizedTest", "RepeatedTest",
 
 /// Discovers JUnit 4/5 test methods below a conventional Maven test-source directory.
 pub fn discover_java_tests(module_root: &Path) -> Result<Vec<JavaTestCase>, ImpactError> {
-    let source_root = module_root.join("src/test/java");
     let mut tests = Vec::new();
-    for source_path in java_sources(&source_root)? {
-        tests.extend(discover_file(module_root, &source_path)?);
+    for test_module in test_modules(module_root)? {
+        let source_root = test_module.join("src/test/java");
+        for source_path in java_sources(&source_root)? {
+            tests.extend(discover_file(&test_module, &source_path)?);
+        }
     }
     Ok(tests)
+}
+
+/// Finds the supplied module and descendant conventional Maven or Gradle modules with test roots.
+fn test_modules(module_root: &Path) -> Result<Vec<PathBuf>, ImpactError> {
+    let mut modules = vec![module_root.to_path_buf()];
+    descendant_modules(module_root, module_root, &mut modules)?;
+    Ok(modules)
+}
+
+/// Collects nested build modules without entering version-control metadata or generated outputs.
+fn descendant_modules(
+    root: &Path,
+    current: &Path,
+    modules: &mut Vec<PathBuf>,
+) -> Result<(), ImpactError> {
+    for entry in
+        std::fs::read_dir(current).map_err(|error| ImpactError::Source(error.to_string()))?
+    {
+        let path = entry
+            .map_err(|error| ImpactError::Source(error.to_string()))?
+            .path();
+        if !path.is_dir()
+            || matches!(
+                path.file_name().and_then(|name| name.to_str()),
+                Some(".git" | ".idea" | "build" | "node_modules" | "target")
+            )
+        {
+            continue;
+        }
+        if path != root && is_build_module(&path) {
+            modules.push(path.clone());
+        }
+        descendant_modules(root, &path, modules)?;
+    }
+    Ok(())
+}
+
+/// Recognizes conventional Java build-module roots without interpreting build-script contents.
+fn is_build_module(path: &Path) -> bool {
+    path.join("pom.xml").is_file()
+        || path.join("build.gradle").is_file()
+        || path.join("build.gradle.kts").is_file()
 }
 
 /// Recursively collects Java source files below one Maven test-source directory.

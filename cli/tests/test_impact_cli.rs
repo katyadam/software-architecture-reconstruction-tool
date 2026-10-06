@@ -1,5 +1,8 @@
-use std::{fs, path::Path, process::Command};
+use std::{fs, path::Path, process::Command, sync::Mutex};
 use tempfile::TempDir;
+
+/// Keeps external Maven and WALA processes from competing for the test runner's resources.
+static TIA_PROCESS_LOCK: Mutex<()> = Mutex::new(());
 
 /// Runs the standalone binary against a two-version Maven fixture and reads its JSON output.
 #[test]
@@ -50,10 +53,54 @@ fn selects_every_module_test_for_a_deleted_java_source_file() {
     assert_module_fallback(run_tia(&fixture, &baseline));
 }
 
+#[test]
+fn selects_descendant_module_tests_for_a_reactor_root_configuration_change() {
+    let fixture = create_reactor_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    fs::write(
+        fixture.path().join("pom.xml"),
+        "<project xmlns=\"http://maven.apache.org/POM/4.0.0\"><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>reactor</artifactId><version>1</version><packaging>pom</packaging><modules><module>orders</module><module>billing</module></modules><properties><maven.compiler.release>8</maven.compiler.release><fixture.mode>baseline</fixture.mode></properties></project>",
+    )
+    .expect("candidate reactor POM writes");
+    git(&fixture, &["add", "."]);
+    git(
+        &fixture,
+        &["commit", "-m", "reactor configuration candidate"],
+    );
+
+    assert_module_fallback(run_tia(&fixture, &baseline));
+}
+
+#[test]
+fn selects_each_descendant_test_once_when_root_and_child_modules_change() {
+    let fixture = create_reactor_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    fs::write(
+        fixture.path().join("pom.xml"),
+        "<project xmlns=\"http://maven.apache.org/POM/4.0.0\"><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>reactor</artifactId><version>1</version><packaging>pom</packaging><modules><module>orders</module><module>billing</module></modules><properties><maven.compiler.release>8</maven.compiler.release><fixture.mode>candidate</fixture.mode></properties></project>",
+    )
+    .expect("candidate reactor POM writes");
+    write_source(
+        fixture.path(),
+        "orders/src/main/java/fixture/orders/Service.java",
+        "package fixture.orders; public class Service { public static void run() { int value = 2; } }",
+    );
+    git(&fixture, &["add", "."]);
+    git(
+        &fixture,
+        &["commit", "-m", "root and child module candidate"],
+    );
+
+    assert_module_fallback(run_tia(&fixture, &baseline));
+}
+
 /// Executes the binary for one candidate fixture and deserializes its persisted selection result.
 fn run_tia(fixture: &TempDir, baseline: &str) -> models::TestImpactResult {
+    let _process_guard = TIA_PROCESS_LOCK
+        .lock()
+        .expect("TIA process lock is available");
     let output = fixture.path().join("impact.json");
-    let status = Command::new(env!("CARGO_BIN_EXE_test-impact"))
+    let output_result = Command::new(env!("CARGO_BIN_EXE_test-impact"))
         .args([
             "--project-dir",
             fixture.path().to_str().expect("fixture path is UTF-8"),
@@ -64,9 +111,13 @@ fn run_tia(fixture: &TempDir, baseline: &str) -> models::TestImpactResult {
             "--output",
             output.to_str().expect("output path is UTF-8"),
         ])
-        .status()
+        .output()
         .expect("TIA binary starts");
-    assert!(status.success());
+    assert!(
+        output_result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output_result.stderr)
+    );
     serde_json::from_str(&fs::read_to_string(output).expect("TIA result is written"))
         .expect("TIA result is JSON")
 }
@@ -114,6 +165,50 @@ fn create_fixture() -> TempDir {
     fixture
 }
 
+/// Creates a two-module Maven reactor whose tests belong to child module roots.
+fn create_reactor_fixture() -> TempDir {
+    let fixture = tempfile::tempdir().expect("temporary reactor directory");
+    fs::write(
+        fixture.path().join("pom.xml"),
+        "<project xmlns=\"http://maven.apache.org/POM/4.0.0\"><modelVersion>4.0.0</modelVersion><groupId>fixture</groupId><artifactId>reactor</artifactId><version>1</version><packaging>pom</packaging><modules><module>orders</module><module>billing</module></modules><properties><maven.compiler.release>8</maven.compiler.release></properties></project>",
+    )
+    .expect("reactor POM writes");
+    for module in ["orders", "billing"] {
+        write_source(
+            fixture.path(),
+            &format!("{module}/src/main/java/fixture/{module}/Service.java"),
+            &format!(
+                "package fixture.{module}; public class Service {{ public static void run() {{}} }}"
+            ),
+        );
+        write_source(
+            fixture.path(),
+            &format!("{module}/src/test/java/fixture/{module}/ServiceTest.java"),
+            &format!(
+                "package fixture.{module}; public class ServiceTest {{ @org.junit.jupiter.api.Test public void coversService() {{ Service.run(); }} }}"
+            ),
+        );
+        fs::write(
+            fixture.path().join(format!("{module}/pom.xml")),
+            format!(
+                "<project xmlns=\"http://maven.apache.org/POM/4.0.0\"><modelVersion>4.0.0</modelVersion><parent><groupId>fixture</groupId><artifactId>reactor</artifactId><version>1</version></parent><artifactId>{module}</artifactId></project>"
+            ),
+        )
+        .expect("module POM writes");
+        write_source(
+            fixture.path(),
+            &format!("{module}/src/test/java/org/junit/jupiter/api/Test.java"),
+            "package org.junit.jupiter.api; public @interface Test {}",
+        );
+    }
+    git(&fixture, &["init"]);
+    git(&fixture, &["config", "user.email", "tia@example.test"]);
+    git(&fixture, &["config", "user.name", "TIA fixture"]);
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "reactor baseline"]);
+    fixture
+}
+
 /// Writes fixture source while creating all missing source directories.
 fn write_source(root: &Path, relative_path: &str, content: &str) {
     let path = root.join(relative_path);
@@ -131,7 +226,9 @@ fn git(fixture: &TempDir, arguments: &[&str]) -> String {
         .expect("Git starts");
     assert!(
         output.status.success(),
-        "{}",
+        "git {:?} failed:\nstdout: {}\nstderr: {}",
+        arguments,
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
