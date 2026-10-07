@@ -14,6 +14,8 @@ Environment:
   WALA_ADAPTER_JAR          WALA adapter JAR (default: wala-callgraph target JAR)
   TIA_BENCHMARK_OUTPUT_DIR  Directory for JSON results (default: a new /tmp directory)
   WALA_TIMEOUT_SECONDS      Per-module adapter timeout (default: 30)
+
+Each project also writes its command output to <output-dir>/<project>.log.
 EOF
 }
 
@@ -65,18 +67,20 @@ for project_name in "$@"; do
     continue
   fi
   result="$output_dir/$project_name.json"
+  log="$output_dir/$project_name.log"
   if ! "$tia_binary" \
     --project-dir "$project_dir" \
     --baseline-revision "$baseline" \
     --wala-adapter-jar "$wala_adapter_jar" \
     --wala-timeout-seconds "$wala_timeout_seconds" \
-    --output "$result"; then
-    echo "TIA invocation failed: $project_name" >&2
+    --quiet \
+    --output "$result" >"$log" 2>&1; then
+    echo "TIA invocation failed: $project_name (see $log)" >&2
     status=1
     continue
   fi
   if ! jq -e '.selected_tests | type == "array"' "$result" >/dev/null; then
-    echo "TIA did not produce a valid result: $project_name" >&2
+    echo "TIA did not produce a valid result: $project_name (see $log)" >&2
     status=1
     continue
   fi
