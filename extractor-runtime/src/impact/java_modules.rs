@@ -79,6 +79,10 @@ impl ModuleCatalog {
         }
     }
 
+    pub fn is_complete(&self) -> bool {
+        matches!(self.state, CatalogState::Complete(_))
+    }
+
     pub(super) fn complete(root: PathBuf, modules: Vec<PathBuf>) -> Self {
         Self {
             root,
@@ -96,7 +100,13 @@ impl ModuleCatalog {
 
 /// Normalizes existing roots so path-prefix ownership checks are stable.
 fn normalized(path: &Path) -> PathBuf {
-    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .expect("current directory exists")
+            .join(path)
+    }
 }
 
 /// Resolves a Git-relative path without letting it escape the catalog root.
