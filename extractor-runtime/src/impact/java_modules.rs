@@ -219,11 +219,15 @@ fn maven_declared_modules(pom: &Path) -> Result<Vec<String>, String> {
 fn gradle_modules(root: &Path, settings: &Path) -> Result<Vec<PathBuf>, String> {
     let source = fs::read_to_string(settings).map_err(|error| error.to_string())?;
     let mut projects = Vec::new();
-    for line in source
-        .lines()
-        .map(str::trim)
-        .filter(|line| line.starts_with("include"))
-    {
+    for line in source.lines().map(str::trim) {
+        if !line.contains("include") {
+            continue;
+        }
+        if !line.starts_with("include") {
+            return Err(format!(
+                "Gradle include is not a top-level literal declaration: {line}"
+            ));
+        }
         let remainder = line["include".len()..]
             .trim()
             .trim_matches(|c| c == '(' || c == ')');
@@ -242,8 +246,8 @@ fn gradle_modules(root: &Path, settings: &Path) -> Result<Vec<PathBuf>, String> 
     let mut modules = vec![root.to_path_buf()];
     for project in projects {
         let path = mapping
-            .captures(&source)
-            .filter(|captures| captures[1] == project)
+            .captures_iter(&source)
+            .find(|captures| captures[1] == project)
             .map(|captures| root.join(&captures[2]))
             .unwrap_or_else(|| root.join(project.trim_start_matches(':').replace(':', "/")));
         let Some(path) = path.canonicalize().ok() else {
