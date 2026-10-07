@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use cli::get_all_code_elements;
+use cli::get_all_code_elements_with_progress;
 use extractor_runtime::{
     call_graph::{resolve_edges, wala::WalaJavaProvider},
     impact::{ModuleCatalog, analyze_changes, discover_java_tests, select_tests},
@@ -33,6 +33,9 @@ struct Arguments {
     /// Maximum duration allowed for each WALA module analysis.
     #[arg(long, default_value_t = 300, value_name = "SECONDS")]
     wala_timeout_seconds: u64,
+    /// Suppress source-extraction progress output while retaining diagnostics and JSON output.
+    #[arg(long)]
+    quiet: bool,
 }
 
 /// Runs conservative TIA and writes a JSON result even when analysis must fall back broadly.
@@ -57,8 +60,12 @@ fn run(arguments: Arguments) -> Result<()> {
     }
     validate_wala_adapter(&arguments)?;
     let extraction_started = Instant::now();
-    let aggregate = get_all_code_elements(&arguments.project_dir, &HashMap::new())
-        .context("Unable to extract source callables for call-graph resolution")?;
+    let aggregate = get_all_code_elements_with_progress(
+        &arguments.project_dir,
+        &HashMap::new(),
+        !arguments.quiet,
+    )
+    .context("Unable to extract source callables for call-graph resolution")?;
     diagnostics.push(timing_diagnostic(
         "source extraction",
         extraction_started.elapsed(),

@@ -38,6 +38,39 @@ fn selects_the_junit_test_that_reaches_a_changed_method() {
 }
 
 #[test]
+fn quiet_mode_writes_a_result_without_extraction_progress() {
+    let fixture = create_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    fs::write(
+        fixture.path().join("src/main/java/fixture/Service.java"),
+        "package fixture; public class Service { public static void changed() { int value = 2; } public static void unchanged() {} }",
+    )
+    .expect("candidate source writes");
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "candidate"]);
+
+    let (result, output) = run_tia_with_extra_args(&fixture, &baseline, &wala_jar(), &["--quiet"]);
+
+    assert!(
+        !result.selected_tests.is_empty(),
+        "{:?}",
+        result.diagnostics
+    );
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.starts_with("timing: source extraction=")),
+        "quiet mode must still run source extraction: {:?}",
+        result.diagnostics
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "quiet mode wrote progress to stdout"
+    );
+}
+
+#[test]
 fn selects_every_module_test_for_a_non_java_configuration_change() {
     let fixture = create_fixture();
     let baseline = git(&fixture, &["rev-parse", "HEAD"]);
@@ -145,11 +178,22 @@ fn run_tia_with_jar(
     baseline: &str,
     wala_adapter_jar: &Path,
 ) -> models::TestImpactResult {
+    run_tia_with_extra_args(fixture, baseline, wala_adapter_jar, &[]).0
+}
+
+/// Executes TIA with optional command-line switches and returns its output for CLI behavior checks.
+fn run_tia_with_extra_args(
+    fixture: &TempDir,
+    baseline: &str,
+    wala_adapter_jar: &Path,
+    extra_args: &[&str],
+) -> (models::TestImpactResult, std::process::Output) {
     let _process_guard = TIA_PROCESS_LOCK
         .lock()
         .expect("TIA process lock is available");
     let output = fixture.path().join("impact.json");
-    let output_result = Command::new(env!("CARGO_BIN_EXE_test-impact"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_test-impact"));
+    command
         .args([
             "--project-dir",
             fixture.path().to_str().expect("fixture path is UTF-8"),
@@ -160,15 +204,18 @@ fn run_tia_with_jar(
             "--output",
             output.to_str().expect("output path is UTF-8"),
         ])
-        .output()
-        .expect("TIA binary starts");
+        .args(extra_args);
+    let output_result = command.output().expect("TIA binary starts");
     assert!(
         output_result.status.success(),
         "{}",
         String::from_utf8_lossy(&output_result.stderr)
     );
-    serde_json::from_str(&fs::read_to_string(output).expect("TIA result is written"))
-        .expect("TIA result is JSON")
+    (
+        serde_json::from_str(&fs::read_to_string(output).expect("TIA result is written"))
+            .expect("TIA result is JSON"),
+        output_result,
+    )
 }
 
 /// Verifies the controlled fallback contract keeps every discovered module test.
