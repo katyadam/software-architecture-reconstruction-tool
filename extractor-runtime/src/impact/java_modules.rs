@@ -150,29 +150,42 @@ fn maven_declared_modules(pom: &Path) -> Result<Vec<String>, String> {
     let xml = fs::read_to_string(pom).map_err(|error| error.to_string())?;
     let mut reader = Reader::from_str(&xml);
     reader.config_mut().trim_text(true);
-    let mut in_modules = false;
-    let mut in_module = false;
+    let mut elements: Vec<String> = Vec::new();
+    let mut module_value: Option<String> = None;
     let mut modules = Vec::new();
     loop {
         match reader.read_event() {
-            Ok(Event::Start(element)) => match element.name().as_ref() {
-                b"profile" => {
+            Ok(Event::Start(element)) => {
+                let name = String::from_utf8_lossy(element.name().as_ref()).into_owned();
+                if name == "profile" {
                     return Err("Maven profiles are unsupported for module metadata".into());
                 }
-                b"modules" => in_modules = true,
-                b"module" if in_modules => in_module = true,
-                _ => {}
-            },
-            Ok(Event::Text(text)) if in_module => modules.push(
-                text.decode()
-                    .map_err(|error| error.to_string())?
-                    .into_owned(),
-            ),
-            Ok(Event::End(element)) => match element.name().as_ref() {
-                b"module" => in_module = false,
-                b"modules" => in_modules = false,
-                _ => {}
-            },
+                if name == "module" && elements.as_slice() == ["project", "modules"] {
+                    module_value = Some(String::new());
+                } else if module_value.is_some() {
+                    return Err("Maven module declaration has nested content".into());
+                }
+                elements.push(name);
+            }
+            Ok(Event::Text(text)) if module_value.is_some() => module_value
+                .as_mut()
+                .expect("module value exists")
+                .push_str(&text.decode().map_err(|error| error.to_string())?),
+            Ok(Event::CData(text)) if module_value.is_some() => module_value
+                .as_mut()
+                .expect("module value exists")
+                .push_str(&text.decode().map_err(|error| error.to_string())?),
+            Ok(Event::End(element)) => {
+                let name = String::from_utf8_lossy(element.name().as_ref()).into_owned();
+                if name == "module" && module_value.is_some() {
+                    let value = module_value.take().expect("module value exists");
+                    if value.is_empty() {
+                        return Err("Maven module path is empty".into());
+                    }
+                    modules.push(value);
+                }
+                elements.pop();
+            }
             Ok(Event::Eof) => return Ok(modules),
             Err(error) => return Err(format!("unable to parse Maven POM: {error}")),
             _ => {}
@@ -276,6 +289,34 @@ mod tests {
                 root
             );
         }
+    }
+
+    #[test]
+    fn maven_catalog_reads_cdata_module_paths() {
+        let directory = tempfile::tempdir().expect("temporary project root exists");
+        let root = directory.path().canonicalize().expect("root canonicalizes");
+        write_pom(
+            &root,
+            "<modules><module><![CDATA[orders]]></module></modules>",
+        );
+        write_pom(&root.join("orders"), "");
+        assert_eq!(
+            ModuleCatalog::load(&root).owner_for("orders/src/main/java/Order.java"),
+            root.join("orders")
+        );
+    }
+
+    #[test]
+    fn maven_catalog_ignores_nested_plugin_modules() {
+        let directory = tempfile::tempdir().expect("temporary project root exists");
+        let root = directory.path().canonicalize().expect("root canonicalizes");
+        write_pom(
+            &root,
+            "<build><plugins><plugin><modules><module>unlisted</module></modules></plugin></plugins></build>",
+        );
+        write_pom(&root.join("unlisted"), "");
+        let catalog = ModuleCatalog::load(&root);
+        assert_eq!(catalog.descendants_of(&root), vec![root]);
     }
 
     fn write_pom(directory: &Path, body: &str) {
