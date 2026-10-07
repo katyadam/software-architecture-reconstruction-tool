@@ -1,9 +1,6 @@
-use super::java_changes::map_java_range;
+use super::{ModuleCatalog, java_changes::map_java_range};
 use models::{ChangedElement, ChangedElementKind};
-use std::{
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{path::Path, process::Command};
 use thiserror::Error;
 
 /// Reports failures while obtaining or interpreting a Git candidate diff.
@@ -43,6 +40,7 @@ pub fn analyze_changes(
         ],
     )?;
     let mut changes = Vec::new();
+    let catalog = ModuleCatalog::load(project_root);
 
     for status in parse_statuses(&statuses) {
         if status.kind == 'M' || status.kind == 'A' {
@@ -52,6 +50,7 @@ pub fn analyze_changes(
                     for range in ranges {
                         changes.extend(map_java_range(
                             project_root,
+                            &catalog,
                             &status.candidate_path,
                             range,
                         )?);
@@ -60,7 +59,7 @@ pub fn analyze_changes(
                 }
             }
         }
-        changes.push(module_change(project_root, &status.candidate_path));
+        changes.push(module_change(&catalog, &status.candidate_path));
     }
     Ok(deduplicate(changes))
 }
@@ -133,35 +132,16 @@ fn parse_candidate_range(value: &str) -> Option<std::ops::RangeInclusive<usize>>
 }
 
 /// Creates a module-level fallback element for a path that cannot be narrowed safely.
-fn module_change(project_root: &Path, source_path: &str) -> ChangedElement {
+fn module_change(catalog: &ModuleCatalog, source_path: &str) -> ChangedElement {
     ChangedElement {
-        module_root: find_module_root(project_root, source_path)
+        module_root: catalog
+            .owner_for(source_path)
             .to_string_lossy()
             .into_owned(),
         source_path: source_path.to_owned(),
         kind: ChangedElementKind::Module,
         callable_signature: None,
     }
-}
-
-/// Finds the closest existing Maven module root for a changed or deleted path.
-pub(super) fn find_module_root(project_root: &Path, source_path: &str) -> PathBuf {
-    let mut current = project_root.join(source_path);
-    if current.extension().is_some() {
-        current.pop();
-    }
-    while current.starts_with(project_root) {
-        if current.join("pom.xml").is_file()
-            || current.join("build.gradle").is_file()
-            || current.join("build.gradle.kts").is_file()
-        {
-            return current;
-        }
-        if !current.pop() {
-            break;
-        }
-    }
-    project_root.to_path_buf()
 }
 
 /// Removes duplicate elements caused by overlapping diff hunks.
