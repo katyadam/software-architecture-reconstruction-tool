@@ -12,9 +12,20 @@ pub fn get_all_code_elements(
     project_dir: &PathBuf,
     external_constants: &HashMap<String, String>,
 ) -> Result<CodeElementsAggregate> {
+    get_all_code_elements_with_progress(project_dir, external_constants, true)
+}
+
+/// Extracts code elements while optionally reporting per-file progress to stdout.
+pub fn get_all_code_elements_with_progress(
+    project_dir: &PathBuf,
+    external_constants: &HashMap<String, String>,
+    report_progress: bool,
+) -> Result<CodeElementsAggregate> {
     let paths = collect_files(project_dir)?;
     let files_to_process = paths.len();
-    println!("Total files found: {files_to_process}");
+    if report_progress {
+        println!("Total files found: {files_to_process}");
+    }
 
     let mut file_records = Vec::new();
     for (i, path) in paths.iter().enumerate() {
@@ -29,11 +40,13 @@ pub fn get_all_code_elements(
                 continue;
             }
         };
-        println!(
-            "Extracting ({}/{files_to_process}): {:?}",
-            i + 1,
-            path.file_name().unwrap_or_default()
-        );
+        if report_progress {
+            println!(
+                "Extracting ({}/{files_to_process}): {:?}",
+                i + 1,
+                path.file_name().unwrap_or_default()
+            );
+        }
         if let Some(record) = dispatch_syntactic(&code, path.to_str().unwrap_or_default())
             .with_context(|| format!("Error dispatching file: {:?}", path))?
         {
