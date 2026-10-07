@@ -3,7 +3,7 @@ use clap::Parser;
 use cli::get_all_code_elements;
 use extractor_runtime::{
     call_graph::{resolve_edges, wala::WalaJavaProvider},
-    impact::{analyze_changes, discover_java_tests, select_tests},
+    impact::{ModuleCatalog, analyze_changes, discover_java_tests, select_tests},
 };
 use models::{ChangedElement, TestImpactResult};
 use std::{
@@ -39,6 +39,9 @@ struct Arguments {
 fn run(arguments: Arguments) -> Result<()> {
     validate_project_and_revision(&arguments)?;
     let candidate_revision = git_revision(&arguments.project_dir, "HEAD")?;
+    let module_metadata_diagnostic = ModuleCatalog::load(&arguments.project_dir)
+        .diagnostic()
+        .map(str::to_owned);
     let change_analysis_started = Instant::now();
     let changes = analyze_changes(&arguments.project_dir, &arguments.baseline_revision)
         .context("Unable to determine candidate changes from Git")?;
@@ -46,6 +49,9 @@ fn run(arguments: Arguments) -> Result<()> {
         "git diff",
         change_analysis_started.elapsed(),
     )];
+    if let Some(diagnostic) = module_metadata_diagnostic {
+        diagnostics.push(format!("module metadata fallback: {diagnostic}"));
+    }
     if changes_are_module_only(&changes) {
         return write_module_fallback_result(&arguments, candidate_revision, changes, diagnostics);
     }

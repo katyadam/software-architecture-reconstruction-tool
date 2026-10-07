@@ -1,4 +1,4 @@
-use super::ImpactError;
+use super::{ImpactError, ModuleCatalog};
 use models::JavaTestCase;
 use std::path::{Path, PathBuf};
 use tree_sitter::{Node, Parser};
@@ -8,7 +8,8 @@ const TEST_ANNOTATIONS: &[&str] = &["Test", "ParameterizedTest", "RepeatedTest",
 /// Discovers JUnit 4/5 test methods below a conventional Maven test-source directory.
 pub fn discover_java_tests(module_root: &Path) -> Result<Vec<JavaTestCase>, ImpactError> {
     let mut tests = Vec::new();
-    for test_module in test_modules(module_root)? {
+    let catalog = ModuleCatalog::load(module_root);
+    for test_module in test_modules(module_root, &catalog)? {
         let source_root = test_module.join("src/test/java");
         for source_path in java_sources(&source_root)? {
             tests.extend(discover_file(&test_module, &source_path)?);
@@ -18,7 +19,10 @@ pub fn discover_java_tests(module_root: &Path) -> Result<Vec<JavaTestCase>, Impa
 }
 
 /// Finds the supplied module and descendant conventional Maven or Gradle modules with test roots.
-fn test_modules(module_root: &Path) -> Result<Vec<PathBuf>, ImpactError> {
+fn test_modules(module_root: &Path, catalog: &ModuleCatalog) -> Result<Vec<PathBuf>, ImpactError> {
+    if catalog.is_complete() {
+        return Ok(catalog.descendants_of(module_root));
+    }
     let mut modules = vec![module_root.to_path_buf()];
     descendant_modules(module_root, module_root, &mut modules)?;
     Ok(modules)
