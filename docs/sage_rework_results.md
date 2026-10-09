@@ -685,6 +685,38 @@ summary; this section is the measurement record.
   presented as an update to, the 0.74 / 0.88 headline. Both are scored against
   the same 16-edge oracle — the difference is the run, not the oracle.
 
+## Jev residual triage — train-ticket generalization (2026-10-09)
+
+V5 (`07538f8`, `is_http` + enclosing-function snippet, default t = 0.8) on two
+train-ticket variants, 3 runs each (t = 0.9 / 0.8 / 0.7). Brief:
+`docs/jev_triage_generalization_check.md`. Details:
+`jev_triage_runs/tt-v5-function-snippet/results.md`,
+`jev_triage_runs/ttp-v5-function-snippet/results.md` (gitignored).
+
+| corpus | residuals (HTTP / non) | P / R at every t | lowest HTTP | highest non-HTTP | Jev errors |
+|---|---|---|---|---|---|
+| train-ticket `master` (Java) | 4 / 0 | 1.00 / 1.00 | 0.98 | - | 0 |
+| train-ticket `polyglot` (Java/Py/Go) | 39 / 6 | 1.00 / 1.00 | 0.96 | 0.05 | 0 |
+| same, strict labels | 23 / 22 | 0.59 / 1.00 | 0.96 | 0.98 | 0 |
+
+- **Verdict: generalizes** (polyglot, primary labels): separated in all runs
+  for t in (0.05, 0.96). With empaia (0.72, 0.96) the joint range is
+  **(0.72, 0.96)**; default 0.8 holds on both corpora.
+- Java-only: residuals fell ~24 (2026-07-11) -> 4; static layer resolves the
+  rest. Recall 4/4; precision untestable (no negatives).
+- Java state checks all pass: snippet 4/4 and 45/45, no `source_call` misses,
+  `receiver.datatype = RestTemplate`, imports readable. Go state works too.
+- Labelling choice: 16 polyglot residuals are `httpx` test-client calls over
+  `ASGITransport` (in-process). Counted HTTP, per the 2026-07-11 "keep test
+  calls for RTS" decision. If they must be non-HTTP (strict), `is_http` cannot
+  separate them (0.97–0.98). Fix candidates, not applied: in-process transports
+  in the `no` criteria, or a test-origin tag downstream.
+- `score.py` now takes a corpus argument (`empaia` default, `train-ticket`,
+  `train-ticket-polyglot`, `train-ticket-polyglot-strict`); empaia V5 numbers
+  re-checked unchanged.
+- Setup: `../train-ticket-polyglot` is now a git worktree of `../train-ticket`
+  on `polyglot` (`f428b5a5`); stale `/curry/tt-polyglot` record pruned.
+
 ---
 
 ## Decision log
