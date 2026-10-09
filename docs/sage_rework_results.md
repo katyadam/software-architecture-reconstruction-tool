@@ -717,6 +717,52 @@ train-ticket variants, 3 runs each (t = 0.9 / 0.8 / 0.7). Brief:
 - Setup: `../train-ticket-polyglot` is now a git worktree of `../train-ticket`
   on `polyglot` (`f428b5a5`); stale `/curry/tt-polyglot` record pruned.
 
+## Jev triage — end-to-end SDG edges (2026-10-09)
+
+Brief: `docs/jev_triage_end_to_end_rescore.md`. HEAD `4fb2a11`, V5,
+t = 0.8, one binary. Details: `jev_triage_runs/e2e-v5/results.md`
+(gitignored). Arms: N (no `--llm`), D (matcher only, dead Sage port),
+DJ (D + `--typesafe`). **S / SJ blocked: Ollama not installed.**
+Business view, oracle edges (empaia 16, train-ticket 92). Jev errors 0.
+
+| corpus | arm | P | R | FP | Jev non-edge | matcher | Sage-bound | extract s |
+|---|---|---|---|---|---|---|---|---|
+| empaia (median of 6) | N | 0.86 | 0.75 | 1–2 | - | - | - | 8.0 |
+| | D | 0.69 | 0.84 | 6 | - | 46/128 | 82 | 7.9 |
+| | DJ | **0.88** | 0.88 | 1–2 | 108/128 | 11/20 | **9** | 16.7 |
+| tt-polyglot | N = D = DJ | 0.976 | 0.902 | 2 | 6/45 (DJ) | 0 | 45 / 39 (DJ) | 2.8 / 6.5 (DJ) |
+| tt-java | N = D = DJ | 1.00 | 0.946 | 0 | 0/4 | 0 | 4 | 3.0 / 3.3 (DJ) |
+
+- **Verdict: Jev helps** (D vs DJ; S vs SJ unmeasured). empaia: D's 4
+  extra FPs (`annotation/app/job-execution/workbench -> job-service`, 6/6
+  runs) all vanish in DJ (0/6). Cause: the matcher maps `job_id`-named
+  DB/cache `.get` calls onto `job-service`; Jev marks all 23 such call sites
+  NonEdge (is_http 0.03–0.72). **No lost TP** on any corpus: the two
+  residual-only TPs (`app/job-execution -> marketplace`, `mps_client.py`)
+  are in all 12 D/DJ runs.
+- Unchanged FPs: `workbench -> app`, `annotation -> clinical-data` — Category
+  D resolution errors (`sage_next_steps.md` item 1). Jev cannot fix them.
+- Sage-bound calls (matcher misses; what live Sage would get): empaia
+  82 -> 9, polyglot 45 -> 39, Java 4 -> 4. Cost: triage +8.7 s empaia,
+  +3.4 s polyglot, +0.35 s Java.
+- train-ticket: connection sets hash-identical across arms. The matcher
+  resolves 0 residuals there, so D/DJ cannot differ without Sage.
+- **New finding — empaia extraction is nondeterministic** (same binary,
+  N recall 0.69–0.81, 333–480 requests). Cause:
+  `derive_constant_value_by_external_constants`
+  (`extractor-runtime/src/pipeline/pass3/constants.rs`) returns the first
+  exact-or-suffix hit while iterating a `HashMap`. `--scrape` adds
+  `PYTEST_{CDS,ES,JS,AS,HS}_URL=localhost:...`, which tie with
+  `es_url`/`self._es_url` etc. Only `medical-data-service`'s outgoing edges
+  flip. Not fixed. Until fixed, every empaia edge number needs >= 5 reps.
+  The 2026-07-31 single-run 0.87 / 0.81 was one draw from this spread.
+- polyglot ASGI test calls (16, pass Jev): matcher 0, so they keep bare
+  paths. The synthesizer still path-matches 10 of them, in N too:
+  `consignservice/*` -> `ts-config-service` (connection typed
+  `TestOrigin`, excluded) and `travelplanservice/welcome` ->
+  `ts-travel-service` (`TestOrigin` requests riding an oracle Business
+  edge). No Business-view effect; both targets are wrong.
+
 ---
 
 ## Decision log
@@ -781,3 +827,9 @@ train-ticket variants, 3 runs each (t = 0.9 / 0.8 / 0.7). Brief:
   (a plain substring rule would over-reject valid non-lexical groundings like
   `mds_url` -> `medical-data-service`). Deferred: the extraction-artifact fix
   removed every observed instance, making this a low-stakes hardening item.
+- **2026-10-09 — Jev triage end-to-end: helps.** empaia D -> DJ Business P
+  0.69 -> 0.88 (median of 6), 4 matcher FPs removed, no lost TP, Sage-bound
+  calls 82 -> 9. Next: task 3 (Jev `Choice` for the target service). Two
+  prerequisites first: (1) S / SJ 3-rep baseline once Ollama is installed —
+  task 3 must beat it; (2) fix the external-constants `HashMap` tie
+  (prefer exact match) — empaia numbers are not reproducible until then.

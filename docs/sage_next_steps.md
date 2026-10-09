@@ -7,15 +7,19 @@ measurement log), `sage_rework_knowledge_report.md` (paper-facing),
 design).
 
 Baseline best results (business-edge P/R vs hand-verified oracle):
-- empaia (LLM + constants + scrape): **0.74 / 0.88** (14 TP, 5 FP, 2 FN) vs
-  16-edge oracle. Not re-measured since the typed-edge change landed — the
-  re-run is outstanding, blocked on Ollama (not running).
-- empaia (no LLM, constants + scrape): **0.87 / 0.81** (13 TP, 2 FP, 3 FN) vs
-  the 16-edge business oracle. Measured 2026-07-31. Not attributable to typed
-  edges — see item 2, the typed-interaction change is a measured no-op here.
-- train-ticket Java: **1.00 / 0.95** (87 TP, 0 FP, 5 FN) vs 92-edge oracle.
-- train-ticket polyglot + LLM: **0.86 / 0.77** (71 TP, 12 FP, 21 FN).
-- Micrograal baseline on the same tree: 0.68 / 0.59.
+Measured 2026-10-09 at `4fb2a11` (`sage-rework`), Business view; details in
+`sage_rework_results.md` "Jev triage — end-to-end SDG edges".
+- empaia, constants + scrape, matcher + Jev triage (`--llm --typesafe`,
+  Sage unreachable): **0.88 / 0.88** median of 6 (FP 1–2). Same without
+  Jev: 0.69 / 0.84 (FP 6). No `--llm`: 0.86 / 0.75.
+  **Nondeterministic** (R spread 0.69–0.94 across runs): external-constants
+  `HashMap` tie, see that entry. Report medians of >= 5 runs.
+- train-ticket Java (any arm): **1.00 / 0.95** (87 TP, 0 FP, 5 FN).
+- train-ticket polyglot, scrape, no Sage (any arm): **0.98 / 0.90**
+  (83 TP, 2 FP, 9 FN).
+- Not re-measured (Ollama not installed): any live-Sage run. The old empaia
+  LLM 0.74 / 0.88 and polyglot + LLM 0.86 / 0.77 are stale; do not compare.
+- Micrograal baseline (old tree, not re-measured): 0.68 / 0.59.
 
 ---
 
