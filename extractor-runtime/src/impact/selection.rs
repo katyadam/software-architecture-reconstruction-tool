@@ -257,6 +257,14 @@ fn callable_signature_matches(graph_signature: &str, changed_signature: &str) ->
 
 /// Matches resolved callable IDs and JVM test identities emitted by JUnit source discovery.
 fn graph_signature_matches_test(graph_signature: &str, test: &JavaTestCase) -> bool {
+    if graph_signature
+        == format!(
+            "{}#{}{}",
+            test.class_name, test.method_name, test.descriptor
+        )
+    {
+        return true;
+    }
     if graph_signature == test.callable_signature {
         return true;
     }

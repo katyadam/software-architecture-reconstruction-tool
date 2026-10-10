@@ -1,5 +1,5 @@
 use models::call_graph::{CallGraphOutcome, MethodRef, ResolvedCallEdge};
-use models::{Callable, Namespace};
+use models::{Callable, JavaTestCase, Namespace};
 use std::path::Path;
 
 /// Maps provider method references to unique VoyantClair callable signatures.
@@ -11,12 +11,24 @@ pub fn resolve_edges(
     root: &Path,
     callables: &[Callable],
 ) -> (Vec<ResolvedCallEdge>, Vec<String>) {
+    resolve_edges_with_java_tests(outcome, root, callables, &[])
+}
+
+/// Maps provider edges to production source callables and discovered JUnit entrypoints.
+pub fn resolve_edges_with_java_tests(
+    outcome: &CallGraphOutcome,
+    root: &Path,
+    callables: &[Callable],
+    tests: &[JavaTestCase],
+) -> (Vec<ResolvedCallEdge>, Vec<String>) {
     let mut edges = vec![];
     let mut diagnostics = vec![];
     for edge in &outcome.edges {
         match (
-            resolve(&edge.caller, root, callables),
-            resolve(&edge.callee, root, callables),
+            resolve_java_test(&edge.caller, root, tests)
+                .or_else(|| resolve(&edge.caller, root, callables)),
+            resolve_java_test(&edge.callee, root, tests)
+                .or_else(|| resolve(&edge.callee, root, callables)),
         ) {
             (Some(source_id), Some(target_id)) => edges.push(ResolvedCallEdge {
                 source_id,
@@ -27,6 +39,28 @@ pub fn resolve_edges(
         }
     }
     (edges, diagnostics)
+}
+
+/// Resolves a WALA test entrypoint without parsing its source file into a callable.
+fn resolve_java_test(method: &MethodRef, root: &Path, tests: &[JavaTestCase]) -> Option<String> {
+    let matches: Vec<_> = tests
+        .iter()
+        .filter(|test| {
+            Path::new(&test.module_root).starts_with(root)
+                && test.class_name == method.declaring_type
+                && test.method_name == method.member_name
+                && test.descriptor == method.descriptor
+        })
+        .collect();
+    (matches.len() == 1).then(|| java_test_graph_identity(matches[0]))
+}
+
+/// Keeps package-qualified JVM test identities distinct in the resolved graph.
+fn java_test_graph_identity(test: &JavaTestCase) -> String {
+    format!(
+        "{}#{}{}",
+        test.class_name, test.method_name, test.descriptor
+    )
 }
 
 /// Resolves one provider method reference only when exactly one source callable matches it.

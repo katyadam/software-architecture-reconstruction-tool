@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use extractor_runtime::call_graph::{CallGraphProvider, resolve_edges, wala::WalaJavaProvider};
 use extractor_runtime::pipeline::pass3::{pass_attr, pass_module};
 use extractor_runtime::pipeline::{build_project_ir, dispatch_syntactic, evaluate};
-use models::{CodeElementsAggregate, ConfigurationData};
+use models::{Callable, CodeElementsAggregate, ConfigurationData, ir::syntax::FileRecord};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -42,6 +42,33 @@ pub fn get_java_code_elements_for_modules_with_progress(
     external_constants: &HashMap<String, String>,
     report_progress: bool,
 ) -> Result<CodeElementsAggregate> {
+    let paths = java_paths_for_modules(module_roots)?;
+    get_code_elements_from_paths_with_progress(paths, external_constants, report_progress)
+}
+
+/// Collects syntactic Java callable metadata from the affected module roots.
+pub fn get_java_callables_for_modules_with_progress(
+    module_roots: &[PathBuf],
+    report_progress: bool,
+) -> Result<Vec<Callable>> {
+    let main_roots: Vec<_> = module_roots
+        .iter()
+        .map(|module_root| module_root.join("src/main/java"))
+        .collect();
+    Ok(
+        collect_syntactic_records(java_paths_for_modules(&main_roots)?, report_progress)?
+            .into_iter()
+            .flat_map(|record| {
+                record
+                    .callables
+                    .into_iter()
+                    .map(|callable| callable.metadata)
+            })
+            .collect(),
+    )
+}
+
+fn java_paths_for_modules(module_roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
     let mut roots: Vec<_> = module_roots.iter().cloned().collect();
     roots.sort();
     roots.dedup();
@@ -57,7 +84,7 @@ pub fn get_java_code_elements_for_modules_with_progress(
         })?;
     paths.sort();
     paths.dedup();
-    get_code_elements_from_paths_with_progress(paths, external_constants, report_progress)
+    Ok(paths)
 }
 
 fn get_code_elements_with_progress(
@@ -78,6 +105,25 @@ fn get_code_elements_from_paths_with_progress(
     external_constants: &HashMap<String, String>,
     report_progress: bool,
 ) -> Result<CodeElementsAggregate> {
+    let file_records = collect_syntactic_records(paths, report_progress)?;
+    let project_ir = build_project_ir(file_records);
+
+    let per_file_attrs = pass_attr::resolve_all(&project_ir, external_constants);
+    let per_file_module_consts =
+        pass_module::resolve_all(&project_ir, external_constants, &per_file_attrs);
+    let evaluated_ir = evaluate(
+        project_ir,
+        external_constants,
+        &per_file_attrs,
+        &per_file_module_consts,
+    );
+    Ok(CodeElementsAggregate::from(evaluated_ir))
+}
+
+fn collect_syntactic_records(
+    paths: Vec<PathBuf>,
+    report_progress: bool,
+) -> Result<Vec<FileRecord>> {
     let files_to_process = paths.len();
     if report_progress {
         println!("Total files found: {files_to_process}");
@@ -110,18 +156,7 @@ fn get_code_elements_from_paths_with_progress(
         }
     }
 
-    let project_ir = build_project_ir(file_records);
-
-    let per_file_attrs = pass_attr::resolve_all(&project_ir, external_constants);
-    let per_file_module_consts =
-        pass_module::resolve_all(&project_ir, external_constants, &per_file_attrs);
-    let evaluated_ir = evaluate(
-        project_ir,
-        external_constants,
-        &per_file_attrs,
-        &per_file_module_consts,
-    );
-    Ok(CodeElementsAggregate::from(evaluated_ir))
+    Ok(file_records)
 }
 
 /// Adds uniquely resolved WALA Java edges for configured service directories when enabled.
@@ -179,8 +214,8 @@ pub fn collect_files(dir: &PathBuf) -> Result<Vec<PathBuf>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        get_all_code_elements_with_progress, get_java_code_elements_for_modules_with_progress,
-        get_java_code_elements_with_progress,
+        get_all_code_elements_with_progress, get_java_callables_for_modules_with_progress,
+        get_java_code_elements_for_modules_with_progress, get_java_code_elements_with_progress,
     };
     use std::{collections::HashMap, fs, path::Path};
 
@@ -280,6 +315,34 @@ mod tests {
                 .count(),
             1,
             "duplicate module roots must not duplicate callables"
+        );
+    }
+
+    #[test]
+    fn java_callable_collection_returns_syntactic_metadata_from_selected_modules() {
+        let project = tempfile::tempdir().expect("temporary project directory");
+        let module = project.path().join("module");
+        let source = module.join("src/main/java/example/Service.java");
+        let test_source = module.join("src/test/java/example/ServiceTest.java");
+        write_java_source(
+            &source,
+            "package example; public class Service { public void run() {} }",
+        );
+        write_java_source(
+            &test_source,
+            "package example; public class ServiceTest { public void covers() {} }",
+        );
+
+        let callables = get_java_callables_for_modules_with_progress(&[module], false)
+            .expect("callable collection succeeds");
+
+        assert!(callables.iter().any(|callable| {
+            callable.file_path == source.to_string_lossy() && callable.name == "void run()"
+        }));
+        assert!(
+            callables
+                .iter()
+                .all(|callable| callable.file_path != test_source.to_string_lossy())
         );
     }
 

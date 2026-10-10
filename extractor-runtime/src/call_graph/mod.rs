@@ -4,4 +4,4 @@ mod registry;
 mod resolver;
 pub mod wala;
 pub use registry::{CallGraphProvider, ProviderRegistry};
-pub use resolver::resolve_edges;
+pub use resolver::{resolve_edges, resolve_edges_with_java_tests};
