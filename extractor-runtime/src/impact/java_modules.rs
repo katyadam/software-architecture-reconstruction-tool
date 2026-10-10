@@ -100,13 +100,14 @@ impl ModuleCatalog {
 
 /// Normalizes existing roots so path-prefix ownership checks are stable.
 fn normalized(path: &Path) -> PathBuf {
-    if path.is_absolute() {
+    let absolute = if path.is_absolute() {
         path.to_path_buf()
     } else {
         std::env::current_dir()
             .expect("current directory exists")
             .join(path)
-    }
+    };
+    absolute.canonicalize().unwrap_or(absolute)
 }
 
 /// Resolves a Git-relative path without letting it escape the catalog root.
@@ -241,15 +242,45 @@ fn gradle_modules(root: &Path, settings: &Path) -> Result<Vec<PathBuf>, String> 
             projects.push(literal.to_owned());
         }
     }
-    let mapping = Regex::new(r#"project\(\s*[\"'](:[^\"']+)[\"']\s*\)\.projectDir\s*=\s*file\(\s*[\"']([^\"']+)[\"']\s*\)"#)
-        .expect("Gradle projectDir pattern is valid");
+    let assignment =
+        Regex::new(r#"(?m)^\s*project\(\s*[\"'](:[^\"']+)[\"']\s*\)\.projectDir\s*=\s*(.+?)\s*$"#)
+            .expect("Gradle projectDir assignment pattern is valid");
+    let file_mapping = Regex::new(r#"^file\(\s*[\"']([^\"']+)[\"']\s*\)$"#)
+        .expect("Gradle file projectDir pattern is valid");
+    let root_dir_mapping = Regex::new(r#"^\"\$rootDir/([^\"$]+)\"\s+as\s+File$"#)
+        .expect("Gradle rootDir projectDir pattern is valid");
     let mut modules = vec![root.to_path_buf()];
     for project in projects {
-        let path = mapping
+        let assignments: Vec<_> = assignment
             .captures_iter(&source)
-            .find(|captures| captures[1] == project)
-            .map(|captures| root.join(&captures[2]))
-            .unwrap_or_else(|| root.join(project.trim_start_matches(':').replace(':', "/")));
+            .filter(|captures| captures[1] == project)
+            .collect();
+        let path = match assignments.as_slice() {
+            [] => root.join(project.trim_start_matches(':').replace(':', "/")),
+            [captures] => {
+                let value = captures[2].trim();
+                let literal = file_mapping
+                    .captures(value)
+                    .and_then(|captures| captures.get(1))
+                    .filter(|path| !path.as_str().contains('$'))
+                    .or_else(|| {
+                        root_dir_mapping
+                            .captures(value)
+                            .and_then(|captures| captures.get(1))
+                    })
+                    .ok_or_else(|| {
+                        format!(
+                            "Gradle projectDir is not a supported literal assignment for {project}"
+                        )
+                    })?;
+                root.join(literal.as_str())
+            }
+            _ => {
+                return Err(format!(
+                    "Gradle projectDir is declared more than once: {project}"
+                ));
+            }
+        };
         let Some(path) = path.canonicalize().ok() else {
             return Err(format!(
                 "Gradle project directory does not exist: {project}"
@@ -419,6 +450,96 @@ mod tests {
             ModuleCatalog::load(&root).owner_for("custom/payment/src/main/java/Payment.java"),
             root.join("custom/payment")
         );
+    }
+
+    #[test]
+    fn gradle_catalog_reads_literal_root_dir_project_mappings() {
+        let directory = tempfile::tempdir().expect("temporary project root exists");
+        let root = directory.path().canonicalize().expect("root canonicalizes");
+        write_gradle_project(&root.join("xds"));
+        fs::write(
+            root.join("settings.gradle"),
+            "include ':grpc-xds'\nproject(':grpc-xds').projectDir = \"$rootDir/xds\" as File",
+        )
+        .expect("settings writes");
+
+        assert_eq!(
+            ModuleCatalog::load(&root).owner_for("xds/src/main/java/Xds.java"),
+            root.join("xds")
+        );
+    }
+
+    #[test]
+    fn gradle_catalog_accepts_a_lexically_aliased_project_root() {
+        let directory = tempfile::tempdir().expect("temporary project root exists");
+        let root = directory.path().canonicalize().expect("root canonicalizes");
+        fs::create_dir(root.join("alias")).expect("alias segment exists");
+        write_gradle_project(&root.join("xds"));
+        fs::write(
+            root.join("settings.gradle"),
+            "include ':grpc-xds'\nproject(':grpc-xds').projectDir = \"$rootDir/xds\" as File",
+        )
+        .expect("settings writes");
+
+        assert_eq!(
+            ModuleCatalog::load(&root.join("alias").join(".."))
+                .owner_for("xds/src/main/java/Xds.java"),
+            root.join("xds")
+        );
+    }
+
+    #[test]
+    fn gradle_catalog_rejects_dynamic_project_dir_mappings() {
+        let directory = tempfile::tempdir().expect("temporary project root exists");
+        let root = directory.path().canonicalize().expect("root canonicalizes");
+        write_gradle_project(&root.join("$moduleDirectory"));
+        fs::write(
+            root.join("settings.gradle"),
+            r#"include ':grpc-xds'
+project(':grpc-xds').projectDir = "$rootDir/$moduleDirectory" as File"#,
+        )
+        .expect("settings writes");
+
+        let catalog = ModuleCatalog::load(&root);
+        assert!(catalog.diagnostic().is_some());
+        assert_eq!(
+            catalog.owner_for("$moduleDirectory/src/main/java/Xds.java"),
+            root
+        );
+    }
+
+    #[test]
+    fn gradle_catalog_rejects_multiline_dynamic_project_dir_mappings() {
+        let directory = tempfile::tempdir().expect("temporary project root exists");
+        let root = directory.path().canonicalize().expect("root canonicalizes");
+        write_gradle_project(&root.join("grpc-xds"));
+        fs::write(
+            root.join("settings.gradle"),
+            "include ':grpc-xds'\nproject(':grpc-xds').projectDir =\n    dynamicPath",
+        )
+        .expect("settings writes");
+
+        let catalog = ModuleCatalog::load(&root);
+        assert!(catalog.diagnostic().is_some());
+        assert_eq!(catalog.owner_for("grpc-xds/src/main/java/Xds.java"), root);
+    }
+
+    #[test]
+    fn gradle_catalog_rejects_root_dir_mappings_that_escape_the_project() {
+        let directory = tempfile::tempdir().expect("temporary project root exists");
+        let root = directory.path().canonicalize().expect("root canonicalizes");
+        let project = root.join("project");
+        write_gradle_project(&project);
+        write_gradle_project(&root.join("outside"));
+        fs::write(
+            project.join("settings.gradle"),
+            "include ':outside'\nproject(':outside').projectDir = \"$rootDir/../outside\" as File",
+        )
+        .expect("settings writes");
+
+        let catalog = ModuleCatalog::load(&project);
+        assert!(catalog.diagnostic().is_some());
+        assert_eq!(catalog.owner_for("src/main/java/Project.java"), project);
     }
 
     #[test]
