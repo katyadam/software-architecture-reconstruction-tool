@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use cli::get_all_code_elements_with_progress;
+use cli::get_java_code_elements_for_modules_with_progress;
 use extractor_runtime::{
     call_graph::{resolve_edges, wala::WalaJavaProvider},
     impact::{ModuleCatalog, analyze_changes, discover_java_tests, select_tests},
@@ -59,9 +59,10 @@ fn run(arguments: Arguments) -> Result<()> {
         return write_module_fallback_result(&arguments, candidate_revision, changes, diagnostics);
     }
     validate_wala_adapter(&arguments)?;
+    let modules = changed_modules(&changes);
     let extraction_started = Instant::now();
-    let aggregate = get_all_code_elements_with_progress(
-        &arguments.project_dir,
+    let aggregate = get_java_code_elements_for_modules_with_progress(
+        &modules.iter().map(PathBuf::from).collect::<Vec<_>>(),
         &HashMap::new(),
         !arguments.quiet,
     )
@@ -77,7 +78,7 @@ fn run(arguments: Arguments) -> Result<()> {
     let mut selected_tests = Vec::new();
     let mut unselected_tests = Vec::new();
 
-    for module in changed_modules(&changes) {
+    for module in modules {
         let module_changes = changes_for_module(&changes, &module);
         let module_result =
             analyze_module(&provider, &module, module_changes, &aggregate.callables);
