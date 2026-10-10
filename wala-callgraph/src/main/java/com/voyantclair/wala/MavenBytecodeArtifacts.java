@@ -21,14 +21,21 @@ public final class MavenBytecodeArtifacts implements BytecodeArtifactPreparer {
     Path moduleRoot = modulePom.getParent();
     Path reactorPom = findReactorPom(modulePom);
     String selector = reactorPom.getParent().relativize(moduleRoot).toString();
-    var build = runMaven(reactorPom, List.of("-pl", selector, "-am", "install", "-DskipTests"));
+    var build =
+        runMaven(
+            reactorPom,
+            List.of(
+                "-pl", selector, "-am", "test-compile", "jar:jar", "install:install", "-DskipTests"));
     if (build.exitCode() != 0) {
       return failure(build.output());
     }
     var classpath =
         runMaven(
             modulePom,
-            List.of("-DincludeScope=test", "dependency:build-classpath", "-Dmdep.outputFile=target/wala-classpath.txt"));
+            List.of(
+                "-DincludeScope=test",
+                "dependency:build-classpath",
+                "-Dmdep.outputFile=target/wala-classpath.txt"));
     if (classpath.exitCode() != 0) {
       return failure(classpath.output());
     }
