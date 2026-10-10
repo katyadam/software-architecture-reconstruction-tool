@@ -13,6 +13,7 @@ pub struct ModuleCatalog {
 
 enum CatalogState {
     Complete(Vec<PathBuf>),
+    Partial(Vec<PathBuf>, String),
     Uncertain(String),
 }
 
@@ -22,7 +23,13 @@ impl ModuleCatalog {
         let root = normalized(project_root);
         if root.join("pom.xml").is_file() {
             return match maven_modules(&root) {
-                Ok(modules) => Self::complete(root, modules),
+                Ok(modules) if modules.profile_defined => Self::partial(
+                    root,
+                    modules.roots,
+                    "Maven profiles define additional modules; profile-dependent paths use broad fallback"
+                        .into(),
+                ),
+                Ok(modules) => Self::complete(root, modules.roots),
                 Err(diagnostic) => Self::uncertain(root, diagnostic),
             };
         }
@@ -44,7 +51,7 @@ impl ModuleCatalog {
     /// Returns the deepest declared module containing a candidate-relative source path.
     pub fn owner_for(&self, source_path: &str) -> PathBuf {
         match &self.state {
-            CatalogState::Complete(modules) => {
+            CatalogState::Complete(modules) | CatalogState::Partial(modules, _) => {
                 let Some(candidate) = normalized_candidate(&self.root, source_path) else {
                     return self.root.clone();
                 };
@@ -62,7 +69,7 @@ impl ModuleCatalog {
     /// Returns declared descendants for a complete catalog, or the supplied root when uncertain.
     pub fn descendants_of(&self, module_root: &Path) -> Vec<PathBuf> {
         match &self.state {
-            CatalogState::Complete(modules) => modules
+            CatalogState::Complete(modules) | CatalogState::Partial(modules, _) => modules
                 .iter()
                 .filter(|module| module.starts_with(module_root))
                 .cloned()
@@ -75,12 +82,28 @@ impl ModuleCatalog {
     pub fn diagnostic(&self) -> Option<&str> {
         match &self.state {
             CatalogState::Complete(_) => None,
-            CatalogState::Uncertain(diagnostic) => Some(diagnostic),
+            CatalogState::Partial(_, diagnostic) | CatalogState::Uncertain(diagnostic) => {
+                Some(diagnostic)
+            }
         }
     }
 
     pub fn is_complete(&self) -> bool {
         matches!(self.state, CatalogState::Complete(_))
+    }
+
+    /// Returns whether a Java source path has a fully known module scope.
+    pub fn can_narrow_source(&self, source_path: &str) -> bool {
+        let Some(candidate) = normalized_candidate(&self.root, source_path) else {
+            return false;
+        };
+        match &self.state {
+            CatalogState::Complete(_) => true,
+            CatalogState::Partial(modules, _) => modules
+                .iter()
+                .any(|module| module != &self.root && candidate.starts_with(module)),
+            CatalogState::Uncertain(_) => false,
+        }
     }
 
     pub(super) fn complete(root: PathBuf, modules: Vec<PathBuf>) -> Self {
@@ -94,6 +117,13 @@ impl ModuleCatalog {
         Self {
             root,
             state: CatalogState::Uncertain(diagnostic),
+        }
+    }
+
+    fn partial(root: PathBuf, modules: Vec<PathBuf>, diagnostic: String) -> Self {
+        Self {
+            root,
+            state: CatalogState::Partial(modules, diagnostic),
         }
     }
 }
@@ -130,8 +160,16 @@ fn normalized_candidate(root: &Path, source_path: &str) -> Option<PathBuf> {
 }
 
 /// Collects only modules directly declared by each reachable Maven reactor POM.
-fn maven_modules(root: &Path) -> Result<Vec<PathBuf>, String> {
-    let mut modules = vec![root.to_path_buf()];
+struct MavenModules {
+    roots: Vec<PathBuf>,
+    profile_defined: bool,
+}
+
+fn maven_modules(root: &Path) -> Result<MavenModules, String> {
+    let mut modules = MavenModules {
+        roots: vec![root.to_path_buf()],
+        profile_defined: false,
+    };
     collect_maven_modules(root, root, &mut modules)?;
     Ok(modules)
 }
@@ -139,9 +177,11 @@ fn maven_modules(root: &Path) -> Result<Vec<PathBuf>, String> {
 fn collect_maven_modules(
     root: &Path,
     module: &Path,
-    modules: &mut Vec<PathBuf>,
+    modules: &mut MavenModules,
 ) -> Result<(), String> {
-    for declared in maven_declared_modules(&module.join("pom.xml"))? {
+    let declarations = maven_declared_modules(&module.join("pom.xml"))?;
+    modules.profile_defined |= declarations.profile_defined;
+    for declared in declarations.unconditional {
         if declared.contains("${") {
             return Err(format!(
                 "Maven module path uses property expansion: {declared}"
@@ -159,33 +199,40 @@ fn collect_maven_modules(
         if !child.join("pom.xml").is_file() {
             return Err(format!("Maven module has no POM: {declared}"));
         }
-        if modules.contains(&child) {
+        if modules.roots.contains(&child) {
             return Err(format!(
                 "Maven module is declared more than once: {declared}"
             ));
         }
-        modules.push(child.clone());
+        modules.roots.push(child.clone());
         collect_maven_modules(root, &child, modules)?;
     }
     Ok(())
 }
 
-fn maven_declared_modules(pom: &Path) -> Result<Vec<String>, String> {
+struct MavenModuleDeclarations {
+    unconditional: Vec<String>,
+    profile_defined: bool,
+}
+
+fn maven_declared_modules(pom: &Path) -> Result<MavenModuleDeclarations, String> {
     let xml = fs::read_to_string(pom).map_err(|error| error.to_string())?;
     let mut reader = Reader::from_str(&xml);
     reader.config_mut().trim_text(true);
     let mut elements: Vec<String> = Vec::new();
     let mut module_value: Option<String> = None;
     let mut modules = Vec::new();
+    let mut profile_defined = false;
     loop {
         match reader.read_event() {
             Ok(Event::Start(element)) => {
                 let name = String::from_utf8_lossy(element.name().as_ref()).into_owned();
-                if name == "profile" {
-                    return Err("Maven profiles are unsupported for module metadata".into());
-                }
                 if name == "module" && elements.as_slice() == ["project", "modules"] {
                     module_value = Some(String::new());
+                } else if name == "module"
+                    && elements.as_slice() == ["project", "profiles", "profile", "modules"]
+                {
+                    profile_defined = true;
                 } else if module_value.is_some() {
                     return Err("Maven module declaration has nested content".into());
                 }
@@ -210,7 +257,12 @@ fn maven_declared_modules(pom: &Path) -> Result<Vec<String>, String> {
                 }
                 elements.pop();
             }
-            Ok(Event::Eof) => return Ok(modules),
+            Ok(Event::Eof) => {
+                return Ok(MavenModuleDeclarations {
+                    unconditional: modules,
+                    profile_defined,
+                });
+            }
             Err(error) => return Err(format!("unable to parse Maven POM: {error}")),
             _ => {}
         }
@@ -376,6 +428,41 @@ mod tests {
             root
         );
         assert!(catalog.diagnostic().is_none());
+    }
+
+    #[test]
+    fn maven_catalog_retains_unconditional_modules_when_profiles_are_present() {
+        let directory = tempfile::tempdir().expect("temporary project root exists");
+        let root = directory.path().canonicalize().expect("root canonicalizes");
+        write_pom(
+            &root,
+            "<modules><module>orders</module></modules><profiles><profile><modules><module>experimental</module></modules></profile></profiles><build><plugins><plugin><modules><module>ignored</module></modules></plugin></plugins></build>",
+        );
+        write_pom(
+            &root.join("orders"),
+            "<modules><module>billing</module></modules><profiles><profile><modules><module>orders-experimental</module></modules></profile></profiles>",
+        );
+        write_pom(&root.join("orders/billing"), "");
+        write_pom(&root.join("orders/orders-experimental"), "");
+        write_pom(&root.join("experimental"), "");
+        write_pom(&root.join("ignored"), "");
+
+        let catalog = ModuleCatalog::load(&root);
+
+        assert_eq!(
+            catalog.owner_for("orders/billing/src/main/java/example/Billing.java"),
+            root.join("orders/billing")
+        );
+        assert_eq!(
+            catalog.owner_for("experimental/src/main/java/example/Experiment.java"),
+            root
+        );
+        assert!(
+            catalog
+                .diagnostic()
+                .is_some_and(|diagnostic| diagnostic.contains("profile"))
+        );
+        assert!(!catalog.is_complete());
     }
 
     #[test]
