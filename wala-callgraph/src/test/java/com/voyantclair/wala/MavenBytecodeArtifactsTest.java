@@ -39,6 +39,9 @@ class MavenBytecodeArtifactsTest {
                 .getParent()
                 .resolve("target/failsafe-reports")),
         "WALA preparation must not run Failsafe integration tests");
+    assertFalse(
+        Files.exists(sourceRoot.getParent().getParent().getParent().resolve("target/wala-m2")),
+        "WALA preparation must reuse Maven's configured repository");
   }
 
   @Test
