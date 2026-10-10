@@ -1,13 +1,13 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use cli::get_java_code_elements_for_modules_with_progress;
+use cli::get_java_callables_for_modules_with_progress;
 use extractor_runtime::{
-    call_graph::{resolve_edges, wala::WalaJavaProvider},
+    call_graph::{resolve_edges_with_java_tests, wala::WalaJavaProvider},
     impact::{ModuleCatalog, analyze_changes, discover_java_tests, select_tests},
 };
 use models::{ChangedElement, TestImpactResult};
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
     process::Command,
@@ -61,9 +61,8 @@ fn run(arguments: Arguments) -> Result<()> {
     validate_wala_adapter(&arguments)?;
     let modules = changed_modules(&changes);
     let extraction_started = Instant::now();
-    let aggregate = get_java_code_elements_for_modules_with_progress(
+    let callables = get_java_callables_for_modules_with_progress(
         &modules.iter().map(PathBuf::from).collect::<Vec<_>>(),
-        &HashMap::new(),
         !arguments.quiet,
     )
     .context("Unable to extract source callables for call-graph resolution")?;
@@ -80,8 +79,7 @@ fn run(arguments: Arguments) -> Result<()> {
 
     for module in modules {
         let module_changes = changes_for_module(&changes, &module);
-        let module_result =
-            analyze_module(&provider, &module, module_changes, &aggregate.callables);
+        let module_result = analyze_module(&provider, &module, module_changes, &callables);
         selected_tests.extend(module_result.selected_tests);
         unselected_tests.extend(module_result.unselected_tests);
         diagnostics.extend(module_result.diagnostics);
@@ -187,7 +185,8 @@ fn analyze_module(
     let wala_started = Instant::now();
     let mut outcome = provider.analyze_test_roots(&source_root, &tests);
     let resolution_started = Instant::now();
-    let (resolved_edges, resolution_diagnostics) = resolve_edges(&outcome, module_path, callables);
+    let (resolved_edges, resolution_diagnostics) =
+        resolve_edges_with_java_tests(&outcome, module_path, callables, &tests);
     outcome.diagnostics.extend(resolution_diagnostics);
     let selection_started = Instant::now();
     let mut result = select_tests(changes, tests, outcome, resolved_edges);

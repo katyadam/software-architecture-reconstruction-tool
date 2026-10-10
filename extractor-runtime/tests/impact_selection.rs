@@ -62,6 +62,34 @@ fn selects_only_the_test_that_reaches_a_changed_callable() {
 }
 
 #[test]
+fn uses_fully_qualified_jvm_test_identity_to_avoid_cross_package_selection() {
+    let first = JavaTestCase {
+        class_name: "Lfirst/ServiceTest".into(),
+        source_path: "src/test/java/first/ServiceTest.java".into(),
+        ..test_case("Service")
+    };
+    let second = JavaTestCase {
+        class_name: "Lsecond/ServiceTest".into(),
+        source_path: "src/test/java/second/ServiceTest.java".into(),
+        ..test_case("Service")
+    };
+
+    let result = select_tests(
+        vec![callable_change()],
+        vec![first.clone(), second.clone()],
+        successful_outcome(),
+        vec![ResolvedCallEdge {
+            source_id: "Lfirst/ServiceTest#coversChange()V".into(),
+            target_id: "class:OrderService/void changed()".into(),
+        }],
+    );
+
+    assert_eq!(result.selected_tests.len(), 1);
+    assert_eq!(result.selected_tests[0].test, first);
+    assert_eq!(result.unselected_tests, vec![second]);
+}
+
+#[test]
 fn falls_back_to_every_module_test_for_module_changes_and_analysis_uncertainty() {
     let first = test_case("OrderService");
     let second = test_case("Inventory");
