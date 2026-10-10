@@ -21,11 +21,12 @@ public final class MavenBytecodeArtifacts implements BytecodeArtifactPreparer {
     Path moduleRoot = modulePom.getParent();
     Path reactorPom = findReactorPom(modulePom);
     String selector = reactorPom.getParent().relativize(moduleRoot).toString();
+    String localRepository = "-Dmaven.repo.local=" + reactorPom.getParent().resolve("target/wala-m2");
     var build =
         runMaven(
             reactorPom,
             List.of(
-                "-pl", selector, "-am", "test-compile", "jar:jar", "install:install", "-DskipTests"));
+                "-pl", selector, "-am", "test-compile", "jar:jar", "install:install", "-DskipTests", localRepository));
     if (build.exitCode() != 0) {
       return failure(build.output());
     }
@@ -35,7 +36,8 @@ public final class MavenBytecodeArtifacts implements BytecodeArtifactPreparer {
             List.of(
                 "-DincludeScope=test",
                 "dependency:build-classpath",
-                "-Dmdep.outputFile=target/wala-classpath.txt"));
+                "-Dmdep.outputFile=target/wala-classpath.txt",
+                localRepository));
     if (classpath.exitCode() != 0) {
       return failure(classpath.output());
     }
