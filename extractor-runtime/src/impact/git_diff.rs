@@ -46,7 +46,7 @@ pub fn analyze_changes(
         if status.kind == 'M' || status.kind == 'A' {
             if status.candidate_path.ends_with(".java") {
                 let ranges = candidate_ranges(&patch, &status.candidate_path);
-                if !ranges.is_empty() {
+                if !ranges.is_empty() && catalog.can_narrow_source(&status.candidate_path) {
                     for range in ranges {
                         changes.extend(map_java_range(
                             project_root,

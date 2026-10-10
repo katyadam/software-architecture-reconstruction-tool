@@ -10,6 +10,9 @@ pub(super) fn map_java_range(
     source_path: &str,
     range: RangeInclusive<usize>,
 ) -> Result<Vec<ChangedElement>, ImpactError> {
+    if !catalog.can_narrow_source(source_path) {
+        return Ok(Vec::new());
+    }
     let code = std::fs::read_to_string(project_root.join(source_path))
         .map_err(|error| ImpactError::Source(error.to_string()))?;
     let mut parser = Parser::new();
