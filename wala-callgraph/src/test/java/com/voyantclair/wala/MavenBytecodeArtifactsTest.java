@@ -67,6 +67,7 @@ class MavenBytecodeArtifactsTest {
     writeModulePom(root.resolve("base"), "base", version, null);
     writeModulePom(root.resolve("service"), "service", version, "base");
     writeJava(root.resolve("base/src/main/java/fixture/Base.java"), "package fixture; public class Base { public static void work() {} }");
+    writeJava(root.resolve("base/src/test/java/fixture/BaseFixture.java"), "package fixture; public class BaseFixture {}");
     writeJava(root.resolve("service/src/main/java/fixture/Main.java"), "package fixture; public class Main { public static void main(String[] args) { Base.work(); } }");
     writeJava(root.resolve("service/src/test/java/fixture/MainTest.java"), "package fixture; public class MainTest { public void testMain() { Main.main(new String[0]); } }");
     writeJava(
@@ -87,7 +88,11 @@ class MavenBytecodeArtifactsTest {
                     + dependency
                     + "</artifactId><version>"
                     + version
-                    + "</version></dependency>")
+                    + "</version></dependency><dependency><groupId>fixture</groupId><artifactId>"
+                    + dependency
+                    + "</artifactId><version>"
+                    + version
+                    + "</version><classifier>tests</classifier><scope>test</scope></dependency>")
             + "<dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.11.4</version><scope>test</scope></dependency></dependencies>";
     Files.writeString(
         module.resolve("pom.xml"),
