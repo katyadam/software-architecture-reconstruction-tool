@@ -58,22 +58,21 @@ impl WalaJavaProvider {
         let output = child
             .and_then(|child| wait_for_output(child, self.timeout).map_err(std::io::Error::other));
         match output {
-            Ok(output) if output.status.success() => {
-                match serde_json::from_slice::<CallGraphOutcome>(&output.stdout) {
-                    Ok(result)
-                        if result.schema_version == 1
-                            && result.status != CallGraphStatus::Failed =>
-                    {
-                        result
-                    }
-                    Ok(_) | Err(_) => failed(request, "WALA produced invalid call-graph JSON"),
-                }
-            }
+            Ok(output) if output.status.success() => parse_adapter_output(request, &output.stdout),
             Ok(output) => failed(request, &String::from_utf8_lossy(&output.stderr)),
             Err(error) => failed(request, &error.to_string()),
         }
     }
 }
+
+/// Accepts versioned adapter outcomes, including structured failures with actionable diagnostics.
+fn parse_adapter_output(request: &CallGraphRequest, output: &[u8]) -> CallGraphOutcome {
+    match serde_json::from_slice::<CallGraphOutcome>(output) {
+        Ok(result) if result.schema_version == 1 => result,
+        Ok(_) | Err(_) => failed(request, "WALA produced invalid call-graph JSON"),
+    }
+}
+
 impl CallGraphProvider for WalaJavaProvider {
     /// Declares that this adapter accepts Java source code.
     fn language(&self) -> Language {
@@ -182,8 +181,13 @@ fn failed(request: &CallGraphRequest, diagnostic: &str) -> CallGraphOutcome {
 
 #[cfg(test)]
 mod tests {
-    use super::{isolate_process_group, test_root_arguments, wait_for_output};
-    use models::JavaTestCase;
+    use super::{
+        isolate_process_group, parse_adapter_output, test_root_arguments, wait_for_output,
+    };
+    use models::{
+        JavaTestCase,
+        call_graph::{CallGraphRequest, CallGraphStatus, Language},
+    };
     use std::{
         path::Path,
         process::Command,
@@ -303,5 +307,34 @@ mod tests {
                 "Lexample/ServiceTest#changesService()V".to_owned(),
             ]
         );
+    }
+
+    #[test]
+    fn preserves_diagnostics_from_a_valid_failed_adapter_outcome() {
+        let request = CallGraphRequest::new("/service", Language::Java);
+        let result = parse_adapter_output(
+            &request,
+            br#"{"schema_version":1,"status":"failed","provider_id":"wala-java","source_root":"/service","algorithm":"cha_bytecode","diagnostics":["test_root_preparation_failed=Gradle failed"],"edges":[]}"#,
+        );
+
+        assert_eq!(result.status, CallGraphStatus::Failed);
+        assert_eq!(
+            result.diagnostics,
+            vec!["test_root_preparation_failed=Gradle failed"]
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_and_unsupported_version_adapter_output() {
+        let request = CallGraphRequest::new("/service", Language::Java);
+        for output in [
+            br#"not json"#.as_slice(),
+            br#"{"schema_version":2,"status":"failed","provider_id":"wala-java","source_root":"/service","algorithm":"cha_bytecode","diagnostics":["future schema"],"edges":[]}"#
+                .as_slice(),
+        ] {
+            let result = parse_adapter_output(&request, output);
+            assert_eq!(result.status, CallGraphStatus::Failed);
+            assert_eq!(result.diagnostics, vec!["WALA produced invalid call-graph JSON"]);
+        }
     }
 }
