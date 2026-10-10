@@ -25,7 +25,14 @@ public final class MavenBytecodeArtifacts implements BytecodeArtifactPreparer {
         runMaven(
             reactorPom,
             List.of(
-                "-pl", selector, "-am", "test-compile", "jar:jar", "install:install", "-DskipTests"));
+                "-pl",
+                selector,
+                "-am",
+                "test-compile",
+                "jar:jar",
+                "jar:test-jar",
+                "install:install",
+                "-DskipTests"));
     if (build.exitCode() != 0) {
       return failure(build.output());
     }
