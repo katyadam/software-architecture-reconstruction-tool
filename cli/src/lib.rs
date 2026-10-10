@@ -21,7 +21,63 @@ pub fn get_all_code_elements_with_progress(
     external_constants: &HashMap<String, String>,
     report_progress: bool,
 ) -> Result<CodeElementsAggregate> {
-    let paths = collect_files(project_dir)?;
+    get_code_elements_with_progress(project_dir, external_constants, report_progress, |_| true)
+}
+
+/// Extracts Java code elements while optionally reporting per-file progress to stdout.
+pub fn get_java_code_elements_with_progress(
+    project_dir: &PathBuf,
+    external_constants: &HashMap<String, String>,
+    report_progress: bool,
+) -> Result<CodeElementsAggregate> {
+    get_code_elements_with_progress(project_dir, external_constants, report_progress, |path| {
+        path.extension()
+            .is_some_and(|extension| extension == "java")
+    })
+}
+
+/// Extracts Java code elements from the affected module roots only.
+pub fn get_java_code_elements_for_modules_with_progress(
+    module_roots: &[PathBuf],
+    external_constants: &HashMap<String, String>,
+    report_progress: bool,
+) -> Result<CodeElementsAggregate> {
+    let mut roots: Vec<_> = module_roots.iter().cloned().collect();
+    roots.sort();
+    roots.dedup();
+
+    let mut paths = roots
+        .into_iter()
+        .try_fold(Vec::new(), |mut paths, module_root| {
+            paths.extend(collect_files(&module_root)?.into_iter().filter(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == "java")
+            }));
+            Ok::<_, anyhow::Error>(paths)
+        })?;
+    paths.sort();
+    paths.dedup();
+    get_code_elements_from_paths_with_progress(paths, external_constants, report_progress)
+}
+
+fn get_code_elements_with_progress(
+    project_dir: &PathBuf,
+    external_constants: &HashMap<String, String>,
+    report_progress: bool,
+    include_path: impl Fn(&std::path::Path) -> bool,
+) -> Result<CodeElementsAggregate> {
+    let paths: Vec<_> = collect_files(project_dir)?
+        .into_iter()
+        .filter(|path| include_path(path))
+        .collect();
+    get_code_elements_from_paths_with_progress(paths, external_constants, report_progress)
+}
+
+fn get_code_elements_from_paths_with_progress(
+    paths: Vec<PathBuf>,
+    external_constants: &HashMap<String, String>,
+    report_progress: bool,
+) -> Result<CodeElementsAggregate> {
     let files_to_process = paths.len();
     if report_progress {
         println!("Total files found: {files_to_process}");
@@ -118,4 +174,118 @@ pub fn collect_files(dir: &PathBuf) -> Result<Vec<PathBuf>> {
         }
     }
     Ok(results)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        get_all_code_elements_with_progress, get_java_code_elements_for_modules_with_progress,
+        get_java_code_elements_with_progress,
+    };
+    use std::{collections::HashMap, fs, path::Path};
+
+    #[test]
+    fn java_extraction_ignores_non_java_and_binary_project_files() {
+        let project = tempfile::tempdir().expect("temporary project directory");
+        let source = project.path().join("src/main/java/example/Service.java");
+        fs::create_dir_all(source.parent().expect("source directory"))
+            .expect("source directory writes");
+        fs::write(
+            &source,
+            "package example; public class Service { public void run() {} }",
+        )
+        .expect("Java source writes");
+        fs::write(project.path().join("notes.txt"), "not Java").expect("text file writes");
+        fs::write(project.path().join("image.bin"), [0, 159, 146, 150])
+            .expect("binary file writes");
+        let python = project.path().join("helper.py");
+        fs::write(&python, "def helper():\n    return 1\n").expect("Python source writes");
+
+        let aggregate = get_java_code_elements_with_progress(
+            &project.path().to_path_buf(),
+            &HashMap::new(),
+            false,
+        )
+        .expect("Java extraction succeeds");
+
+        assert!(
+            aggregate
+                .callables
+                .iter()
+                .any(|callable| callable.file_path == source.to_string_lossy()),
+            "expected Java callable, got {:?}",
+            aggregate.callables
+        );
+        assert!(
+            aggregate
+                .callables
+                .iter()
+                .all(|callable| callable.file_path != python.to_string_lossy())
+        );
+
+        let all_languages = get_all_code_elements_with_progress(
+            &project.path().to_path_buf(),
+            &HashMap::new(),
+            false,
+        )
+        .expect("general extraction succeeds");
+        assert!(
+            all_languages
+                .callables
+                .iter()
+                .any(|callable| callable.file_path == python.to_string_lossy())
+        );
+    }
+
+    #[test]
+    fn module_java_extraction_ignores_unaffected_java_modules() {
+        let project = tempfile::tempdir().expect("temporary project directory");
+        let changed_module = project.path().join("changed");
+        let changed_source = changed_module.join("src/main/java/example/Changed.java");
+        let unaffected_source = project
+            .path()
+            .join("unaffected/src/main/java/example/Unchanged.java");
+        write_java_source(
+            &changed_source,
+            "package example; public class Changed { public void run() {} }",
+        );
+        write_java_source(
+            &unaffected_source,
+            "package example; public class Unchanged { public void run() {} }",
+        );
+
+        let aggregate = get_java_code_elements_for_modules_with_progress(
+            &[changed_module.clone(), changed_module],
+            &HashMap::new(),
+            false,
+        )
+        .expect("module Java extraction succeeds");
+        assert!(
+            aggregate
+                .callables
+                .iter()
+                .any(|callable| callable.file_path == changed_source.to_string_lossy())
+        );
+        assert!(
+            !aggregate
+                .callables
+                .iter()
+                .any(|callable| callable.file_path == unaffected_source.to_string_lossy())
+        );
+        assert_eq!(
+            aggregate
+                .callables
+                .iter()
+                .filter(|callable| callable.file_path == changed_source.to_string_lossy())
+                .count(),
+            1,
+            "duplicate module roots must not duplicate callables"
+        );
+    }
+
+    fn write_java_source(path: &Path, source: &str) {
+        fs::create_dir_all(path.parent().expect("source directory"))
+            .expect("source directory writes");
+        fs::write(path, source).expect("Java source writes");
+    }
 }
