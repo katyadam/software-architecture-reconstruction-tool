@@ -147,6 +147,21 @@ cargo run -p cli --release -- \
     --llm
 ```
 
+### Using a Hosted Provider (e.g. Groq)
+
+Any OpenAI-compatible endpoint works. Set `LLM_API_KEY` (defaults to `ollama` when unset):
+
+```bash
+LLM_API_KEY=gsk_... cargo run -p cli --release -- \
+    -p /butler/empaia \
+    -c ./config/configurations/local-empaia-config.json \
+    -o ./output-empaia \
+    --scrape \
+    --llm \
+    --llm-url https://api.groq.com/openai/v1 \
+    --llm-model openai/gpt-oss-120b
+```
+
 Responses below the confidence threshold or with no supporting evidence are rejected with a typed `SageError`. See `sage/src/response.rs` for the full error taxonomy.
 
 ---

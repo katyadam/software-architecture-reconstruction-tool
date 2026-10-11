@@ -25,10 +25,12 @@ pub struct SageClient {
 
 impl SageClient {
     /// Create a client pointing at `base_url` (e.g. `"http://localhost:11434/v1"`).
+    /// The API key comes from `LLM_API_KEY`, falling back to `"ollama"` for local Ollama.
     pub fn new(base_url: &str, model: &str) -> Self {
+        let api_key = std::env::var("LLM_API_KEY").unwrap_or_else(|_| "ollama".to_string());
         let config = OpenAIConfig::new()
             .with_api_base(base_url)
-            .with_api_key("ollama");
+            .with_api_key(api_key);
         Self {
             client: Client::with_config(config),
             model: model.to_string(),
@@ -62,14 +64,14 @@ impl SageClient {
             .build()
             .map_err(SageError::Network)?;
 
-        let response = self.client.chat().create(request).await?;
+        // Untyped response: providers add fields async-openai rejects
+        // (e.g. Groq's `service_tier: "on_demand"`).
+        let response: serde_json::Value = self.client.chat().create_byot(request).await?;
 
-        let text = response
-            .choices
-            .into_iter()
-            .next()
-            .and_then(|c| c.message.content)
-            .unwrap_or_default();
+        let text = response["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
 
         let grounding = context_grounding_string(&query.context);
 
