@@ -203,6 +203,7 @@ fn residual_call_state(
             .and_then(|span| read_span(&rc.file_path, span)),
         imports: file.map_or_else(Vec::new, |f| f.imports.iter().map(render_import).collect()),
         file: relative_file(&rc.file_path, config),
+        facts: vec![],
     }
 }
 

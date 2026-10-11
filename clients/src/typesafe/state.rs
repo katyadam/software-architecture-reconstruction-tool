@@ -29,6 +29,9 @@ pub struct ResidualCallState {
     pub imports: Vec<String>,
     /// Source file path, relative to the project root.
     pub file: String,
+    /// Facts DDFA acquired, in fetch order; omitted when empty.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub facts: Vec<Fact>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -46,6 +49,17 @@ pub struct Enclosing {
     pub function: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub class: Option<String>,
+}
+
+/// One fact DDFA acquired for a residual.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Fact {
+    /// Option id that fetched it, e.g. `open:wbs/settings.py#settings`.
+    pub action: String,
+    /// Language of the origin file, e.g. `Python`.
+    pub language: String,
+    /// Rendered fact, at most 40 lines.
+    pub body: String,
 }
 
 #[cfg(test)]
@@ -72,11 +86,38 @@ mod tests {
             snippet: Some("def get(self, url: str):\n    return self._client.get(url)".to_string()),
             imports: vec!["httpx".to_string()],
             file: "wbs/clients/mds.py".to_string(),
+            facts: vec![],
         };
         let json = serde_json::to_string(&state).expect("serializable");
         assert_eq!(
             json,
             r#"{"call":"self._client.get(url)","receiver":{"expr":"self._client"},"residual":"self._mds_url + url","operand_bindings":{"self._mds_url":"settings.mds_url","url":"parameter: url: str"},"enclosing":{"function":"get(self, url: str)","class":"MdsClient"},"snippet":"def get(self, url: str):\n    return self._client.get(url)","imports":["httpx"],"file":"wbs/clients/mds.py"}"#
         );
+    }
+
+    #[test]
+    fn serializes_facts_last_when_present() {
+        let state = ResidualCallState {
+            call: "get(u)".to_string(),
+            receiver: None,
+            residual: "u".to_string(),
+            operand_bindings: BTreeMap::new(),
+            enclosing: Enclosing {
+                function: "f()".to_string(),
+                class: None,
+            },
+            snippet: None,
+            imports: vec![],
+            file: "a.py".to_string(),
+            facts: vec![Fact {
+                action: "define:u".to_string(),
+                language: "Python".to_string(),
+                body: "u = BASE".to_string(),
+            }],
+        };
+        let json = serde_json::to_string(&state).expect("serializable");
+        assert!(json.ends_with(
+            r#""file":"a.py","facts":[{"action":"define:u","language":"Python","body":"u = BASE"}]}"#
+        ));
     }
 }
