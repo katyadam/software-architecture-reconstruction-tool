@@ -23,4 +23,10 @@ pub enum TypeSafeError {
 
     #[error("TypeSafe returned {status}: {body}")]
     Status { status: u16, body: String },
+
+    #[error(
+        "Choice has {got} options, TypeSafe allows {}",
+        crate::typesafe::question::MAX_CHOICE_OPTIONS
+    )]
+    TooManyOptions { got: usize },
 }

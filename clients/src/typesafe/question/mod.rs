@@ -2,8 +2,12 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
-pub mod residual;
+use crate::error::TypeSafeError;
 
+pub mod residual;
+pub mod resolve;
+
+pub const MAX_CHOICE_OPTIONS: usize = 255;
 /// One entry of the request `questions` map. See https://docs.typesafe.ai/api.md
 ///
 /// The API also accepts objects/arrays for instructions and criteria; plain
@@ -28,6 +32,29 @@ pub enum Question {
         instructions: String,
         criteria: Vec<String>,
     },
+}
+
+impl Question {
+    fn choice(
+        instructions: &str,
+        options: impl IntoIterator<Item = (String, String)>,
+    ) -> Result<Self, TypeSafeError> {
+        let criteria: BTreeMap<String, Option<String>> = options
+            .into_iter()
+            .map(|(id, desc)| (id, Some(desc)))
+            .collect();
+
+        if criteria.len() > MAX_CHOICE_OPTIONS {
+            return Err(TypeSafeError::TooManyOptions {
+                got: criteria.len(),
+            });
+        }
+
+        Ok(Question::Choice {
+            instructions: instructions.to_string(),
+            criteria,
+        })
+    }
 }
 
 /// What a yes / a no means.
@@ -86,5 +113,21 @@ mod tests {
             serde_json::to_value(&score).expect("serializable"),
             json!({ "type": "score", "instructions": "How frustrated?", "criteria": ["Calm", "Very angry"] })
         );
+    }
+
+    #[test]
+    fn choice_takes_all_options_or_errors() {
+        let opts = |n: usize| (0..n).map(|i| (format!("o{i}"), format!("option {i}")));
+        let Ok(Question::Choice { criteria, .. }) =
+            Question::choice("Pick", opts(MAX_CHOICE_OPTIONS))
+        else {
+            panic!("255 options fit")
+        };
+        assert_eq!(criteria.len(), MAX_CHOICE_OPTIONS);
+        assert_eq!(criteria["o0"].as_deref(), Some("option 0"));
+        assert!(matches!(
+            Question::choice("Pick", opts(MAX_CHOICE_OPTIONS + 1)),
+            Err(TypeSafeError::TooManyOptions { got: 256 })
+        ));
     }
 }
