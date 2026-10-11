@@ -111,6 +111,12 @@ Defaults are first guesses; the measurement tunes them.
 Jev HTTP error, missing origin file, no candidate service, no TypeSafe
 client -> residual stays unresolved, run continues, `warn!`.
 
+Choice limit (255 options, API): `Question::choice` never truncates; above
+the limit it errors. Actions are ranked, so `available()` keeps the best 254
+(+ `stop`). Services are answers, never dropped: more than 254 (+ `none`)
+-> `TooManyOptions` -> residual unresolved, `warn!`. Benchmarks today: empaia
+16, train-ticket 46. Tournament over service chunks when a benchmark exceeds.
+
 ### CLI
 
 `--resolver matcher|sage|once|acquire` (default `sage` until Sage is
