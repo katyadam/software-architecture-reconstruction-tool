@@ -34,8 +34,9 @@ pub fn resolve_edges_with_java_tests(
                 source_id,
                 target_id,
             }),
-            _ => diagnostics
+            _ if diagnostics.is_empty() => diagnostics
                 .push("WALA edge could not be mapped uniquely to source callables".into()),
+            _ => {}
         }
     }
     (edges, diagnostics)
