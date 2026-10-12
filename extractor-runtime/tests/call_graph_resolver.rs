@@ -162,5 +162,86 @@ fn does_not_resolve_a_test_from_a_sibling_module_with_a_shared_string_prefix() {
     );
 
     assert!(edges.is_empty());
-    assert_eq!(diagnostics.len(), 1);
+    assert!(diagnostics.is_empty());
+}
+
+#[test]
+fn ignores_edges_to_external_classes_without_causing_selection_uncertainty() {
+    let method = |class: &str, member_name: &str| MethodRef {
+        language: Language::Java,
+        declaring_type: format!("L{class}"),
+        member_name: member_name.into(),
+        descriptor: "()V".into(),
+        source_path: None,
+        source_line: None,
+    };
+    let outcome = CallGraphOutcome {
+        schema_version: 1,
+        status: CallGraphStatus::Ok,
+        provider_id: "wala-java".into(),
+        source_root: "/service".into(),
+        algorithm: "x".into(),
+        diagnostics: vec![],
+        edges: vec![RawCallEdge {
+            caller: method("fixture/Service", "run"),
+            callee: method("java/util/List", "size"),
+            provider_id: "wala-java".into(),
+            algorithm: "x".into(),
+            confidence: None,
+        }],
+    };
+
+    let (edges, diagnostics) = resolve_edges(
+        &outcome,
+        std::path::Path::new("/service"),
+        &[callable(
+            "Service",
+            "/service/src/main/java/fixture/Service.java",
+        )],
+    );
+
+    assert!(edges.is_empty());
+    assert!(diagnostics.is_empty());
+}
+
+#[test]
+fn reports_ambiguous_module_methods_as_selection_uncertainty() {
+    let method = |class: &str| MethodRef {
+        language: Language::Java,
+        declaring_type: format!("L{class}"),
+        member_name: "run".into(),
+        descriptor: "()V".into(),
+        source_path: None,
+        source_line: None,
+    };
+    let outcome = CallGraphOutcome {
+        schema_version: 1,
+        status: CallGraphStatus::Ok,
+        provider_id: "wala-java".into(),
+        source_root: "/service".into(),
+        algorithm: "x".into(),
+        diagnostics: vec![],
+        edges: vec![RawCallEdge {
+            caller: method("A"),
+            callee: method("B"),
+            provider_id: "wala-java".into(),
+            algorithm: "x".into(),
+            confidence: None,
+        }],
+    };
+
+    let (_, diagnostics) = resolve_edges(
+        &outcome,
+        std::path::Path::new("/service"),
+        &[
+            callable("A", "/service/A.java"),
+            callable_named("B", "run", "/service/B.java"),
+            callable_named("B", "run", "/service/B.java"),
+        ],
+    );
+
+    assert_eq!(
+        diagnostics,
+        vec!["WALA edge could not be mapped uniquely to source callables"]
+    );
 }

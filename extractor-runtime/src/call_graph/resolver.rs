@@ -24,22 +24,42 @@ pub fn resolve_edges_with_java_tests(
     let mut edges = vec![];
     let mut diagnostics = vec![];
     for edge in &outcome.edges {
-        match (
-            resolve_java_test(&edge.caller, root, tests)
-                .or_else(|| resolve(&edge.caller, root, callables)),
-            resolve_java_test(&edge.callee, root, tests)
-                .or_else(|| resolve(&edge.callee, root, callables)),
-        ) {
+        let caller = resolve_java_test(&edge.caller, root, tests)
+            .or_else(|| resolve(&edge.caller, root, callables));
+        let callee = resolve_java_test(&edge.callee, root, tests)
+            .or_else(|| resolve(&edge.callee, root, callables));
+        let unresolved_source_endpoint = (caller.is_none()
+            && belongs_to_source(&edge.caller, root, callables))
+            || (callee.is_none() && belongs_to_source(&edge.callee, root, callables));
+        match (caller, callee) {
             (Some(source_id), Some(target_id)) => edges.push(ResolvedCallEdge {
                 source_id,
                 target_id,
             }),
-            _ if diagnostics.is_empty() => diagnostics
+            _ if diagnostics.is_empty() && unresolved_source_endpoint => diagnostics
                 .push("WALA edge could not be mapped uniquely to source callables".into()),
             _ => {}
         }
     }
     (edges, diagnostics)
+}
+
+/// Identifies references whose declaring class exists in the analyzed source scope.
+fn belongs_to_source(method: &MethodRef, root: &Path, callables: &[Callable]) -> bool {
+    let Some(class) = method
+        .declaring_type
+        .trim_start_matches('L')
+        .rsplit('/')
+        .next()
+    else {
+        return false;
+    };
+    callables.iter().any(|callable| {
+        callable
+            .file_path
+            .starts_with(root.to_str().unwrap_or_default())
+            && matches!(&callable.namespace, Namespace::Class(name) if name == class)
+    })
 }
 
 /// Resolves a WALA test entrypoint without parsing its source file into a callable.
