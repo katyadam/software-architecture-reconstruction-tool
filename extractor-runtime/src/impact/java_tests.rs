@@ -286,11 +286,27 @@ fn java_type_descriptor(value: &str, imports: &HashMap<String, String>) -> Optio
         value if !value.is_empty() => {
             let value = value.split('<').next()?;
             let qualified = imports.get(value).map(String::as_str).unwrap_or(value);
-            format!("L{};", qualified.replace('.', "/"))
+            format!("L{};", jvm_type_path(qualified))
         }
         _ => return None,
     };
     Some(format!("{}{}", "[".repeat(arrays), descriptor))
+}
+
+/// Converts an imported Java type to a JVM path, including nested-class `$` separators.
+fn jvm_type_path(value: &str) -> String {
+    let segments: Vec<_> = value.split('.').collect();
+    let class_start = segments
+        .iter()
+        .position(|segment| segment.chars().next().is_some_and(char::is_uppercase));
+    match class_start {
+        Some(index) => format!(
+            "{}/{}",
+            segments[..index].join("/"),
+            segments[index..].join("$")
+        ),
+        None => segments.join("/"),
+    }
 }
 
 /// Maps explicit Java imports by their local simple name for descriptor resolution.
