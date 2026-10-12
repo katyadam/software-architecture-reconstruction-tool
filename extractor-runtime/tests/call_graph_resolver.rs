@@ -131,13 +131,16 @@ fn does_not_resolve_a_test_from_a_sibling_module_with_a_shared_string_prefix() {
         source_root: "/repo/orders".into(),
         algorithm: "x".into(),
         diagnostics: vec![],
-        edges: vec![RawCallEdge {
-            caller: method("fixture/ServiceTest", "coversChanged"),
-            callee: method("fixture/Service", "run"),
-            provider_id: "wala-java".into(),
-            algorithm: "x".into(),
-            confidence: None,
-        }],
+        edges: vec![
+            RawCallEdge {
+                caller: method("fixture/ServiceTest", "coversChanged"),
+                callee: method("fixture/Service", "run"),
+                provider_id: "wala-java".into(),
+                algorithm: "x".into(),
+                confidence: None,
+            };
+            2
+        ],
     };
     let tests = vec![JavaTestCase {
         module_root: "/repo/orders2".into(),
