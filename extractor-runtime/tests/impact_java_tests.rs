@@ -62,8 +62,9 @@ fn resolves_imported_parameter_types_in_junit_descriptors() {
             package example;
             import org.junit.jupiter.api.Test;
             import io.debezium.connector.jdbc.SinkRecordFactory;
+            import io.debezium.connector.jdbc.junit.jupiter.PostgresInsertModeArgumentsProvider.PostgresInsertMode;
             class ImportedTypeTest {
-              @Test void covers(SinkRecordFactory factory) {}
+              @Test void covers(SinkRecordFactory factory, PostgresInsertMode insertMode) {}
             }
         "#,
     );
@@ -73,7 +74,7 @@ fn resolves_imported_parameter_types_in_junit_descriptors() {
     assert!(tests.iter().any(|test| {
         test.class_name == "Lexample/ImportedTypeTest"
             && test.method_name == "covers"
-            && test.descriptor == "(Lio/debezium/connector/jdbc/SinkRecordFactory;)V"
+            && test.descriptor == "(Lio/debezium/connector/jdbc/SinkRecordFactory;Lio/debezium/connector/jdbc/junit/jupiter/PostgresInsertModeArgumentsProvider$PostgresInsertMode;)V"
     }));
 }
 
