@@ -52,6 +52,31 @@ fn discovers_junit_entrypoints_and_preserves_overload_descriptors() {
     assert!(tests.iter().all(|test| test.method_name != "helper"));
 }
 
+#[test]
+fn resolves_imported_parameter_types_in_junit_descriptors() {
+    let module = tempfile::tempdir().expect("temporary module is created");
+    write(
+        module.path(),
+        "src/test/java/example/ImportedTypeTest.java",
+        r#"
+            package example;
+            import org.junit.jupiter.api.Test;
+            import io.debezium.connector.jdbc.SinkRecordFactory;
+            class ImportedTypeTest {
+              @Test void covers(SinkRecordFactory factory) {}
+            }
+        "#,
+    );
+
+    let tests = discover_java_tests(module.path()).expect("test methods are discovered");
+
+    assert!(tests.iter().any(|test| {
+        test.class_name == "Lexample/ImportedTypeTest"
+            && test.method_name == "covers"
+            && test.descriptor == "(Lio/debezium/connector/jdbc/SinkRecordFactory;)V"
+    }));
+}
+
 /// Writes one test fixture source file below the temporary Maven module.
 fn write(module_root: &Path, relative_path: &str, content: &str) {
     let path = module_root.join(relative_path);

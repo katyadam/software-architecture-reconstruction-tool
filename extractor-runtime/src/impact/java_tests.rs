@@ -1,6 +1,9 @@
 use super::{ImpactError, ModuleCatalog};
 use models::JavaTestCase;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 use tree_sitter::{Node, Parser};
 
 const TEST_ANNOTATIONS: &[&str] = &["Test", "ParameterizedTest", "RepeatedTest", "TestFactory"];
@@ -97,11 +100,13 @@ fn discover_file(module_root: &Path, source_path: &Path) -> Result<Vec<JavaTestC
         .parse(&source, None)
         .expect("Java source parses into a tree");
     let package = package_name(tree.root_node(), &source);
+    let imports = imported_types(&source);
     let mut tests = Vec::new();
     collect_methods(
         tree.root_node(),
         &source,
         &package,
+        &imports,
         module_root,
         source_path,
         &mut tests,
@@ -114,18 +119,27 @@ fn collect_methods(
     node: Node<'_>,
     source: &str,
     package: &str,
+    imports: &HashMap<String, String>,
     module_root: &Path,
     source_path: &Path,
     tests: &mut Vec<JavaTestCase>,
 ) {
     if node.kind() == "method_declaration" && is_test_method(node, source) {
-        if let Some(test) = test_case(node, source, package, module_root, source_path) {
+        if let Some(test) = test_case(node, source, package, imports, module_root, source_path) {
             tests.push(test);
         }
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect_methods(child, source, package, module_root, source_path, tests);
+        collect_methods(
+            child,
+            source,
+            package,
+            imports,
+            module_root,
+            source_path,
+            tests,
+        );
     }
 }
 
@@ -151,12 +165,13 @@ fn test_case(
     method: Node<'_>,
     source: &str,
     package: &str,
+    imports: &HashMap<String, String>,
     module_root: &Path,
     source_path: &Path,
 ) -> Option<JavaTestCase> {
     let class_name = enclosing_class_name(method, source, package)?;
     let method_name = text(method.child_by_field_name("name")?, source)?.to_owned();
-    let descriptor = method_descriptor(method, source)?;
+    let descriptor = method_descriptor(method, source, imports)?;
     Some(JavaTestCase {
         module_root: module_root.to_string_lossy().into_owned(),
         callable_signature: format!(
@@ -223,7 +238,11 @@ fn enclosing_class_name(method: Node<'_>, source: &str, package: &str) -> Option
 }
 
 /// Converts one Java method declaration to its JVM parameter-and-return descriptor.
-fn method_descriptor(method: Node<'_>, source: &str) -> Option<String> {
+fn method_descriptor(
+    method: Node<'_>,
+    source: &str,
+    imports: &HashMap<String, String>,
+) -> Option<String> {
     let parameters = method.child_by_field_name("parameters")?;
     let mut cursor = parameters.walk();
     let descriptors: Option<Vec<_>> = parameters
@@ -233,18 +252,18 @@ fn method_descriptor(method: Node<'_>, source: &str) -> Option<String> {
             parameter
                 .child_by_field_name("type")
                 .and_then(|node| text(node, source))
-                .and_then(java_type_descriptor)
+                .and_then(|value| java_type_descriptor(value, imports))
         })
         .collect();
     let return_type = method
         .child_by_field_name("type")
         .and_then(|node| text(node, source))
-        .and_then(java_type_descriptor)?;
+        .and_then(|value| java_type_descriptor(value, imports))?;
     Some(format!("({}){return_type}", descriptors?.join("")))
 }
 
 /// Converts a Java source type into a best-effort JVM descriptor for WALA selector matching.
-fn java_type_descriptor(value: &str) -> Option<String> {
+fn java_type_descriptor(value: &str, imports: &HashMap<String, String>) -> Option<String> {
     let value = value.trim();
     let (arrays, base) = value.chars().fold((0, value), |(count, remainder), _| {
         if remainder.ends_with("[]") {
@@ -264,10 +283,26 @@ fn java_type_descriptor(value: &str) -> Option<String> {
         "float" => "F".to_owned(),
         "double" => "D".to_owned(),
         "String" | "java.lang.String" => "Ljava/lang/String;".to_owned(),
-        value if !value.is_empty() => format!("L{};", value.split('<').next()?.replace('.', "/")),
+        value if !value.is_empty() => {
+            let value = value.split('<').next()?;
+            let qualified = imports.get(value).map(String::as_str).unwrap_or(value);
+            format!("L{};", qualified.replace('.', "/"))
+        }
         _ => return None,
     };
     Some(format!("{}{}", "[".repeat(arrays), descriptor))
+}
+
+/// Maps explicit Java imports by their local simple name for descriptor resolution.
+fn imported_types(source: &str) -> HashMap<String, String> {
+    source
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("import "))
+        .map(|value| value.trim_end_matches(';').trim())
+        .filter(|value| !value.ends_with(".*") && !value.starts_with("static "))
+        .filter_map(|value| value.rsplit_once('.').map(|(_, simple)| (simple, value)))
+        .map(|(simple, value)| (simple.to_owned(), value.to_owned()))
+        .collect()
 }
 
 /// Reads source text for one Tree-sitter node.
