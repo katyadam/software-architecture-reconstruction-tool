@@ -368,11 +368,14 @@ fn add_reason(
     }
 }
 
-/// Ignores the normal timing record and treats every other adapter diagnostic as uncertainty.
+/// Ignores normal provider timing records and treats every other adapter diagnostic as uncertainty.
 fn uncertainty_diagnostics(diagnostics: &[String]) -> Vec<String> {
     diagnostics
         .iter()
-        .filter(|diagnostic| !diagnostic.starts_with("analysis_duration_ms="))
+        .filter(|diagnostic| {
+            !diagnostic.starts_with("analysis_duration_ms=")
+                && !diagnostic.starts_with("reachability_duration_ms=")
+        })
         .cloned()
         .collect()
 }
@@ -388,7 +391,9 @@ fn failure_diagnostic(outcome: &CallGraphOutcome) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{callable_signature_matches, graph_signature_matches_test};
+    use super::{
+        callable_signature_matches, graph_signature_matches_test, uncertainty_diagnostics,
+    };
     use models::JavaTestCase;
 
     #[test]
@@ -412,5 +417,16 @@ mod tests {
                 source_path: "test.java".into(),
             }
         ));
+    }
+
+    #[test]
+    fn ignores_provider_duration_diagnostics_when_deciding_uncertainty() {
+        assert!(
+            uncertainty_diagnostics(&[
+                "analysis_duration_ms=12".into(),
+                "reachability_duration_ms=3".into(),
+            ])
+            .is_empty()
+        );
     }
 }

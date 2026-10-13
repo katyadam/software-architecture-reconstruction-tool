@@ -19,6 +19,7 @@ import com.ibm.wala.util.config.PatternsFilter;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.HashSet;
@@ -170,47 +171,100 @@ public final class BytecodeCallGraph {
                 1f));
       }
     }
+    long reachabilityStartedAtNanos = System.nanoTime();
     var reachability = reachability(callGraph, scope, entrypointSelectors);
+    var diagnostics = new ArrayList<>(selectedEntrypoints.diagnostics());
+    diagnostics.add(
+        "reachability_duration_ms="
+            + (System.nanoTime() - reachabilityStartedAtNanos) / 1_000_000);
     return result(
-        "ok", applicationClassDirs, algorithm, selectedEntrypoints.diagnostics(), reachability, edges);
+        "ok", applicationClassDirs, algorithm, diagnostics, reachability, edges);
   }
 
   /** Computes test-root provenance through all WALA nodes while publishing application methods only. */
   private static List<CallGraphResult.Reachability> reachability(
       CallGraph callGraph, AnalysisScope scope, List<MethodSelector> selectors) {
-    var reachedByMethod = new LinkedHashMap<CallGraphResult.MethodRef, LinkedHashSet<CallGraphResult.MethodRef>>();
-    for (CGNode entrypoint : callGraph) {
-      if (!selectors.stream().anyMatch(selector -> matches(entrypoint, selector))) {
+    var rootIndexes = new LinkedHashMap<MethodSelector, Integer>();
+    var roots = new ArrayList<CallGraphResult.MethodRef>();
+    for (MethodSelector selector : selectors) {
+      if (!rootIndexes.containsKey(selector)) {
+        rootIndexes.put(selector, roots.size());
+        roots.add(new CallGraphResult.MethodRef(
+            "java", selector.declaringType(), selector.memberName(), selector.descriptor(), null, null));
+      }
+    }
+
+    var rootsByNode = new LinkedHashMap<CGNode, BitSet>();
+    var pending = new ArrayDeque<CGNode>();
+    for (CGNode node : callGraph) {
+      Integer rootIndex = rootIndexes.get(selector(node));
+      if (rootIndex == null) {
         continue;
       }
-      var root = ref(entrypoint.getMethod());
-      var pending = new ArrayDeque<CGNode>();
-      var visited = new HashSet<CGNode>();
-      pending.add(entrypoint);
-      while (!pending.isEmpty()) {
-        var node = pending.removeFirst();
-        if (!visited.add(node)) {
-          continue;
-        }
-        if (scope.isApplicationLoader(node.getMethod().getDeclaringClass().getClassLoader())) {
-          reachedByMethod.computeIfAbsent(ref(node.getMethod()), ignored -> new LinkedHashSet<>()).add(root);
-        }
-        var successors = callGraph.getSuccNodes(node);
-        while (successors.hasNext()) {
-          pending.add(successors.next());
+      var reachedRoots = rootsByNode.computeIfAbsent(node, ignored -> new BitSet(roots.size()));
+      if (!reachedRoots.get(rootIndex)) {
+        reachedRoots.set(rootIndex);
+        pending.add(node);
+      }
+    }
+
+    while (!pending.isEmpty()) {
+      CGNode node = pending.removeFirst();
+      BitSet nodeRoots = rootsByNode.get(node);
+      var successors = callGraph.getSuccNodes(node);
+      while (successors.hasNext()) {
+        CGNode successor = successors.next();
+        BitSet successorRoots =
+            rootsByNode.computeIfAbsent(successor, ignored -> new BitSet(roots.size()));
+        if (addRoots(successorRoots, nodeRoots)) {
+          pending.add(successor);
         }
       }
     }
+
+    var reachedByMethod = new LinkedHashMap<CallGraphResult.MethodRef, BitSet>();
+    for (var entry : rootsByNode.entrySet()) {
+      CGNode node = entry.getKey();
+      if (!scope.isApplicationLoader(node.getMethod().getDeclaringClass().getClassLoader())) {
+        continue;
+      }
+      BitSet methodRoots =
+          reachedByMethod.computeIfAbsent(ref(node.getMethod()), ignored -> new BitSet(roots.size()));
+      addRoots(methodRoots, entry.getValue());
+    }
     return reachedByMethod.entrySet().stream()
-        .map(entry -> new CallGraphResult.Reachability(entry.getKey(), List.copyOf(entry.getValue())))
+        .map(entry -> new CallGraphResult.Reachability(entry.getKey(), roots(entry.getValue(), roots)))
         .toList();
   }
 
-  private static boolean matches(CGNode node, MethodSelector selector) {
+  /** Adds source root bits to a destination and returns whether it acquired any new provenance. */
+  private static boolean addRoots(BitSet destination, BitSet source) {
+    boolean changed = false;
+    for (int root = source.nextSetBit(0); root >= 0; root = source.nextSetBit(root + 1)) {
+      if (!destination.get(root)) {
+        destination.set(root);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /** Materializes stable entrypoint references for the compact internal provenance bit set. */
+  private static List<CallGraphResult.MethodRef> roots(
+      BitSet indexes, List<CallGraphResult.MethodRef> roots) {
+    var reachedRoots = new ArrayList<CallGraphResult.MethodRef>();
+    for (int root = indexes.nextSetBit(0); root >= 0; root = indexes.nextSetBit(root + 1)) {
+      reachedRoots.add(roots.get(root));
+    }
+    return List.copyOf(reachedRoots);
+  }
+
+  private static MethodSelector selector(CGNode node) {
     var method = node.getMethod();
-    return method.getDeclaringClass().getName().toString().equals(selector.declaringType())
-        && method.getName().toString().equals(selector.memberName())
-        && method.getDescriptor().toString().equals(selector.descriptor());
+    return new MethodSelector(
+        method.getDeclaringClass().getName().toString(),
+        method.getName().toString(),
+        method.getDescriptor().toString());
   }
 
   /** Resolves explicit compiled method selectors only when they refer to application classes. */
