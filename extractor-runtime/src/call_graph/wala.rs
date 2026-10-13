@@ -68,7 +68,7 @@ impl WalaJavaProvider {
 /// Accepts versioned adapter outcomes, including structured failures with actionable diagnostics.
 fn parse_adapter_output(request: &CallGraphRequest, output: &[u8]) -> CallGraphOutcome {
     match serde_json::from_slice::<CallGraphOutcome>(output) {
-        Ok(result) if result.schema_version == 1 => result,
+        Ok(result) if result.schema_version == 2 => result,
         Ok(_) | Err(_) => failed(request, "WALA produced invalid call-graph JSON"),
     }
 }
@@ -175,6 +175,7 @@ fn failed(request: &CallGraphRequest, diagnostic: &str) -> CallGraphOutcome {
         source_root: request.source_root.clone(),
         algorithm: "cha_bytecode".into(),
         diagnostics: vec![diagnostic.into()],
+        reachability: vec![],
         edges: vec![],
     }
 }
@@ -310,18 +311,16 @@ mod tests {
     }
 
     #[test]
-    fn preserves_diagnostics_from_a_valid_failed_adapter_outcome() {
+    fn parses_schema_v2_reachability_from_a_valid_adapter_outcome() {
         let request = CallGraphRequest::new("/service", Language::Java);
         let result = parse_adapter_output(
             &request,
-            br#"{"schema_version":1,"status":"failed","provider_id":"wala-java","source_root":"/service","algorithm":"cha_bytecode","diagnostics":["test_root_preparation_failed=Gradle failed"],"edges":[]}"#,
+            br#"{"schema_version":2,"status":"ok","provider_id":"wala-java","source_root":"/service","algorithm":"cha_bytecode","diagnostics":[],"reachability":[{"method":{"language":"java","declaring_type":"Lexample/Service","member_name":"changed","descriptor":"()V","source_path":null,"source_line":null},"entrypoints":[{"language":"java","declaring_type":"Lexample/ServiceTest","member_name":"coversChanged","descriptor":"()V","source_path":null,"source_line":null}]}],"edges":[]}"#,
         );
 
-        assert_eq!(result.status, CallGraphStatus::Failed);
-        assert_eq!(
-            result.diagnostics,
-            vec!["test_root_preparation_failed=Gradle failed"]
-        );
+        assert_eq!(result.status, CallGraphStatus::Ok);
+        assert_eq!(result.reachability.len(), 1,);
+        assert_eq!(result.reachability[0].method.member_name, "changed");
     }
 
     #[test]
@@ -329,7 +328,7 @@ mod tests {
         let request = CallGraphRequest::new("/service", Language::Java);
         for output in [
             br#"not json"#.as_slice(),
-            br#"{"schema_version":2,"status":"failed","provider_id":"wala-java","source_root":"/service","algorithm":"cha_bytecode","diagnostics":["future schema"],"edges":[]}"#
+            br#"{"schema_version":1,"status":"failed","provider_id":"wala-java","source_root":"/service","algorithm":"cha_bytecode","diagnostics":["legacy schema"],"edges":[]}"#
                 .as_slice(),
         ] {
             let result = parse_adapter_output(&request, output);
