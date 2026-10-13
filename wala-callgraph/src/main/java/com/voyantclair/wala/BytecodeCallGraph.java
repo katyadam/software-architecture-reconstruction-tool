@@ -324,6 +324,11 @@ public final class BytecodeCallGraph {
         rootRefs.add(new CallGraphResult.MethodRef("java", root.declaringType(), root.memberName(), root.descriptor(), null, null));
       }
     }
+    var rootNodes = new LinkedHashMap<CGNode, Integer>();
+    for (CGNode entrypoint : callGraph.getEntrypointNodes()) {
+      Integer root = rootIndexes.get(selector(entrypoint));
+      if (root != null) rootNodes.put(entrypoint, root);
+    }
     var reachedByMethod = new LinkedHashMap<CallGraphResult.MethodRef, BitSet>();
     for (CGNode target : callGraph) {
       if (!scope.isApplicationLoader(target.getMethod().getDeclaringClass().getClassLoader())
@@ -337,7 +342,7 @@ public final class BytecodeCallGraph {
       while (!pending.isEmpty()) {
         CGNode node = pending.removeFirst();
         if (!visited.add(node)) continue;
-        Integer root = rootIndexes.get(selector(node));
+        Integer root = rootNodes.get(node);
         if (root != null) reachedRoots.set(root);
         var predecessors = callGraph.getPredNodes(node);
         while (predecessors.hasNext()) pending.add(predecessors.next());
