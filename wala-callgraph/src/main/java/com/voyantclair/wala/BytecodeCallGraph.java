@@ -120,6 +120,8 @@ public final class BytecodeCallGraph {
       List<MethodSelector> entrypointSelectors,
       Algorithm algorithm)
       throws Exception {
+    long startedAtNanos = System.nanoTime();
+    phase("scope_start", startedAtNanos);
     var scope = AnalysisScope.createJavaAnalysisScope();
     scope.setExclusions(
         PatternsFilter.builder()
@@ -136,8 +138,10 @@ public final class BytecodeCallGraph {
     for (Path dependencyJar : dependencyJars) {
       scope.addToScope(ClassLoaderReference.Extension, new JarFile(dependencyJar.toFile()));
     }
+    phase("scope_ready", startedAtNanos);
 
     IClassHierarchy hierarchy = ClassHierarchyFactory.make(scope);
+    phase("class_hierarchy_ready", startedAtNanos);
     var entryPoints = applicationEntrypoints(hierarchy);
     var selectedEntrypoints = selectedEntrypoints(hierarchy, entrypointSelectors);
     entryPoints.addAll(selectedEntrypoints.entryPoints());
@@ -154,6 +158,7 @@ public final class BytecodeCallGraph {
     var options = new AnalysisOptions(scope, entryPoints);
     options.getSSAOptions().setDefaultValues(SymbolTable::getDefaultValue);
     var callGraph = buildCallGraph(algorithm, options, hierarchy, scope);
+    phase("call_graph_ready", startedAtNanos);
 
     var edges = new ArrayList<CallGraphResult.Edge>();
     for (var caller : callGraph) {
@@ -171,14 +176,26 @@ public final class BytecodeCallGraph {
                 1f));
       }
     }
+    phase("edges_ready", startedAtNanos);
     long reachabilityStartedAtNanos = System.nanoTime();
     var reachability = reachability(callGraph, scope, entrypointSelectors);
+    phase("reachability_ready", startedAtNanos);
     var diagnostics = new ArrayList<>(selectedEntrypoints.diagnostics());
     diagnostics.add(
         "reachability_duration_ms="
             + (System.nanoTime() - reachabilityStartedAtNanos) / 1_000_000);
     return result(
         "ok", applicationClassDirs, algorithm, diagnostics, reachability, edges);
+  }
+
+  /** Emits one bounded progress milestone to stderr without corrupting JSON on stdout. */
+  private static void phase(String phase, long startedAtNanos) {
+    System.err.println(
+        "wala_phase="
+            + phase
+            + " elapsed_ms="
+            + (System.nanoTime() - startedAtNanos) / 1_000_000);
+    System.err.flush();
   }
 
   /** Computes test-root provenance through all WALA nodes while publishing application methods only. */
