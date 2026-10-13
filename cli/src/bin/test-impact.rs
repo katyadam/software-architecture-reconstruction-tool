@@ -188,7 +188,13 @@ fn analyze_module(
     let resolution = resolve_reachability_with_java_tests(&outcome, module_path, callables, &tests);
     outcome.diagnostics.extend(resolution.diagnostics);
     let selection_started = Instant::now();
-    let mut result = select_tests(changes, tests, outcome, resolution.edges);
+    let mut result = extractor_runtime::impact::select_tests_with_reachability(
+        changes,
+        tests,
+        outcome,
+        resolution.edges,
+        &resolution.reachable_tests_by_callable,
+    );
     result.diagnostics.push(timing_diagnostic(
         "test discovery",
         wala_started.duration_since(discovery_started),
@@ -272,6 +278,7 @@ fn failed_outcome(module: &str, diagnostic: String) -> models::call_graph::CallG
         source_root: module.into(),
         algorithm: "cha_bytecode".into(),
         diagnostics: vec![diagnostic],
+        reachability: vec![],
         edges: Vec::new(),
     }
 }

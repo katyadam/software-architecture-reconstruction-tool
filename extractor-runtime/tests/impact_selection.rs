@@ -1,8 +1,9 @@
-use extractor_runtime::impact::select_tests;
+use extractor_runtime::impact::{select_tests, select_tests_with_reachability};
 use models::{
     ChangedElement, ChangedElementKind, JavaTestCase, SelectionReason,
     call_graph::{CallGraphOutcome, CallGraphRequest, CallGraphStatus, ResolvedCallEdge},
 };
+use std::collections::BTreeMap;
 
 /// Builds a test identity suitable for focused selection assertions.
 fn test_case(name: &str) -> JavaTestCase {
@@ -59,6 +60,55 @@ fn selects_only_the_test_that_reaches_a_changed_callable() {
         }]
     );
     assert_eq!(result.unselected_tests, vec![unrelated]);
+}
+
+#[test]
+fn selects_only_tests_listed_by_direct_wala_reachability() {
+    let reaching = test_case("OrderService");
+    let unrelated = test_case("Inventory");
+    let reachability = BTreeMap::from([(
+        "class:OrderService/void changed()".into(),
+        vec![format!(
+            "{}#{}{}",
+            reaching.class_name, reaching.method_name, reaching.descriptor
+        )],
+    )]);
+
+    let result = select_tests_with_reachability(
+        vec![callable_change()],
+        vec![reaching.clone(), unrelated.clone()],
+        successful_outcome(),
+        vec![],
+        &reachability,
+    );
+
+    assert_eq!(result.selected_tests.len(), 1);
+    assert_eq!(result.selected_tests[0].test, reaching);
+    assert_eq!(result.unselected_tests, vec![unrelated]);
+}
+
+#[test]
+fn does_not_fallback_when_direct_wala_reachability_is_empty() {
+    let reaching = test_case("OrderService");
+    let unrelated = test_case("Inventory");
+    let reachability = BTreeMap::from([("class:OrderService/void changed()".into(), vec![])]);
+
+    let result = select_tests_with_reachability(
+        vec![callable_change()],
+        vec![reaching.clone(), unrelated.clone()],
+        successful_outcome(),
+        vec![],
+        &reachability,
+    );
+
+    assert!(result.selected_tests.is_empty());
+    assert_eq!(result.unselected_tests, vec![reaching, unrelated]);
+    assert!(
+        !result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.starts_with("unresolved changed element:"))
+    );
 }
 
 #[test]
