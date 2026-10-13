@@ -5,7 +5,7 @@ use extractor_runtime::{
     call_graph::{resolve_reachability_with_java_tests, wala::WalaJavaProvider},
     impact::{ModuleCatalog, analyze_changes, discover_java_tests, select_tests},
 };
-use models::{ChangedElement, TestImpactResult};
+use models::{Callable, ChangedElement, ChangedElementKind, Namespace, TestImpactResult};
 use std::{
     collections::BTreeSet,
     fs,
@@ -183,7 +183,8 @@ fn analyze_module(
     };
     let source_root = module_path.join("src/main/java");
     let wala_started = Instant::now();
-    let mut outcome = provider.analyze_test_roots(&source_root, &tests);
+    let targets = wala_targets(&source_root, &changes, callables);
+    let mut outcome = provider.analyze_test_roots(&source_root, &tests, &targets);
     let resolution_started = Instant::now();
     let resolution = resolve_reachability_with_java_tests(&outcome, module_path, callables, &tests);
     outcome.diagnostics.extend(resolution.diagnostics);
@@ -212,6 +213,55 @@ fn analyze_module(
         selection_started.elapsed(),
     ));
     result
+}
+
+/// Converts changed source owners into conservative WALA method targets for bounded provenance.
+fn wala_targets(source_root: &Path, changes: &[ChangedElement], callables: &[Callable]) -> Vec<String> {
+    let mut targets = BTreeSet::new();
+    for change in changes {
+        let method = change
+            .callable_signature
+            .as_deref()
+            .and_then(|signature| signature.split_once('.'));
+        for callable in callables {
+            if !callable.file_path.ends_with(&change.source_path) {
+                continue;
+            }
+            let Namespace::Class(class) = &callable.namespace else {
+                continue;
+            };
+            let matches_change = match change.kind {
+                ChangedElementKind::Callable => method.is_some_and(|(owner, name)| {
+                    owner == class
+                        && callable_method_name(&callable.name) == Some(name.trim_end_matches("()"))
+                }),
+                ChangedElementKind::Class => change.callable_signature.as_deref() == Some(class),
+                ChangedElementKind::Module => false,
+            };
+            if !matches_change {
+                continue;
+            }
+            let Ok(relative) = Path::new(&callable.file_path).strip_prefix(source_root) else {
+                continue;
+            };
+            let declaring_type = format!(
+                "L{}",
+                relative
+                    .with_extension("")
+                    .to_string_lossy()
+                    .replace(std::path::MAIN_SEPARATOR, "/")
+            );
+            if let Some(member) = callable_method_name(&callable.name) {
+                targets.insert(format!("{declaring_type}#{member}/{}", callable.parameters.len()));
+            }
+        }
+    }
+    targets.into_iter().collect()
+}
+
+fn callable_method_name(name: &str) -> Option<&str> {
+    name.split_once('(')
+        .and_then(|(prefix, _)| prefix.split_whitespace().last())
 }
 
 /// Discovers tests and selects the required broad fallback without invoking the adapter.

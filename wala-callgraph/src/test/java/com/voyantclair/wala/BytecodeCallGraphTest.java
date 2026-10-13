@@ -136,6 +136,20 @@ class BytecodeCallGraphTest {
         result.diagnostics().toString());
   }
 
+  @Test
+  void emits_reachability_only_for_explicit_changed_targets(@TempDir Path tempDir) throws Exception {
+    Path classesDir = compileTestRootFixture(tempDir);
+    var result = BytecodeCallGraph.analyze(
+        List.of(classesDir),
+        List.of(),
+        List.of(new BytecodeCallGraph.MethodSelector("LExampleTest", "testChanged", "()V")),
+        List.of(new BytecodeCallGraph.TargetSelector("LService", "changed", 0)),
+        BytecodeCallGraph.Algorithm.CHA);
+
+    assertEquals(1, result.reachability().size(), result.reachability().toString());
+    assertEquals("changed", result.reachability().get(0).method().member_name());
+  }
+
   /** Compiles a Java 8 fixture whose virtual dispatch has a known concrete target. */
   private static Path compileDispatchFixture(Path tempDir) throws IOException {
     Path source = tempDir.resolve("Main.java");

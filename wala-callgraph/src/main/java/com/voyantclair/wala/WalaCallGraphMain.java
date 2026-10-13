@@ -97,8 +97,21 @@ public final class WalaCallGraphMain {
       List<Path> dependencyJars,
       List<BytecodeCallGraph.MethodSelector> entrypointSelectors,
       BytecodeCallGraph.Algorithm algorithm) {
+    return runPreferred(
+        sourceDir, explicitClassDirs, dependencyJars, entrypointSelectors, List.of(), algorithm);
+  }
+
+  /** Prefers Maven bytecode and narrows direct test provenance to changed source methods. */
+  public static CallGraphResult runPreferred(
+      Path sourceDir,
+      List<Path> explicitClassDirs,
+      List<Path> dependencyJars,
+      List<BytecodeCallGraph.MethodSelector> entrypointSelectors,
+      List<BytecodeCallGraph.TargetSelector> targetSelectors,
+      BytecodeCallGraph.Algorithm algorithm) {
     if (!explicitClassDirs.isEmpty()) {
-      return runBytecode(explicitClassDirs, dependencyJars, entrypointSelectors, algorithm);
+      return BytecodeCallGraph.analyze(
+          explicitClassDirs, dependencyJars, entrypointSelectors, targetSelectors, algorithm);
     }
     BytecodeArtifactPreparer preparer =
         MavenBytecodeArtifacts.owns(sourceDir)
@@ -111,7 +124,8 @@ public final class WalaCallGraphMain {
       combinedDependencies.addAll(dependencyJars);
       var combinedClassDirs = new ArrayList<Path>(artifacts.applicationClassDirs());
       combinedClassDirs.addAll(artifacts.testClassDirs());
-      return runBytecode(combinedClassDirs, combinedDependencies, entrypointSelectors, algorithm);
+      return BytecodeCallGraph.analyze(
+          combinedClassDirs, combinedDependencies, entrypointSelectors, targetSelectors, algorithm);
     }
     if (!entrypointSelectors.isEmpty()) {
       return testRootPreparationFailed(sourceDir, algorithm, preparation.diagnostic());
@@ -158,6 +172,19 @@ public final class WalaCallGraphMain {
         value.substring(0, separator),
         value.substring(separator + 1, descriptorStart),
         value.substring(descriptorStart));
+  }
+
+  /** Parses a changed-method selector in {@code Lpackage/Class#method/arity} form. */
+  static BytecodeCallGraph.TargetSelector parseTargetSelector(String value) {
+    int separator = value.indexOf('#');
+    int aritySeparator = value.lastIndexOf('/');
+    if (separator <= 0 || aritySeparator <= separator + 1 || aritySeparator == value.length() - 1) {
+      throw new IllegalArgumentException("Invalid --target selector: " + value);
+    }
+    return new BytecodeCallGraph.TargetSelector(
+        value.substring(0, separator),
+        value.substring(separator + 1, aritySeparator),
+        Integer.parseInt(value.substring(aritySeparator + 1)));
   }
 
   /** Performs the WALA analysis after callers have resolved any required dependency JARs. */
@@ -358,6 +385,7 @@ public final class WalaCallGraphMain {
     var dependencyJars = new ArrayList<Path>();
     var applicationClassDirs = new ArrayList<Path>();
     var entrypointSelectors = new ArrayList<BytecodeCallGraph.MethodSelector>();
+    var targetSelectors = new ArrayList<BytecodeCallGraph.TargetSelector>();
     var bytecodeAlgorithm = BytecodeCallGraph.Algorithm.CHA;
     for (int index = 0; index < args.length; index++) {
       if (args[index].equals("--source-dir") && index + 1 < args.length) {
@@ -370,6 +398,8 @@ public final class WalaCallGraphMain {
         applicationClassDirs.add(Path.of(args[++index]));
       } else if (args[index].equals("--entrypoint") && index + 1 < args.length) {
         entrypointSelectors.add(parseMethodSelector(args[++index]));
+      } else if (args[index].equals("--target") && index + 1 < args.length) {
+        targetSelectors.add(parseTargetSelector(args[++index]));
       } else if (args[index].equals("--algorithm") && index + 1 < args.length) {
         bytecodeAlgorithm = parseBytecodeAlgorithm(args[++index]);
       }
@@ -384,6 +414,7 @@ public final class WalaCallGraphMain {
                 applicationClassDirs,
                 dependencyJars,
                 entrypointSelectors,
+                targetSelectors,
                 bytecodeAlgorithm)));
   }
 }

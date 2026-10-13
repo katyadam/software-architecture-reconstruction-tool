@@ -56,6 +56,8 @@ public final class BytecodeCallGraph {
 
   /** Identifies one compiled application or test method that must be a WALA entry point. */
   public record MethodSelector(String declaringType, String memberName, String descriptor) {}
+  /** Identifies a changed source method without requiring Rust to reconstruct its JVM descriptor. */
+  public record TargetSelector(String declaringType, String memberName, int parameterCount) {}
 
   private BytecodeCallGraph() {}
 
@@ -81,7 +83,7 @@ public final class BytecodeCallGraph {
    */
   public static CallGraphResult analyze(
       List<Path> applicationClassDirs, List<Path> dependencyJars, Algorithm algorithm) {
-    return analyze(applicationClassDirs, dependencyJars, List.of(), algorithm);
+    return analyze(applicationClassDirs, dependencyJars, List.of(), List.of(), algorithm);
   }
 
   /** Analyzes bytecode with explicit method roots in addition to conventional Java main methods. */
@@ -90,10 +92,20 @@ public final class BytecodeCallGraph {
       List<Path> dependencyJars,
       List<MethodSelector> entrypointSelectors,
       Algorithm algorithm) {
+    return analyze(applicationClassDirs, dependencyJars, entrypointSelectors, List.of(), algorithm);
+  }
+
+  /** Analyzes bytecode while computing provenance only for explicitly changed source targets. */
+  public static CallGraphResult analyze(
+      List<Path> applicationClassDirs,
+      List<Path> dependencyJars,
+      List<MethodSelector> entrypointSelectors,
+      List<TargetSelector> targetSelectors,
+      Algorithm algorithm) {
     long startedAtNanos = System.nanoTime();
     try {
       return withDuration(
-          analyzeScope(applicationClassDirs, dependencyJars, entrypointSelectors, algorithm), startedAtNanos);
+          analyzeScope(applicationClassDirs, dependencyJars, entrypointSelectors, targetSelectors, algorithm), startedAtNanos);
     } catch (Throwable error) {
       return withDuration(failed(applicationClassDirs, algorithm, error), startedAtNanos);
     }
@@ -119,6 +131,7 @@ public final class BytecodeCallGraph {
       List<Path> applicationClassDirs,
       List<Path> dependencyJars,
       List<MethodSelector> entrypointSelectors,
+      List<TargetSelector> targetSelectors,
       Algorithm algorithm)
       throws Exception {
     long startedAtNanos = System.nanoTime();
@@ -187,7 +200,7 @@ public final class BytecodeCallGraph {
     }
     phase("edges_ready", startedAtNanos);
     long reachabilityStartedAtNanos = System.nanoTime();
-    var reachability = reachability(callGraph, scope, entrypointSelectors);
+    var reachability = reachability(callGraph, scope, entrypointSelectors, targetSelectors);
     phase("reachability_ready", startedAtNanos);
     var diagnostics = new ArrayList<>(selectedEntrypoints.diagnostics());
     diagnostics.add(
@@ -242,7 +255,11 @@ public final class BytecodeCallGraph {
 
   /** Computes test-root provenance through all WALA nodes while publishing application methods only. */
   private static List<CallGraphResult.Reachability> reachability(
-      CallGraph callGraph, AnalysisScope scope, List<MethodSelector> selectors) {
+      CallGraph callGraph, AnalysisScope scope, List<MethodSelector> selectors,
+      List<TargetSelector> targetSelectors) {
+    if (!targetSelectors.isEmpty()) {
+      return targetReachability(callGraph, scope, selectors, targetSelectors);
+    }
     var rootIndexes = new LinkedHashMap<MethodSelector, Integer>();
     var roots = new ArrayList<CallGraphResult.MethodRef>();
     for (MethodSelector selector : selectors) {
@@ -296,6 +313,41 @@ public final class BytecodeCallGraph {
         .toList();
   }
 
+  /** Traverses predecessors from changed methods, avoiding full-graph provenance for every method. */
+  private static List<CallGraphResult.Reachability> targetReachability(
+      CallGraph callGraph, AnalysisScope scope, List<MethodSelector> roots, List<TargetSelector> targets) {
+    var rootIndexes = new LinkedHashMap<MethodSelector, Integer>();
+    var rootRefs = new ArrayList<CallGraphResult.MethodRef>();
+    for (MethodSelector root : roots) {
+      if (!rootIndexes.containsKey(root)) {
+        rootIndexes.put(root, rootRefs.size());
+        rootRefs.add(new CallGraphResult.MethodRef("java", root.declaringType(), root.memberName(), root.descriptor(), null, null));
+      }
+    }
+    var reachedByMethod = new LinkedHashMap<CallGraphResult.MethodRef, BitSet>();
+    for (CGNode target : callGraph) {
+      if (!scope.isApplicationLoader(target.getMethod().getDeclaringClass().getClassLoader())
+          || !targets.stream().anyMatch(selector -> matches(target, selector))) {
+        continue;
+      }
+      var reachedRoots = reachedByMethod.computeIfAbsent(ref(target.getMethod()), ignored -> new BitSet(rootRefs.size()));
+      var pending = new ArrayDeque<CGNode>();
+      var visited = new HashSet<CGNode>();
+      pending.add(target);
+      while (!pending.isEmpty()) {
+        CGNode node = pending.removeFirst();
+        if (!visited.add(node)) continue;
+        Integer root = rootIndexes.get(selector(node));
+        if (root != null) reachedRoots.set(root);
+        var predecessors = callGraph.getPredNodes(node);
+        while (predecessors.hasNext()) pending.add(predecessors.next());
+      }
+    }
+    return reachedByMethod.entrySet().stream()
+        .map(entry -> new CallGraphResult.Reachability(entry.getKey(), roots(entry.getValue(), rootRefs)))
+        .toList();
+  }
+
   /** Adds source root bits to a destination and returns whether it acquired any new provenance. */
   private static boolean addRoots(BitSet destination, BitSet source) {
     boolean changed = false;
@@ -324,6 +376,23 @@ public final class BytecodeCallGraph {
         method.getDeclaringClass().getName().toString(),
         method.getName().toString(),
         method.getDescriptor().toString());
+  }
+
+  private static boolean matches(CGNode node, TargetSelector selector) {
+    var method = node.getMethod();
+    return method.getDeclaringClass().getName().toString().equals(selector.declaringType())
+        && method.getName().toString().equals(selector.memberName())
+        && parameterCount(method.getDescriptor().toString()) == selector.parameterCount();
+  }
+
+  private static int parameterCount(String descriptor) {
+    int count = 0;
+    for (int index = 1; descriptor.charAt(index) != ')'; count++) {
+      while (descriptor.charAt(index) == '[') index++;
+      if (descriptor.charAt(index) == 'L') index = descriptor.indexOf(';', index) + 1;
+      else index++;
+    }
+    return count;
   }
 
   /** Resolves explicit compiled method selectors only when they refer to application classes. */
