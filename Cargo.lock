@@ -768,6 +768,7 @@ dependencies = [
  "clap",
  "env-scraper",
  "extractor-runtime",
+ "java-extractor",
  "models",
  "serde",
  "serde_json",
