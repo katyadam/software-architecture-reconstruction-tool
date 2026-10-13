@@ -4,8 +4,9 @@ use models::{
     call_graph::{CallGraphOutcome, CallGraphRequest, CallGraphStatus, Language},
 };
 use std::{
+    io::{BufRead, BufReader, Read},
     path::PathBuf,
-    process::{Child, Command, Output, Stdio},
+    process::{Child, ChildStderr, ChildStdout, Command, Output, Stdio},
     sync::mpsc,
     time::Duration,
 };
@@ -105,28 +106,99 @@ fn test_root_arguments(source_root: &std::path::Path, test_roots: &[JavaTestCase
 
 /// Waits for an adapter process and terminates it when it exceeds the configured deadline.
 #[cfg(unix)]
-fn wait_for_output(child: Child, timeout: Duration) -> Result<Output, String> {
+fn wait_for_output(mut child: Child, timeout: Duration) -> Result<Output, String> {
     let process_id = child.id();
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let stdout_collector = std::thread::spawn(move || collect_stdout(stdout));
+    let stderr_collector = std::thread::spawn(move || collect_stderr(stderr));
     let (sender, receiver) = mpsc::sync_channel(1);
     let collector = std::thread::spawn(move || {
-        let _ = sender.send(child.wait_with_output().map_err(|error| error.to_string()));
+        let output: Result<Output, String> = (|| {
+            let status = child.wait().map_err(|error| error.to_string())?;
+            let stdout = stdout_collector
+                .join()
+                .map_err(|_| "WALA standard-output collector stopped unexpectedly".to_owned())??;
+            let stderr = stderr_collector
+                .join()
+                .map_err(|_| "WALA standard-error collector stopped unexpectedly".to_owned())??;
+            Ok(Output {
+                status,
+                stdout,
+                stderr,
+            })
+        })();
+        let _ = sender.send(output);
     });
-    let result = receiver.recv_timeout(timeout);
-    if matches!(result, Err(mpsc::RecvTimeoutError::Timeout)) {
-        terminate_process_group(process_id);
-    }
+    let (output, timed_out) = match receiver.recv_timeout(timeout) {
+        Ok(output) => (output, false),
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            terminate_process_group(process_id);
+            (
+                receiver
+                    .recv()
+                    .map_err(|_| "WALA process-output collector stopped unexpectedly".to_owned())?,
+                true,
+            )
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            return Err("WALA process-output collector stopped unexpectedly".into());
+        }
+    };
     if collector.join().is_err() {
         return Err("WALA process-output collector stopped unexpectedly".into());
     }
+    let output = output?;
 
-    match result {
-        Ok(output) => output,
-        Err(mpsc::RecvTimeoutError::Timeout) => {
-            Err(format!("WALA analysis timed out after {timeout:?}"))
+    if timed_out {
+        return Err(timeout_diagnostic(timeout, &output.stderr));
+    }
+    Ok(output)
+}
+
+/// Collects adapter JSON without exposing it before the adapter exits successfully.
+#[cfg(unix)]
+fn collect_stdout(stdout: Option<ChildStdout>) -> Result<Vec<u8>, String> {
+    let mut output = vec![];
+    if let Some(mut stdout) = stdout {
+        stdout
+            .read_to_end(&mut output)
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(output)
+}
+
+/// Relays structured adapter phase records immediately and retains all stderr for diagnostics.
+#[cfg(unix)]
+fn collect_stderr(stderr: Option<ChildStderr>) -> Result<Vec<u8>, String> {
+    let mut output = vec![];
+    let Some(stderr) = stderr else {
+        return Ok(output);
+    };
+    let mut lines = BufReader::new(stderr).split(b'\n');
+    while let Some(line) = lines.next() {
+        let line = line.map_err(|error| error.to_string())?;
+        if line.starts_with(b"wala_phase=") {
+            eprintln!("WALA: {}", String::from_utf8_lossy(&line));
         }
-        Err(mpsc::RecvTimeoutError::Disconnected) => {
-            Err("WALA process-output collector stopped unexpectedly".into())
-        }
+        output.extend_from_slice(&line);
+        output.push(b'\n');
+    }
+    Ok(output)
+}
+
+/// Makes a timeout actionable without allowing unbounded adapter stderr into result JSON.
+#[cfg(unix)]
+fn timeout_diagnostic(timeout: Duration, stderr: &[u8]) -> String {
+    const MAX_STDERR_BYTES: usize = 4_096;
+    let tail_start = stderr.len().saturating_sub(MAX_STDERR_BYTES);
+    let tail = String::from_utf8_lossy(&stderr[tail_start..])
+        .trim()
+        .to_owned();
+    if tail.is_empty() {
+        format!("WALA analysis timed out after {timeout:?}")
+    } else {
+        format!("WALA analysis timed out after {timeout:?}; adapter stderr: {tail}")
     }
 }
 
@@ -213,6 +285,24 @@ mod tests {
             !process_exists(&child_pid),
             "direct adapter process {child_pid} should be reaped before timeout returns"
         );
+    }
+
+    #[test]
+    fn preserves_adapter_phase_telemetry_when_a_process_times_out() {
+        let child = Command::new("sh")
+            .args([
+                "-c",
+                "echo wala_phase=call_graph_ready elapsed_ms=1 >&2; sleep 1",
+            ])
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("test command should start");
+
+        let error = wait_for_output(child, Duration::from_millis(100))
+            .expect_err("a process that sleeps longer than its deadline must time out");
+
+        assert!(error.contains("timed out"), "{error}");
+        assert!(error.contains("wala_phase=call_graph_ready"), "{error}");
     }
 
     #[test]
