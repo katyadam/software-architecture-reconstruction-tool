@@ -6,6 +6,7 @@ import com.ibm.wala.ipa.callgraph.AnalysisCacheImpl;
 import com.ibm.wala.ipa.callgraph.AnalysisOptions;
 import com.ibm.wala.ipa.callgraph.AnalysisScope;
 import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.CGNode;
 import com.ibm.wala.ipa.callgraph.Entrypoint;
 import com.ibm.wala.ipa.callgraph.cha.CHACallGraph;
 import com.ibm.wala.ipa.callgraph.impl.DefaultEntrypoint;
@@ -16,7 +17,10 @@ import com.ibm.wala.ssa.SymbolTable;
 import com.ibm.wala.types.ClassLoaderReference;
 import com.ibm.wala.util.config.PatternsFilter;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -104,6 +108,7 @@ public final class BytecodeCallGraph {
         result.source_root(),
         result.algorithm(),
         diagnostics,
+        result.reachability(),
         result.edges());
   }
 
@@ -141,6 +146,7 @@ public final class BytecodeCallGraph {
           applicationClassDirs,
           algorithm,
           selectedEntrypoints.diagnostics(),
+          List.of(),
           List.of());
     }
 
@@ -164,8 +170,47 @@ public final class BytecodeCallGraph {
                 1f));
       }
     }
+    var reachability = reachability(callGraph, scope, entrypointSelectors);
     return result(
-        "ok", applicationClassDirs, algorithm, selectedEntrypoints.diagnostics(), edges);
+        "ok", applicationClassDirs, algorithm, selectedEntrypoints.diagnostics(), reachability, edges);
+  }
+
+  /** Computes test-root provenance through all WALA nodes while publishing application methods only. */
+  private static List<CallGraphResult.Reachability> reachability(
+      CallGraph callGraph, AnalysisScope scope, List<MethodSelector> selectors) {
+    var reachedByMethod = new LinkedHashMap<CallGraphResult.MethodRef, LinkedHashSet<CallGraphResult.MethodRef>>();
+    for (CGNode entrypoint : callGraph) {
+      if (!selectors.stream().anyMatch(selector -> matches(entrypoint, selector))) {
+        continue;
+      }
+      var root = ref(entrypoint.getMethod());
+      var pending = new ArrayDeque<CGNode>();
+      var visited = new HashSet<CGNode>();
+      pending.add(entrypoint);
+      while (!pending.isEmpty()) {
+        var node = pending.removeFirst();
+        if (!visited.add(node)) {
+          continue;
+        }
+        if (scope.isApplicationLoader(node.getMethod().getDeclaringClass().getClassLoader())) {
+          reachedByMethod.computeIfAbsent(ref(node.getMethod()), ignored -> new LinkedHashSet<>()).add(root);
+        }
+        var successors = callGraph.getSuccNodes(node);
+        while (successors.hasNext()) {
+          pending.add(successors.next());
+        }
+      }
+    }
+    return reachedByMethod.entrySet().stream()
+        .map(entry -> new CallGraphResult.Reachability(entry.getKey(), List.copyOf(entry.getValue())))
+        .toList();
+  }
+
+  private static boolean matches(CGNode node, MethodSelector selector) {
+    var method = node.getMethod();
+    return method.getDeclaringClass().getName().toString().equals(selector.declaringType())
+        && method.getName().toString().equals(selector.memberName())
+        && method.getDescriptor().toString().equals(selector.descriptor());
   }
 
   /** Resolves explicit compiled method selectors only when they refer to application classes. */
@@ -271,7 +316,7 @@ public final class BytecodeCallGraph {
       List<Path> applicationClassDirs,
       Algorithm algorithm,
       List<CallGraphResult.Edge> edges) {
-    return result(status, applicationClassDirs, algorithm, List.of(), edges);
+    return result(status, applicationClassDirs, algorithm, List.of(), List.of(), edges);
   }
 
   /** Builds a result while preserving warnings that must cause conservative TIA fallback. */
@@ -280,14 +325,16 @@ public final class BytecodeCallGraph {
       List<Path> applicationClassDirs,
       Algorithm algorithm,
       List<String> diagnostics,
+      List<CallGraphResult.Reachability> reachability,
       List<CallGraphResult.Edge> edges) {
     return new CallGraphResult(
-        1,
+        2,
         status,
         PROVIDER_ID,
         applicationClassDirs.toString(),
         algorithm.identifier(),
         diagnostics,
+        reachability,
         edges);
   }
 
@@ -295,12 +342,13 @@ public final class BytecodeCallGraph {
   private static CallGraphResult failed(
       List<Path> applicationClassDirs, Algorithm algorithm, Throwable error) {
     return new CallGraphResult(
-        1,
+        2,
         "failed",
         PROVIDER_ID,
         applicationClassDirs.toString(),
         algorithm.identifier(),
         List.of(error.getClass().getSimpleName() + ": " + error.getMessage()),
+        List.of(),
         List.of());
   }
 }
