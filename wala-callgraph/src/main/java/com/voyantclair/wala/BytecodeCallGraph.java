@@ -25,6 +25,7 @@ import java.util.LinkedHashSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.jar.JarFile;
 
 /** Builds a WALA call graph from compiled application classes and dependency JARs. */
@@ -157,7 +158,15 @@ public final class BytecodeCallGraph {
 
     var options = new AnalysisOptions(scope, entryPoints);
     options.getSSAOptions().setDefaultValues(SymbolTable::getDefaultValue);
-    var callGraph = buildCallGraph(algorithm, options, hierarchy, scope);
+    var callGraphBuilding = new AtomicBoolean(true);
+    Thread watchdog = phaseWatchdog("call_graph_building", startedAtNanos, callGraphBuilding);
+    CallGraph callGraph;
+    try {
+      callGraph = buildCallGraph(algorithm, options, hierarchy, scope);
+    } finally {
+      callGraphBuilding.set(false);
+      watchdog.interrupt();
+    }
     phase("call_graph_ready", startedAtNanos);
 
     var edges = new ArrayList<CallGraphResult.Edge>();
@@ -196,6 +205,39 @@ public final class BytecodeCallGraph {
             + " elapsed_ms="
             + (System.nanoTime() - startedAtNanos) / 1_000_000);
     System.err.flush();
+  }
+
+  /** Reports a stalled WALA phase without interrupting the analysis thread or changing its result. */
+  private static Thread phaseWatchdog(
+      String phase, long startedAtNanos, AtomicBoolean active) {
+    Thread analysisThread = Thread.currentThread();
+    Thread watchdog = new Thread(
+        () -> {
+          while (active.get()) {
+            try {
+              Thread.sleep(15_000);
+            } catch (InterruptedException ignored) {
+              return;
+            }
+            if (!active.get()) {
+              return;
+            }
+            StackTraceElement[] stack = analysisThread.getStackTrace();
+            String topFrame = stack.length == 0 ? "unavailable" : stack[0].toString();
+            System.err.println(
+                "wala_phase="
+                    + phase
+                    + " elapsed_ms="
+                    + (System.nanoTime() - startedAtNanos) / 1_000_000
+                    + " top_frame="
+                    + topFrame);
+            System.err.flush();
+          }
+        },
+        "wala-phase-watchdog");
+    watchdog.setDaemon(true);
+    watchdog.start();
+    return watchdog;
   }
 
   /** Computes test-root provenance through all WALA nodes while publishing application methods only. */
