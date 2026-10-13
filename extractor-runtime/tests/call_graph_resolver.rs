@@ -1,5 +1,7 @@
 use extractor_runtime::call_graph::{resolve_edges, resolve_edges_with_java_tests};
-use models::call_graph::{CallGraphOutcome, CallGraphStatus, Language, MethodRef, RawCallEdge};
+use models::call_graph::{
+    CallGraphOutcome, CallGraphStatus, Language, MethodReachability, MethodRef, RawCallEdge,
+};
 use models::{Callable, JavaTestCase, Namespace, Parameter};
 
 fn callable(class: &str, file: &str) -> Callable {
@@ -343,6 +345,58 @@ fn resolves_java_generic_type_variables_after_bytecode_erasure() {
 
     assert_eq!(edges.len(), 1);
     assert!(diagnostics.is_empty());
+}
+
+#[test]
+fn resolves_source_reachability_to_its_discovered_test() {
+    let method = |class: &str, member_name: &str| MethodRef {
+        language: Language::Java,
+        declaring_type: format!("L{class}"),
+        member_name: member_name.into(),
+        descriptor: "()V".into(),
+        source_path: None,
+        source_line: None,
+    };
+    let outcome = CallGraphOutcome {
+        schema_version: 2,
+        status: CallGraphStatus::Ok,
+        provider_id: "wala-java".into(),
+        source_root: "/service".into(),
+        algorithm: "x".into(),
+        diagnostics: vec![],
+        reachability: vec![MethodReachability {
+            method: method("fixture/Service", "changed"),
+            entrypoints: vec![method("fixture/ServiceTest", "coversChanged")],
+        }],
+        edges: vec![],
+    };
+    let tests = vec![JavaTestCase {
+        module_root: "/service".into(),
+        class_name: "Lfixture/ServiceTest".into(),
+        method_name: "coversChanged".into(),
+        descriptor: "()V".into(),
+        callable_signature: "ServiceTest.coversChanged()V".into(),
+        source_path: "/service/src/test/java/fixture/ServiceTest.java".into(),
+    }];
+
+    let result = extractor_runtime::call_graph::resolve_reachability_with_java_tests(
+        &outcome,
+        std::path::Path::new("/service"),
+        &[callable_named(
+            "Service",
+            "changed",
+            "/service/src/main/java/fixture/Service.java",
+        )],
+        &tests,
+    );
+
+    assert_eq!(
+        result
+            .reachable_tests_by_callable
+            .get("class:Service/void changed()"),
+        Some(&vec!["Lfixture/ServiceTest#coversChanged()V".into()])
+    );
+    assert!(result.diagnostics.is_empty());
 }
 
 #[test]
