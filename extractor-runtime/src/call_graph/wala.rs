@@ -40,9 +40,10 @@ impl WalaJavaProvider {
         &self,
         source_root: &std::path::Path,
         test_roots: &[JavaTestCase],
+        targets: &[String],
     ) -> CallGraphOutcome {
         let request = CallGraphRequest::new(source_root.to_string_lossy(), Language::Java);
-        self.invoke(&request, test_root_arguments(source_root, test_roots))
+        self.invoke(&request, test_root_arguments(source_root, test_roots, targets))
     }
 
     /// Launches the adapter with the supplied fully formed argument vector.
@@ -89,7 +90,11 @@ impl CallGraphProvider for WalaJavaProvider {
 }
 
 /// Builds the repeatable adapter entrypoint arguments for discovered JUnit methods.
-fn test_root_arguments(source_root: &std::path::Path, test_roots: &[JavaTestCase]) -> Vec<String> {
+fn test_root_arguments(
+    source_root: &std::path::Path,
+    test_roots: &[JavaTestCase],
+    targets: &[String],
+) -> Vec<String> {
     let mut arguments = vec![
         "--source-dir".to_owned(),
         source_root.to_string_lossy().into_owned(),
@@ -100,6 +105,10 @@ fn test_root_arguments(source_root: &std::path::Path, test_roots: &[JavaTestCase
             "{}#{}{}",
             test.class_name, test.method_name, test.descriptor
         ));
+    }
+    for target in targets {
+        arguments.push("--target".to_owned());
+        arguments.push(target.clone());
     }
     arguments
 }
@@ -390,12 +399,14 @@ mod tests {
         }];
 
         assert_eq!(
-            test_root_arguments(Path::new("module/src/main/java"), &tests),
+            test_root_arguments(Path::new("module/src/main/java"), &tests, &["Lexample/Service#run/0".into()]),
             vec![
                 "--source-dir".to_owned(),
                 "module/src/main/java".to_owned(),
                 "--entrypoint".to_owned(),
                 "Lexample/ServiceTest#changesService()V".to_owned(),
+                "--target".to_owned(),
+                "Lexample/Service#run/0".to_owned(),
             ]
         );
     }
