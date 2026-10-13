@@ -20,6 +20,7 @@ const DEFAULT_ANALYSIS_TIMEOUT: Duration = Duration::from_secs(300);
 pub struct WalaJavaProvider {
     jar: PathBuf,
     timeout: Duration,
+    algorithm: String,
 }
 impl WalaJavaProvider {
     /// Creates a Java provider that launches the adapter JAR at `jar`.
@@ -32,6 +33,7 @@ impl WalaJavaProvider {
         Self {
             jar: jar.into(),
             timeout,
+            algorithm: std::env::var("WALA_ALGORITHM").unwrap_or_else(|_| "cha".into()),
         }
     }
 
@@ -43,7 +45,10 @@ impl WalaJavaProvider {
         targets: &[String],
     ) -> CallGraphOutcome {
         let request = CallGraphRequest::new(source_root.to_string_lossy(), Language::Java);
-        self.invoke(&request, test_root_arguments(source_root, test_roots, targets))
+        self.invoke(
+            &request,
+            test_root_arguments(source_root, test_roots, targets),
+        )
     }
 
     /// Launches the adapter with the supplied fully formed argument vector.
@@ -52,6 +57,7 @@ impl WalaJavaProvider {
         command
             .arg("-jar")
             .arg(&self.jar)
+            .args(["--algorithm", &self.algorithm])
             .args(arguments)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -399,7 +405,11 @@ mod tests {
         }];
 
         assert_eq!(
-            test_root_arguments(Path::new("module/src/main/java"), &tests, &["Lexample/Service#run/0".into()]),
+            test_root_arguments(
+                Path::new("module/src/main/java"),
+                &tests,
+                &["Lexample/Service#run/0".into()]
+            ),
             vec![
                 "--source-dir".to_owned(),
                 "module/src/main/java".to_owned(),
