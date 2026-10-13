@@ -15,7 +15,8 @@ Environment:
   TIA_BENCHMARK_OUTPUT_DIR  Directory for JSON results (default: a new /tmp directory)
   WALA_TIMEOUT_SECONDS      Per-module adapter timeout (default: 30)
 
-Each project also writes its command output to <output-dir>/<project>.log.
+Each project streams command output to the terminal and writes it to
+<output-dir>/<project>.log.
 EOF
 }
 
@@ -74,7 +75,7 @@ for project_name in "$@"; do
     --wala-adapter-jar "$wala_adapter_jar" \
     --wala-timeout-seconds "$wala_timeout_seconds" \
     --quiet \
-    --output "$result" >"$log" 2>&1; then
+    --output "$result" 2>&1 | tee "$log"; then
     echo "TIA invocation failed: $project_name (see $log)" >&2
     status=1
     continue
