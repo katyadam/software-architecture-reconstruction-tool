@@ -55,17 +55,38 @@ pub fn get_java_callables_for_modules_with_progress(
         .iter()
         .map(|module_root| module_root.join("src/main/java"))
         .collect();
-    Ok(
-        collect_syntactic_records(java_paths_for_modules(&main_roots)?, report_progress)?
-            .into_iter()
-            .flat_map(|record| {
-                record
-                    .callables
-                    .into_iter()
-                    .map(|callable| callable.metadata)
-            })
-            .collect(),
-    )
+    let paths = java_paths_for_modules(&main_roots)?;
+    let files_to_process = paths.len();
+    if report_progress {
+        println!("Total files found: {files_to_process}");
+    }
+    let mut callables = Vec::new();
+    for (index, path) in paths.iter().enumerate() {
+        if report_progress {
+            println!(
+                "Extracting ({}/{}): {:?}",
+                index + 1,
+                files_to_process,
+                path.file_name().unwrap_or_default()
+            );
+        }
+        let source = match fs::read_to_string(path) {
+            Ok(source) => source,
+            Err(error) => {
+                eprintln!(
+                    "⚠️  Skipping file {:?}: {}",
+                    path.file_name().unwrap_or_default(),
+                    error
+                );
+                continue;
+            }
+        };
+        callables.extend(
+            java_extractor::extract_syntactic_callables(&source, &path.to_string_lossy())
+                .with_context(|| format!("Unable to extract Java callables from {path:?}"))?,
+        );
+    }
+    Ok(callables)
 }
 
 fn java_paths_for_modules(module_roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
@@ -344,6 +365,25 @@ mod tests {
                 .iter()
                 .all(|callable| callable.file_path != test_source.to_string_lossy())
         );
+    }
+
+    #[test]
+    fn java_callable_collection_retains_generic_methods_without_symbolic_bodies() {
+        let project = tempfile::tempdir().expect("temporary project directory");
+        let module = project.path().join("module");
+        let source = module.join("src/main/java/example/Transformation.java");
+        write_java_source(
+            &source,
+            "package example; public class Transformation { public void configure(final Map<String, ?> configs) { unsupported(configs); } }",
+        );
+
+        let callables = get_java_callables_for_modules_with_progress(&[module], false)
+            .expect("callable collection succeeds");
+
+        assert!(callables.iter().any(|callable| {
+            callable.file_path == source.to_string_lossy()
+                && callable.name == "void configure(final Map<String, ?> configs)"
+        }));
     }
 
     fn write_java_source(path: &Path, source: &str) {

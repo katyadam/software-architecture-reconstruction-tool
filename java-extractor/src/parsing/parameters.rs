@@ -29,7 +29,7 @@ fn parse_single_param(param: &str) -> Option<Parameter> {
     // Remove annotations (@Something)
     let without_annotations = before_default
         .split_whitespace()
-        .filter(|tok| !tok.starts_with('@'))
+        .filter(|tok| !tok.starts_with('@') && *tok != "final")
         .collect::<Vec<_>>();
 
     if without_annotations.len() < 2 {

@@ -1,11 +1,13 @@
 package com.voyantclair.wala;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -13,7 +15,8 @@ import org.junit.jupiter.api.io.TempDir;
 /** Verifies Maven reactor preparation without relying on benchmark-specific layouts. */
 class MavenBytecodeArtifactsTest {
   @Test
-  void prepares_sibling_module_classes_and_dependency_jars(@TempDir Path tempDir) throws Exception {
+  void prepares_only_selected_module_classes_and_dependency_jars(@TempDir Path tempDir)
+      throws Exception {
     Path sourceRoot = createReactor(tempDir);
 
     var preparation = new MavenBytecodeArtifacts().prepare(sourceRoot);
@@ -21,15 +24,10 @@ class MavenBytecodeArtifactsTest {
     assertTrue(preparation.succeeded(), preparation.diagnostic());
     BytecodeArtifacts.PreparedArtifacts artifacts = preparation.artifacts();
     assertTrue(artifacts.moduleRoot().endsWith("service"));
-    assertTrue(
-        artifacts.applicationClassDirs().stream()
-            .anyMatch(path -> path.endsWith("base/target/classes")));
-    assertTrue(
-        preparation.artifacts().applicationClassDirs().stream()
-            .anyMatch(path -> path.endsWith("service/target/classes")));
-    assertTrue(
-        artifacts.testClassDirs().stream()
-            .anyMatch(path -> path.endsWith("service/target/test-classes")));
+    assertEquals(
+        List.of(tempDir.resolve("service/target/classes")), artifacts.applicationClassDirs());
+    assertEquals(
+        List.of(tempDir.resolve("service/target/test-classes")), artifacts.testClassDirs());
     assertFalse(artifacts.dependencyJars().isEmpty());
     assertFalse(
         Files.exists(

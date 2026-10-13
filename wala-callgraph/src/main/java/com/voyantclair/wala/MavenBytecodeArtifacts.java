@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.stream.Stream;
 
 /** Prepares compiled class directories and dependency JARs for a conventional Maven service. */
 public final class MavenBytecodeArtifacts implements BytecodeArtifactPreparer {
@@ -52,8 +51,8 @@ public final class MavenBytecodeArtifacts implements BytecodeArtifactPreparer {
           Files.exists(classpathFile) ? parseClasspath(Files.readString(classpathFile)) : List.of();
       return new BytecodeArtifacts.Preparation(
           new BytecodeArtifacts.PreparedArtifacts(
-              findClassDirs(reactorPom.getParent()),
-              findTestClassDirs(reactorPom.getParent()),
+              compiledOutput(moduleRoot, "classes"),
+              compiledOutput(moduleRoot, "test-classes"),
               dependencyJars,
               moduleRoot),
           "");
@@ -113,20 +112,10 @@ public final class MavenBytecodeArtifacts implements BytecodeArtifactPreparer {
     }
   }
 
-  /** Locates compiled class directories produced below a direct-child Maven reactor. */
-  private static List<Path> findClassDirs(Path reactorRoot) throws IOException {
-    try (Stream<Path> paths = Files.walk(reactorRoot, 4)) {
-      return paths.filter(path -> path.endsWith("target/classes") && Files.isDirectory(path)).toList();
-    }
-  }
-
-  /** Locates test class directories produced below a direct-child Maven reactor. */
-  private static List<Path> findTestClassDirs(Path reactorRoot) throws IOException {
-    try (Stream<Path> paths = Files.walk(reactorRoot, 4)) {
-      return paths
-          .filter(path -> path.endsWith("target/test-classes") && Files.isDirectory(path))
-          .toList();
-    }
+  /** Returns one selected module output directory when Maven produced it. */
+  private static List<Path> compiledOutput(Path moduleRoot, String outputName) {
+    Path output = moduleRoot.resolve("target").resolve(outputName);
+    return Files.isDirectory(output) ? List.of(output) : List.of();
   }
 
   /** Converts Maven's platform-separated dependency classpath into readable JAR paths. */

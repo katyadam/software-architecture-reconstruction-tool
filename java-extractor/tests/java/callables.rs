@@ -1,4 +1,5 @@
 use java_extractor::{
+    extract_syntactic_callables,
     extraction::{callables::extractor::CallablesExtractor, extractor::Extractor},
     s,
 };
@@ -476,6 +477,26 @@ fn test_callables() {
     ];
 
     assert_eq!(callables, expected);
+}
+
+#[test]
+fn retains_generic_methods_without_symbolic_body_parsing() {
+    let callables = extract_syntactic_callables(
+        "class Transformation { void configure(final Map<String, ?> configs) { unsupported(configs); } }",
+        "Transformation.java",
+    )
+    .expect("Java source should parse");
+
+    let configure = callables
+        .iter()
+        .find(|callable| callable.name == "void configure(final Map<String, ?> configs)")
+        .expect("configure callable should be extracted");
+    assert_eq!(configure.file_path, "Transformation.java");
+    assert_eq!(configure.parameters.len(), 1);
+    assert_eq!(
+        configure.parameters[0].datatype.as_deref(),
+        Some("Map<String, ?>")
+    );
 }
 
 #[test]
