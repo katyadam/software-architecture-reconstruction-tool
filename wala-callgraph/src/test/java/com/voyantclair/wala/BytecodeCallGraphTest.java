@@ -73,7 +73,9 @@ class BytecodeCallGraphTest {
         BytecodeCallGraph.analyze(
             List.of(classesDir),
             List.of(),
-            List.of(new BytecodeCallGraph.MethodSelector("LExampleTest", "testChanged", "()V")),
+            List.of(
+                new BytecodeCallGraph.MethodSelector("LExampleTest", "testChanged", "()V"),
+                new BytecodeCallGraph.MethodSelector("LExampleTest", "testChangedAgain", "()V")),
             BytecodeCallGraph.Algorithm.CHA);
 
     assertEquals("ok", result.status());
@@ -98,6 +100,17 @@ class BytecodeCallGraphTest {
                                     entrypoint.declaring_type().equals("LExampleTest")
                                         && entrypoint.member_name().equals("testChanged"))),
         result.reachability().toString());
+    assertTrue(
+        result.reachability().stream()
+            .filter(
+                reachability ->
+                    reachability.method().declaring_type().equals("LService")
+                        && reachability.method().member_name().equals("changed"))
+            .allMatch(reachability -> reachability.entrypoints().size() == 2),
+        result.reachability().toString());
+    assertTrue(
+        result.diagnostics().stream().anyMatch(value -> value.startsWith("reachability_duration_ms=")),
+        result.diagnostics().toString());
     assertTrue(
         result.reachability().stream()
             .noneMatch(
@@ -143,7 +156,7 @@ class BytecodeCallGraphTest {
     Path source = tempDir.resolve("ExampleTest.java");
     Files.writeString(
         source,
-        "class Service { static void changed() {} } class ExampleTest { void testChanged() { Service.changed(); } }");
+        "class Service { static void changed() {} } class ExampleTest { void testChanged() { Service.changed(); } void testChangedAgain() { Service.changed(); } }");
     Path classesDir = tempDir.resolve("test-classes");
     Files.createDirectories(classesDir);
     assertEquals(
