@@ -4,7 +4,7 @@ use models::{
     call_graph::{CallGraphOutcome, CallGraphStatus, ResolvedCallEdge},
 };
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     path::Path,
 };
 
@@ -14,6 +14,17 @@ pub fn select_tests(
     tests: Vec<JavaTestCase>,
     outcome: CallGraphOutcome,
     resolved_edges: Vec<ResolvedCallEdge>,
+) -> TestImpactResult {
+    select_tests_with_reachability(changes, tests, outcome, resolved_edges, &BTreeMap::new())
+}
+
+/// Selects tests using WALA's direct callable-to-test provenance when available.
+pub fn select_tests_with_reachability(
+    changes: Vec<ChangedElement>,
+    tests: Vec<JavaTestCase>,
+    outcome: CallGraphOutcome,
+    resolved_edges: Vec<ResolvedCallEdge>,
+    reachable_tests_by_callable: &BTreeMap<String, Vec<String>>,
 ) -> TestImpactResult {
     let affected_modules = affected_modules(&changes);
     let mut selected_reasons: HashMap<usize, Vec<SelectionReason>> = HashMap::new();
@@ -68,6 +79,7 @@ pub fn select_tests(
                     &tests,
                     &resolved_edges,
                     &reverse_edges,
+                    reachable_tests_by_callable,
                     &mut selected_reasons,
                     &mut diagnostics,
                 );
@@ -145,9 +157,36 @@ fn select_reaching_tests(
     tests: &[JavaTestCase],
     edges: &[ResolvedCallEdge],
     reverse: &HashMap<&str, Vec<&str>>,
+    reachable_tests_by_callable: &BTreeMap<String, Vec<String>>,
     selected_reasons: &mut HashMap<usize, Vec<SelectionReason>>,
     diagnostics: &mut Vec<String>,
 ) {
+    let direct_records: Vec<_> = reachable_tests_by_callable
+        .iter()
+        .filter(|(callable, _)| changed_callable_matches(change, callable))
+        .collect();
+    if !direct_records.is_empty() {
+        let directly_reached_tests: Vec<_> = direct_records
+            .iter()
+            .flat_map(|(_, tests)| tests.iter())
+            .collect();
+        for (index, test) in tests.iter().enumerate() {
+            let identity = java_test_identity(test);
+            if directly_reached_tests
+                .iter()
+                .any(|reached| *reached == &identity)
+            {
+                add_reason(
+                    selected_reasons,
+                    index,
+                    SelectionReason::ChangedCallable {
+                        signature: change.callable_signature.clone().unwrap_or_default(),
+                    },
+                );
+            }
+        }
+        return;
+    }
     let targets = changed_targets(change, edges);
     if targets.is_empty() {
         fallback_unresolved_change(change, tests, selected_reasons, diagnostics);
@@ -179,6 +218,27 @@ fn select_reaching_tests(
     if !matched_test {
         fallback_unresolved_change(change, tests, selected_reasons, diagnostics);
     }
+}
+
+fn changed_callable_matches(change: &ChangedElement, callable: &str) -> bool {
+    match change.kind {
+        ChangedElementKind::Callable => change
+            .callable_signature
+            .as_deref()
+            .is_some_and(|signature| callable_signature_matches(callable, signature)),
+        ChangedElementKind::Class => change
+            .callable_signature
+            .as_deref()
+            .is_some_and(|class_name| signature_belongs_to_class(callable, class_name)),
+        ChangedElementKind::Module => false,
+    }
+}
+
+fn java_test_identity(test: &JavaTestCase) -> String {
+    format!(
+        "{}#{}{}",
+        test.class_name, test.method_name, test.descriptor
+    )
 }
 
 /// Finds graph callables that correspond to one changed element at its available granularity.
