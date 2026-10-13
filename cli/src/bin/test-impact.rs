@@ -216,7 +216,11 @@ fn analyze_module(
 }
 
 /// Converts changed source owners into conservative WALA method targets for bounded provenance.
-fn wala_targets(source_root: &Path, changes: &[ChangedElement], callables: &[Callable]) -> Vec<String> {
+fn wala_targets(
+    source_root: &Path,
+    changes: &[ChangedElement],
+    callables: &[Callable],
+) -> Vec<String> {
     let mut targets = BTreeSet::new();
     for change in changes {
         let method = change
@@ -252,7 +256,10 @@ fn wala_targets(source_root: &Path, changes: &[ChangedElement], callables: &[Cal
                     .replace(std::path::MAIN_SEPARATOR, "/")
             );
             if let Some(member) = callable_method_name(&callable.name) {
-                targets.insert(format!("{declaring_type}#{member}/{}", callable.parameters.len()));
+                targets.insert(format!(
+                    "{declaring_type}#{member}/{}",
+                    callable.parameters.len()
+                ));
             }
         }
     }
