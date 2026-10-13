@@ -123,12 +123,13 @@ public final class WalaCallGraphMain {
   private static CallGraphResult testRootPreparationFailed(
       Path sourceDir, BytecodeCallGraph.Algorithm algorithm, String diagnostic) {
     return new CallGraphResult(
-        1,
+        2,
         "failed",
         "wala-java",
         sourceDir.toString(),
         algorithm.identifier(),
         List.of("test_root_preparation_failed=" + diagnostic),
+        List.of(),
         List.of());
   }
 
@@ -328,11 +329,12 @@ public final class WalaCallGraphMain {
   private static CallGraphResult result(
       String status, Path root, List<CallGraphResult.Edge> edges) {
     return new CallGraphResult(
-        1,
+        2,
         status,
         "wala-java",
         root.toString(),
         "zero_one_container_cfa",
+        List.of(),
         List.of(),
         edges);
   }
@@ -340,12 +342,13 @@ public final class WalaCallGraphMain {
   /** Converts an analysis exception into a JSON result that downstream providers can consume safely. */
   private static CallGraphResult failed(Path root, Throwable error) {
     return new CallGraphResult(
-        1,
+        2,
         "failed",
         "wala-java",
         root.toString(),
         "zero_one_container_cfa",
         List.of(error.getClass().getSimpleName() + ": " + error.getMessage()),
+        List.of(),
         List.of());
   }
 

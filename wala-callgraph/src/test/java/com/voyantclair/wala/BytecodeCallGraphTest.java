@@ -86,6 +86,24 @@ class BytecodeCallGraphTest {
                         && edge.callee().declaring_type().equals("LService")
                         && edge.callee().member_name().equals("changed")),
         result.edges().toString());
+    assertTrue(
+        result.reachability().stream()
+            .anyMatch(
+                reachability ->
+                    reachability.method().declaring_type().equals("LService")
+                        && reachability.method().member_name().equals("changed")
+                        && reachability.entrypoints().stream()
+                            .anyMatch(
+                                entrypoint ->
+                                    entrypoint.declaring_type().equals("LExampleTest")
+                                        && entrypoint.member_name().equals("testChanged"))),
+        result.reachability().toString());
+    assertTrue(
+        result.reachability().stream()
+            .noneMatch(
+                reachability ->
+                    reachability.method().declaring_type().startsWith("Ljava/")),
+        result.reachability().toString());
   }
 
   @Test

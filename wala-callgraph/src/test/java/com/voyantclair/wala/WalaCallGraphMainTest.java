@@ -16,6 +16,7 @@ class WalaCallGraphMainTest {
     var result = WalaCallGraphMain.run(Path.of("src/test/resources/fixtures/no-entrypoint"));
     assertEquals("no_entrypoints", result.status());
     assertTrue(result.edges().isEmpty());
+    assertTrue(result.reachability().isEmpty());
   }
 
   @Test void reports_invalid_source_bindings_as_a_failed_result(@TempDir Path tempDir) throws Exception {
