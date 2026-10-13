@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use cli::get_java_callables_for_modules_with_progress;
 use extractor_runtime::{
-    call_graph::{resolve_edges_with_java_tests, wala::WalaJavaProvider},
+    call_graph::{resolve_reachability_with_java_tests, wala::WalaJavaProvider},
     impact::{ModuleCatalog, analyze_changes, discover_java_tests, select_tests},
 };
 use models::{ChangedElement, TestImpactResult};
@@ -185,11 +185,10 @@ fn analyze_module(
     let wala_started = Instant::now();
     let mut outcome = provider.analyze_test_roots(&source_root, &tests);
     let resolution_started = Instant::now();
-    let (resolved_edges, resolution_diagnostics) =
-        resolve_edges_with_java_tests(&outcome, module_path, callables, &tests);
-    outcome.diagnostics.extend(resolution_diagnostics);
+    let resolution = resolve_reachability_with_java_tests(&outcome, module_path, callables, &tests);
+    outcome.diagnostics.extend(resolution.diagnostics);
     let selection_started = Instant::now();
-    let mut result = select_tests(changes, tests, outcome, resolved_edges);
+    let mut result = select_tests(changes, tests, outcome, resolution.edges);
     result.diagnostics.push(timing_diagnostic(
         "test discovery",
         wala_started.duration_since(discovery_started),

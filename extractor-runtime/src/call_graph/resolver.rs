@@ -5,6 +5,13 @@ use std::path::Path;
 
 const MAX_UNRESOLVED_ENDPOINT_SAMPLES: usize = 10;
 
+/// Source-resolved call-graph data available to impact selection.
+pub struct JavaCallGraphResolution {
+    pub edges: Vec<ResolvedCallEdge>,
+    pub reachable_tests_by_callable: BTreeMap<String, Vec<String>>,
+    pub diagnostics: Vec<String>,
+}
+
 /// Maps provider method references to unique VoyantClair callable signatures.
 ///
 /// Unresolvable endpoints are deliberately omitted so the synthesized graph remains
@@ -51,6 +58,47 @@ pub fn resolve_edges_with_java_tests(
         edges,
         unresolved_source_endpoint_diagnostics(root, callables, unresolved_source_endpoints),
     )
+}
+
+/// Resolves WALA's direct test-entrypoint provenance for each source callable.
+pub fn resolve_reachability_with_java_tests(
+    outcome: &CallGraphOutcome,
+    root: &Path,
+    callables: &[Callable],
+    tests: &[JavaTestCase],
+) -> JavaCallGraphResolution {
+    let (edges, mut diagnostics) = resolve_edges_with_java_tests(outcome, root, callables, tests);
+    let mut reachable_tests_by_callable: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for record in &outcome.reachability {
+        let Some(callable) = resolve(&record.method, root, callables) else {
+            if belongs_to_source(&record.method, root, callables) {
+                diagnostics.push(format!(
+                    "WALA reachability method could not be mapped uniquely: {}",
+                    unresolved_endpoint_identity(&record.method)
+                ));
+            }
+            continue;
+        };
+        let entrypoints = reachable_tests_by_callable.entry(callable).or_default();
+        for entrypoint in &record.entrypoints {
+            if let Some(test) = resolve_java_test(entrypoint, root, tests) {
+                entrypoints.insert(test);
+            } else {
+                diagnostics.push(format!(
+                    "WALA reachability entrypoint was not discovered as a test: {}",
+                    unresolved_endpoint_identity(entrypoint)
+                ));
+            }
+        }
+    }
+    JavaCallGraphResolution {
+        edges,
+        reachable_tests_by_callable: reachable_tests_by_callable
+            .into_iter()
+            .map(|(callable, tests)| (callable, tests.into_iter().collect()))
+            .collect(),
+        diagnostics,
+    }
 }
 
 /// Identifies references whose declaring class exists in the analyzed source scope.
