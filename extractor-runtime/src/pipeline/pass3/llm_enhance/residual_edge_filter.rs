@@ -92,7 +92,7 @@ pub(super) fn print_triage_footer(wall: Duration) {
 }
 
 /// Stdout and the log; one `write_all` per entry so concurrent appends stay whole.
-fn emit(text: &str) {
+pub(super) fn emit(text: &str) {
     println!("{text}");
     let Some(path) = jev_log_path() else {
         return;
@@ -169,7 +169,7 @@ fn decide(answers: &HashMap<String, Answer>, threshold: f64) -> ResidualTriage {
     }
 }
 
-fn residual_call_state(
+pub(super) fn residual_call_state(
     rc: &RestCall,
     bindings: &OperandBindings,
     project_ir: &ProjectIR,
@@ -252,7 +252,7 @@ fn receiver(call: &CallStatement) -> Option<Receiver> {
 /// Java `function_name` carries args: `rt.exchange(url, x)` -> `rt.exchange`.
 /// Python/Go names don't end in `)`, so `requests.Session().get` stays intact.
 // ponytail: paren counting ignores string literals; a paren inside a literal arg mis-splits.
-fn strip_args(function_name: &str) -> &str {
+pub(super) fn strip_args(function_name: &str) -> &str {
     if !function_name.ends_with(')') {
         return function_name;
     }
@@ -292,7 +292,7 @@ fn render_call(rc: &RestCall, callee: Option<&str>) -> String {
 }
 
 /// From service base dir on; file name only otherwise. Never the absolute path.
-fn relative_file(file_path: &str, config: &ConfigurationData) -> String {
+pub(super) fn relative_file(file_path: &str, config: &ConfigurationData) -> String {
     config
         .service_descriptions
         .iter()
