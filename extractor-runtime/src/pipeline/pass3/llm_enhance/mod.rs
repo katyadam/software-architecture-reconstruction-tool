@@ -1,5 +1,6 @@
 //! Resolution of residual (unresolved) REST call targets.
 
+mod ddfa;
 mod dispatch;
 mod facts;
 mod matcher;
@@ -13,4 +14,5 @@ mod test_fixtures;
 mod tokens;
 mod variables;
 
+pub use ddfa::DdfaMode;
 pub use dispatch::evaluate_restcalls_with_llm;
