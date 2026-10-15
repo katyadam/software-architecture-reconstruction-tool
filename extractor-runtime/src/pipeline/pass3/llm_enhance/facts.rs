@@ -9,11 +9,11 @@ use clients::typesafe::{
     state::{Fact, ResidualCallState},
 };
 use models::{
-    Assignment, AssignmentKey, ConfigurationData, Entity, RestCall, Scope,
+    Argument, Assignment, AssignmentKey, ConfigurationData, Entity, Namespace, RestCall, Scope,
     ir::project::{ProjectIR, TypedFileRecord},
 };
 
-use crate::pipeline::pass3::llm_enhance::residual_edge_filter::relative_file;
+use crate::pipeline::pass3::llm_enhance::residual_edge_filter::{relative_file, strip_args};
 use crate::pipeline::pass3::restcalls::OperandBindings;
 
 /// Max `OpenFile` options per step.
@@ -307,30 +307,154 @@ fn entity_line(e: &Entity) -> String {
     format!("class {}{parents}: {}", e.name, fields.join(", "))
 }
 
-// Filled in by Task 3.
-fn define_lines(_ctx: &FactCtx, _name: &str) -> Vec<String> {
-    vec![]
+/// Same language, and the origin file or the origin service.
+fn scoped_files<'a>(ctx: &FactCtx<'a>) -> impl Iterator<Item = &'a TypedFileRecord> {
+    let (origin, dir) = (ctx.origin, ctx.service_dir);
+    ctx.project_ir.files.iter().filter(move |f| {
+        same_language(origin, f)
+            && (f.file_path == origin.file_path || (!dir.is_empty() && f.file_path.contains(dir)))
+    })
 }
-fn callers_lines(_ctx: &FactCtx) -> Vec<String> {
-    vec![]
+
+fn define_lines(ctx: &FactCtx, name: &str) -> Vec<String> {
+    let dotted = format!(".{name}");
+    let mut lines = Vec::new();
+    for f in scoped_files(ctx) {
+        let rel = relative_file(&f.file_path, ctx.config);
+        for (k, a) in &f.assignments {
+            if k.variable_name == name || k.variable_name.ends_with(&dotted) {
+                lines.push(format!("{rel}: {}", assignment_line(k, a)));
+            }
+        }
+        for e in f
+            .entities
+            .iter()
+            .filter(|e| e.fields.iter().any(|fl| fl.name == name))
+        {
+            lines.push(format!("{rel}: {}", entity_line(e)));
+        }
+    }
+    lines.sort();
+    lines
 }
-fn receiver_lines(_ctx: &FactCtx) -> Vec<String> {
-    vec![]
+
+/// Every matching key, sorted: `MDS_URL`, `*_MDS_URL`, `*.MDS_URL`, project constant.
+fn constant_lines(ctx: &FactCtx, name: &str) -> Vec<String> {
+    let upper = name.to_ascii_uppercase();
+    let (suffix, dotted) = (format!("_{upper}"), format!(".{upper}"));
+    let mut lines: Vec<String> = ctx
+        .external_constants
+        .iter()
+        .filter(|(k, _)| {
+            let k = k.to_ascii_uppercase();
+            k == upper || k.ends_with(&suffix) || k.ends_with(&dotted)
+        })
+        .map(|(k, v)| format!("{k} = {v} (env/constants file)"))
+        .collect();
+    if let Some(c) = ctx.project_ir.constants.get(&upper) {
+        lines.push(format!(
+            "{} = {} ({})",
+            c.name,
+            c.value,
+            relative_file(&c.source_file, ctx.config)
+        ));
+    }
+    lines.sort();
+    lines
 }
-fn constant_lines(_ctx: &FactCtx, _name: &str) -> Vec<String> {
-    vec![]
+
+fn enclosing_name<'a>(ctx: &FactCtx<'a>) -> Option<&'a str> {
+    ctx.project_ir
+        .enclosing_callable(&ctx.rc.file_path, &ctx.rc.function_hash)
+        .map(|c| c.metadata.name.as_str())
 }
-fn enclosing_name<'a>(_ctx: &FactCtx<'a>) -> Option<&'a str> {
-    None
+
+fn callers_lines(ctx: &FactCtx) -> Vec<String> {
+    let Some(name) = enclosing_name(ctx) else {
+        return vec![];
+    };
+    let mut lines = Vec::new();
+    for f in scoped_files(ctx) {
+        for c in f.call_statements.iter().map(|c| &c.metadata) {
+            let callee = strip_args(&c.function_name);
+            if callee.rsplit('.').next() != Some(name) {
+                continue;
+            }
+            lines.push(format!(
+                "{}: in {}: {callee}({})",
+                relative_file(&f.file_path, ctx.config),
+                c.enclosing_function_name.as_deref().unwrap_or("<module>"),
+                render_args(&c.arguments)
+            ));
+        }
+    }
+    lines.sort();
+    lines
 }
-fn receiver_entity<'a>(_ctx: &FactCtx<'a>) -> Option<(&'a TypedFileRecord, &'a Entity)> {
-    None
+
+fn render_args(args: &[Argument]) -> String {
+    args.iter()
+        .map(|a| {
+            if a.assigned_variable.is_empty() {
+                a.value.clone()
+            } else {
+                format!("{}={}", a.assigned_variable, a.value)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Receiver datatype if it is a project class, else the enclosing class.
+fn receiver_entity<'a>(ctx: &FactCtx<'a>) -> Option<(&'a TypedFileRecord, &'a Entity)> {
+    let datatype = ctx
+        .state
+        .receiver
+        .as_ref()
+        .and_then(|r| r.datatype.as_deref())
+        .and_then(|t| t.rsplit('.').next());
+    [datatype, ctx.state.enclosing.class.as_deref()]
+        .into_iter()
+        .flatten()
+        .find_map(|name| {
+            scoped_files(ctx)
+                .find_map(|f| f.entities.iter().find(|e| e.name == name).map(|e| (f, e)))
+        })
+}
+
+fn receiver_lines(ctx: &FactCtx) -> Vec<String> {
+    let Some((file, entity)) = receiver_entity(ctx) else {
+        return vec![];
+    };
+    let mut lines = vec![format!(
+        "{}: {}",
+        relative_file(&file.file_path, ctx.config),
+        entity_line(entity)
+    )];
+    if let Some(parents) = ctx
+        .project_ir
+        .class_hierarchy
+        .parents
+        .get(&entity.signature)
+    {
+        lines.push(format!("parents: {}", parents.join(", ")));
+    }
+    lines.extend(
+        file.callables
+            .iter()
+            .map(|c| &c.metadata)
+            .filter(|c| {
+                c.is_constructor && matches!(&c.namespace, Namespace::Class(n) if *n == entity.name)
+            })
+            .map(|c| format!("constructor: {}", c.signature)),
+    );
+    lines
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipeline::pass3::llm_enhance::test_fixtures::{ORIGIN, file, world};
+    use crate::pipeline::pass3::llm_enhance::test_fixtures::{ORIGIN, entity, file, world};
     use models::ir::language::Language;
 
     fn ids(ctx: &FactCtx, actions: &[Action]) -> Vec<String> {
@@ -338,7 +462,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "needs Task 3"]
     fn first_step_offers_every_kind() {
         let w = world();
         let ctx = w.ctx();
@@ -435,5 +558,88 @@ mod tests {
                 "open:proj/caller/mod_29.py#mod_29".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn define_finds_field_across_service() {
+        let w = world();
+        let ctx = w.ctx();
+        let fact = fetch(
+            &ctx,
+            &Action::Define("mds_url".to_string()),
+            &mut Explored::new(ORIGIN),
+        );
+        assert_eq!(
+            fact.body,
+            "proj/caller/settings.py: class Settings(BaseSettings): mds_url: str"
+        );
+    }
+
+    #[test]
+    fn constant_lists_every_match_sorted() {
+        let w = world();
+        let ctx = w.ctx();
+        let fact = fetch(
+            &ctx,
+            &Action::Constant("mds_url".to_string()),
+            &mut Explored::new(ORIGIN),
+        );
+        assert_eq!(
+            fact.body,
+            "MDS_URL = http://mds:8000 (env/constants file)\n\
+             PYTEST_MDS_URL = http://localhost:8000 (env/constants file)"
+        );
+    }
+
+    #[test]
+    fn callers_show_call_sites_with_args() {
+        let w = world();
+        let ctx = w.ctx();
+        let fact = fetch(&ctx, &Action::Callers, &mut Explored::new(ORIGIN));
+        assert_eq!(
+            fact.body,
+            "proj/caller/api.py: in get_case: self.client.fetch_case(case_id)"
+        );
+    }
+
+    #[test]
+    fn receiver_falls_back_to_enclosing_class() {
+        let w = world();
+        let ctx = w.ctx();
+        // `httpx.AsyncClient` is not a project entity -> enclosing `MdsClient`.
+        let fact = fetch(&ctx, &Action::Receiver, &mut Explored::new(ORIGIN));
+        assert_eq!(
+            fact.body,
+            "proj/caller/client.py: class MdsClient: _mds_url = settings.mds_url"
+        );
+    }
+
+    #[test]
+    fn taken_actions_are_not_offered_again() {
+        let w = world();
+        let ctx = w.ctx();
+        let mut explored = Explored::new(ORIGIN);
+        fetch(&ctx, &Action::Callers, &mut explored);
+        assert!(!ids(&ctx, &available(&ctx, &explored)).contains(&"callers".to_string()));
+    }
+
+    #[test]
+    fn lookups_skip_other_languages() {
+        let mut w = world();
+        let mut java = file("/proj/caller/Settings.java", Language::Java);
+        java.entities.push(entity(
+            "JSettings",
+            "/proj/caller/Settings.java",
+            &[],
+            &[("mds_url", Some("String"), None)],
+        ));
+        w.ir.files.push(java);
+        let ctx = w.ctx();
+        let fact = fetch(
+            &ctx,
+            &Action::Define("mds_url".to_string()),
+            &mut Explored::new(ORIGIN),
+        );
+        assert!(!fact.body.contains("JSettings"));
     }
 }
