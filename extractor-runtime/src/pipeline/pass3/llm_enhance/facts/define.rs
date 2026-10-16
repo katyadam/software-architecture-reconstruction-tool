@@ -2,8 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use super::{FactCtx, assignment_line, entity_line, scoped_files};
-use crate::pipeline::pass3::llm_enhance::residual_edge_filter::relative_file;
+use super::{FactCtx, assignment_line, entity_line, fact_path, scoped_files};
 use crate::pipeline::pass3::restcalls::OperandBindings;
 
 /// Names worth defining: last segment of identifiers in binding values
@@ -25,7 +24,7 @@ pub(super) fn define_lines(ctx: &FactCtx, name: &str) -> Vec<String> {
     let dotted = format!(".{name}");
     let mut lines = Vec::new();
     for f in scoped_files(ctx) {
-        let rel = relative_file(&f.file_path, ctx.config);
+        let rel = fact_path(&f.file_path, ctx.config);
         for (k, a) in &f.assignments {
             if k.variable_name == name || k.variable_name.ends_with(&dotted) {
                 lines.push(format!("{rel}: {}", assignment_line(k, a)));

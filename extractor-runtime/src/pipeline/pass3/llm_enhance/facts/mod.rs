@@ -86,7 +86,7 @@ impl Action {
                 format!("Constants and deployment env vars named like `{name}`."),
             ),
             Action::OpenFile { path, codeword } => {
-                let rel = relative_file(path, ctx.config);
+                let rel = fact_path(path, ctx.config);
                 (
                     format!("open:{rel}#{codeword}"),
                     format!("Open {rel} (imported as `{codeword}`): settings, classes, functions."),
@@ -209,6 +209,16 @@ fn entity_line(e: &Entity) -> String {
     format!("class {}{parents}: {}", e.name, fields.join(", "))
 }
 
+/// `relative_file` minus leading `./` / `../` segments (cwd-relative base dirs).
+fn fact_path(path: &str, config: &ConfigurationData) -> String {
+    let rel = relative_file(path, config);
+    let mut s = rel.as_str();
+    while let Some(rest) = s.strip_prefix("../").or_else(|| s.strip_prefix("./")) {
+        s = rest;
+    }
+    s.to_string()
+}
+
 /// Same language, and the origin file or the origin service.
 fn scoped_files<'a>(ctx: &FactCtx<'a>) -> impl Iterator<Item = &'a TypedFileRecord> {
     let (origin, dir) = (ctx.origin, ctx.service_dir);
@@ -251,5 +261,20 @@ mod tests {
         let mut explored = Explored::new(ORIGIN);
         fetch(&ctx, &Action::Callers, &mut explored);
         assert!(!ids(&ctx, &available(&ctx, &explored)).contains(&"callers".to_string()));
+    }
+
+    #[test]
+    fn fact_path_drops_leading_parent_dirs() {
+        let mut w = world();
+        w.config.service_descriptions[0].base_dir_path = "../empaia/caller".to_string();
+        let ctx = w.ctx();
+        let open = Action::OpenFile {
+            path: "../empaia/caller/settings.py".to_string(),
+            codeword: "settings".to_string(),
+        };
+        assert_eq!(
+            open.option(&ctx).0,
+            "open:empaia/caller/settings.py#settings"
+        );
     }
 }

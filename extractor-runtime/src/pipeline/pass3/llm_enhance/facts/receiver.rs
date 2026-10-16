@@ -2,8 +2,7 @@
 
 use models::{Entity, Namespace, ir::project::TypedFileRecord};
 
-use super::{FactCtx, entity_line, scoped_files};
-use crate::pipeline::pass3::llm_enhance::residual_edge_filter::relative_file;
+use super::{FactCtx, entity_line, fact_path, scoped_files};
 
 /// Receiver datatype if it is a project class, else the enclosing class.
 pub(super) fn receiver_entity<'a>(ctx: &FactCtx<'a>) -> Option<(&'a TypedFileRecord, &'a Entity)> {
@@ -28,7 +27,7 @@ pub(super) fn receiver_lines(ctx: &FactCtx) -> Vec<String> {
     };
     let mut lines = vec![format!(
         "{}: {}",
-        relative_file(&file.file_path, ctx.config),
+        fact_path(&file.file_path, ctx.config),
         entity_line(entity)
     )];
     if let Some(parents) = ctx

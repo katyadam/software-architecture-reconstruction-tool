@@ -2,8 +2,8 @@
 
 use models::Argument;
 
-use super::{FactCtx, scoped_files};
-use crate::pipeline::pass3::llm_enhance::residual_edge_filter::{relative_file, strip_args};
+use super::{FactCtx, fact_path, scoped_files};
+use crate::pipeline::pass3::llm_enhance::residual_edge_filter::strip_args;
 
 pub(super) fn enclosing_name<'a>(ctx: &FactCtx<'a>) -> Option<&'a str> {
     ctx.project_ir
@@ -24,7 +24,7 @@ pub(super) fn callers_lines(ctx: &FactCtx) -> Vec<String> {
             }
             lines.push(format!(
                 "{}: in {}: {callee}({})",
-                relative_file(&f.file_path, ctx.config),
+                fact_path(&f.file_path, ctx.config),
                 c.enclosing_function_name.as_deref().unwrap_or("<module>"),
                 render_args(&c.arguments)
             ));

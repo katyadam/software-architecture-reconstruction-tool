@@ -1,7 +1,6 @@
 //! `Constant` action: constants and env vars named like a binding.
 
-use super::FactCtx;
-use crate::pipeline::pass3::llm_enhance::residual_edge_filter::relative_file;
+use super::{FactCtx, fact_path};
 
 /// Every matching key, sorted: `MDS_URL`, `*_MDS_URL`, `*.MDS_URL`, project constant.
 pub(super) fn constant_lines(ctx: &FactCtx, name: &str) -> Vec<String> {
@@ -21,7 +20,7 @@ pub(super) fn constant_lines(ctx: &FactCtx, name: &str) -> Vec<String> {
             "{} = {} ({})",
             c.name,
             c.value,
-            relative_file(&c.source_file, ctx.config)
+            fact_path(&c.source_file, ctx.config)
         ));
     }
     lines.sort();
