@@ -104,11 +104,21 @@ public final class MavenBytecodeArtifacts implements BytecodeArtifactPreparer {
       command.add("-f");
       command.add(pom.toString());
       command.addAll(arguments);
-      var process = new ProcessBuilder(command).redirectErrorStream(true).start();
+      var builder = new ProcessBuilder(command).redirectErrorStream(true);
+      configureMavenJavaHome(builder.environment(), System.getenv("WALA_MAVEN_JAVA_HOME"));
+      var process = builder.start();
       String output = new String(process.getInputStream().readAllBytes());
       return new ProcessResult(process.waitFor(), output);
     } catch (Exception error) {
       return new ProcessResult(-1, error.toString());
+    }
+  }
+
+  /** Applies an optional Java home only to Maven processes that prepare benchmark bytecode. */
+  static void configureMavenJavaHome(
+      java.util.Map<String, String> environment, String configuredJavaHome) {
+    if (configuredJavaHome != null && !configuredJavaHome.isBlank()) {
+      environment.put("JAVA_HOME", configuredJavaHome);
     }
   }
 

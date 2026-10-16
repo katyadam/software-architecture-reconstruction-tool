@@ -150,6 +150,26 @@ class BytecodeCallGraphTest {
     assertEquals("changed", result.reachability().get(0).method().member_name());
   }
 
+  @Test
+  void emits_an_empty_reachability_record_for_a_resolved_unreached_target(
+      @TempDir Path tempDir) throws Exception {
+    Path classesDir = compileTestRootFixture(tempDir);
+    var result = BytecodeCallGraph.analyze(
+        List.of(classesDir),
+        List.of(),
+        List.of(new BytecodeCallGraph.MethodSelector("LExampleTest", "testChanged", "()V")),
+        List.of(new BytecodeCallGraph.TargetSelector("LService", "unchanged", 0)),
+        BytecodeCallGraph.Algorithm.CHA);
+
+    assertTrue(
+        result.reachability().stream()
+            .anyMatch(
+                reachability ->
+                    reachability.method().member_name().equals("unchanged")
+                        && reachability.entrypoints().isEmpty()),
+        result.reachability().toString());
+  }
+
   /** Compiles a Java 8 fixture whose virtual dispatch has a known concrete target. */
   private static Path compileDispatchFixture(Path tempDir) throws IOException {
     Path source = tempDir.resolve("Main.java");
@@ -170,7 +190,7 @@ class BytecodeCallGraphTest {
     Path source = tempDir.resolve("ExampleTest.java");
     Files.writeString(
         source,
-        "class Service { static void changed() {} } class ExampleTest { void testChanged() { Service.changed(); } void testChangedAgain() { Service.changed(); } }");
+        "class Service { static void changed() {} static void unchanged() {} } class ExampleTest { void testChanged() { Service.changed(); } void testChangedAgain() { Service.changed(); } }");
     Path classesDir = tempDir.resolve("test-classes");
     Files.createDirectories(classesDir);
     assertEquals(

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,26 @@ import org.junit.jupiter.api.io.TempDir;
 
 /** Verifies Maven reactor preparation without relying on benchmark-specific layouts. */
 class MavenBytecodeArtifactsTest {
+  @Test
+  void uses_configured_java_home_only_for_maven_subprocess() {
+    var environment = new HashMap<String, String>();
+    environment.put("JAVA_HOME", "/adapter-jdk");
+
+    MavenBytecodeArtifacts.configureMavenJavaHome(environment, "/benchmark-jdk");
+
+    assertEquals("/benchmark-jdk", environment.get("JAVA_HOME"));
+  }
+
+  @Test
+  void preserves_maven_java_home_when_no_override_is_configured() {
+    var environment = new HashMap<String, String>();
+    environment.put("JAVA_HOME", "/adapter-jdk");
+
+    MavenBytecodeArtifacts.configureMavenJavaHome(environment, " ");
+
+    assertEquals("/adapter-jdk", environment.get("JAVA_HOME"));
+  }
+
   @Test
   void prepares_only_selected_module_classes_and_dependency_jars(@TempDir Path tempDir)
       throws Exception {
