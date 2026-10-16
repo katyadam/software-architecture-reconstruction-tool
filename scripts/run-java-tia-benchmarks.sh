@@ -57,7 +57,7 @@ printf '%-44s %10s %12s %s\n' 'project' 'selected' 'unselected' 'timings'
 status=0
 for project_name in "$@"; do
   project_dir="$benchmark_root/$project_name"
-  if [[ ! -d $project_dir/.git ]]; then
+  if ! git -C "$project_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "Unknown Git benchmark project: $project_name" >&2
     status=1
     continue

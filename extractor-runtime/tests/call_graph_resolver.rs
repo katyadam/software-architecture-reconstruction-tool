@@ -699,6 +699,104 @@ fn ignores_edges_to_compiler_generated_enum_values_without_selection_uncertainty
 }
 
 #[test]
+fn ignores_lombok_generated_to_string_without_selection_uncertainty() {
+    let root = tempfile::tempdir().expect("temporary source root is created");
+    let source = root.path().join("src/main/java/fixture/OrderDAO.java");
+    std::fs::create_dir_all(source.parent().expect("source has a parent"))
+        .expect("source directory is created");
+    std::fs::write(
+        &source,
+        "package fixture; import lombok.ToString; @ToString class OrderDAO { void declared() {} }",
+    )
+    .expect("source is written");
+    let method = |class: &str, member_name: &str, descriptor: &str| MethodRef {
+        language: Language::Java,
+        declaring_type: format!("L{class}"),
+        member_name: member_name.into(),
+        descriptor: descriptor.into(),
+        source_path: None,
+        source_line: None,
+    };
+    let outcome = CallGraphOutcome {
+        schema_version: 1,
+        status: CallGraphStatus::Ok,
+        provider_id: "wala-java".into(),
+        source_root: root.path().to_string_lossy().into(),
+        algorithm: "x".into(),
+        diagnostics: vec![],
+        reachability: vec![],
+        edges: vec![RawCallEdge {
+            caller: method("external/Test", "runs", "()V"),
+            callee: method("fixture/OrderDAO", "toString", "()Ljava/lang/String;"),
+            provider_id: "wala-java".into(),
+            algorithm: "x".into(),
+            confidence: None,
+        }],
+    };
+
+    let (_, diagnostics) = resolve_edges(
+        &outcome,
+        root.path(),
+        &[callable_named(
+            "OrderDAO",
+            "declared",
+            source.to_string_lossy().as_ref(),
+        )],
+    );
+
+    assert!(diagnostics.is_empty());
+}
+
+#[test]
+fn reports_unannotated_unmapped_to_string_as_selection_uncertainty() {
+    let root = tempfile::tempdir().expect("temporary source root is created");
+    let source = root.path().join("src/main/java/fixture/OrderDAO.java");
+    std::fs::create_dir_all(source.parent().expect("source has a parent"))
+        .expect("source directory is created");
+    std::fs::write(
+        &source,
+        "package fixture; class OrderDAO { void declared() {} }",
+    )
+    .expect("source is written");
+    let method = |class: &str, member_name: &str, descriptor: &str| MethodRef {
+        language: Language::Java,
+        declaring_type: format!("L{class}"),
+        member_name: member_name.into(),
+        descriptor: descriptor.into(),
+        source_path: None,
+        source_line: None,
+    };
+    let outcome = CallGraphOutcome {
+        schema_version: 1,
+        status: CallGraphStatus::Ok,
+        provider_id: "wala-java".into(),
+        source_root: root.path().to_string_lossy().into(),
+        algorithm: "x".into(),
+        diagnostics: vec![],
+        reachability: vec![],
+        edges: vec![RawCallEdge {
+            caller: method("external/Test", "runs", "()V"),
+            callee: method("fixture/OrderDAO", "toString", "()Ljava/lang/String;"),
+            provider_id: "wala-java".into(),
+            algorithm: "x".into(),
+            confidence: None,
+        }],
+    };
+
+    let (_, diagnostics) = resolve_edges(
+        &outcome,
+        root.path(),
+        &[callable_named(
+            "OrderDAO",
+            "declared",
+            source.to_string_lossy().as_ref(),
+        )],
+    );
+
+    assert_eq!(diagnostics[0], "WALA unresolved source endpoints=1");
+}
+
+#[test]
 fn reports_ambiguous_module_methods_as_selection_uncertainty() {
     let method = |class: &str| MethodRef {
         language: Language::Java,

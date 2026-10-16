@@ -103,7 +103,9 @@ pub fn resolve_reachability_with_java_tests(
 
 /// Identifies references whose declaring class exists in the analyzed source scope.
 fn belongs_to_source(method: &MethodRef, root: &Path, callables: &[Callable]) -> bool {
-    if is_bytecode_only_java_member(method) {
+    if is_bytecode_only_java_member(method)
+        || is_lombok_generated_to_string(method, root, callables)
+    {
         return false;
     }
     let Some(class) = method
@@ -121,6 +123,33 @@ fn belongs_to_source(method: &MethodRef, root: &Path, callables: &[Callable]) ->
             && matches_declaring_source_file(method, callable)
             && matches!(&callable.namespace, Namespace::Class(name) if name == class)
     })
+}
+
+/// Excludes Lombok's generated `toString` when it has no source declaration to resolve.
+fn is_lombok_generated_to_string(method: &MethodRef, root: &Path, callables: &[Callable]) -> bool {
+    if method.member_name != "toString" || method.descriptor != "()Ljava/lang/String;" {
+        return false;
+    }
+    let class = method
+        .declaring_type
+        .trim_start_matches('L')
+        .rsplit('/')
+        .next()
+        .unwrap_or_default();
+    callables
+        .iter()
+        .filter(|callable| {
+            callable
+                .file_path
+                .starts_with(root.to_str().unwrap_or_default())
+                && matches_declaring_source_file(method, callable)
+                && matches!(&callable.namespace, Namespace::Class(name) if name == class)
+        })
+        .any(|callable| {
+            std::fs::read_to_string(&callable.file_path).is_ok_and(|source| {
+                source.contains("@ToString") || source.contains("@lombok.ToString")
+            })
+        })
 }
 
 /// Excludes JVM-generated members whose source edits are represented by their enclosing class.
