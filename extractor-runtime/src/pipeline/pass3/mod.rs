@@ -15,12 +15,13 @@ use models::{
     ConfigurationData, Endpoint,
     ir::{evaluted::EvaluatedIR, project::ProjectIR},
 };
-use sage::resolver::client::SageClient;
 
 use crate::pipeline::pass3::{
     llm_enhance::evaluate_restcalls_with_llm,
     pass_module::{MODULE_CALLABLE_NAME, PerFileModuleConsts},
 };
+
+pub use llm_enhance::{DdfaMode, Resolver};
 
 /// Pass 3: Produce `EvaluatedIR` from `ProjectIR`.
 ///
@@ -94,16 +95,14 @@ pub fn evaluate(
     }
 }
 
-/// Used only in CLI lib which is not binary. This means this function is not used within binary
-///  and marked as dead_code even though it is used in CLI through the lib.
-#[allow(dead_code)]
+/// Pass 3 with residual resolution by `resolver`.
 pub async fn evaluate_with_llm(
     project_ir: ProjectIR,
     external_constants: &HashMap<String, String>,
     per_file_attrs: &HashMap<String, HashMap<String, String>>,
     per_file_module_consts: &PerFileModuleConsts,
     config: &ConfigurationData,
-    sage: &SageClient,
+    resolver: Resolver<'_>,
     typesafe_client: Option<&TypeSafeClient>,
 ) -> EvaluatedIR {
     let (mut restcalls, bindings): (Vec<_>, Vec<_>) = restcalls::evaluate_restcalls(
@@ -119,7 +118,8 @@ pub async fn evaluate_with_llm(
         &mut restcalls,
         &bindings,
         config,
-        sage,
+        external_constants,
+        resolver,
         typesafe_client,
         &project_ir,
     )

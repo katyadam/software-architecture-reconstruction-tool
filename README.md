@@ -164,6 +164,26 @@ LLM_API_KEY=gsk_... cargo run -p cli --release -- \
 
 Responses below the confidence threshold or with no supporting evidence are rejected with a typed `SageError`. See `sage/src/response.rs` for the full error taxonomy.
 
+### Jev Fact Acquisition (DDFA)
+
+`--resolver` picks the backend for residuals the deterministic matcher misses
+(with `--llm`): `matcher` (none), `sage` (LLM, default), `once` or `acquire`
+(TypeSafe Jev, needs `--typesafe` and `TYPESAFE_API_KEY` in `.env`).
+`acquire` lets Jev request facts (definitions, callers, constants, imported
+files of the same language) until it can pick the target service.
+
+```bash
+cargo run -p cli --release -- \
+    -p ../empaia \
+    -c ./config/configurations/local-empaia-config.json \
+    -f ./config/constants/empaia-constants.json \
+    -o ./output-empaia \
+    --scrape --llm --typesafe --resolver acquire
+```
+
+Tuning: `DDFA_MAX_STEPS` (6), `DDFA_ENOUGH` (0.7), `DDFA_TARGET_MIN` (0.5),
+`DDFA_ONCE_FACTS` (12). Each residual logs one `[ddfa]` row to stdout and `JEV_LOG`.
+
 ---
 
 ## Full-Stack Deployment

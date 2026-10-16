@@ -47,6 +47,7 @@ struct LlmMeta {
     enabled: bool,
     model: String,
     url: String,
+    resolver: String,
 }
 
 /// Wall-clock timing of the run, in milliseconds.
@@ -138,6 +139,7 @@ pub struct RunMetadataInput<'a> {
     pub llm_enabled: bool,
     pub llm_model: &'a str,
     pub llm_url: &'a str,
+    pub resolver: &'a str,
     pub cm: &'a ContextMap,
     pub sdg: &'a Sdg,
     pub imcg: &'a Imcg,
@@ -187,6 +189,7 @@ pub fn write_run_metadata(input: RunMetadataInput<'_>) -> Result<()> {
             enabled: input.llm_enabled,
             model: input.llm_model.to_string(),
             url: input.llm_url.to_string(),
+            resolver: input.resolver.to_string(),
         },
         timing: TimingMeta {
             extraction_ms,

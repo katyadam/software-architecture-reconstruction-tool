@@ -25,7 +25,7 @@ mod client;
 mod error;
 #[macro_use]
 mod macros;
-mod pipeline;
+use extractor_runtime::pipeline;
 
 #[derive(OpenApi)]
 #[openapi(

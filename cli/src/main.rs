@@ -3,6 +3,7 @@ use clap::Parser;
 use cli::metadata::{self, RunMetadataInput};
 use cli::{get_all_code_elements, save_json};
 use clients::typesafe::TypeSafeClient;
+use extractor_runtime::pipeline::pass3::{DdfaMode, Resolver};
 use models::ConfigurationData;
 use sage::resolver::client::SageClient;
 use serde::Deserialize;
@@ -14,6 +15,14 @@ use synthesizer::{
     connectors::dto::Constant, direct_cm_build, direct_imcg_build, direct_sdg_build,
 };
 use uuid::Uuid;
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum ResolverArg {
+    Matcher,
+    Sage,
+    Once,
+    Acquire,
+}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Local simulation of the extraction process")]
@@ -42,6 +51,10 @@ struct Cli {
     #[arg(long, default_value = "qwen2.5-coder:7b")]
     llm_model: String,
 
+    /// Backend for residuals the matcher misses (with --llm). once/acquire need --typesafe.
+    #[arg(long, value_enum, default_value_t = ResolverArg::Sage)]
+    resolver: ResolverArg,
+
     #[arg(long, default_value_t = false)]
     typesafe: bool,
 }
@@ -64,6 +77,10 @@ async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
     env_logger::init();
     let args = Cli::parse();
+
+    if matches!(args.resolver, ResolverArg::Once | ResolverArg::Acquire) && !args.typesafe {
+        anyhow::bail!("--resolver once|acquire needs --typesafe");
+    }
 
     if !args.project_dir.is_dir() {
         anyhow::bail!("Project directory does not exist!");
@@ -112,9 +129,14 @@ async fn main() -> Result<()> {
         println!("   Found {count} env vars from .env / docker-compose files.");
     }
 
-    let sage = args
-        .llm
+    let sage = (args.llm && args.resolver == ResolverArg::Sage)
         .then(|| SageClient::new(&args.llm_url, &args.llm_model));
+    let resolver = args.llm.then_some(match (args.resolver, &sage) {
+        (ResolverArg::Sage, Some(sage)) => Resolver::Sage(sage),
+        (ResolverArg::Once, _) => Resolver::Ddfa(DdfaMode::Once),
+        (ResolverArg::Acquire, _) => Resolver::Ddfa(DdfaMode::Acquire),
+        _ => Resolver::Matcher,
+    });
 
     let typesafe_client = args
         .typesafe
@@ -125,7 +147,7 @@ async fn main() -> Result<()> {
         &args.project_dir,
         &external_constants,
         &config,
-        sage.as_ref(),
+        resolver,
         typesafe_client.as_ref(),
     )
     .await?;
@@ -163,6 +185,7 @@ async fn main() -> Result<()> {
         llm_enabled: args.llm,
         llm_model: &args.llm_model,
         llm_url: &args.llm_url,
+        resolver: &format!("{:?}", args.resolver).to_lowercase(),
         cm: &cm,
         sdg: &sdg,
         imcg: &imcg,

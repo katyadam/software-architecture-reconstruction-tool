@@ -15,4 +15,4 @@ mod tokens;
 mod variables;
 
 pub use ddfa::DdfaMode;
-pub use dispatch::evaluate_restcalls_with_llm;
+pub use dispatch::{Resolver, evaluate_restcalls_with_llm};

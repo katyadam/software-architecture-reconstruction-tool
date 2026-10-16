@@ -1,27 +1,46 @@
-use clients::typesafe::TypeSafeClient;
+use std::collections::HashMap;
+
+use clients::typesafe::{SystemOneRequest, TypeSafeClient};
 use futures_util::stream::{self, StreamExt};
 use log::{debug, info, warn};
 use models::{ConfigurationData, RestCall, ir::project::ProjectIR};
 use sage::resolver::client::SageClient;
 
 use crate::pipeline::pass3::llm_enhance::{
+    ddfa::{DdfaMode, Limits, Resolution, resolve},
+    facts::FactCtx,
     matcher::{IndexedService, build_index, deterministic_match},
     oracle::{ServiceOracle, service_for_url},
-    query_builder::{build_query_for_restcall, rewrite_target_uri_to_service},
-    residual_edge_filter::{ResidualTriage, print_triage_footer, print_triage_header, triage},
+    query_builder::{build_query_for_restcall, candidate_services, rewrite_target_uri_to_service},
+    residual_edge_filter::{
+        ResidualTriage, emit, print_triage_footer, print_triage_header, residual_call_state, triage,
+    },
     scorer::{ProducedEdge, score},
     signals,
+    variables::microservice_for_file,
 };
 use crate::pipeline::pass3::restcalls::OperandBindings;
 
 const MAX_CONCURRENT_LLM_QUERIES: usize = 4;
 
+/// Backend for residuals the matcher misses.
+#[derive(Clone, Copy)]
+pub enum Resolver<'a> {
+    /// Deterministic matcher only.
+    Matcher,
+    Sage(&'a SageClient),
+    /// Jev fact acquisition; needs a TypeSafe client.
+    Ddfa(DdfaMode),
+}
+
 struct Ctx<'a> {
     config: &'a ConfigurationData,
     project_ir: &'a ProjectIR,
-    sage: &'a SageClient,
+    external_constants: &'a HashMap<String, String>,
+    resolver: Resolver<'a>,
     typesafe_client: Option<&'a TypeSafeClient>,
     index: Vec<IndexedService<'a>>,
+    limits: Limits,
 }
 
 enum Outcome {
@@ -40,7 +59,7 @@ enum Outcome {
 
 enum Step {
     Deterministic(String),
-    Llm(String),
+    Model(String),
     Unresolved { queried: bool },
 }
 
@@ -49,16 +68,19 @@ pub async fn evaluate_restcalls_with_llm(
     restcalls: &mut [RestCall],
     bindings: &[OperandBindings],
     config: &ConfigurationData,
-    sage: &SageClient,
+    external_constants: &HashMap<String, String>,
+    resolver: Resolver<'_>,
     typesafe_client: Option<&TypeSafeClient>,
     project_ir: &ProjectIR,
 ) {
     let ctx = Ctx {
         config,
         project_ir,
-        sage,
+        external_constants,
+        resolver,
         typesafe_client,
         index: build_index(config),
+        limits: Limits::from_env(),
     };
 
     print_triage_header();
@@ -98,7 +120,7 @@ pub async fn evaluate_restcalls_with_llm(
                 deterministic += 1;
                 restcalls[i].target_uri = uri;
             }
-            Step::Llm(uri) => {
+            Step::Model(uri) => {
                 queried += 1;
                 restcalls[i].target_uri = uri;
             }
@@ -154,7 +176,11 @@ async fn resolve_one(rc: &RestCall, bindings: &OperandBindings, ctx: &Ctx<'_>) -
         .filter(|rewritten| *rewritten != rc.target_uri)
     {
         Some(uri) => Step::Deterministic(uri),
-        None => query_sage(rc, ctx).await,
+        None => match ctx.resolver {
+            Resolver::Matcher => Step::Unresolved { queried: false },
+            Resolver::Sage(sage) => query_sage(rc, sage, ctx).await,
+            Resolver::Ddfa(mode) => query_ddfa(rc, bindings, mode, ctx).await,
+        },
     };
 
     Outcome::Residual {
@@ -165,7 +191,7 @@ async fn resolve_one(rc: &RestCall, bindings: &OperandBindings, ctx: &Ctx<'_>) -
 }
 
 /// Rewrite onto the chosen service URL; abstain or error leaves it untouched.
-async fn query_sage(rc: &RestCall, ctx: &Ctx<'_>) -> Step {
+async fn query_sage(rc: &RestCall, sage: &SageClient, ctx: &Ctx<'_>) -> Step {
     let Some(query) = build_query_for_restcall(rc, ctx.config, ctx.project_ir) else {
         warn!(
             "sage: skipping {} — no candidate services to classify",
@@ -173,7 +199,7 @@ async fn query_sage(rc: &RestCall, ctx: &Ctx<'_>) -> Step {
         );
         return Step::Unresolved { queried: false };
     };
-    match ctx.sage.query(query).await {
+    match sage.query(query).await {
         Ok(resp) => match resp.service {
             Some(name) => match ctx
                 .config
@@ -181,7 +207,9 @@ async fn query_sage(rc: &RestCall, ctx: &Ctx<'_>) -> Step {
                 .iter()
                 .find(|d| d.name == name)
             {
-                Some(service) => Step::Llm(rewrite_target_uri_to_service(&rc.target_uri, service)),
+                Some(service) => {
+                    Step::Model(rewrite_target_uri_to_service(&rc.target_uri, service))
+                }
                 None => {
                     warn!(
                         "sage: chosen service {name} not in config for {}",
@@ -200,6 +228,90 @@ async fn query_sage(rc: &RestCall, ctx: &Ctx<'_>) -> Step {
             Step::Unresolved { queried: true }
         }
     }
+}
+
+/// Rewrite onto the service Jev picks; abstain or error leaves it untouched.
+async fn query_ddfa(
+    rc: &RestCall,
+    bindings: &OperandBindings,
+    mode: DdfaMode,
+    ctx: &Ctx<'_>,
+) -> Step {
+    let Some(client) = ctx.typesafe_client else {
+        warn!(
+            "ddfa: no TypeSafe client, {} left unresolved",
+            rc.target_uri
+        );
+        return Step::Unresolved { queried: false };
+    };
+    let Some(origin) = ctx
+        .project_ir
+        .files
+        .iter()
+        .find(|f| f.file_path == rc.file_path)
+    else {
+        warn!("ddfa: {} not in project IR", rc.file_path);
+        return Step::Unresolved { queried: false };
+    };
+    let services = candidate_services(
+        &microservice_for_file(&rc.file_path, ctx.config),
+        ctx.config,
+    );
+    if services.is_empty() {
+        return Step::Unresolved { queried: false };
+    }
+    let state = residual_call_state(rc, bindings, ctx.project_ir, ctx.config);
+    let service_dir = ctx
+        .config
+        .service_descriptions
+        .iter()
+        .find(|s| rc.file_path.contains(&s.base_dir_path))
+        .map_or("", |s| s.base_dir_path.as_str());
+    let fctx = FactCtx {
+        project_ir: ctx.project_ir,
+        config: ctx.config,
+        external_constants: ctx.external_constants,
+        rc,
+        bindings,
+        state: &state,
+        origin,
+        service_dir,
+    };
+    let ask = async |req: &SystemOneRequest| client.system_one(req).await;
+    match resolve(mode, &fctx, &services, &ctx.limits, ask).await {
+        Ok(resolution) => {
+            emit(&ddfa_row(rc, &resolution));
+            match resolution
+                .service
+                .and_then(|name| services.iter().find(|s| s.name == name))
+            {
+                Some(service) => {
+                    Step::Model(rewrite_target_uri_to_service(&rc.target_uri, service))
+                }
+                None => Step::Unresolved { queried: true },
+            }
+        }
+        Err(e) => {
+            warn!("ddfa: resolving {} failed: {e}", rc.target_uri);
+            Step::Unresolved { queried: true }
+        }
+    }
+}
+
+/// `[ddfa] mds  calls 2 tokens 812 | open:a.py#settings > define:mds_url | <target> | client.py`
+fn ddfa_row(rc: &RestCall, r: &Resolution) -> String {
+    let file = std::path::Path::new(&rc.file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&rc.file_path);
+    format!(
+        "[ddfa] {:<20} calls {} tokens {} | {} | {} | {file}",
+        r.service.as_deref().unwrap_or("-"),
+        r.calls,
+        r.input_tokens,
+        r.trail.join(" > "),
+        rc.target_uri
+    )
 }
 
 /// Score against the oracle when `SAGE_SCORE` (constants file path) is set.

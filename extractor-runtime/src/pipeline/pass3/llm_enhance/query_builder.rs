@@ -13,10 +13,8 @@ pub(super) fn build_query_for_restcall(
 ) -> Option<SageQuery> {
     let sig = signals::extract(rc, project_ir, config);
 
-    let candidates: Vec<CandidateService> = config
-        .service_descriptions
-        .iter()
-        .filter(|desc| desc.name != sig.origin_service && !desc.urls.is_empty())
+    let candidates: Vec<CandidateService> = candidate_services(&sig.origin_service, config)
+        .into_iter()
         .map(|desc| CandidateService {
             name: desc.name.clone(),
             url: desc.urls[0].clone(),
@@ -39,6 +37,18 @@ pub(super) fn build_query_for_restcall(
         kind: QueryKind::ClassifyTargetService { candidates },
         context,
     })
+}
+
+/// Services with a URL, minus `origin`.
+pub(super) fn candidate_services<'a>(
+    origin: &str,
+    config: &'a ConfigurationData,
+) -> Vec<&'a ServiceDescription> {
+    config
+        .service_descriptions
+        .iter()
+        .filter(|d| d.name != origin && !d.urls.is_empty())
+        .collect()
 }
 
 /// `base + "/cases" + id` -> `/cases`. Heuristic scan, not a parser.
@@ -79,6 +89,27 @@ pub(super) fn rewrite_target_uri_to_service(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn candidates_skip_origin_and_urlless() {
+        let svc = |name: &str, url: Option<&str>| ServiceDescription {
+            name: name.to_string(),
+            base_dir_path: format!("/proj/{name}"),
+            urls: url.map(str::to_string).into_iter().collect(),
+        };
+        let config = ConfigurationData {
+            service_descriptions: vec![
+                svc("caller", Some("http://caller")),
+                svc("mds", Some("http://mds")),
+                svc("nourl", None),
+            ],
+        };
+        let names: Vec<&str> = candidate_services("caller", &config)
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["mds"]);
+    }
 
     #[test]
     fn path_suffix_no_literal() {
