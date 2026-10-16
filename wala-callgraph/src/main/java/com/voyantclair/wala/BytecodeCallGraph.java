@@ -200,9 +200,14 @@ public final class BytecodeCallGraph {
     }
     phase("edges_ready", startedAtNanos);
     long reachabilityStartedAtNanos = System.nanoTime();
-    var reachability = reachability(callGraph, scope, entrypointSelectors, targetSelectors);
+    var targetReachability = targetSelectors.isEmpty() ? null : targetReachability(
+        callGraph, scope, hierarchy, entrypointSelectors, targetSelectors);
+    var reachability = targetReachability == null
+        ? reachability(callGraph, scope, entrypointSelectors, targetSelectors)
+        : targetReachability.reachability();
     phase("reachability_ready", startedAtNanos);
     var diagnostics = new ArrayList<>(selectedEntrypoints.diagnostics());
+    if (targetReachability != null) diagnostics.addAll(targetReachability.diagnostics());
     diagnostics.add(
         "reachability_duration_ms="
             + (System.nanoTime() - reachabilityStartedAtNanos) / 1_000_000);
@@ -257,9 +262,6 @@ public final class BytecodeCallGraph {
   private static List<CallGraphResult.Reachability> reachability(
       CallGraph callGraph, AnalysisScope scope, List<MethodSelector> selectors,
       List<TargetSelector> targetSelectors) {
-    if (!targetSelectors.isEmpty()) {
-      return targetReachability(callGraph, scope, selectors, targetSelectors);
-    }
     var rootIndexes = new LinkedHashMap<MethodSelector, Integer>();
     var roots = new ArrayList<CallGraphResult.MethodRef>();
     for (MethodSelector selector : selectors) {
@@ -314,8 +316,8 @@ public final class BytecodeCallGraph {
   }
 
   /** Traverses predecessors from changed methods, avoiding full-graph provenance for every method. */
-  private static List<CallGraphResult.Reachability> targetReachability(
-      CallGraph callGraph, AnalysisScope scope, List<MethodSelector> roots, List<TargetSelector> targets) {
+  private static TargetReachability targetReachability(
+      CallGraph callGraph, AnalysisScope scope, IClassHierarchy hierarchy, List<MethodSelector> roots, List<TargetSelector> targets) {
     var rootIndexes = new LinkedHashMap<MethodSelector, Integer>();
     var rootRefs = new ArrayList<CallGraphResult.MethodRef>();
     for (MethodSelector root : roots) {
@@ -330,6 +332,18 @@ public final class BytecodeCallGraph {
       if (root != null) rootNodes.put(entrypoint, root);
     }
     var reachedByMethod = new LinkedHashMap<CallGraphResult.MethodRef, BitSet>();
+    var matchedTargets = new HashSet<TargetSelector>();
+    for (var clazz : hierarchy) {
+      if (!scope.isApplicationLoader(clazz.getClassLoader())) continue;
+      for (var method : clazz.getDeclaredMethods()) {
+        for (var selector : targets) {
+          if (matches(method, selector)) {
+            matchedTargets.add(selector);
+            reachedByMethod.putIfAbsent(ref(method), new BitSet(rootRefs.size()));
+          }
+        }
+      }
+    }
     for (CGNode target : callGraph) {
       if (!scope.isApplicationLoader(target.getMethod().getDeclaringClass().getClassLoader())
           || !targets.stream().anyMatch(selector -> matches(target, selector))) {
@@ -348,9 +362,14 @@ public final class BytecodeCallGraph {
         while (predecessors.hasNext()) pending.add(predecessors.next());
       }
     }
-    return reachedByMethod.entrySet().stream()
+    var reachability = reachedByMethod.entrySet().stream()
         .map(entry -> new CallGraphResult.Reachability(entry.getKey(), roots(entry.getValue(), rootRefs)))
         .toList();
+    var diagnostics = targets.stream()
+        .filter(selector -> !matchedTargets.contains(selector))
+        .map(selector -> "unmatched_target=" + selector.declaringType() + "#" + selector.memberName() + "/" + selector.parameterCount())
+        .toList();
+    return new TargetReachability(reachability, diagnostics);
   }
 
   /** Adds source root bits to a destination and returns whether it acquired any new provenance. */
@@ -384,7 +403,10 @@ public final class BytecodeCallGraph {
   }
 
   private static boolean matches(CGNode node, TargetSelector selector) {
-    var method = node.getMethod();
+    return matches(node.getMethod(), selector);
+  }
+
+  private static boolean matches(com.ibm.wala.classLoader.IMethod method, TargetSelector selector) {
     return method.getDeclaringClass().getName().toString().equals(selector.declaringType())
         && method.getName().toString().equals(selector.memberName())
         && parameterCount(method.getDescriptor().toString()) == selector.parameterCount();
@@ -434,6 +456,9 @@ public final class BytecodeCallGraph {
 
   /** Couples resolved explicit entry points with diagnostics for selectors that could not bind. */
   private record SelectedEntrypoints(List<Entrypoint> entryPoints, List<String> diagnostics) {}
+
+  /** Couples explicit changed targets with their proven test reachability. */
+  private record TargetReachability(List<CallGraphResult.Reachability> reachability, List<String> diagnostics) {}
 
   /** Builds a WALA call graph with the requested precision strategy. */
   private static CallGraph buildCallGraph(

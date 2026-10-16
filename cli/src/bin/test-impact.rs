@@ -255,7 +255,7 @@ fn wala_targets(
                     .to_string_lossy()
                     .replace(std::path::MAIN_SEPARATOR, "/")
             );
-            if let Some(member) = callable_method_name(&callable.name) {
+            if let Some(member) = wala_target_member(callable) {
                 targets.insert(format!(
                     "{declaring_type}#{member}/{}",
                     callable.parameters.len()
@@ -269,6 +269,37 @@ fn wala_targets(
 fn callable_method_name(name: &str) -> Option<&str> {
     name.split_once('(')
         .and_then(|(prefix, _)| prefix.split_whitespace().last())
+}
+
+/// Uses the JVM spelling for constructors while preserving ordinary source method names.
+fn wala_target_member(callable: &Callable) -> Option<&str> {
+    callable
+        .is_constructor
+        .then_some("<init>")
+        .or_else(|| callable_method_name(&callable.name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wala_target_member;
+    use models::{Callable, Namespace};
+
+    #[test]
+    fn converts_java_constructor_targets_to_jvm_init() {
+        let constructor = Callable {
+            name: "public Service(String dependency)".into(),
+            signature: "class:Service/Service(String)".into(),
+            namespace: Namespace::Class("Service".into()),
+            parameters: vec![],
+            return_type: None,
+            is_async: false,
+            is_constructor: true,
+            hash: String::new(),
+            file_path: "/service/src/main/java/example/Service.java".into(),
+        };
+
+        assert_eq!(wala_target_member(&constructor), Some("<init>"));
+    }
 }
 
 /// Discovers tests and selects the required broad fallback without invoking the adapter.
