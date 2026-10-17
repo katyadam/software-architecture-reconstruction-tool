@@ -1,5 +1,7 @@
 //! Provider-neutral call-graph analysis and source-callable resolution.
 
+mod adapter_process;
+pub mod go_native;
 pub mod java_adapter;
 mod registry;
 mod resolver;
