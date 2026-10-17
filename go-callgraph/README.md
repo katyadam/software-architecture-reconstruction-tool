@@ -62,6 +62,16 @@ benchmark integration has been added in this slice.
 
 ## Rust adapter
 
+The native executable also supports `--mode inventory --source-dir DIR` for
+graph-free typed discovery and `--mode describe` for AST ownership metadata.
+Describe reads `{"files":[{"source_path":"snapshot-key","source":"Go source"}]}`
+from stdin; it does not load packages or require a module. Metadata envelopes
+use schema version 1. Graph mode remains the default and uses schema version 2.
+Discovery preserves tests even when unsupported `TestMain` setup is present.
+Package loading is offline and uses a scratch module/sum copy so analyzing a
+checkout cannot rewrite its module files. Missing cached dependencies fail
+explicitly rather than trigger downloads.
+
 `extractor_runtime::call_graph::go_native::GoNativeProvider` invokes this
 executable directly, without Java preparation. `analyze_targets` returns a typed
 `GoAnalysisResult`: its `graph`, native `tests`, and `scope` remain available for
