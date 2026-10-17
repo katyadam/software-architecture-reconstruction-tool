@@ -42,6 +42,17 @@ impl WalaJavaProvider {
         self.inner
             .analyze_test_roots(source_root, test_roots, targets)
     }
+
+    pub fn analyze_modules(
+        &self,
+        project_root: &std::path::Path,
+        modules: &[PathBuf],
+        tests: &[JavaTestCase],
+        targets: &[String],
+    ) -> CallGraphOutcome {
+        self.inner
+            .analyze_modules(project_root, modules, tests, targets)
+    }
 }
 
 impl CallGraphProvider for WalaJavaProvider {

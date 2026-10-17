@@ -76,6 +76,58 @@ impl JavaAdapterProvider {
         )
     }
 
+    /// Prepares all in-project application modules for a consumer's test roots.
+    /// This explicit path also lets legacy providers use the neutral preparer.
+    pub fn analyze_modules(
+        &self,
+        project_root: &std::path::Path,
+        module_roots: &[PathBuf],
+        test_roots: &[JavaTestCase],
+        targets: &[String],
+    ) -> CallGraphOutcome {
+        let request = CallGraphRequest::new(project_root.to_string_lossy(), Language::Java);
+        let mut merged = PreparedJavaArtifacts {
+            application_class_dirs: vec![],
+            test_class_dirs: vec![],
+            classpath: vec![],
+            diagnostic: String::new(),
+        };
+        for module in module_roots {
+            let module_request = CallGraphRequest::new(
+                module.join("src/main/java").to_string_lossy(),
+                Language::Java,
+            );
+            let artifacts = match self.prepare_artifacts(&module_request) {
+                Ok(artifacts) => artifacts,
+                Err(diagnostic) => {
+                    return failed(&request, &self.provider_id, &self.algorithm, &diagnostic);
+                }
+            };
+            merged
+                .application_class_dirs
+                .extend(artifacts.application_class_dirs);
+            merged.test_class_dirs.extend(artifacts.test_class_dirs);
+            merged.classpath.extend(artifacts.classpath);
+        }
+        for paths in [
+            &mut merged.application_class_dirs,
+            &mut merged.test_class_dirs,
+            &mut merged.classpath,
+        ] {
+            paths.sort();
+            paths.dedup();
+        }
+        // A reactor artifact already loaded as application bytecode must not also
+        // appear in a parent/library loader, where it could shadow that bytecode.
+        merged.classpath.retain(|path| {
+            !duplicates_application_module(std::path::Path::new(path), module_roots)
+        });
+        self.invoke(
+            &request,
+            test_root_arguments(project_root, test_roots, targets, Some(&merged)),
+        )
+    }
+
     fn prepare_artifacts(
         &self,
         request: &CallGraphRequest,
@@ -146,6 +198,36 @@ impl JavaAdapterProvider {
             ),
         }
     }
+}
+
+fn duplicates_application_module(jar: &std::path::Path, modules: &[PathBuf]) -> bool {
+    modules.iter().any(|module| {
+        if jar.starts_with(module.join("build/libs")) {
+            return true;
+        }
+        let Ok(properties) =
+            std::fs::read_to_string(module.join("target/maven-archiver/pom.properties"))
+        else {
+            return false;
+        };
+        let values: std::collections::BTreeMap<_, _> = properties
+            .lines()
+            .filter_map(|line| line.split_once('='))
+            .collect();
+        let (Some(group), Some(artifact), Some(version)) = (
+            values.get("groupId"),
+            values.get("artifactId"),
+            values.get("version"),
+        ) else {
+            return false;
+        };
+        let folder = PathBuf::from(group.replace('.', "/"))
+            .join(artifact)
+            .join(version);
+        let main = folder.join(format!("{artifact}-{version}.jar"));
+        let tests = folder.join(format!("{artifact}-{version}-tests.jar"));
+        jar.ends_with(main) || (module.join("target/test-classes").is_dir() && jar.ends_with(tests))
+    })
 }
 
 impl CallGraphProvider for JavaAdapterProvider {
@@ -394,6 +476,34 @@ fn failed(
 #[cfg(test)]
 mod tests {
     use super::{isolate_process_group, test_root_arguments, wait_for_output};
+    #[test]
+    fn omits_only_the_maven_jar_already_loaded_as_application_bytecode() {
+        let root = tempfile::tempdir().unwrap();
+        let archive = root.path().join("target/maven-archiver");
+        std::fs::create_dir_all(&archive).unwrap();
+        std::fs::write(
+            archive.join("pom.properties"),
+            "groupId=example.control\nartifactId=library\nversion=1\n",
+        )
+        .unwrap();
+        let modules = vec![root.path().to_path_buf()];
+        assert!(super::duplicates_application_module(
+            std::path::Path::new("/cache/example/control/library/1/library-1.jar"),
+            &modules
+        ));
+        assert!(!super::duplicates_application_module(
+            std::path::Path::new("/cache/example/control/library/2/library-2.jar"),
+            &modules
+        ));
+        assert!(!super::duplicates_application_module(
+            std::path::Path::new("/cache/other/control/library/1/library-1.jar"),
+            &modules
+        ));
+        assert!(!super::duplicates_application_module(
+            std::path::Path::new("/cache/example/control/library/1/library-1-tests.jar"),
+            &modules
+        ));
+    }
     use models::JavaTestCase;
     use std::{
         path::Path,
@@ -450,6 +560,7 @@ mod tests {
                 Path::new("module/src/main/java"),
                 &tests,
                 &["Lexample/Service#run/0".into()],
+                None,
             ),
             vec![
                 "--source-dir",

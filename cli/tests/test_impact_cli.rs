@@ -248,6 +248,164 @@ fn selects_descendant_module_tests_for_a_reactor_root_configuration_change() {
 }
 
 #[test]
+fn excludes_independent_sibling_tests_for_a_child_configuration_change() {
+    let fixture = create_reactor_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "orders/src/main/resources/mode.properties",
+        "mode=candidate",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "child configuration candidate"]);
+    let result = run_tia_with_jar(&fixture, &baseline, &fixture.path().join("missing.jar"));
+    assert_eq!(result.selected_tests.len(), 1, "{:?}", result.diagnostics);
+    assert_eq!(result.unselected_tests.len(), 1);
+    assert!(result.unselected_tests[0].module_root.ends_with("billing"));
+}
+
+#[test]
+fn excludes_independent_sibling_tests_for_a_production_callable_change() {
+    let fixture = create_reactor_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "orders/src/main/java/fixture/orders/Service.java",
+        "package fixture.orders; public class Service { public static void run() { int value = 2; } }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "child production candidate"]);
+    let result = run_tia(&fixture, &baseline);
+    assert_eq!(result.selected_tests.len(), 1, "{:?}", result.diagnostics);
+    assert!(
+        result
+            .unselected_tests
+            .iter()
+            .any(|test| test.module_root.ends_with("billing"))
+    );
+}
+
+#[test]
+fn selects_sibling_gradle_tests_for_a_child_configuration_change() {
+    let fixture = create_reactor_fixture();
+    fs::remove_file(fixture.path().join("pom.xml")).unwrap();
+    write_source(
+        fixture.path(),
+        "settings.gradle",
+        "include ':orders', ':billing'",
+    );
+    write_source(fixture.path(), "build.gradle", "");
+    for module in ["orders", "billing"] {
+        fs::remove_file(fixture.path().join(format!("{module}/pom.xml"))).unwrap();
+        write_source(
+            fixture.path(),
+            &format!("{module}/build.gradle"),
+            "plugins { id 'java' }",
+        );
+    }
+    write_source(
+        fixture.path(),
+        "billing/build.gradle",
+        "plugins { id 'java' }\ndependencies { implementation project(':orders') }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "Gradle baseline"]);
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "orders/src/main/resources/mode.properties",
+        "mode=candidate",
+    );
+    git(&fixture, &["add", "."]);
+    git(
+        &fixture,
+        &["commit", "-m", "Gradle child configuration candidate"],
+    );
+    let result = run_tia_with_jar(&fixture, &baseline, &fixture.path().join("missing.jar"));
+    assert_eq!(result.selected_tests.len(), 2, "{:?}", result.diagnostics);
+    assert!(result.unselected_tests.is_empty());
+    assert!(
+        result
+            .selected_tests
+            .iter()
+            .any(|selected| selected.test.module_root.ends_with("billing"))
+    );
+}
+
+#[test]
+fn both_providers_select_only_the_consumer_test_reaching_the_changed_library() {
+    let fixture = create_reactor_fixture();
+    write_source(
+        fixture.path(),
+        "billing/pom.xml",
+        "<project><modelVersion>4.0.0</modelVersion><parent><groupId>fixture</groupId><artifactId>reactor</artifactId><version>1</version></parent><artifactId>billing</artifactId><dependencies><dependency><groupId>fixture</groupId><artifactId>orders</artifactId><version>1</version></dependency></dependencies></project>",
+    );
+    write_source(
+        fixture.path(),
+        "billing/src/test/java/fixture/billing/ServiceTest.java",
+        "package fixture.billing; public class ServiceTest { @org.junit.jupiter.api.Test public void coversLibrary() { fixture.orders.Service.run(); } @org.junit.jupiter.api.Test public void coversLocal() { Service.run(); } }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "consumer baseline"]);
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "orders/src/main/java/fixture/orders/Service.java",
+        "package fixture.orders; public class Service { public static void run() { int changed = 2; } }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "library candidate"]);
+    for result in [
+        run_tia(&fixture, &baseline),
+        run_tia_with_sootup(&fixture, &baseline),
+    ] {
+        assert_eq!(result.selected_tests.len(), 2, "{:?}", result.diagnostics);
+        assert!(
+            result
+                .selected_tests
+                .iter()
+                .any(|selected| selected.test.method_name == "coversLibrary")
+        );
+        assert!(result.selected_tests.iter().all(|selected| {
+            selected
+                .reasons
+                .iter()
+                .all(|reason| matches!(reason, models::SelectionReason::ChangedCallable { .. }))
+        }));
+        assert_eq!(result.unselected_tests.len(), 1, "{:?}", result.diagnostics);
+        assert_eq!(result.unselected_tests[0].method_name, "coversLocal");
+    }
+}
+
+#[test]
+fn uncertain_dependency_metadata_retains_broad_consumer_fallback() {
+    let fixture = create_reactor_fixture();
+    write_source(
+        fixture.path(),
+        "orders/pom.xml",
+        "<project><modelVersion>4.0.0</modelVersion><parent><groupId>fixture</groupId><artifactId>reactor</artifactId><version>1</version></parent><artifactId>orders</artifactId><profiles><profile><id>dynamic</id><dependencies/></profile></profiles></project>",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "profile baseline"]);
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "orders/src/main/resources/mode.properties",
+        "mode=candidate",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "configuration candidate"]);
+    let result = run_tia_with_jar(&fixture, &baseline, &fixture.path().join("missing.jar"));
+    assert_eq!(result.selected_tests.len(), 2);
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.starts_with("module dependency metadata fallback:"))
+    );
+}
+
+#[test]
 fn selects_each_descendant_test_once_when_root_and_child_modules_change() {
     let fixture = create_reactor_fixture();
     let baseline = git(&fixture, &["rev-parse", "HEAD"]);

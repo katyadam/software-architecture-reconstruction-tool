@@ -1,0 +1,9 @@
+plugins { id 'java' }
+repositories { mavenLocal(); mavenCentral() }
+dependencies {
+    implementation project(':library')
+    implementation 'org.springframework:spring-context:6.2.6'
+    testImplementation 'org.springframework:spring-test:6.2.6'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+}
+test { useJUnitPlatform() }

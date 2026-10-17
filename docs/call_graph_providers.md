@@ -71,7 +71,7 @@ Build the adapter first, then compare the checked-out candidate `HEAD` against
 any resolvable Git baseline revision:
 
 ```bash
-mvn -q -f wala-callgraph/pom.xml package
+mvn -q -f java-callgraph-adapters/pom.xml -pl ../wala-callgraph -am package
 cargo run -p cli --bin test-impact -- \
   --project-dir <candidate-checkout> \
   --baseline-revision <baseline-revision> \
@@ -96,6 +96,15 @@ test factories, or cross-service paths. Those cases must
 remain broad until explicitly modeled.
 
 ## Adding a provider
+
+Cross-module TIA uses a provider-neutral dependency graph to find transitive
+consumers and prepares their upstream modules as application bytecode. Both
+WALA and SootUp receive explicit class directories and a deduplicated dependency
+classpath for these analyses. Independent modules remain excluded when supported
+Maven/Gradle metadata proves they are outside the dependency closure. Unsupported
+or ambiguous metadata emits `module dependency metadata fallback` and retains
+broad selection of possible consumers. Supported metadata and comparative
+mutation results are detailed in [the Java baseline benchmark](benchmarks/java-tia-baseline.md).
 
 Implement `CallGraphProvider` for the language, emit the shared `MethodRef` /
 `RawCallEdge` schema, and register it in `ProviderRegistry`. The resolver maps

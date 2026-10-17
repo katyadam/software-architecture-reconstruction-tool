@@ -6,7 +6,10 @@ use extractor_runtime::{
         java_adapter::JavaAdapterProvider, resolve_reachability_with_java_tests,
         wala::WalaJavaProvider,
     },
-    impact::{ModuleCatalog, analyze_changes, discover_java_tests, select_tests},
+    impact::{
+        ModuleCatalog, ModuleDependencyGraph, analyze_changes, discover_java_tests,
+        include_potential_consumer_tests, select_tests,
+    },
 };
 use models::{Callable, ChangedElement, ChangedElementKind, Namespace, TestImpactResult};
 use std::{
@@ -99,6 +102,7 @@ fn run(arguments: Arguments) -> Result<()> {
         unselected_tests,
     );
     result.diagnostics.append(&mut diagnostics);
+    include_project_consumer_tests(&arguments.project_dir, Some(&provider), &mut result)?;
     write_result(&arguments.output, &result)
 }
 
@@ -134,6 +138,20 @@ enum SelectedJavaProvider {
 }
 
 impl SelectedJavaProvider {
+    fn analyze_modules(
+        &self,
+        project_root: &Path,
+        modules: &[PathBuf],
+        tests: &[models::JavaTestCase],
+        targets: &[String],
+    ) -> models::call_graph::CallGraphOutcome {
+        match self {
+            Self::Wala(provider) => provider.analyze_modules(project_root, modules, tests, targets),
+            Self::SootUp(provider) => {
+                provider.analyze_modules(project_root, modules, tests, targets)
+            }
+        }
+    }
     fn label(&self) -> &'static str {
         match self {
             Self::Wala(_) => "WALA",
@@ -231,7 +249,190 @@ fn write_module_fallback_result(
         unselected_tests,
     );
     result.diagnostics.append(&mut diagnostics);
+    include_project_consumer_tests(&arguments.project_dir, None, &mut result)?;
     write_result(&arguments.output, &result)
+}
+
+/// Completes the candidate test universe before returning module-scoped decisions.
+fn include_project_consumer_tests(
+    project_dir: &Path,
+    provider: Option<&SelectedJavaProvider>,
+    result: &mut TestImpactResult,
+) -> Result<()> {
+    if result.changed_elements.is_empty() {
+        return Ok(());
+    }
+    let discovery_started = Instant::now();
+    let project_root = project_dir
+        .canonicalize()
+        .context("Unable to normalize project root")?;
+    let tests = discover_java_tests(&project_root)
+        .context("Unable to discover potential consumer tests across project modules")?;
+    result.diagnostics.push(timing_diagnostic(
+        "project consumer test discovery",
+        discovery_started.elapsed(),
+    ));
+    let metadata_started = Instant::now();
+    let graph = ModuleDependencyGraph::load(&project_root);
+    result.diagnostics.push(timing_diagnostic(
+        "module dependency metadata",
+        metadata_started.elapsed(),
+    ));
+    match graph {
+        Err(reason) => {
+            result
+                .diagnostics
+                .push(format!("module dependency metadata fallback: {reason}"));
+            include_potential_consumer_tests(result, tests);
+        }
+        Ok(graph) => {
+            let consumer_modules: BTreeSet<_> = tests
+                .iter()
+                .map(|test| PathBuf::from(&test.module_root))
+                .collect();
+            for consumer in consumer_modules {
+                let changes: Vec<_> = result
+                    .changed_elements
+                    .iter()
+                    .filter(|change| {
+                        let path = change.source_path.replace('\\', "/");
+                        !path.starts_with("src/test/")
+                            && !path.contains("/src/test/")
+                            && graph
+                                .consumers_of(Path::new(&change.module_root))
+                                .contains(&consumer)
+                    })
+                    .cloned()
+                    .collect();
+                if changes.is_empty() {
+                    continue;
+                }
+                let consumer_tests: Vec<_> = tests
+                    .iter()
+                    .filter(|test| Path::new(&test.module_root) == consumer)
+                    .cloned()
+                    .collect();
+                let mut scoped_changes = changes.clone();
+                for change in &mut scoped_changes {
+                    change.module_root = consumer.to_string_lossy().into_owned();
+                }
+                let consumer_result = if changes
+                    .iter()
+                    .all(|change| change.kind == ChangedElementKind::Module)
+                {
+                    select_tests(
+                        scoped_changes,
+                        consumer_tests,
+                        models::call_graph::CallGraphOutcome::ok(
+                            models::call_graph::CallGraphRequest::new(
+                                consumer.to_string_lossy(),
+                                models::call_graph::Language::Java,
+                            ),
+                            "not-run",
+                            "dependency-module-fallback",
+                        ),
+                        vec![],
+                    )
+                } else {
+                    let provider =
+                        provider.context("callable consumer analysis requires a provider")?;
+                    let mut modules = graph.upstream_of(&consumer);
+                    modules.insert(consumer.clone());
+                    let modules: Vec<_> = modules.into_iter().collect();
+                    let callables = get_java_callables_for_modules_with_progress(&modules, false)?;
+                    let mut targets = BTreeSet::new();
+                    for change in &changes {
+                        targets.extend(callgraph_targets(
+                            &Path::new(&change.module_root).join("src/main/java"),
+                            std::slice::from_ref(change),
+                            &callables,
+                        ));
+                    }
+                    let started = Instant::now();
+                    let mut outcome = provider.analyze_modules(
+                        &project_root,
+                        &modules,
+                        &consumer_tests,
+                        &targets.into_iter().collect::<Vec<_>>(),
+                    );
+                    let resolution = resolve_reachability_with_java_tests(
+                        &outcome,
+                        &project_root,
+                        &callables,
+                        &consumer_tests,
+                    );
+                    outcome.diagnostics.extend(resolution.diagnostics);
+                    let mut selected = extractor_runtime::impact::select_tests_with_reachability(
+                        scoped_changes,
+                        consumer_tests,
+                        outcome,
+                        resolution.edges,
+                        &resolution.reachable_tests_by_callable,
+                    );
+                    selected.diagnostics.push(timing_diagnostic(
+                        &format!("{} consumer analysis", provider.label()),
+                        started.elapsed(),
+                    ));
+                    selected
+                };
+                merge_consumer_result(result, consumer_result);
+            }
+            // Explicitly retain independent tests as excluded, rather than omitting them.
+            let known: BTreeSet<_> = result
+                .selected_tests
+                .iter()
+                .map(|selected| test_key(&selected.test))
+                .chain(result.unselected_tests.iter().map(test_key))
+                .collect();
+            result.unselected_tests.extend(
+                tests
+                    .into_iter()
+                    .filter(|test| !known.contains(&test_key(test))),
+            );
+        }
+    }
+    Ok(())
+}
+
+fn test_key(test: &models::JavaTestCase) -> (String, String, String, String) {
+    (
+        test.module_root.clone(),
+        test.class_name.clone(),
+        test.method_name.clone(),
+        test.descriptor.clone(),
+    )
+}
+
+fn merge_consumer_result(result: &mut TestImpactResult, consumer: TestImpactResult) {
+    for selected in consumer.selected_tests {
+        if let Some(existing) = result
+            .selected_tests
+            .iter_mut()
+            .find(|existing| test_key(&existing.test) == test_key(&selected.test))
+        {
+            for reason in selected.reasons {
+                if !existing.reasons.contains(&reason) {
+                    existing.reasons.push(reason);
+                }
+            }
+        } else {
+            result.selected_tests.push(selected);
+        }
+    }
+    let selected: BTreeSet<_> = result
+        .selected_tests
+        .iter()
+        .map(|selected| test_key(&selected.test))
+        .collect();
+    let mut excluded: std::collections::BTreeMap<_, _> = result
+        .unselected_tests
+        .drain(..)
+        .chain(consumer.unselected_tests)
+        .filter(|test| !selected.contains(&test_key(test)))
+        .map(|test| (test_key(&test), test))
+        .collect();
+    result.unselected_tests = std::mem::take(&mut excluded).into_values().collect();
+    result.diagnostics.extend(consumer.diagnostics);
 }
 
 /// Runs discovery, WALA, resolution, and selection for one independently affected Maven module.
@@ -267,10 +468,26 @@ fn analyze_module(
             return result;
         }
     };
+    if tests.is_empty() {
+        let mut result =
+            TestImpactResult::new(String::new(), String::new(), changes, vec![], vec![]);
+        result
+            .diagnostics
+            .push("skipped call-graph analysis for module without tests".into());
+        result.diagnostics.push(timing_diagnostic(
+            "test discovery",
+            discovery_started.elapsed(),
+        ));
+        return result;
+    }
     let source_root = module_path.join("src/main/java");
     let callgraph_started = Instant::now();
     let targets = callgraph_targets(&source_root, &changes, callables);
-    let mut outcome = provider.analyze_test_roots(&source_root, &tests, &targets);
+    let mut outcome = if module_path.join("pom.xml").is_file() {
+        provider.analyze_test_roots(&source_root, &tests, &targets)
+    } else {
+        provider.analyze_modules(module_path, &[module_path.to_path_buf()], &tests, &targets)
+    };
     let resolution_started = Instant::now();
     let resolution = resolve_reachability_with_java_tests(&outcome, module_path, callables, &tests);
     outcome.diagnostics.extend(resolution.diagnostics);
