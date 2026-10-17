@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
+use strsim::levenshtein;
 use utoipa::ToSchema;
 
 use crate::sdg::interaction_kind::{host_of, is_reflexive};
@@ -21,6 +22,8 @@ pub enum MatchTag {
     Template,
     /// Matched on a trailing run of segments only.
     Suffix,
+    /// Levenshtein fallback, no unified candidate.
+    Fuzzy,
     /// Kept by the Jev tie-break.
     Jev,
 }
@@ -37,17 +40,25 @@ pub fn candidates<'a>(
     let leading_hole = !target.contains("://") && c.first().is_some_and(|s| is_var(s));
 
     let found = scope
-        .into_iter()
+        .iter()
         .filter_map(|e| {
             let s = segments(&e.data.uri);
-            match_tag(&c, &s, leading_hole, host_known).map(|t| (e, t, s))
+            match_tag(&c, &s, leading_hole, host_known)
+                .filter(|_| has_evidence(&c, &s))
+                .map(|t| (*e, t, s))
         })
         .collect();
 
     let mut kept = drop_dominated(&c, drop_suffix_if_full(found));
+    if kept.is_empty() {
+        return fuzzy_fallback(target, &scope).into_iter().collect();
+    }
     kept.sort_by(|(a, _), (b, _)| sort_key(a).cmp(&sort_key(b)));
     kept
 }
+
+/// Max Levenshtein distance, as a fraction of the longer uri, for a fuzzy match.
+const DISSIMILARITY_PERCENT: f32 = 0.3;
 
 /// Candidate with its tag and endpoint path segments.
 type Found<'a, 's> = (&'a AssignedEndpoint, MatchTag, Vec<&'s str>);
@@ -111,6 +122,39 @@ fn match_tag(c: &[&str], s: &[&str], leading_hole: bool, host_known: bool) -> Op
     } else {
         None
     }
+}
+
+/// True when some aligned position is literal on both sides; `{a}/{b}` unifies with anything.
+fn has_evidence(c: &[&str], s: &[&str]) -> bool {
+    !literals(c, s).is_empty()
+}
+
+/// Old Levenshtein argmin over `scope`, kept within `DISSIMILARITY_PERCENT`; ties -> smallest `sort_key`.
+fn fuzzy_fallback<'a>(
+    target: &str,
+    scope: &[&'a AssignedEndpoint],
+) -> Option<(&'a AssignedEndpoint, MatchTag)> {
+    scope
+        .iter()
+        .map(|e| (fuzzy_distance(e, target), *e))
+        .min_by(|(da, a), (db, b)| da.cmp(db).then_with(|| sort_key(a).cmp(&sort_key(b))))
+        .filter(|(d, e)| {
+            (*d as f32) < e.data.uri.len().max(target.len()) as f32 * DISSIMILARITY_PERCENT
+        })
+        .map(|(_, e)| (e, MatchTag::Fuzzy))
+}
+
+/// Smallest distance from `target` to the endpoint uri under each service url, or bare.
+fn fuzzy_distance(e: &AssignedEndpoint, target: &str) -> usize {
+    let path = e.data.uri.trim_start_matches('/');
+    e.service
+        .urls
+        .iter()
+        .map(String::as_str)
+        .chain([""])
+        .map(|u| levenshtein(&format!("{}/{path}", u.trim_end_matches('/')), target))
+        .min()
+        .unwrap_or(usize::MAX)
 }
 
 /// Drops Suffix matches when any Exact or Template match exists.
@@ -450,5 +494,53 @@ mod tests {
         eps.reverse();
         assert_eq!(forward, named(&eps));
         assert_eq!(forward.len(), 3);
+    }
+    #[test]
+    fn pure_hole_call_has_no_candidates() {
+        let (consign, config) = (
+            svc("ts-consign-service", 16111),
+            svc("ts-config-service", 15679),
+        );
+        let eps = [
+            ep(
+                &consign,
+                HttpMethod::POST,
+                "/api/v1/consignservice/consigns",
+            ),
+            ep(
+                &consign,
+                HttpMethod::POST,
+                "/api/v1/consignservice/consigns/{id}",
+            ),
+            ep(&config, HttpMethod::POST, "/api/v1/configservice/configs"),
+        ];
+        assert!(run(&call(HttpMethod::POST, "{requestUrl}"), &eps).is_empty());
+    }
+
+    #[test]
+    fn two_hole_call_has_no_candidates() {
+        let eps = [ep(&station(), HttpMethod::GET, "/x/{id}")];
+        assert!(run(&call(HttpMethod::GET, "{a}/{b}"), &eps).is_empty());
+    }
+
+    #[test]
+    fn glued_host_falls_back_to_fuzzy() {
+        let mds = svc("medical-data-service", 5000);
+        let eps = [
+            ep(&mds, HttpMethod::GET, "/jobs"),
+            ep(&mds, HttpMethod::GET, "/scopes/{id}/x"),
+        ];
+        let c = call(HttpMethod::GET, "http://medical-data-service:5000url");
+        assert_eq!(run(&c, &eps), vec![("/jobs".into(), MatchTag::Fuzzy)]);
+    }
+
+    #[test]
+    fn fuzzy_rejects_beyond_threshold() {
+        let eps = [ep(
+            &svc("ts-route-service", 11178),
+            HttpMethod::GET,
+            "/api/v1/routeservice/routes",
+        )];
+        assert!(run(&call(HttpMethod::GET, "{requestUrl}"), &eps).is_empty());
     }
 }

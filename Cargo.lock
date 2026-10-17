@@ -4555,6 +4555,7 @@ dependencies = [
  "rust-s3",
  "serde",
  "serde_json",
+ "strsim",
  "testcontainers",
  "thiserror 2.0.18",
  "tokio",
