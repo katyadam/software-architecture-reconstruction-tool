@@ -34,10 +34,15 @@ func (w *progressWriter) Write(p []byte) (int, error) {
 func (w *progressWriter) close() { w.mu.Lock(); defer w.mu.Unlock(); w.destination = nil }
 
 func run(args []string, stdout, stderr io.Writer) int {
+	return runInput(args, os.Stdin, stdout, stderr)
+}
+
+func runInput(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("go-callgraph", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	var opts Options
 	var targets targetFlags
+	mode := flags.String("mode", "graph", "graph, inventory, or describe")
 	flags.StringVar(&opts.SourceDir, "source-dir", "", "Go module root (required)")
 	flags.StringVar(&opts.Tags, "tags", "", "comma-separated build tags")
 	flags.Var(&targets, "target", "native package#function or package#(Receiver).Method; repeatable")
@@ -45,7 +50,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
-	if opts.SourceDir == "" || len(targets) == 0 || flags.NArg() != 0 || *timeout <= 0 {
+	if (*mode != "graph" && *mode != "inventory" && *mode != "describe") || (*mode != "describe" && opts.SourceDir == "") || (*mode == "graph" && len(targets) == 0) || flags.NArg() != 0 || *timeout <= 0 {
 		fmt.Fprintln(stderr, "--source-dir, at least one --target, and a positive --timeout are required")
 		return 2
 	}
@@ -55,20 +60,52 @@ func run(args []string, stdout, stderr io.Writer) int {
 	opts.Progress = progress
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
-	result := make(chan Outcome, 1)
-	go func() { result <- Analyze(ctx, opts) }()
-	var out Outcome
+	type response struct {
+		value  any
+		failed bool
+	}
+	result := make(chan response, 1)
+	go func() {
+		switch *mode {
+		case "inventory":
+			out := Discover(ctx, opts)
+			result <- response{out, out.Status == "failed"}
+		case "describe":
+			var input struct {
+				Files []SourceInput `json:"files"`
+			}
+			if err := json.NewDecoder(stdin).Decode(&input); err != nil {
+				result <- response{DescriptionOutcome{SchemaVersion: 1, ProviderID: "go-native", Status: "failed", Files: []FileDescription{}, Diagnostics: []string{err.Error()}}, true}
+				return
+			}
+			out := DescribeSources(ctx, input.Files)
+			result <- response{out, out.Status == "failed"}
+		default:
+			out := Analyze(ctx, opts)
+			result <- response{out, out.Status == "failed"}
+		}
+	}()
+	var out response
 	select {
 	case out = <-result:
 	case <-ctx.Done():
-		out = emptyOutcome(opts)
-		out.Diagnostics = append(out.Diagnostics, fmt.Sprintf("Go analysis deadline exceeded after %s", *timeout))
+		message := fmt.Sprintf("Go %s deadline exceeded after %s", *mode, *timeout)
+		switch *mode {
+		case "inventory":
+			out = response{InventoryOutcome{SchemaVersion: 1, ProviderID: "go-native", Status: "failed", SourceRoot: opts.SourceDir, Tests: []NativeTest{}, SourceFiles: []string{}, Declarations: []NativeDeclaration{}, Scope: emptyOutcome(opts).Scope, Diagnostics: []string{message}}, true}
+		case "describe":
+			out = response{DescriptionOutcome{SchemaVersion: 1, ProviderID: "go-native", Status: "failed", Files: []FileDescription{}, Diagnostics: []string{message}}, true}
+		default:
+			failed := emptyOutcome(opts)
+			failed.Diagnostics = append(failed.Diagnostics, message)
+			out = response{failed, true}
+		}
 	}
-	if err := json.NewEncoder(stdout).Encode(out); err != nil {
+	if err := json.NewEncoder(stdout).Encode(out.value); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	if out.Status == "failed" {
+	if out.failed {
 		return 1
 	}
 	return 0

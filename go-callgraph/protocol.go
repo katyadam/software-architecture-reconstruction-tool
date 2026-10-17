@@ -46,3 +46,49 @@ type Options struct {
 	Tags      string
 	Progress  io.Writer
 }
+
+type SourceInput struct {
+	SourcePath string `json:"source_path"`
+	Source     string `json:"source"`
+}
+type SourceDeclaration struct {
+	MemberName    string `json:"member_name"`
+	Header        string `json:"header"`
+	StartLine     int    `json:"start_line"`
+	EndLine       int    `json:"end_line"`
+	BodyStartLine int    `json:"body_start_line"`
+	BodyEndLine   int    `json:"body_end_line"`
+}
+type FileDescription struct {
+	SourcePath   string              `json:"source_path"`
+	PackageName  *string             `json:"package_name"`
+	Declarations []SourceDeclaration `json:"declarations"`
+	Diagnostics  []string            `json:"diagnostics"`
+}
+type DescriptionOutcome struct {
+	SchemaVersion int               `json:"schema_version"`
+	ProviderID    string            `json:"provider_id"`
+	Status        string            `json:"status"`
+	Files         []FileDescription `json:"files"`
+	Diagnostics   []string          `json:"diagnostics"`
+}
+type NativeTest struct {
+	Method           MethodRef `json:"method"`
+	ExecutionPackage string    `json:"execution_package"`
+}
+type NativeDeclaration struct {
+	Method MethodRef         `json:"method"`
+	Syntax SourceDeclaration `json:"syntax"`
+}
+type InventoryOutcome struct {
+	SchemaVersion         int                 `json:"schema_version"`
+	ProviderID            string              `json:"provider_id"`
+	Status                string              `json:"status"`
+	SourceRoot            string              `json:"source_root"`
+	SourceFiles           []string            `json:"source_files"`
+	Tests                 []NativeTest        `json:"tests"`
+	Declarations          []NativeDeclaration `json:"declarations"`
+	TestInventoryComplete bool                `json:"test_inventory_complete"`
+	Scope                 Scope               `json:"scope"`
+	Diagnostics           []string            `json:"diagnostics"`
+}
