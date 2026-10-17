@@ -150,7 +150,7 @@ git -C "$grpc_repo" commit -qm candidate
 
 TIA_EXPECTED_PROVIDER=sootup \
 TIA_EXPECTED_ADAPTER_JAR="$temp_dir/sootup.jar" \
-TIA_EXPECTED_GRADLE_ARGUMENTS=-PskipAndroid=true \
+TIA_EXPECTED_GRADLE_ARGUMENTS='-PskipAndroid=true -PskipCodegen=true' \
 EXPECTED_BENCHMARK_ROOT="$temp_dir" \
 TIA_EXPECTED_PROJECT=grpc-java \
 TIA_EXPECTED_CHANGED_PATH=candidate \
