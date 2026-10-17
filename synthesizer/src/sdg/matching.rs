@@ -31,6 +31,33 @@ pub fn candidates<'a>(
     endpoints: &'a [AssignedEndpoint],
     all_urls: &[String],
 ) -> Vec<(&'a AssignedEndpoint, MatchTag)> {
+    let (scope, host_known) = scope(call, endpoints, all_urls);
+    let target = &call.data.target_uri;
+    let c = segments(target);
+    let leading_hole = !target.contains("://") && c.first().is_some_and(|s| is_var(s));
+
+    let found = scope
+        .into_iter()
+        .filter_map(|e| {
+            let s = segments(&e.data.uri);
+            match_tag(&c, &s, leading_hole, host_known).map(|t| (e, t, s))
+        })
+        .collect();
+
+    let mut kept = drop_dominated(&c, drop_suffix_if_full(found));
+    kept.sort_by(|(a, _), (b, _)| sort_key(a).cmp(&sort_key(b)));
+    kept
+}
+
+/// Candidate with its tag and endpoint path segments.
+type Found<'a, 's> = (&'a AssignedEndpoint, MatchTag, Vec<&'s str>);
+
+/// Same-method endpoints in the services `call` can reach; true when the host is known.
+fn scope<'a>(
+    call: &AssignedRestCall,
+    endpoints: &'a [AssignedEndpoint],
+    all_urls: &[String],
+) -> (Vec<&'a AssignedEndpoint>, bool) {
     let target = &call.data.target_uri;
     let own = &call.service;
     let host = host_of(target).to_ascii_lowercase();
@@ -49,80 +76,74 @@ pub fn candidates<'a>(
                 .any(|u| host_of(u).eq_ignore_ascii_case(&host))
     };
 
-    let (scope, host_known): (Vec<&AssignedEndpoint>, bool) =
-        if is_reflexive(target, &own.urls, all_urls) {
-            (
-                same_method()
-                    .filter(|e| e.service.name == own.name)
-                    .collect(),
-                true,
-            )
-        } else if same_method().any(owns_host) {
-            (same_method().filter(|e| owns_host(e)).collect(), true)
+    if is_reflexive(target, &own.urls, all_urls) {
+        (
+            same_method()
+                .filter(|e| e.service.name == own.name)
+                .collect(),
+            true,
+        )
+    } else if same_method().any(owns_host) {
+        (same_method().filter(|e| owns_host(e)).collect(), true)
+    } else {
+        (
+            same_method()
+                .filter(|e| e.service.name != own.name)
+                .collect(),
+            false,
+        )
+    }
+}
+
+/// Tag for call segments `c` against endpoint segments `s`, `None` if they do not match.
+fn match_tag(c: &[&str], s: &[&str], leading_hole: bool, host_known: bool) -> Option<MatchTag> {
+    if c.len() == s.len() && unifies(c, s) {
+        if c.iter().chain(s).any(|x| is_var(x)) {
+            Some(MatchTag::Template)
         } else {
-            (
-                same_method()
-                    .filter(|e| e.service.name != own.name)
-                    .collect(),
-                false,
-            )
-        };
+            Some(MatchTag::Exact)
+        }
+    } else if (leading_hole && s.len() + 1 >= c.len() && unifies(&c[1..], tail(s, c.len() - 1)))
+        // Lost router prefix, e.g. `app.mount("/v3")`.
+        || (host_known && s.len() < c.len() && unifies(tail(c, s.len()), s))
+    {
+        Some(MatchTag::Suffix)
+    } else {
+        None
+    }
+}
 
-    let c = segments(target);
-    let leading_hole = !target.contains("://") && c.first().is_some_and(|s| is_var(s));
-
-    let mut found: Vec<(&AssignedEndpoint, MatchTag, Vec<&str>)> = scope
-        .into_iter()
-        .filter_map(|e| {
-            let s = segments(&e.data.uri);
-            let tag = if c.len() == s.len() && unifies(&c, &s) {
-                if c.iter().chain(&s).any(|x| is_var(x)) {
-                    MatchTag::Template
-                } else {
-                    MatchTag::Exact
-                }
-            } else if (leading_hole
-                && s.len() + 1 >= c.len()
-                && unifies(&c[1..], tail(&s, c.len() - 1)))
-                // Lost router prefix, e.g. `app.mount("/v3")`.
-                || (host_known && s.len() < c.len() && unifies(tail(&c, s.len()), &s))
-            {
-                MatchTag::Suffix
-            } else {
-                return None;
-            };
-            Some((e, tag, s))
-        })
-        .collect();
-
+/// Drops Suffix matches when any Exact or Template match exists.
+fn drop_suffix_if_full<'a, 's>(mut found: Vec<Found<'a, 's>>) -> Vec<Found<'a, 's>> {
     if found.iter().any(|(_, t, _)| *t != MatchTag::Suffix) {
         found.retain(|(_, t, _)| *t != MatchTag::Suffix);
     }
+    found
+}
 
+/// Drops candidates whose literal matches are a strict subset of another's.
+fn drop_dominated<'a>(
+    c: &[&str],
+    found: Vec<Found<'a, '_>>,
+) -> Vec<(&'a AssignedEndpoint, MatchTag)> {
     // ponytail: O(n^2) dominance scan, fine for per-call candidate counts.
-    let lits: Vec<BTreeSet<usize>> = found.iter().map(|(_, _, s)| literals(&c, s)).collect();
-    let mut kept: Vec<(&AssignedEndpoint, MatchTag)> = found
+    let lits: Vec<BTreeSet<usize>> = found.iter().map(|(_, _, s)| literals(c, s)).collect();
+    found
         .iter()
         .zip(&lits)
         .filter(|(_, b)| !lits.iter().any(|a| a.is_superset(b) && a != *b))
         .map(|((e, t, _), _)| (*e, *t))
-        .collect();
+        .collect()
+}
 
-    kept.sort_by(|(a, _), (b, _)| {
-        (
-            &a.service.name,
-            &a.data.uri,
-            &a.data.function_name,
-            &a.data.file_path,
-        )
-            .cmp(&(
-                &b.service.name,
-                &b.data.uri,
-                &b.data.function_name,
-                &b.data.file_path,
-            ))
-    });
-    kept
+/// Deterministic ordering key for a candidate.
+fn sort_key(e: &AssignedEndpoint) -> (&String, &String, &String, &String) {
+    (
+        &e.service.name,
+        &e.data.uri,
+        &e.data.function_name,
+        &e.data.file_path,
+    )
 }
 
 /// Path segments without scheme, authority, query or fragment.
