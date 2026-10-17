@@ -6,7 +6,6 @@ import (
 	"go/ast"
 	"go/types"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -16,7 +15,6 @@ import (
 
 	"golang.org/x/tools/go/callgraph"
 	"golang.org/x/tools/go/callgraph/cha"
-	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/ssa"
 	"golang.org/x/tools/go/ssa/ssautil"
 )
@@ -51,52 +49,17 @@ func Analyze(ctx context.Context, opts Options) (out Outcome) {
 		out.Reachability = []Reachability{}
 		return out
 	}
-	root, err := filepath.Abs(opts.SourceDir)
-	if err != nil {
-		return failed(err)
-	}
-	root, err = filepath.EvalSymlinks(root)
-	if err != nil {
-		return failed(err)
-	}
-	out.SourceRoot = root
-	if _, err = os.Stat(filepath.Join(root, "go.mod")); err != nil {
-		return failed(fmt.Errorf("source-dir must be a module root: %w", err))
-	}
 	start := time.Now()
 	phase := func(name string) {
 		if opts.Progress != nil {
 			fmt.Fprintf(opts.Progress, "callgraph_phase=%s provider=go-native elapsed_ms=%d\n", name, time.Since(start).Milliseconds())
 		}
 	}
-	env := []string{}
-	for _, item := range os.Environ() {
-		if !strings.HasPrefix(item, "GOWORK=") && !strings.HasPrefix(item, "GOTOOLCHAIN=") {
-			env = append(env, item)
-		}
-	}
-	env = append(env, "GOWORK=off", "GOTOOLCHAIN=local")
-	flags := []string{"-mod=readonly"}
-	if opts.Tags != "" {
-		flags = append(flags, "-tags="+opts.Tags)
-	}
 	phase("loading")
-	pkgs, err := packages.Load(&packages.Config{Context: ctx, Dir: root, Env: env, Mode: packages.LoadSyntax | packages.NeedForTest, Tests: true, BuildFlags: flags}, "./...")
+	root, pkgs, err := loadSource(ctx, opts)
+	out.SourceRoot = root
 	if err != nil {
 		return failed(err)
-	}
-	errors := map[string]bool{}
-	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
-		for _, e := range pkg.Errors {
-			errors[e.Error()] = true
-		}
-	})
-	for message := range errors {
-		out.Diagnostics = append(out.Diagnostics, message)
-	}
-	if len(errors) > 0 {
-		sort.Strings(out.Diagnostics)
-		return out
 	}
 	if err = ctx.Err(); err != nil {
 		return failed(err)
@@ -117,18 +80,7 @@ func Analyze(ctx context.Context, opts Options) (out Outcome) {
 		if !ok || obj.Pkg() == nil {
 			return MethodRef{}, false
 		}
-		pos := prog.Fset.Position(obj.Pos())
-		rel, err := filepath.Rel(root, pos.Filename)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || !pos.IsValid() {
-			return MethodRef{}, false
-		}
-		member := obj.Name()
-		sig := obj.Type().(*types.Signature)
-		if recv := sig.Recv(); recv != nil {
-			member = "(" + types.TypeString(recv.Type(), func(*types.Package) string { return "" }) + ")." + member
-		}
-		return MethodRef{Language: "go", DeclaringType: obj.Pkg().Path(), MemberName: member,
-			Descriptor: types.TypeString(obj.Type(), func(p *types.Package) string { return p.Path() }), SourcePath: pos.Filename, SourceLine: pos.Line}, true
+		return sourceRef(prog.Fset, obj, root)
 	}
 	// A package can appear in production and test-augmented forms. Group by
 	// source declaration while preserving every SSA variant for traversal.
