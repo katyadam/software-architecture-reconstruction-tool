@@ -55,7 +55,8 @@ fn get_resolved_parts(template: &str, analysis_result: &AnalysisResult) -> Vec<R
                         }
                     })
                     .collect(),
-                _ => vec![part.to_string()],
+                // Unresolved operand -> typed hole, like Python
+                _ => vec![format!("{{{part}}}")],
             }
         })
         .collect()
@@ -93,6 +94,22 @@ mod tests {
     #[test]
     fn unbound_variable_stays_unresolved() {
         let uris = generate_target_uris("baseUrl", &AnalysisResult::default());
-        assert_eq!(uris, vec!["baseUrl".to_string()]);
+        assert_eq!(uris, vec!["{baseUrl}".to_string()]);
+    }
+
+    /// Unresolved operands become typed holes, like Python.
+    #[test]
+    fn unresolved_operand_becomes_hole() {
+        let uris = generate_target_uris(
+            "\"http://ts-order-service:12031/api/v1/orderservice/order/status/\" + orderId + \"/\" + status",
+            &AnalysisResult::default(),
+        );
+        assert_eq!(
+            uris,
+            vec![
+                "http://ts-order-service:12031/api/v1/orderservice/order/status/{orderId}/{status}"
+                    .to_string()
+            ]
+        );
     }
 }

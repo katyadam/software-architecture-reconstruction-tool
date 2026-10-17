@@ -168,7 +168,7 @@ fn test_spring_restcalls_without_dfa() {
             ],
             http_method: HttpMethod::GET,
             target_uri: s!(
-                "http://ts-inside-payment-service/api/v1/inside_pay_service/inside_payment/drawback/userId/money"
+                "http://ts-inside-payment-service/api/v1/inside_pay_service/inside_payment/drawback/{userId}/{money}"
             ),
             file_path: s!("./examples/CancelServiceImpl.java"),
             source_span: SourceSpan {
@@ -204,7 +204,7 @@ fn test_spring_restcalls_without_dfa() {
                 },
             ],
             http_method: HttpMethod::GET,
-            target_uri: s!("http://ts-user-service/api/v1/userservice/users/id/orderId"),
+            target_uri: s!("http://ts-user-service/api/v1/userservice/users/id/{orderId}"),
             file_path: s!("./examples/CancelServiceImpl.java"),
             source_span: SourceSpan {
                 start_byte: 945,
@@ -241,7 +241,7 @@ fn test_spring_restcalls_without_dfa() {
                 },
             ],
             http_method: HttpMethod::GET,
-            target_uri: s!("http://ts-order-service/api/v1/orderservice/order/orderId"),
+            target_uri: s!("http://ts-order-service/api/v1/orderservice/order/{orderId}"),
             file_path: s!("./examples/CancelServiceImpl.java"),
             source_span: SourceSpan {
                 start_byte: 945,
@@ -281,7 +281,7 @@ fn test_spring_restcalls_without_dfa() {
             ],
             http_method: HttpMethod::GET,
             target_uri: s!(
-                "http://ts-order-other-service/api/v1/orderOtherService/orderOther/orderId"
+                "http://ts-order-other-service/api/v1/orderOtherService/orderOther/{orderId}"
             ),
             file_path: s!("./examples/CancelServiceImpl.java"),
             source_span: SourceSpan {

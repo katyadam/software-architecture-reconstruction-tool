@@ -6,6 +6,9 @@ mod tests {
         ConfigurationData, Endpoint, HttpMethod, RestCall, configuration::ServiceDescription,
     };
     use strsim::levenshtein;
+    use uuid::Uuid;
+
+    use crate::connectors::dto::Constant;
 
     use crate::sdg::builder::{SdgBuilder, SdgBuilderImpl};
     use crate::sdg::interaction_kind::InteractionKind;
@@ -178,6 +181,60 @@ mod tests {
             InteractionKind::Business,
             "one business request must keep the whole connection Business, got requests {kinds:?}"
         );
+    }
+
+    #[test]
+    fn constant_hole_substitutes_without_braces() {
+        let builder = SdgBuilderImpl::new();
+        let endpoints = ["/api/x", "/api/y"]
+            .map(|uri| Endpoint {
+                function_name: "handler".to_string(),
+                http_method: HttpMethod::GET,
+                uri: uri.to_string(),
+                file_path: "svc/src/Controller.java".to_string(),
+                ..Default::default()
+            })
+            .to_vec();
+        let restcalls = ["{HOST}/api/x", "HOST/api/y"]
+            .map(|target_uri| RestCall {
+                function_name: "call".to_string(),
+                http_method: HttpMethod::GET,
+                target_uri: target_uri.to_string(),
+                file_path: "caller/src/Client.java".to_string(),
+                ..Default::default()
+            })
+            .to_vec();
+        let configuration = ConfigurationData {
+            service_descriptions: vec![
+                ServiceDescription {
+                    name: "svc".to_string(),
+                    base_dir_path: "svc".to_string(),
+                    urls: vec!["http://svc:80".to_string()],
+                },
+                ServiceDescription {
+                    name: "caller".to_string(),
+                    base_dir_path: "caller".to_string(),
+                    urls: vec!["http://caller:80".to_string()],
+                },
+            ],
+        };
+        let constants = vec![Constant::new(
+            Uuid::nil(),
+            "HOST".to_string(),
+            "http://svc:80".to_string(),
+        )];
+
+        let sdg = builder
+            .build(&endpoints, &restcalls, &[], &configuration, &constants)
+            .expect("build must succeed");
+
+        let mut uris: Vec<&str> = sdg
+            .connections
+            .iter()
+            .flat_map(|c| c.requests.iter().map(|r| r.restcall.target_uri.as_str()))
+            .collect();
+        uris.sort();
+        assert_eq!(uris, vec!["http://svc:80/api/x", "http://svc:80/api/y"]);
     }
 
     fn sample_data() -> (Vec<Endpoint>, Vec<RestCall>) {

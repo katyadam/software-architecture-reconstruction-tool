@@ -185,18 +185,21 @@ impl SdgBuilderImpl {
             .map(|constant| (constant.name.as_str(), constant.value.as_str()))
             .collect();
 
-        let pattern = sorted_constants
+        // Optional braces: Java emits unresolved constants as holes `{HOST}`
+        let names = sorted_constants
             .iter()
             .map(|constant| regex::escape(&constant.name))
             .collect::<Vec<String>>()
             .join("|");
+        let pattern = format!(r"\{{?(?:{names})\}}?");
         let re = Regex::new(&pattern)
             .map_err(|_| BuilderError::Error("Failed to compile constants regex".to_owned()))?;
 
         for restcall in restcalls {
             let substituted =
                 re.replace_all(&restcall.data.target_uri, |caps: &regex::Captures| {
-                    if let Some(value) = lookup_table.get(&caps[0]) {
+                    let key = caps[0].trim_start_matches('{').trim_end_matches('}');
+                    if let Some(value) = lookup_table.get(key) {
                         value.to_string()
                     } else {
                         caps[0].to_string()
