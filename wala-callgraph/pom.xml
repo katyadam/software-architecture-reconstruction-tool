@@ -10,6 +10,11 @@
   </properties>
   <dependencies>
     <dependency>
+      <groupId>com.voyantclair</groupId>
+      <artifactId>java-callgraph-support</artifactId>
+      <version>0.1.0</version>
+    </dependency>
+    <dependency>
       <groupId>com.ibm.wala</groupId>
       <artifactId>com.ibm.wala.core</artifactId>
       <version>${wala.version}</version>

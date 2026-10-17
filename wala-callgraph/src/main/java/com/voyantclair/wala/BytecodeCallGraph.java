@@ -1,5 +1,6 @@
 package com.voyantclair.wala;
 
+import com.voyantclair.callgraph.CallGraphResult;
 import com.ibm.wala.cast.java.client.impl.ZeroOneContainerCFABuilderFactory;
 import com.ibm.wala.classLoader.BinaryDirectoryTreeModule;
 import com.ibm.wala.ipa.callgraph.AnalysisCacheImpl;
