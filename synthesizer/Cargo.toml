@@ -19,7 +19,6 @@ dotenvy = { workspace = true }
 neo4rs = { workspace = true }
 uuid = { workspace = true }
 testcontainers = { workspace = true }
-strsim = { workspace = true }
 thiserror = { workspace = true }
 rust-s3 = { workspace = true }
 futures = { workspace = true }

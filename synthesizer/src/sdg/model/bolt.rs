@@ -3,6 +3,7 @@ use neo4rs::{BoltList, BoltMap, BoltNode, BoltString, BoltType, DeError};
 use serde::de::Unexpected;
 
 use crate::sdg::interaction_kind::InteractionKind;
+use crate::sdg::matching::MatchTag;
 use crate::sdg::model::{Connection, MessageConnection, MessageRequest, Request, Service};
 
 impl From<Service> for BoltType {
@@ -157,6 +158,7 @@ impl TryFrom<BoltMap> for Connection {
                         endpoint: Endpoint::default(),
                         restcall: RestCall::default(),
                         kind: InteractionKind::default(),
+                        match_tag: MatchTag::default(),
                     })),
                     _ => Err(DeError::InvalidType {
                         received: Unexpected::Other("Non BoltString type").into(),
@@ -320,6 +322,7 @@ impl TryFrom<BoltMap> for Request {
             endpoint,
             restcall,
             kind: InteractionKind::default(),
+            match_tag: MatchTag::default(),
         })
     }
 }

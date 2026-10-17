@@ -1,20 +1,16 @@
-use std::{
-    borrow::Cow,
-    cmp::{Reverse, min},
-    collections::HashMap,
-};
+use std::{borrow::Cow, cmp::Reverse, collections::HashMap};
 
 use models::{
     ConfigurationData, Endpoint, MessageDestinationKind, MessageEdge, MessageRole, RestCall,
     configuration::ServiceDescription,
 };
 use regex::Regex;
-use strsim::levenshtein;
 
 use crate::{
     connectors::dto::Constant,
     errors::builder::BuilderError,
-    sdg::interaction_kind::{InteractionKind, InteractionSignals, classify, is_reflexive},
+    sdg::interaction_kind::{InteractionKind, InteractionSignals, classify},
+    sdg::matching::{MatchTag, candidates},
     sdg::model::{
         AssignedEndpoint, AssignedMessageEdge, AssignedRestCall, Connection, MessageConnection,
         MessageRequest, Request, Sdg, Service,
@@ -86,8 +82,6 @@ impl SdgBuilderImpl {
     pub fn new() -> Self {
         Self {}
     }
-
-    const DISSIMILARITY_PERCENT: f32 = 0.3;
 
     fn get_assigned_endpoints(
         &self,
@@ -185,13 +179,14 @@ impl SdgBuilderImpl {
             .map(|constant| (constant.name.as_str(), constant.value.as_str()))
             .collect();
 
-        // Optional braces: Java emits unresolved constants as holes `{HOST}`
+        // Java emits unresolved constants as holes `{HOST}`; bare names need
+        // word boundaries so `HOST` never matches inside `HOSTNAME`.
         let names = sorted_constants
             .iter()
             .map(|constant| regex::escape(&constant.name))
             .collect::<Vec<String>>()
             .join("|");
-        let pattern = format!(r"\{{?(?:{names})\}}?");
+        let pattern = format!(r"\{{(?:{names})\}}|\b(?:{names})\b");
         let re = Regex::new(&pattern)
             .map_err(|_| BuilderError::Error("Failed to compile constants regex".to_owned()))?;
 
@@ -219,12 +214,11 @@ impl SdgBuilderImpl {
         restcalls: Vec<AssignedRestCall>,
         all_urls: &[String],
     ) -> Vec<Connection> {
-        let restcall_endpoint: Vec<(AssignedRestCall, AssignedEndpoint)> =
-            self.create_endpoint_restcall_pairs(endpoints, restcalls, all_urls);
+        let restcall_endpoint = self.create_endpoint_restcall_pairs(endpoints, restcalls, all_urls);
 
         let mut connections_map: HashMap<String, Connection> = HashMap::new();
 
-        for (restcall, endpoint) in restcall_endpoint {
+        for (restcall, endpoint, match_tag) in restcall_endpoint {
             // Prefer the matched endpoint's path; fall back to the raw target
             // when matching produced none. The health rule reads the last
             // segment, so it works on a full URL too.
@@ -259,6 +253,7 @@ impl SdgBuilderImpl {
                     endpoint: endpoint.data.clone(),
                     restcall: restcall.data.clone(),
                     kind,
+                    match_tag,
                 });
         }
 
@@ -311,97 +306,19 @@ impl SdgBuilderImpl {
         connections_map.into_values().collect()
     }
 
-    fn exact_match(&self, endpoint: &AssignedEndpoint, restcall: &AssignedRestCall) -> bool {
-        if !endpoint.data.uri.starts_with("http") {
-            for url in &endpoint.service.urls {
-                let to_match = format!(
-                    "{}/{}",
-                    url.trim_end_matches("/"),
-                    endpoint.data.uri.trim_start_matches("/")
-                );
-                if to_match == restcall.data.target_uri {
-                    return true;
-                }
-            }
-        } else {
-            return endpoint.data.uri == restcall.data.target_uri;
-        }
-        false
-    }
-
-    fn get_levenshtein_distance(
-        &self,
-        endpoint: &AssignedEndpoint,
-        restcall: &AssignedRestCall,
-    ) -> usize {
-        let mut lowest_score = usize::MAX;
-
-        for prefix in endpoint
-            .service
-            .urls
-            .iter()
-            .chain(std::iter::once(&"".to_string()))
-        {
-            let endpoint_test_uri = format!(
-                "{}/{}",
-                prefix.trim_end_matches("/"),
-                endpoint.data.uri.trim_start_matches("/")
-            );
-            let score = levenshtein(&endpoint_test_uri, &restcall.data.target_uri);
-            lowest_score = min(lowest_score, score);
-        }
-
-        lowest_score
-    }
-
     fn create_endpoint_restcall_pairs(
         &self,
         endpoints: Vec<AssignedEndpoint>,
         restcalls: Vec<AssignedRestCall>,
         all_urls: &[String],
-    ) -> Vec<(AssignedRestCall, AssignedEndpoint)> {
-        let mut restcall_endpoint: Vec<(AssignedRestCall, AssignedEndpoint)> = Vec::new();
+    ) -> Vec<(AssignedRestCall, AssignedEndpoint, MatchTag)> {
+        let mut pairs = Vec::new();
         for restcall in restcalls {
-            // A reflexive call (localhost, or the caller's own configured host)
-            // must resolve *inside* its own service. Without this the matcher
-            // skips own-service endpoints and fuzzy-matches a peer that happens
-            // to share a port -- the empaia mds -> app false positive.
-            let want_self =
-                is_reflexive(&restcall.data.target_uri, &restcall.service.urls, all_urls);
-
-            let mut matched_endpoint: Option<&AssignedEndpoint> = None;
-            let mut min_dist = usize::MAX;
-            let mut length_of_longest_str = 0;
-            let mut was_matched_exactly = false;
-            for endpoint in &endpoints {
-                if endpoint.data.http_method != restcall.data.http_method
-                    || (endpoint.service.name == restcall.service.name) != want_self
-                {
-                    continue;
-                }
-                if self.exact_match(endpoint, &restcall) {
-                    matched_endpoint = Some(endpoint);
-                    was_matched_exactly = true;
-                    break;
-                }
-
-                let cur_dist = self.get_levenshtein_distance(endpoint, &restcall);
-                if cur_dist < min_dist {
-                    min_dist = cur_dist;
-                    matched_endpoint = Some(endpoint);
-                    length_of_longest_str =
-                        std::cmp::max(endpoint.data.uri.len(), restcall.data.target_uri.len());
-                }
-            }
-
-            if let Some(endpoint) = matched_endpoint {
-                let percent = length_of_longest_str as f32 * Self::DISSIMILARITY_PERCENT;
-                if percent > min_dist as f32 || was_matched_exactly {
-                    restcall_endpoint.push((restcall, endpoint.to_owned()));
-                }
+            for (endpoint, tag) in candidates(&restcall, &endpoints, all_urls) {
+                pairs.push((restcall.clone(), endpoint.clone(), tag));
             }
         }
-        restcall_endpoint
+        pairs
     }
 }
 

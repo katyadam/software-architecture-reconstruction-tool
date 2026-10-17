@@ -1,6 +1,6 @@
 pub mod bolt;
 
-use crate::sdg::interaction_kind::InteractionKind;
+use crate::sdg::{interaction_kind::InteractionKind, matching::MatchTag};
 use models::{Endpoint, MessageEdge, RestCall, configuration::ServiceDescription};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -37,6 +37,9 @@ pub struct Request {
     /// Which architectural view this single interaction belongs to.
     #[serde(default)]
     pub kind: InteractionKind,
+    /// How `endpoint` was matched to `restcall`.
+    #[serde(rename = "match", default)]
+    pub match_tag: MatchTag,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, PartialEq, Eq)]

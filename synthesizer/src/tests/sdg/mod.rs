@@ -5,13 +5,14 @@ mod tests {
     use models::{
         ConfigurationData, Endpoint, HttpMethod, RestCall, configuration::ServiceDescription,
     };
-    use strsim::levenshtein;
     use uuid::Uuid;
 
     use crate::connectors::dto::Constant;
 
     use crate::sdg::builder::{SdgBuilder, SdgBuilderImpl};
     use crate::sdg::interaction_kind::InteractionKind;
+    use crate::sdg::matching::MatchTag;
+    use crate::sdg::model::Request;
 
     #[test]
     fn should_create_simple_sdg() {
@@ -33,14 +34,117 @@ mod tests {
             sdg.connections.iter().all(|conn| conn.requests.len() == 3),
             "Incorrect number of matched requests within the only connection, should be 3"
         );
-        assert!(
-            sdg.connections.iter().all(|conn| {
-                conn.requests
-                    .iter()
-                    .all(|req| levenshtein(&req.endpoint.uri, &req.restcall.target_uri) == 24)
-            }),
-            "Not matching URIs between matched endpoint-restcall pair, should be matching or atleast similar"
+        let mut tags: Vec<(HttpMethod, &str, MatchTag)> = sdg.connections[0]
+            .requests
+            .iter()
+            .map(|r| (r.endpoint.http_method, r.endpoint.uri.as_str(), r.match_tag))
+            .collect();
+        tags.sort_by_key(|(m, u, _)| (format!("{m:?}"), u.to_string()));
+        assert_eq!(
+            tags,
+            vec![
+                (HttpMethod::DELETE, "/users/{id}", MatchTag::Template),
+                (HttpMethod::GET, "/users/{id}", MatchTag::Template),
+                (HttpMethod::POST, "/users", MatchTag::Exact),
+            ]
         );
+    }
+
+    #[test]
+    fn ambiguous_call_yields_one_request_per_candidate() {
+        let builder = SdgBuilderImpl::new();
+        let endpoints = ["/users/me", "/users/{id}"]
+            .map(|uri| Endpoint {
+                function_name: "get".to_string(),
+                http_method: HttpMethod::GET,
+                uri: uri.to_string(),
+                file_path: "crm/user-service/src/api/controller.py".to_string(),
+                ..Default::default()
+            })
+            .to_vec();
+        let restcalls = vec![RestCall {
+            function_name: "get".to_string(),
+            http_method: HttpMethod::GET,
+            target_uri: "http://user-service:8000/users/{x}".to_string(),
+            file_path: "crm/admin-user-service/src/api/user_connector.py".to_string(),
+            ..Default::default()
+        }];
+
+        let sdg = builder
+            .build(&endpoints, &restcalls, &[], &sample_configuration(), &[])
+            .expect("build must succeed");
+
+        assert_eq!(sdg.connections.len(), 1);
+        let requests = &sdg.connections[0].requests;
+        assert_eq!(requests.len(), 2);
+        assert!(requests.iter().all(|r| r.restcall == restcalls[0]));
+        let mut uris: Vec<&str> = requests.iter().map(|r| r.endpoint.uri.as_str()).collect();
+        uris.sort();
+        assert_eq!(uris, vec!["/users/me", "/users/{id}"]);
+    }
+
+    #[test]
+    fn request_serializes_match_tag() {
+        let request = Request {
+            endpoint: Endpoint::default(),
+            restcall: RestCall::default(),
+            kind: InteractionKind::default(),
+            match_tag: MatchTag::Template,
+        };
+        let value = serde_json::to_value(request).expect("request serializes");
+        assert_eq!(value["match"], "template");
+    }
+
+    #[test]
+    fn constant_substitution_matches_whole_names_only() {
+        let builder = SdgBuilderImpl::new();
+        let endpoints = vec![Endpoint {
+            function_name: "handler".to_string(),
+            http_method: HttpMethod::GET,
+            uri: "/a".to_string(),
+            file_path: "svc/src/Controller.java".to_string(),
+            ..Default::default()
+        }];
+        let restcalls = ["{HOSTNAME}/a", "{HOST}/a"]
+            .map(|target_uri| RestCall {
+                function_name: "call".to_string(),
+                http_method: HttpMethod::GET,
+                target_uri: target_uri.to_string(),
+                file_path: "caller/src/Client.java".to_string(),
+                ..Default::default()
+            })
+            .to_vec();
+        let configuration = ConfigurationData {
+            service_descriptions: vec![
+                ServiceDescription {
+                    name: "svc".to_string(),
+                    base_dir_path: "svc".to_string(),
+                    urls: vec!["http://svc:80".to_string()],
+                },
+                ServiceDescription {
+                    name: "caller".to_string(),
+                    base_dir_path: "caller".to_string(),
+                    urls: vec!["http://caller:80".to_string()],
+                },
+            ],
+        };
+        let constants = vec![Constant::new(
+            Uuid::nil(),
+            "HOST".to_string(),
+            "http://svc:80".to_string(),
+        )];
+
+        let sdg = builder
+            .build(&endpoints, &restcalls, &[], &configuration, &constants)
+            .expect("build must succeed");
+
+        let mut uris: Vec<&str> = sdg
+            .connections
+            .iter()
+            .flat_map(|c| c.requests.iter().map(|r| r.restcall.target_uri.as_str()))
+            .collect();
+        uris.sort();
+        assert_eq!(uris, vec!["http://svc:80/a", "{HOSTNAME}/a"]);
     }
 
     #[test]
