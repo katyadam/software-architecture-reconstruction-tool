@@ -115,6 +115,74 @@ fn selects_module_tests_without_a_wala_adapter_for_a_configuration_change() {
 }
 
 #[test]
+fn defaults_to_wala_provider_when_only_the_legacy_adapter_flag_is_supplied() {
+    let fixture = create_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "src/main/java/fixture/Service.java",
+        "package fixture; public class Service { public static void changed() { int value = 2; } public static void unchanged() {} }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "candidate"]);
+
+    let result = run_tia(&fixture, &baseline);
+
+    assert!(result.diagnostics.iter().any(|diagnostic| diagnostic.starts_with("timing: WALA analysis=")));
+}
+
+#[test]
+fn sootup_provider_requires_the_provider_neutral_adapter_jar() {
+    let fixture = create_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "src/main/java/fixture/Service.java",
+        "package fixture; public class Service { public static void changed() { int value = 2; } public static void unchanged() {} }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "candidate"]);
+
+    let output = run_tia_command(
+        &fixture,
+        &baseline,
+        &[
+            "--java-callgraph-provider",
+            "sootup",
+            "--java-callgraph-adapter-jar",
+            fixture.path().join("missing-sootup.jar").to_str().expect("UTF-8"),
+        ],
+    );
+
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("--java-callgraph-adapter-jar must be an existing file"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn rejects_unknown_provider_before_creating_a_result() {
+    let fixture = create_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+
+    let output = run_tia_command(
+        &fixture,
+        &baseline,
+        &["--java-callgraph-provider", "unknown"],
+    );
+
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Unsupported Java call-graph provider: unknown"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!fixture.path().join("impact.json").exists());
+}
+
+#[test]
 fn selects_every_module_test_for_a_deleted_java_source_file() {
     let fixture = create_fixture();
     let baseline = git(&fixture, &["rev-parse", "HEAD"]);
@@ -216,6 +284,24 @@ fn run_tia_with_extra_args(
             .expect("TIA result is JSON"),
         output_result,
     )
+}
+
+fn run_tia_command(fixture: &TempDir, baseline: &str, extra_args: &[&str]) -> std::process::Output {
+    let _process_guard = TIA_PROCESS_LOCK
+        .lock()
+        .expect("TIA process lock is available");
+    Command::new(env!("CARGO_BIN_EXE_test-impact"))
+        .args([
+            "--project-dir",
+            fixture.path().to_str().expect("fixture path is UTF-8"),
+            "--baseline-revision",
+            baseline,
+            "--output",
+            fixture.path().join("impact.json").to_str().expect("fixture path is UTF-8"),
+        ])
+        .args(extra_args)
+        .output()
+        .expect("TIA binary starts")
 }
 
 /// Verifies the controlled fallback contract keeps every discovered module test.

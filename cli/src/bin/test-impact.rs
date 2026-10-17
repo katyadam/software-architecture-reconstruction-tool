@@ -2,7 +2,10 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use cli::get_java_callables_for_modules_with_progress;
 use extractor_runtime::{
-    call_graph::{resolve_reachability_with_java_tests, wala::WalaJavaProvider},
+    call_graph::{
+        java_adapter::JavaAdapterProvider,
+        resolve_reachability_with_java_tests, wala::WalaJavaProvider,
+    },
     impact::{ModuleCatalog, analyze_changes, discover_java_tests, select_tests},
 };
 use models::{Callable, ChangedElement, ChangedElementKind, Namespace, TestImpactResult};
@@ -24,9 +27,15 @@ struct Arguments {
     /// Git revision used as the old side of the candidate comparison.
     #[arg(long, value_name = "REVISION")]
     baseline_revision: String,
-    /// Standalone WALA adapter JAR with Maven test-bytecode support.
+    /// Java call-graph implementation used for callable-level analysis.
+    #[arg(long, default_value = "wala", value_name = "PROVIDER")]
+    java_callgraph_provider: String,
+    /// Adapter JAR for a non-WALA Java call-graph provider such as SootUp.
     #[arg(long, value_name = "FILE")]
-    wala_adapter_jar: PathBuf,
+    java_callgraph_adapter_jar: Option<PathBuf>,
+    /// Standalone WALA adapter JAR; preserved as the compatibility path for WALA.
+    #[arg(long, value_name = "FILE")]
+    wala_adapter_jar: Option<PathBuf>,
     /// Destination JSON file for the auditable selection result.
     #[arg(long, value_name = "FILE")]
     output: PathBuf,
@@ -41,6 +50,7 @@ struct Arguments {
 /// Runs conservative TIA and writes a JSON result even when analysis must fall back broadly.
 fn run(arguments: Arguments) -> Result<()> {
     validate_project_and_revision(&arguments)?;
+    let provider_kind = JavaCallGraphProviderKind::parse(&arguments.java_callgraph_provider)?;
     let candidate_revision = git_revision(&arguments.project_dir, "HEAD")?;
     let module_metadata_diagnostic = ModuleCatalog::load(&arguments.project_dir)
         .diagnostic()
@@ -58,7 +68,7 @@ fn run(arguments: Arguments) -> Result<()> {
     if changes_are_module_only(&changes) {
         return write_module_fallback_result(&arguments, candidate_revision, changes, diagnostics);
     }
-    validate_wala_adapter(&arguments)?;
+    let provider = select_provider(&arguments, provider_kind)?;
     let modules = changed_modules(&changes);
     let extraction_started = Instant::now();
     let callables = get_java_callables_for_modules_with_progress(
@@ -70,10 +80,6 @@ fn run(arguments: Arguments) -> Result<()> {
         "source extraction",
         extraction_started.elapsed(),
     ));
-    let provider = WalaJavaProvider::with_timeout(
-        &arguments.wala_adapter_jar,
-        Duration::from_secs(arguments.wala_timeout_seconds),
-    );
     let mut selected_tests = Vec::new();
     let mut unselected_tests = Vec::new();
 
@@ -106,12 +112,86 @@ fn validate_project_and_revision(arguments: &Arguments) -> Result<()> {
     Ok(())
 }
 
-/// Requires an adapter JAR only when callable-level analysis needs WALA.
-fn validate_wala_adapter(arguments: &Arguments) -> Result<()> {
-    if !arguments.wala_adapter_jar.is_file() {
-        anyhow::bail!("--wala-adapter-jar must be an existing file");
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum JavaCallGraphProviderKind {
+    Wala,
+    SootUp,
+}
+
+impl JavaCallGraphProviderKind {
+    fn parse(value: &str) -> Result<Self> {
+        match value {
+            "wala" => Ok(Self::Wala),
+            "sootup" => Ok(Self::SootUp),
+            other => anyhow::bail!("Unsupported Java call-graph provider: {other}"),
+        }
     }
-    Ok(())
+}
+
+enum SelectedJavaProvider {
+    Wala(WalaJavaProvider),
+    SootUp(JavaAdapterProvider),
+}
+
+impl SelectedJavaProvider {
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Wala(_) => "WALA",
+            Self::SootUp(_) => "SootUp",
+        }
+    }
+
+    fn analyze_test_roots(
+        &self,
+        source_root: &Path,
+        test_roots: &[models::JavaTestCase],
+        targets: &[String],
+    ) -> models::call_graph::CallGraphOutcome {
+        match self {
+            Self::Wala(provider) => provider.analyze_test_roots(source_root, test_roots, targets),
+            Self::SootUp(provider) => provider.analyze_test_roots(source_root, test_roots, targets),
+        }
+    }
+}
+
+fn select_provider(
+    arguments: &Arguments,
+    kind: JavaCallGraphProviderKind,
+) -> Result<SelectedJavaProvider> {
+    let timeout = Duration::from_secs(arguments.wala_timeout_seconds);
+    match kind {
+        JavaCallGraphProviderKind::Wala => {
+            if arguments.java_callgraph_adapter_jar.is_some() {
+                anyhow::bail!("--java-callgraph-adapter-jar is only valid with --java-callgraph-provider sootup");
+            }
+            let jar = arguments
+                .wala_adapter_jar
+                .as_ref()
+                .context("--wala-adapter-jar must be supplied for the WALA provider")?;
+            if !jar.is_file() {
+                anyhow::bail!("--wala-adapter-jar must be an existing file");
+            }
+            Ok(SelectedJavaProvider::Wala(WalaJavaProvider::with_timeout(jar, timeout)))
+        }
+        JavaCallGraphProviderKind::SootUp => {
+            if arguments.wala_adapter_jar.is_some() {
+                anyhow::bail!("--wala-adapter-jar cannot be combined with --java-callgraph-provider sootup");
+            }
+            let jar = arguments
+                .java_callgraph_adapter_jar
+                .as_ref()
+                .context("--java-callgraph-adapter-jar must be supplied for the SootUp provider")?;
+            if !jar.is_file() {
+                anyhow::bail!("--java-callgraph-adapter-jar must be an existing file");
+            }
+            Ok(SelectedJavaProvider::SootUp(JavaAdapterProvider::new(
+                "sootup-java",
+                jar,
+                timeout,
+                "cha",
+            )))
+        }
+    }
 }
 
 /// Returns whether every change is already required to use module-wide fallback.
@@ -150,7 +230,7 @@ fn write_module_fallback_result(
 
 /// Runs discovery, WALA, resolution, and selection for one independently affected Maven module.
 fn analyze_module(
-    provider: &WalaJavaProvider,
+    provider: &SelectedJavaProvider,
     module: &str,
     changes: Vec<ChangedElement>,
     callables: &[models::Callable],
@@ -182,8 +262,8 @@ fn analyze_module(
         }
     };
     let source_root = module_path.join("src/main/java");
-    let wala_started = Instant::now();
-    let targets = wala_targets(&source_root, &changes, callables);
+    let callgraph_started = Instant::now();
+    let targets = callgraph_targets(&source_root, &changes, callables);
     let mut outcome = provider.analyze_test_roots(&source_root, &tests, &targets);
     let resolution_started = Instant::now();
     let resolution = resolve_reachability_with_java_tests(&outcome, module_path, callables, &tests);
@@ -198,11 +278,11 @@ fn analyze_module(
     );
     result.diagnostics.push(timing_diagnostic(
         "test discovery",
-        wala_started.duration_since(discovery_started),
+        callgraph_started.duration_since(discovery_started),
     ));
     result.diagnostics.push(timing_diagnostic(
-        "WALA analysis",
-        resolution_started.duration_since(wala_started),
+        &format!("{} analysis", provider.label()),
+        resolution_started.duration_since(callgraph_started),
     ));
     result.diagnostics.push(timing_diagnostic(
         "edge resolution",
@@ -216,7 +296,7 @@ fn analyze_module(
 }
 
 /// Converts changed source owners into conservative WALA method targets for bounded provenance.
-fn wala_targets(
+fn callgraph_targets(
     source_root: &Path,
     changes: &[ChangedElement],
     callables: &[Callable],
