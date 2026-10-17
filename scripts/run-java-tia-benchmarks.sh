@@ -11,6 +11,8 @@ checks sample-message-driven-microservices and sample-spring-kafka-microservices
 Environment:
   JAVA_BENCHMARK_ROOT       Benchmark checkout root (default: sibling benchmarks/java)
   TIA_BINARY                Built test-impact binary (default: target/debug/test-impact)
+  JAVA_CALLGRAPH_PROVIDER   Java call-graph provider: wala or sootup (default: wala)
+  JAVA_CALLGRAPH_ADAPTER_JAR Adapter JAR for the selected non-WALA provider
   WALA_ADAPTER_JAR          WALA adapter JAR (default: wala-callgraph target JAR)
   TIA_BENCHMARK_OUTPUT_DIR  Directory for JSON results (default: a new /tmp directory)
   WALA_TIMEOUT_SECONDS      Per-module adapter timeout (default: 30)
@@ -31,6 +33,8 @@ tool_root=$(dirname "$git_common_dir")
 benchmark_root=${JAVA_BENCHMARK_ROOT:-"$tool_root/../benchmarks/java"}
 tia_binary=${TIA_BINARY:-"$repo_root/target/debug/test-impact"}
 wala_adapter_jar=${WALA_ADAPTER_JAR:-"$repo_root/wala-callgraph/target/wala-callgraph-all.jar"}
+java_callgraph_provider=${JAVA_CALLGRAPH_PROVIDER:-wala}
+java_callgraph_adapter_jar=${JAVA_CALLGRAPH_ADAPTER_JAR:-}
 wala_timeout_seconds=${WALA_TIMEOUT_SECONDS:-30}
 output_dir=${TIA_BENCHMARK_OUTPUT_DIR:-"$(mktemp -d /tmp/sar-java-tia-benchmark.XXXXXX)"}
 
@@ -42,9 +46,28 @@ fi
 if [[ ! -x $tia_binary ]]; then
   cargo build -p cli --bin test-impact --manifest-path "$repo_root/Cargo.toml"
 fi
-if [[ ! -f $wala_adapter_jar ]]; then
-  mvn -q -f "$repo_root/wala-callgraph/pom.xml" package -DskipTests
-fi
+case "$java_callgraph_provider" in
+  wala)
+    if [[ ! -f $wala_adapter_jar ]]; then
+      mvn -q -f "$repo_root/java-callgraph-adapters/pom.xml" -pl ../wala-callgraph -am package -DskipTests
+    fi
+    adapter_arguments=(--wala-adapter-jar "$wala_adapter_jar")
+    ;;
+  sootup)
+    java_callgraph_adapter_jar=${java_callgraph_adapter_jar:-"$repo_root/sootup-callgraph/target/sootup-callgraph-all.jar"}
+    if [[ ! -f $java_callgraph_adapter_jar ]]; then
+      mvn -q -f "$repo_root/java-callgraph-adapters/pom.xml" -pl ../sootup-callgraph -am package -DskipTests
+    fi
+    adapter_arguments=(
+      --java-callgraph-provider sootup
+      --java-callgraph-adapter-jar "$java_callgraph_adapter_jar"
+    )
+    ;;
+  *)
+    echo "Unsupported JAVA_CALLGRAPH_PROVIDER: $java_callgraph_provider" >&2
+    exit 2
+    ;;
+esac
 
 mkdir -p "$output_dir"
 if (($# == 0)); then
@@ -72,7 +95,7 @@ for project_name in "$@"; do
   if ! "$tia_binary" \
     --project-dir "$project_dir" \
     --baseline-revision "$baseline" \
-    --wala-adapter-jar "$wala_adapter_jar" \
+    "${adapter_arguments[@]}" \
     --wala-timeout-seconds "$wala_timeout_seconds" \
     --quiet \
     --output "$result" 2>&1 | tee "$log"; then
