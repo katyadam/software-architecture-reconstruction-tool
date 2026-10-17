@@ -173,6 +173,30 @@ fn sootup_provider_requires_the_provider_neutral_adapter_jar() {
 }
 
 #[test]
+fn selects_the_junit_test_with_sootup_and_prepared_bytecode() {
+    let fixture = create_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "src/main/java/fixture/Service.java",
+        "package fixture; public class Service { public static void changed() { int value = 2; } public static void unchanged() {} }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "candidate"]);
+
+    let result = run_tia_with_sootup(&fixture, &baseline);
+
+    assert_eq!(result.selected_tests.len(), 1, "{:?}", result.diagnostics);
+    assert_eq!(result.selected_tests[0].test.method_name, "coversChanged");
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.starts_with("timing: SootUp analysis="))
+    );
+}
+
+#[test]
 fn rejects_unknown_provider_before_creating_a_result() {
     let fixture = create_fixture();
     let baseline = git(&fixture, &["rev-parse", "HEAD"]);
@@ -258,6 +282,35 @@ fn run_tia_with_jar(
     wala_adapter_jar: &Path,
 ) -> models::TestImpactResult {
     run_tia_with_extra_args(fixture, baseline, wala_adapter_jar, &[]).0
+}
+
+fn run_tia_with_sootup(fixture: &TempDir, baseline: &str) -> models::TestImpactResult {
+    let _process_guard = TIA_PROCESS_LOCK
+        .lock()
+        .expect("TIA process lock is available");
+    let output = fixture.path().join("impact.json");
+    let output_result = Command::new(env!("CARGO_BIN_EXE_test-impact"))
+        .args([
+            "--project-dir",
+            fixture.path().to_str().expect("fixture path is UTF-8"),
+            "--baseline-revision",
+            baseline,
+            "--java-callgraph-provider",
+            "sootup",
+            "--java-callgraph-adapter-jar",
+            sootup_jar().to_str().expect("adapter path is UTF-8"),
+            "--output",
+            output.to_str().expect("output path is UTF-8"),
+        ])
+        .output()
+        .expect("TIA binary starts");
+    assert!(
+        output_result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output_result.stderr)
+    );
+    serde_json::from_str(&fs::read_to_string(output).expect("TIA result is written"))
+        .expect("TIA result is JSON")
 }
 
 /// Executes TIA with optional command-line switches and returns its output for CLI behavior checks.
@@ -454,4 +507,11 @@ fn wala_jar() -> std::path::PathBuf {
         .parent()
         .expect("workspace root")
         .join("wala-callgraph/target/wala-callgraph-all.jar")
+}
+
+fn sootup_jar() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("workspace root")
+        .join("sootup-callgraph/target/sootup-callgraph-all.jar")
 }
