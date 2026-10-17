@@ -21,7 +21,7 @@ TIA_BENCHMARK_OUTPUT_DIR="$output_dir" \
 WALA_TIMEOUT_SECONDS="${WALA_TIMEOUT_SECONDS:-300}" \
 JAVA_CALLGRAPH_PROVIDER=sootup \
 JAVA_CALLGRAPH_ADAPTER_JAR="${JAVA_CALLGRAPH_ADAPTER_JAR:-$repo_root/sootup-callgraph/target/sootup-callgraph-all.jar}" \
-JAVA_CALLGRAPH_GRADLE_ARGUMENTS="${JAVA_CALLGRAPH_GRADLE_ARGUMENTS:--PskipAndroid=true}" \
+JAVA_CALLGRAPH_GRADLE_ARGUMENTS="${JAVA_CALLGRAPH_GRADLE_ARGUMENTS:--PskipAndroid=true -PskipCodegen=true}" \
 "$runner" "$project_name"
 
 printf 'Results: %s/%s.json\n' "$output_dir" "$project_name"
