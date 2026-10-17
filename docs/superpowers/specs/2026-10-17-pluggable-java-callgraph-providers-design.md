@@ -25,7 +25,11 @@ are deliberately out of scope for this slice.
 ## Architecture
 
 ```text
-Maven/Gradle artifact discovery + Java source/callable mapping
+Maven/Gradle module + Java source/callable mapping
+                         |
+                         v
+          provider-neutral artifact preparation
+      (main/test class directories, runtime classpath)
                          |
                          v
                  JavaCallGraphProvider
@@ -62,6 +66,29 @@ emit an empty `edges` list when it provides targeted reachability; it must emit 
 `reachability` list when no selected target is reached. It must not use absence of data to signal
 success.
 
+### Provider-neutral artifact preparation
+
+Source-root-only analysis is insufficient for a portable bytecode backend: WALA currently performs
+Maven/Gradle artifact discovery inside its adapter, while SootUp requires the resolved paths as
+explicit inputs. Introduce a build-tool-neutral preparation boundary before provider launch.
+
+`PreparedJavaArtifacts` contains only:
+
+- zero or more production class directories;
+- zero or more test class directories; and
+- the resolved runtime/test classpath entries needed to load those classes.
+
+The preparer receives the chosen Maven or Gradle module and build options, reuses the existing
+Maven/Gradle metadata and bytecode-discovery behavior, and emits normalized paths plus preparation
+diagnostics. It does not parse bytecode, construct a graph, or depend on WALA, SootUp, or any other
+analysis library. Each adapter receives the same prepared paths through the common command-line
+protocol.
+
+This makes build preparation a comparable part of evaluation: a preparation failure is reported
+once as conservative uncertainty, rather than being misattributed to one provider. WALA may keep a
+source-root compatibility path temporarily, but the benchmark and provider-neutral path must use
+prepared artifacts.
+
 ### Rust provider launcher
 
 Replace the WALA-named process-launcher abstraction with a generic Java adapter launcher that
@@ -79,7 +106,8 @@ Extract the schema-v2 records and shared CLI parsing into a small Java contract/
 that does not depend on WALA. Keep WALA implementation code in its existing module. Add a sibling
 SootUp adapter module that depends only on that shared support module and SootUp artifacts.
 
-SootUp CHA receives application main/test class directories and the resolved dependency classpath.
+SootUp CHA receives application main/test class directories and the resolved dependency classpath
+from `PreparedJavaArtifacts`.
 Its entrypoint selectors are the discovered JUnit methods. For changed callable targets, it emits
 target-to-entrypoint reachability using the common schema. All method-identity conversion is
 centralized in the SootUp adapter; Rust continues to resolve source callables as it does today.
@@ -116,10 +144,12 @@ conservative fallback set.
 3. SootUp adapter unit tests compile a small Java fixture, discover a direct test-to-production
    call, and report no reachability for an unrelated changed method.
 4. Existing WALA tests and the existing CLI compatibility path remain green.
-5. Kafka positive control runs under both providers. The report records selected/unselected counts,
+5. A Maven and a Gradle fixture prove that preparation supplies the same normalized artifact sets
+   to a fake provider, including configured Gradle arguments.
+6. Kafka positive control runs under both providers. The report records selected/unselected counts,
    analysis duration, and whether the changed `OrderConverter.orderDaoToKafka()` reaches the same
    tests.
-6. grpc-xds runs under SootUp with `-PskipAndroid=true`; the report records either a valid outcome
+7. grpc-xds runs under SootUp with `-PskipAndroid=true`; the report records either a valid outcome
    or a specific SootUp failure diagnostic. A successful process alone is not treated as proof of
    useful selection.
 
