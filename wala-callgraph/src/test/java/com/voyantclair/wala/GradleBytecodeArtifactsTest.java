@@ -44,14 +44,25 @@ class GradleBytecodeArtifactsTest {
         "#!/bin/sh\necho \"$@\" >> " + arguments + "\necho \"VOYANTCLAIR_MAIN=" + mainClasses + "\"\necho \"VOYANTCLAIR_TEST=" + testClasses + "\"\necho \"VOYANTCLAIR_TEST_RUNTIME=" + dependency + "\"\n");
     wrapper.toFile().setExecutable(true);
 
-    var preparation = new GradleBytecodeArtifacts().prepare(sourceRoot);
+    BytecodeArtifacts.Preparation preparation;
+    System.setProperty("voyantclair.gradle.arguments", "-PskipAndroid=true");
+    try {
+      preparation = new GradleBytecodeArtifacts().prepare(sourceRoot);
+    } finally {
+      System.clearProperty("voyantclair.gradle.arguments");
+    }
 
     assertTrue(preparation.succeeded(), preparation.diagnostic());
     assertEquals(List.of(mainClasses), preparation.artifacts().applicationClassDirs());
     assertEquals(List.of(testClasses), preparation.artifacts().testClassDirs());
     assertEquals(List.of(dependency), preparation.artifacts().dependencyJars());
-    assertTrue(Files.readString(arguments).contains(":service:testClasses"));
-    assertTrue(Files.readString(arguments).contains("-I"));
+    String invocations = Files.readString(arguments);
+    assertTrue(invocations.contains(":service:testClasses"));
+    assertTrue(invocations.contains("-I"));
+    assertEquals(
+        3,
+        invocations.lines().filter(line -> line.contains("-PskipAndroid=true")).count(),
+        "every Gradle invocation must receive configured project properties");
   }
 
   @Test
@@ -77,6 +88,48 @@ class GradleBytecodeArtifactsTest {
 
     assertTrue(preparation.succeeded(), preparation.diagnostic());
     assertTrue(Files.readString(arguments).contains(":services:orders:testClasses"));
+  }
+
+  @Test
+  void discovers_an_aliased_gradle_project_path_from_its_module_directory(@TempDir Path tempDir)
+      throws Exception {
+    Path module = tempDir.resolve("xds");
+    Path sourceRoot = module.resolve("src/main/java");
+    Path mainClasses = module.resolve("build/classes/java/main");
+    Path testClasses = module.resolve("build/classes/java/test");
+    Path arguments = tempDir.resolve("aliased-arguments.txt");
+    Files.createDirectories(sourceRoot);
+    Files.createDirectories(mainClasses);
+    Files.createDirectories(testClasses);
+    Files.writeString(module.resolve("build.gradle"), "plugins { id 'java' }");
+    Path wrapper = tempDir.resolve("gradlew");
+    Files.writeString(
+        wrapper,
+        "#!/bin/sh\necho \"$@\" >> "
+            + arguments
+            + "\ncase \"$*\" in *voyantclairWalaProjectPaths*) echo \"VOYANTCLAIR_PROJECT=:grpc-xds\\t"
+            + module
+            + "\" ;; *) echo \"VOYANTCLAIR_MAIN="
+            + mainClasses
+            + "\"; echo \"VOYANTCLAIR_TEST="
+            + testClasses
+            + "\"; echo \"VOYANTCLAIR_TEST_RUNTIME=\" ;; esac\n");
+    wrapper.toFile().setExecutable(true);
+
+    var preparation = new GradleBytecodeArtifacts().prepare(sourceRoot);
+
+    assertTrue(preparation.succeeded(), preparation.diagnostic());
+    assertTrue(Files.readString(arguments).contains(":grpc-xds:testClasses"));
+  }
+
+  @Test
+  void registers_project_discovery_after_gradle_loads_projects() throws Exception {
+    var method = GradleBytecodeArtifacts.class.getDeclaredMethod("artifactInitScript");
+    method.setAccessible(true);
+
+    String script = (String) method.invoke(null);
+
+    assertTrue(script.contains("gradle.projectsLoaded"));
   }
 
   @Test

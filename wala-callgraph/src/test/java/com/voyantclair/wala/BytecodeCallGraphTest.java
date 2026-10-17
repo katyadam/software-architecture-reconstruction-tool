@@ -15,6 +15,16 @@ import org.junit.jupiter.api.io.TempDir;
 /** Verifies WALA binary analysis against real Java class files. */
 class BytecodeCallGraphTest {
   @Test
+  void includes_the_failure_top_frame_in_analysis_diagnostics() {
+    var error = new IllegalArgumentException("Illegal target map");
+    error.setStackTrace(new StackTraceElement[] {new StackTraceElement("wala.TargetMap", "add", "TargetMap.java", 42)});
+
+    assertEquals(
+        "IllegalArgumentException: Illegal target map; top_frame=wala.TargetMap.add(TargetMap.java:42)",
+        BytecodeCallGraph.failureDiagnostic(error));
+  }
+
+  @Test
   void resolves_interface_dispatch_from_compiled_application_classes(@TempDir Path tempDir)
       throws Exception {
     Path classesDir = compileDispatchFixture(tempDir);
