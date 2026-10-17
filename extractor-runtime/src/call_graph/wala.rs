@@ -27,7 +27,8 @@ impl WalaJavaProvider {
                 jar,
                 timeout,
                 std::env::var("WALA_ALGORITHM").unwrap_or_else(|_| "cha".into()),
-            ),
+            )
+            .without_artifact_preparation(),
         }
     }
 

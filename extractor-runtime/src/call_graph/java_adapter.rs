@@ -3,6 +3,7 @@ use models::{
     JavaTestCase,
     call_graph::{CallGraphOutcome, CallGraphRequest, CallGraphStatus, Language},
 };
+use serde::Deserialize;
 use std::{
     io::{BufRead, BufReader, Read},
     path::PathBuf,
@@ -22,6 +23,7 @@ pub struct JavaAdapterProvider {
     jar: PathBuf,
     timeout: Duration,
     algorithm: String,
+    prepare_artifacts: bool,
 }
 
 impl JavaAdapterProvider {
@@ -36,7 +38,14 @@ impl JavaAdapterProvider {
             jar: jar.into(),
             timeout,
             algorithm: algorithm.into(),
+            prepare_artifacts: true,
         }
+    }
+
+    /// Keeps a legacy adapter's source-root preparation path while the provider-neutral path migrates.
+    pub fn without_artifact_preparation(mut self) -> Self {
+        self.prepare_artifacts = false;
+        self
     }
 
     pub fn provider_id(&self) -> &str {
@@ -51,7 +60,58 @@ impl JavaAdapterProvider {
         targets: &[String],
     ) -> CallGraphOutcome {
         let request = CallGraphRequest::new(source_root.to_string_lossy(), Language::Java);
-        self.invoke(&request, test_root_arguments(source_root, test_roots, targets))
+        let artifacts = if self.prepare_artifacts {
+            match self.prepare_artifacts(&request) {
+                Ok(artifacts) => Some(artifacts),
+                Err(diagnostic) => {
+                    return failed(&request, &self.provider_id, &self.algorithm, &diagnostic);
+                }
+            }
+        } else {
+            None
+        };
+        self.invoke(
+            &request,
+            test_root_arguments(source_root, test_roots, targets, artifacts.as_ref()),
+        )
+    }
+
+    fn prepare_artifacts(
+        &self,
+        request: &CallGraphRequest,
+    ) -> Result<PreparedJavaArtifacts, String> {
+        let mut command = Command::new("java");
+        command
+            .arg("-cp")
+            .arg(&self.jar)
+            .arg("com.voyantclair.callgraph.ArtifactPreparationMain")
+            .args(["--source-dir", &request.source_root])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        isolate_process_group(&mut command);
+        let output = command
+            .spawn()
+            .and_then(|child| {
+                wait_for_output(child, self.timeout, &self.provider_id)
+                    .map_err(std::io::Error::other)
+            })
+            .map_err(|error| format!("artifact preparation failed: {error}"))?;
+        if !output.status.success() {
+            return Err(format!(
+                "artifact preparation failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ));
+        }
+        let artifacts: PreparedJavaArtifacts = serde_json::from_slice(&output.stdout)
+            .map_err(|_| "artifact preparation failed: invalid preparation JSON".to_owned())?;
+        if artifacts.diagnostic.trim().is_empty() {
+            Ok(artifacts)
+        } else {
+            Err(format!(
+                "artifact preparation failed: {}",
+                artifacts.diagnostic
+            ))
+        }
     }
 
     fn invoke(&self, request: &CallGraphRequest, arguments: Vec<String>) -> CallGraphOutcome {
@@ -78,7 +138,12 @@ impl JavaAdapterProvider {
                 &self.algorithm,
                 &String::from_utf8_lossy(&output.stderr),
             ),
-            Err(error) => failed(request, &self.provider_id, &self.algorithm, &error.to_string()),
+            Err(error) => failed(
+                request,
+                &self.provider_id,
+                &self.algorithm,
+                &error.to_string(),
+            ),
         }
     }
 }
@@ -113,15 +178,34 @@ pub(crate) fn parse_adapter_output(
     }
 }
 
-pub(crate) fn test_root_arguments(
+fn test_root_arguments(
     source_root: &std::path::Path,
     test_roots: &[JavaTestCase],
     targets: &[String],
+    artifacts: Option<&PreparedJavaArtifacts>,
 ) -> Vec<String> {
     let mut arguments = vec![
         "--source-dir".to_owned(),
         source_root.to_string_lossy().into_owned(),
     ];
+    if let Some(artifacts) = artifacts {
+        for classes_dir in &artifacts.application_class_dirs {
+            arguments.push("--classes-dir".to_owned());
+            arguments.push(classes_dir.clone());
+        }
+        for test_classes_dir in &artifacts.test_class_dirs {
+            arguments.push("--test-classes-dir".to_owned());
+            arguments.push(test_classes_dir.clone());
+        }
+        if !artifacts.classpath.is_empty() {
+            arguments.push("--classpath".to_owned());
+            arguments.push(
+                artifacts
+                    .classpath
+                    .join(if cfg!(windows) { ";" } else { ":" }),
+            );
+        }
+    }
     for test in test_roots {
         arguments.push("--entrypoint".to_owned());
         arguments.push(format!(
@@ -136,6 +220,16 @@ pub(crate) fn test_root_arguments(
     arguments
 }
 
+#[derive(Debug, Deserialize)]
+struct PreparedJavaArtifacts {
+    #[serde(rename = "applicationClassDirs")]
+    application_class_dirs: Vec<String>,
+    #[serde(rename = "testClassDirs")]
+    test_class_dirs: Vec<String>,
+    classpath: Vec<String>,
+    diagnostic: String,
+}
+
 #[cfg(unix)]
 pub(crate) fn wait_for_output(
     mut child: Child,
@@ -148,19 +242,22 @@ pub(crate) fn wait_for_output(
     let stdout_collector = std::thread::spawn(move || collect_stdout(stdout));
     let provider_id = provider_id.to_owned();
     let stderr_provider_id = provider_id.clone();
-    let stderr_collector =
-        std::thread::spawn(move || collect_stderr(stderr, &stderr_provider_id));
+    let stderr_collector = std::thread::spawn(move || collect_stderr(stderr, &stderr_provider_id));
     let (sender, receiver) = mpsc::sync_channel(1);
     let collector = std::thread::spawn(move || {
         let output: Result<Output, String> = (|| {
             let status = child.wait().map_err(|error| error.to_string())?;
-            let stdout = stdout_collector
-                .join()
-                .map_err(|_| "adapter standard-output collector stopped unexpectedly".to_owned())??;
-            let stderr = stderr_collector
-                .join()
-                .map_err(|_| "adapter standard-error collector stopped unexpectedly".to_owned())??;
-            Ok(Output { status, stdout, stderr })
+            let stdout = stdout_collector.join().map_err(|_| {
+                "adapter standard-output collector stopped unexpectedly".to_owned()
+            })??;
+            let stderr = stderr_collector.join().map_err(|_| {
+                "adapter standard-error collector stopped unexpectedly".to_owned()
+            })??;
+            Ok(Output {
+                status,
+                stdout,
+                stderr,
+            })
         })();
         let _ = sender.send(output);
     });
@@ -169,9 +266,9 @@ pub(crate) fn wait_for_output(
         Err(mpsc::RecvTimeoutError::Timeout) => {
             terminate_process_group(process_id);
             (
-                receiver
-                    .recv()
-                    .map_err(|_| "adapter process-output collector stopped unexpectedly".to_owned())?,
+                receiver.recv().map_err(|_| {
+                    "adapter process-output collector stopped unexpectedly".to_owned()
+                })?,
                 true,
             )
         }
@@ -193,7 +290,9 @@ pub(crate) fn wait_for_output(
 fn collect_stdout(stdout: Option<ChildStdout>) -> Result<Vec<u8>, String> {
     let mut output = vec![];
     if let Some(mut stdout) = stdout {
-        stdout.read_to_end(&mut output).map_err(|error| error.to_string())?;
+        stdout
+            .read_to_end(&mut output)
+            .map_err(|error| error.to_string())?;
     }
     Ok(output)
 }
@@ -207,7 +306,10 @@ fn collect_stderr(stderr: Option<ChildStderr>, provider_id: &str) -> Result<Vec<
     let mut lines = BufReader::new(stderr).split(b'\n');
     while let Some(line) = lines.next() {
         let line = line.map_err(|error| error.to_string())?;
-        if line.windows(b"_phase=".len()).any(|window| window == b"_phase=") {
+        if line
+            .windows(b"_phase=".len())
+            .any(|window| window == b"_phase=")
+        {
             eprintln!("{provider_id}: {}", String::from_utf8_lossy(&line));
         }
         output.extend_from_slice(&line);
@@ -220,7 +322,9 @@ fn collect_stderr(stderr: Option<ChildStderr>, provider_id: &str) -> Result<Vec<
 fn timeout_diagnostic(timeout: Duration, stderr: &[u8], provider_id: &str) -> String {
     const MAX_STDERR_BYTES: usize = 4_096;
     let tail_start = stderr.len().saturating_sub(MAX_STDERR_BYTES);
-    let tail = String::from_utf8_lossy(&stderr[tail_start..]).trim().to_owned();
+    let tail = String::from_utf8_lossy(&stderr[tail_start..])
+        .trim()
+        .to_owned();
     if tail.is_empty() {
         format!("{provider_id} analysis timed out after {timeout:?}")
     } else {
@@ -241,7 +345,9 @@ pub(crate) fn wait_for_output(
             Ok(None) if Instant::now() >= deadline => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(format!("{provider_id} analysis timed out after {timeout:?}"));
+                return Err(format!(
+                    "{provider_id} analysis timed out after {timeout:?}"
+                ));
             }
             Ok(None) => thread::sleep(Duration::from_millis(10)),
             Err(error) => return Err(error.to_string()),
@@ -289,12 +395,19 @@ fn failed(
 mod tests {
     use super::{isolate_process_group, test_root_arguments, wait_for_output};
     use models::JavaTestCase;
-    use std::{path::Path, process::{Command, Stdio}, time::Duration};
+    use std::{
+        path::Path,
+        process::{Command, Stdio},
+        time::Duration,
+    };
 
     #[test]
     fn preserves_phase_telemetry_when_an_adapter_times_out() {
         let child = Command::new("sh")
-            .args(["-c", "echo callgraph_phase=building elapsed_ms=1 >&2; sleep 1"])
+            .args([
+                "-c",
+                "echo callgraph_phase=building elapsed_ms=1 >&2; sleep 1",
+            ])
             .stderr(Stdio::piped())
             .spawn()
             .expect("test command should start");

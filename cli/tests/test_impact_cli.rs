@@ -128,7 +128,12 @@ fn defaults_to_wala_provider_when_only_the_legacy_adapter_flag_is_supplied() {
 
     let result = run_tia(&fixture, &baseline);
 
-    assert!(result.diagnostics.iter().any(|diagnostic| diagnostic.starts_with("timing: WALA analysis=")));
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.starts_with("timing: WALA analysis="))
+    );
 }
 
 #[test]
@@ -150,13 +155,18 @@ fn sootup_provider_requires_the_provider_neutral_adapter_jar() {
             "--java-callgraph-provider",
             "sootup",
             "--java-callgraph-adapter-jar",
-            fixture.path().join("missing-sootup.jar").to_str().expect("UTF-8"),
+            fixture
+                .path()
+                .join("missing-sootup.jar")
+                .to_str()
+                .expect("UTF-8"),
         ],
     );
 
     assert!(!output.status.success());
     assert!(
-        String::from_utf8_lossy(&output.stderr).contains("--java-callgraph-adapter-jar must be an existing file"),
+        String::from_utf8_lossy(&output.stderr)
+            .contains("--java-callgraph-adapter-jar must be an existing file"),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
@@ -175,7 +185,8 @@ fn rejects_unknown_provider_before_creating_a_result() {
 
     assert!(!output.status.success());
     assert!(
-        String::from_utf8_lossy(&output.stderr).contains("Unsupported Java call-graph provider: unknown"),
+        String::from_utf8_lossy(&output.stderr)
+            .contains("Unsupported Java call-graph provider: unknown"),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
@@ -297,7 +308,11 @@ fn run_tia_command(fixture: &TempDir, baseline: &str, extra_args: &[&str]) -> st
             "--baseline-revision",
             baseline,
             "--output",
-            fixture.path().join("impact.json").to_str().expect("fixture path is UTF-8"),
+            fixture
+                .path()
+                .join("impact.json")
+                .to_str()
+                .expect("fixture path is UTF-8"),
         ])
         .args(extra_args)
         .output()
