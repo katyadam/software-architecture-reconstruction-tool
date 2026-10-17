@@ -4,6 +4,8 @@ import com.voyantclair.callgraph.AdapterArguments;
 import com.voyantclair.callgraph.CallGraphResult;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.HashSet;
 import java.util.List;
 import sootup.callgraph.ClassHierarchyAnalysisAlgorithm;
 import sootup.core.inputlocation.AnalysisInputLocation;
@@ -43,12 +45,12 @@ public final class SootUpBytecodeCallGraph {
       }
       System.err.println("callgraph_phase=building provider=sootup-java elapsed_ms=" + elapsed(started));
       var graph = new ClassHierarchyAnalysisAlgorithm(view).initialize(entrypoints);
-      var reachable = graph.getMethodSignatures().stream().map(SootUpBytecodeCallGraph::ref).toList();
       var reachability = new ArrayList<CallGraphResult.Reachability>();
       for (var target : arguments.targets()) {
-        var matching = reachable.stream().filter(method -> targetMatches(target, method)).toList();
+        var matching = graph.getMethodSignatures().stream()
+            .filter(method -> targetMatches(target, ref(method))).toList();
         for (var method : matching) {
-          reachability.add(new CallGraphResult.Reachability(method, entrypoints.stream().map(SootUpBytecodeCallGraph::ref).toList()));
+          reachability.add(new CallGraphResult.Reachability(ref(method), rootsReaching(graph, method, entrypoints)));
         }
       }
       System.err.println("callgraph_phase=ready provider=sootup-java elapsed_ms=" + elapsed(started));
@@ -57,6 +59,23 @@ public final class SootUpBytecodeCallGraph {
       return new CallGraphResult(2, "failed", "sootup-java", arguments.sourceDir().toString(), "cha",
           List.of(error.getClass().getSimpleName() + ": " + error.getMessage()), List.of(), List.of());
     }
+  }
+
+  /** Walks callers backwards so each target is associated only with selected roots that reach it. */
+  private static List<CallGraphResult.MethodRef> rootsReaching(
+      sootup.callgraph.CallGraph graph, MethodSignature target, List<MethodSignature> roots) {
+    var remaining = new ArrayDeque<MethodSignature>();
+    var visited = new HashSet<MethodSignature>();
+    var rootSet = new HashSet<>(roots);
+    var reachedRoots = new ArrayList<CallGraphResult.MethodRef>();
+    remaining.add(target);
+    while (!remaining.isEmpty()) {
+      var current = remaining.removeFirst();
+      if (!visited.add(current)) continue;
+      if (rootSet.contains(current)) reachedRoots.add(ref(current));
+      remaining.addAll(graph.callSourcesTo(current));
+    }
+    return reachedRoots;
   }
 
   private static CallGraphResult result(AdapterArguments arguments, List<String> diagnostics, List<CallGraphResult.Reachability> reachability) {
