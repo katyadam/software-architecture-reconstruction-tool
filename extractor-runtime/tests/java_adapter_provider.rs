@@ -1,5 +1,8 @@
 use extractor_runtime::call_graph::{CallGraphProvider, java_adapter::JavaAdapterProvider};
-use models::{JavaTestCase, call_graph::{CallGraphStatus, Language}};
+use models::{
+    JavaTestCase,
+    call_graph::{CallGraphStatus, Language},
+};
 use std::{fs, path::Path, process::Command, time::Duration};
 use tempfile::tempdir;
 
@@ -30,7 +33,9 @@ fn forwards_algorithm_entrypoints_and_targets_to_a_named_adapter() {
     assert_eq!(outcome.provider_id, "sootup-java");
     assert_eq!(
         outcome.diagnostics,
-        vec!["ARGS=--algorithm|cha|--source-dir|/service|--entrypoint|Lexample/ServiceTest#coversChanged()V|--target|Lexample/Service#changed()V"],
+        vec![
+            "ARGS=--algorithm|cha|--source-dir|/service|--classes-dir|/classes|--test-classes-dir|/test-classes|--classpath|/dependency.jar|--entrypoint|Lexample/ServiceTest#coversChanged()V|--target|Lexample/Service#changed()V"
+        ],
     );
 }
 
@@ -40,11 +45,17 @@ fn identifies_the_provider_when_adapter_output_is_malformed() {
     let adapter = build_adapter(directory.path(), "System.out.print(\"not-json\");");
     let provider = JavaAdapterProvider::new("sootup-java", adapter, Duration::from_secs(5), "cha");
 
-    let outcome = provider.analyze(&models::call_graph::CallGraphRequest::new("/service", Language::Java));
+    let outcome = provider.analyze(&models::call_graph::CallGraphRequest::new(
+        "/service",
+        Language::Java,
+    ));
 
     assert_eq!(outcome.status, CallGraphStatus::Failed);
     assert_eq!(outcome.provider_id, "sootup-java");
-    assert_eq!(outcome.diagnostics, vec!["sootup-java produced invalid call-graph JSON"]);
+    assert_eq!(
+        outcome.diagnostics,
+        vec!["sootup-java produced invalid call-graph JSON"]
+    );
 }
 
 fn build_adapter(directory: &Path, body: &str) -> std::path::PathBuf {
@@ -56,19 +67,35 @@ fn build_adapter(directory: &Path, body: &str) -> std::path::PathBuf {
         ),
     )
     .expect("adapter source");
-    assert!(Command::new("javac").arg(&source).status().expect("javac should start").success());
+    let preparer = directory.join("com/voyantclair/callgraph/ArtifactPreparationMain.java");
+    fs::create_dir_all(preparer.parent().expect("preparer parent")).expect("preparer directory");
+    fs::write(
+        &preparer,
+        r#"package com.voyantclair.callgraph; public final class ArtifactPreparationMain { public static void main(String[] args) { System.out.print("{\"applicationClassDirs\":[\"/classes\"],\"testClassDirs\":[\"/test-classes\"],\"classpath\":[\"/dependency.jar\"],\"diagnostic\":\"\"}"); } }"#,
+    )
+    .expect("preparer source");
+    assert!(
+        Command::new("javac")
+            .arg(&source)
+            .arg(&preparer)
+            .status()
+            .expect("javac should start")
+            .success()
+    );
     let manifest = directory.join("MANIFEST.MF");
     fs::write(&manifest, "Main-Class: Main\n").expect("manifest");
     let jar = directory.join("adapter.jar");
-    assert!(Command::new("jar")
-        .args(["cfm"])
-        .arg(&jar)
-        .arg(&manifest)
-        .arg("-C")
-        .arg(directory)
-        .arg("Main.class")
-        .status()
-        .expect("jar should start")
-        .success());
+    assert!(
+        Command::new("jar")
+            .args(["cfm"])
+            .arg(&jar)
+            .arg(&manifest)
+            .arg("-C")
+            .arg(directory)
+            .arg(".")
+            .status()
+            .expect("jar should start")
+            .success()
+    );
     jar
 }
