@@ -39,6 +39,8 @@ JAVA_BENCHMARK_ROOT="$worktree_root" \
 TIA_BENCHMARK_OUTPUT_DIR="$output_dir" \
 WALA_TIMEOUT_SECONDS="${WALA_TIMEOUT_SECONDS:-300}" \
 WALA_MAVEN_JAVA_HOME="${WALA_MAVEN_JAVA_HOME:-/Library/Java/JavaVirtualMachines/zulu-11.jdk/Contents/Home}" \
+JAVA_CALLGRAPH_PROVIDER="${JAVA_CALLGRAPH_PROVIDER:-wala}" \
+JAVA_CALLGRAPH_ADAPTER_JAR="${JAVA_CALLGRAPH_ADAPTER_JAR:-}" \
 "$runner" "$project_name"
 
 printf 'Results: %s/%s.json\n' "$output_dir" "$project_name"
