@@ -40,6 +40,45 @@ impl SdgBuilder for SdgBuilderImpl {
         configuration: &ConfigurationData,
         constants: &[Constant],
     ) -> Result<Sdg, BuilderError> {
+        self.build_with_unmatched(
+            endpoints,
+            restcalls,
+            message_edges,
+            configuration,
+            constants,
+        )
+        .map(|(sdg, _)| sdg)
+    }
+}
+
+/// REST call that matched no endpoint, after constant substitution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnmatchedCall {
+    /// Calling service name.
+    pub source: String,
+    pub restcall: RestCall,
+}
+
+impl Default for SdgBuilderImpl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SdgBuilderImpl {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    /// Like [`SdgBuilder::build`], plus the calls with no candidate endpoint.
+    pub fn build_with_unmatched(
+        &self,
+        endpoints: &[Endpoint],
+        restcalls: &[RestCall],
+        message_edges: &[MessageEdge],
+        configuration: &ConfigurationData,
+        constants: &[Constant],
+    ) -> Result<(Sdg, Vec<UnmatchedCall>), BuilderError> {
         let assigned_endpoints =
             self.get_assigned_endpoints(endpoints, &configuration.service_descriptions);
         let services = self
@@ -59,28 +98,17 @@ impl SdgBuilder for SdgBuilderImpl {
             .flat_map(|service| service.urls.iter().cloned())
             .collect();
 
-        let connections =
+        let (connections, unmatched) =
             self.create_connections(assigned_endpoints, assigned_restcalls, &all_urls);
         let assigned_message_edges =
             self.get_assigned_message_edges(message_edges, &configuration.service_descriptions);
         let message_connections = self.create_message_connections(assigned_message_edges);
-        Ok(Sdg {
+        let sdg = Sdg {
             services,
             connections,
             message_connections,
-        })
-    }
-}
-
-impl Default for SdgBuilderImpl {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl SdgBuilderImpl {
-    pub fn new() -> Self {
-        Self {}
+        };
+        Ok((sdg, unmatched))
     }
 
     fn get_assigned_endpoints(
@@ -213,26 +241,16 @@ impl SdgBuilderImpl {
         endpoints: Vec<AssignedEndpoint>,
         restcalls: Vec<AssignedRestCall>,
         all_urls: &[String],
-    ) -> Vec<Connection> {
-        let restcall_endpoint = self.create_endpoint_restcall_pairs(endpoints, restcalls, all_urls);
+    ) -> (Vec<Connection>, Vec<UnmatchedCall>) {
+        let (restcall_endpoint, unmatched) =
+            self.create_endpoint_restcall_pairs(endpoints, restcalls, all_urls);
 
         let mut connections_map: HashMap<String, Connection> = HashMap::new();
 
         for (restcall, endpoint, match_tag) in restcall_endpoint {
-            // Prefer the matched endpoint's path; fall back to the raw target
-            // when matching produced none. The health rule reads the last
-            // segment, so it works on a full URL too.
-            let target_path = if endpoint.data.uri.is_empty() {
-                restcall.data.target_uri.as_str()
-            } else {
-                endpoint.data.uri.as_str()
-            };
-            let kind = classify(
-                &InteractionSignals {
-                    caller_file: &restcall.data.file_path,
-                    target_path,
-                    target_uri: &restcall.data.target_uri,
-                },
+            let kind = request_kind(
+                &restcall.data,
+                &endpoint.data.uri,
                 &restcall.service.urls,
                 all_urls,
             );
@@ -259,7 +277,7 @@ impl SdgBuilderImpl {
 
         let mut connections: Vec<Connection> = connections_map.into_values().collect();
         interaction_kind_rollup_connection(&mut connections);
-        connections
+        (connections, unmatched)
     }
 
     fn create_message_connections(
@@ -311,18 +329,55 @@ impl SdgBuilderImpl {
         endpoints: Vec<AssignedEndpoint>,
         restcalls: Vec<AssignedRestCall>,
         all_urls: &[String],
-    ) -> Vec<(AssignedRestCall, AssignedEndpoint, MatchTag)> {
+    ) -> (
+        Vec<(AssignedRestCall, AssignedEndpoint, MatchTag)>,
+        Vec<UnmatchedCall>,
+    ) {
         let mut pairs = Vec::new();
+        let mut unmatched = Vec::new();
         for restcall in restcalls {
-            for (endpoint, tag) in candidates(&restcall, &endpoints, all_urls) {
+            let found = candidates(&restcall, &endpoints, all_urls);
+            if found.is_empty() {
+                unmatched.push(UnmatchedCall {
+                    source: restcall.service.name.clone(),
+                    restcall: restcall.data.clone(),
+                });
+            }
+            for (endpoint, tag) in found {
                 pairs.push((restcall.clone(), endpoint.clone(), tag));
             }
         }
-        pairs
+        (pairs, unmatched)
     }
 }
 
-fn interaction_kind_rollup_connection(connections: &mut Vec<Connection>) {
+/// Kind of one request; `own_urls` are the caller's urls.
+pub(crate) fn request_kind(
+    restcall: &RestCall,
+    endpoint_uri: &str,
+    own_urls: &[String],
+    all_urls: &[String],
+) -> InteractionKind {
+    // Prefer the matched endpoint's path; fall back to the raw target
+    // when matching produced none. The health rule reads the last
+    // segment, so it works on a full URL too.
+    let target_path = if endpoint_uri.is_empty() {
+        restcall.target_uri.as_str()
+    } else {
+        endpoint_uri
+    };
+    classify(
+        &InteractionSignals {
+            caller_file: &restcall.file_path,
+            target_path,
+            target_uri: &restcall.target_uri,
+        },
+        own_urls,
+        all_urls,
+    )
+}
+
+pub(crate) fn interaction_kind_rollup_connection(connections: &mut Vec<Connection>) {
     for connection in connections {
         connection.kind = InteractionKind::rollup(connection.requests.iter().map(|r| r.kind));
     }

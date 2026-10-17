@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use cli::metadata::{self, RunMetadataInput};
 use cli::{get_all_code_elements, save_json};
-use clients::typesafe::TypeSafeClient;
+use clients::typesafe::{SystemOneRequest, TypeSafeClient};
 use extractor_runtime::pipeline::pass3::{DdfaMode, Resolver};
 use models::ConfigurationData;
 use sage::resolver::client::SageClient;
@@ -12,7 +12,8 @@ use std::default;
 use std::path::PathBuf;
 use std::{fs, time::Instant};
 use synthesizer::{
-    connectors::dto::Constant, direct_cm_build, direct_imcg_build, direct_sdg_build,
+    connectors::dto::Constant, direct_cm_build, direct_imcg_build, direct_sdg_build_with_unmatched,
+    tie_break,
 };
 use uuid::Uuid;
 
@@ -57,6 +58,10 @@ struct Cli {
 
     #[arg(long, default_value_t = false)]
     typesafe: bool,
+
+    /// Ask Jev to pick endpoints for ambiguous or unmatched REST calls
+    #[arg(long, default_value_t = false)]
+    jev_match: bool,
 }
 
 #[derive(Deserialize)]
@@ -81,6 +86,13 @@ async fn main() -> Result<()> {
     if matches!(args.resolver, ResolverArg::Once | ResolverArg::Acquire) && !args.typesafe {
         anyhow::bail!("--resolver once|acquire needs --typesafe");
     }
+    if args.jev_match && !args.typesafe {
+        anyhow::bail!("--jev-match needs --typesafe");
+    }
+    let jev_match_min: f64 = match std::env::var("JEV_MATCH_MIN") {
+        Ok(v) if args.jev_match => v.parse().context("JEV_MATCH_MIN must be a number")?,
+        _ => 0.2,
+    };
 
     if !args.project_dir.is_dir() {
         anyhow::bail!("Project directory does not exist!");
@@ -164,7 +176,16 @@ async fn main() -> Result<()> {
         .map(|c| Constant::new(Uuid::new_v4(), c.name, c.value))
         .collect();
 
-    let sdg = direct_sdg_build(&all_code_elements, &config, &deanonymized_constants);
+    let (mut sdg, unmatched) =
+        direct_sdg_build_with_unmatched(&all_code_elements, &config, &deanonymized_constants);
+    if let (true, Some(client)) = (args.jev_match, typesafe_client.as_ref()) {
+        let ask = async |req: &SystemOneRequest| client.system_one(req).await;
+        let stats = tie_break(&mut sdg, &unmatched, jev_match_min, ask).await;
+        println!(
+            "[match-jev] total calls={} input_tokens={}",
+            stats.calls, stats.input_tokens
+        );
+    }
     let imcg = direct_imcg_build(&all_code_elements, &config, &sdg);
 
     let synthesis_elapsed = synthesis.elapsed();

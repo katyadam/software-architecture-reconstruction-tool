@@ -181,6 +181,11 @@ cargo run -p cli --release -- \
     --scrape --llm --typesafe --resolver acquire
 ```
 
+`--jev-match` (needs `--typesafe`) asks Jev to pick the endpoint of REST calls
+the unifier leaves ambiguous, and of unmatched calls whose host names one
+service. Candidates with probability >= `JEV_MATCH_MIN` (default `0.2`) are
+kept and tagged `jev`; a `none` answer or an error keeps the static match.
+
 Tuning: `DDFA_MAX_STEPS` (6), `DDFA_ENOUGH` (0.7), `DDFA_TARGET_MIN` (0.5),
 `DDFA_ONCE_FACTS` (12). Each residual logs one `[ddfa]` row to stdout and `JEV_LOG`.
 
