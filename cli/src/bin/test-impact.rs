@@ -3,8 +3,8 @@ use clap::Parser;
 use cli::get_java_callables_for_modules_with_progress;
 use extractor_runtime::{
     call_graph::{
-        java_adapter::JavaAdapterProvider,
-        resolve_reachability_with_java_tests, wala::WalaJavaProvider,
+        java_adapter::JavaAdapterProvider, resolve_reachability_with_java_tests,
+        wala::WalaJavaProvider,
     },
     impact::{ModuleCatalog, analyze_changes, discover_java_tests, select_tests},
 };
@@ -162,7 +162,9 @@ fn select_provider(
     match kind {
         JavaCallGraphProviderKind::Wala => {
             if arguments.java_callgraph_adapter_jar.is_some() {
-                anyhow::bail!("--java-callgraph-adapter-jar is only valid with --java-callgraph-provider sootup");
+                anyhow::bail!(
+                    "--java-callgraph-adapter-jar is only valid with --java-callgraph-provider sootup"
+                );
             }
             let jar = arguments
                 .wala_adapter_jar
@@ -171,11 +173,15 @@ fn select_provider(
             if !jar.is_file() {
                 anyhow::bail!("--wala-adapter-jar must be an existing file");
             }
-            Ok(SelectedJavaProvider::Wala(WalaJavaProvider::with_timeout(jar, timeout)))
+            Ok(SelectedJavaProvider::Wala(WalaJavaProvider::with_timeout(
+                jar, timeout,
+            )))
         }
         JavaCallGraphProviderKind::SootUp => {
             if arguments.wala_adapter_jar.is_some() {
-                anyhow::bail!("--wala-adapter-jar cannot be combined with --java-callgraph-provider sootup");
+                anyhow::bail!(
+                    "--wala-adapter-jar cannot be combined with --java-callgraph-provider sootup"
+                );
             }
             let jar = arguments
                 .java_callgraph_adapter_jar
