@@ -2,6 +2,7 @@
 
 mod registry;
 mod resolver;
+pub mod java_adapter;
 pub mod wala;
 pub use registry::{CallGraphProvider, ProviderRegistry};
 pub use resolver::{
