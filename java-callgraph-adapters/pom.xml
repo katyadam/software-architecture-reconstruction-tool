@@ -10,5 +10,6 @@
   <modules>
     <module>../java-callgraph-support</module>
     <module>../wala-callgraph</module>
+    <module>../sootup-callgraph</module>
   </modules>
 </project>
