@@ -60,7 +60,7 @@ public final class JavaArtifactPreparer {
         if (artifacts.exitCode != 0) return PreparedJavaArtifacts.failure(artifacts.output);
         List<Path> main = markedPaths(artifacts.output, "VOYANTCLAIR_MAIN=", true);
         List<Path> test = markedPaths(artifacts.output, "VOYANTCLAIR_TEST=", true);
-        if (main.isEmpty() || test.isEmpty()) return PreparedJavaArtifacts.failure("Gradle did not report Java class directories");
+        if (main.isEmpty() && test.isEmpty()) return PreparedJavaArtifacts.failure("Gradle did not report Java class directories");
         return new PreparedJavaArtifacts(main, test, markedPaths(artifacts.output, "VOYANTCLAIR_TEST_RUNTIME=", false), module, "");
       } finally { Files.deleteIfExists(init); }
     } catch (Exception error) { return PreparedJavaArtifacts.failure(error.toString()); }
@@ -93,11 +93,11 @@ public final class JavaArtifactPreparer {
   }
 
   private static List<Path> directories(Path path) { return Files.isDirectory(path) ? List.of(path) : List.of(); }
-  private static List<Path> paths(String value, boolean directories) { var result = new ArrayList<Path>(); for (String entry : value.split(java.util.regex.Pattern.quote(File.pathSeparator))) { Path path = Path.of(entry.trim()); if ((directories && Files.isDirectory(path)) || (!directories && Files.isRegularFile(path))) result.add(path); } return result; }
+  private static List<Path> paths(String value, boolean directories) { var result = new ArrayList<Path>(); for (String entry : value.split(java.util.regex.Pattern.quote(File.pathSeparator))) { if (entry.isBlank()) continue; Path path = Path.of(entry.trim()); if ((directories && Files.isDirectory(path)) || (!directories && Files.isRegularFile(path))) result.add(path); } return result; }
   private static List<Path> markedPaths(String output, String prefix, boolean directories) { var result = new ArrayList<Path>(); for (String line : output.lines().toList()) if (line.startsWith(prefix)) result.addAll(paths(line.substring(prefix.length()), directories)); return result; }
   private static List<String> gradleArguments() { String value = System.getProperty("voyantclair.gradle.arguments"); if (value == null || value.isBlank()) value = System.getenv("JAVA_CALLGRAPH_GRADLE_ARGUMENTS"); if (value == null || value.isBlank()) value = System.getenv("WALA_GRADLE_ARGUMENTS"); return value == null || value.isBlank() ? List.of() : List.of(value.trim().split("\\s+")); }
   private static List<String> invocation(List<String> configured, String... arguments) { var result = new ArrayList<>(configured); result.addAll(List.of(arguments)); return result; }
-  private static Path gradleRoot(Path module) { for (Path current = module; current != null; current = current.getParent()) if (Files.isExecutable(current.resolve("gradlew"))) return current; return module; }
+  private static Path gradleRoot(Path module) { for (Path current = module; current != null; current = current.getParent()) if (Files.isExecutable(current.resolve("gradlew")) || Files.isRegularFile(current.resolve("settings.gradle")) || Files.isRegularFile(current.resolve("settings.gradle.kts"))) return current; return module; }
   private static java.util.Optional<String> discoveredProjectPath(String output, Path module) { Path expected = module.toAbsolutePath().normalize(); for (String line : output.lines().toList()) if (line.startsWith("VOYANTCLAIR_PROJECT=")) { String[] fields = line.substring("VOYANTCLAIR_PROJECT=".length()).split("\\t", 2); if (fields.length == 2 && Path.of(fields[1]).toAbsolutePath().normalize().equals(expected)) return java.util.Optional.of(fields[0]); } return java.util.Optional.empty(); }
   private static String projectPath(Path root, Path module) { Path relative = root.relativize(module); return relative.getNameCount() == 0 ? "" : ":" + relative.toString().replace(File.separator, ":"); }
   private static String initScript() { return "gradle.projectsLoaded { rootProject.tasks.register('voyantclairProjectPaths') { doLast { rootProject.allprojects.each { project -> println 'VOYANTCLAIR_PROJECT=' + project.path + '\\t' + project.projectDir } } }; rootProject.allprojects { project -> project.tasks.register('voyantclairArtifacts') { doLast { def sets = project.extensions.findByName('sourceSets'); if (sets != null) { println 'VOYANTCLAIR_MAIN=' + sets.main.output.classesDirs.asPath; println 'VOYANTCLAIR_TEST=' + sets.test.output.classesDirs.asPath; println 'VOYANTCLAIR_TEST_RUNTIME=' + project.configurations.testRuntimeClasspath.asPath } } } } }"; }

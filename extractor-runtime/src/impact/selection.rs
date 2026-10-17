@@ -18,6 +18,72 @@ pub fn select_tests(
     select_tests_with_reachability(changes, tests, outcome, resolved_edges, &BTreeMap::new())
 }
 
+/// Retains possible consumers outside changed modules until reverse dependency
+/// metadata can prove they are independent. The caller supplies project-wide tests.
+pub fn include_potential_consumer_tests(
+    result: &mut TestImpactResult,
+    project_tests: Vec<JavaTestCase>,
+) {
+    let changed_modules: BTreeSet<_> = result
+        .changed_elements
+        .iter()
+        .filter(|change| {
+            let path = change.source_path.replace('\\', "/");
+            !path.starts_with("src/test/") && !path.contains("/src/test/")
+        })
+        .map(|change| change.module_root.clone())
+        .collect();
+    if changed_modules.is_empty() {
+        return;
+    }
+    let identity = |test: &JavaTestCase| {
+        (
+            test.module_root.clone(),
+            test.class_name.clone(),
+            test.method_name.clone(),
+            test.descriptor.clone(),
+        )
+    };
+    let mut selected_indices: BTreeMap<_, _> = result
+        .selected_tests
+        .iter()
+        .enumerate()
+        .map(|(index, selected)| (identity(&selected.test), index))
+        .collect();
+    let mut diagnostics = BTreeSet::new();
+    for test in project_tests {
+        let reasons: Vec<_> = changed_modules.iter()
+            .filter(|module| !Path::new(&test.module_root).starts_with(Path::new(module)))
+            .map(|module| {
+                let diagnostic = format!("cross-module dependency scope unresolved for {module}; selecting possible consumer module tests");
+                diagnostics.insert(diagnostic.clone());
+                SelectionReason::ModuleFallback { diagnostic }
+            }).collect();
+        if reasons.is_empty() {
+            continue;
+        }
+        let key = identity(&test);
+        if let Some(&index) = selected_indices.get(&key) {
+            for reason in reasons {
+                if !result.selected_tests[index].reasons.contains(&reason) {
+                    result.selected_tests[index].reasons.push(reason);
+                }
+            }
+        } else {
+            selected_indices.insert(key, result.selected_tests.len());
+            result.selected_tests.push(SelectedTest { test, reasons });
+        }
+    }
+    result
+        .unselected_tests
+        .retain(|test| !selected_indices.contains_key(&identity(test)));
+    for diagnostic in diagnostics {
+        if !result.diagnostics.contains(&diagnostic) {
+            result.diagnostics.push(diagnostic);
+        }
+    }
+}
+
 /// Selects tests using WALA's direct callable-to-test provenance when available.
 pub fn select_tests_with_reachability(
     changes: Vec<ChangedElement>,
