@@ -559,8 +559,15 @@ public final class BytecodeCallGraph {
         PROVIDER_ID,
         applicationClassDirs.toString(),
         algorithm.identifier(),
-        List.of(error.getClass().getSimpleName() + ": " + error.getMessage()),
+        List.of(failureDiagnostic(error)),
         List.of(),
         List.of());
+  }
+
+  /** Keeps failure diagnostics actionable without embedding an unbounded stack trace in result JSON. */
+  static String failureDiagnostic(Throwable error) {
+    String diagnostic = error.getClass().getSimpleName() + ": " + error.getMessage();
+    StackTraceElement[] stack = error.getStackTrace();
+    return stack.length == 0 ? diagnostic : diagnostic + "; top_frame=" + stack[0];
   }
 }
