@@ -21,30 +21,70 @@ public final class GradleBytecodeArtifacts implements BytecodeArtifactPreparer {
             ? wrapper
             : Path.of(System.getProperty("voyantclair.gradle.command", "gradle"));
     try {
-      String projectPath = projectPath(gradleRoot, moduleRoot);
-      ProcessResult compilation = run(command, gradleRoot, List.of(projectPath + ":testClasses"));
-      if (compilation.exitCode() != 0) return failure(compilation.output());
+      List<String> configuredArguments = configuredArguments();
       Path initScript = Files.createTempFile("voyantclair-gradle-artifacts-", ".gradle");
       Files.writeString(initScript, artifactInitScript());
-      ProcessResult artifacts;
       try {
-        artifacts = run(command, gradleRoot, List.of("-q", "-I", initScript.toString(), projectPath + ":voyantclairWalaArtifacts"));
+        ProcessResult discovery =
+            run(
+                command,
+                gradleRoot,
+                withConfiguredArguments(
+                    configuredArguments,
+                    "-q",
+                    "-I",
+                    initScript.toString(),
+                    "voyantclairWalaProjectPaths"));
+        if (discovery.exitCode() != 0) return failure(discovery.output());
+        String projectPath =
+            discoveredProjectPath(discovery.output(), moduleRoot)
+                .orElseGet(() -> projectPath(gradleRoot, moduleRoot));
+        ProcessResult compilation =
+            run(
+                command,
+                gradleRoot,
+                withConfiguredArguments(configuredArguments, projectPath + ":testClasses"));
+        if (compilation.exitCode() != 0) return failure(compilation.output());
+        ProcessResult artifacts =
+            run(
+                command,
+                gradleRoot,
+                withConfiguredArguments(
+                    configuredArguments,
+                    "-q",
+                    "-I",
+                    initScript.toString(),
+                    projectPath + ":voyantclairWalaArtifacts"));
+        if (artifacts.exitCode() != 0) return failure(artifacts.output());
+        String output = artifacts.output();
+        var main = paths(output, "VOYANTCLAIR_MAIN=", true);
+        var test = paths(output, "VOYANTCLAIR_TEST=", true);
+        var dependencies = paths(output, "VOYANTCLAIR_TEST_RUNTIME=", false);
+        if (main.isEmpty() || test.isEmpty()) {
+          return failure("Gradle did not report Java class directories");
+        }
+        return new BytecodeArtifacts.Preparation(
+            new BytecodeArtifacts.PreparedArtifacts(main, test, dependencies, moduleRoot), "");
       } finally {
         Files.deleteIfExists(initScript);
       }
-      if (artifacts.exitCode() != 0) return failure(artifacts.output());
-      String output = artifacts.output();
-      var main = paths(output, "VOYANTCLAIR_MAIN=", true);
-      var test = paths(output, "VOYANTCLAIR_TEST=", true);
-      var dependencies = paths(output, "VOYANTCLAIR_TEST_RUNTIME=", false);
-      if (main.isEmpty() || test.isEmpty()) {
-        return failure("Gradle did not report Java class directories");
-      }
-      return new BytecodeArtifacts.Preparation(
-          new BytecodeArtifacts.PreparedArtifacts(main, test, dependencies, moduleRoot), "");
     } catch (Exception error) {
       return failure(error.toString());
     }
+  }
+
+  /** Returns whitespace-separated Gradle flags configured for benchmark-specific build options. */
+  private static List<String> configuredArguments() {
+    String value = System.getProperty("voyantclair.gradle.arguments");
+    if (value == null || value.isBlank()) value = System.getenv("WALA_GRADLE_ARGUMENTS");
+    return value == null || value.isBlank() ? List.of() : List.of(value.trim().split("\\s+"));
+  }
+
+  /** Prefixes one Gradle invocation with the shared configured options. */
+  private static List<String> withConfiguredArguments(List<String> configured, String... arguments) {
+    var invocation = new ArrayList<>(configured);
+    invocation.addAll(List.of(arguments));
+    return invocation;
   }
 
   /** Returns whether the source root belongs to a conventional Gradle Java module. */
@@ -54,7 +94,20 @@ public final class GradleBytecodeArtifacts implements BytecodeArtifactPreparer {
 
   /** Supplies a DSL-independent Gradle task that prints Java source-set artifacts for one project. */
   private static String artifactInitScript() {
-    return "allprojects { tasks.register('voyantclairWalaArtifacts') { doLast { def sets = extensions.findByName('sourceSets'); if (sets != null) { println 'VOYANTCLAIR_MAIN=' + sets.main.output.classesDirs.asPath; println 'VOYANTCLAIR_TEST=' + sets.test.output.classesDirs.asPath; println 'VOYANTCLAIR_TEST_RUNTIME=' + configurations.testRuntimeClasspath.asPath } } } }";
+    return "gradle.projectsLoaded { rootProject.tasks.register('voyantclairWalaProjectPaths') { doLast { rootProject.allprojects.each { project -> println 'VOYANTCLAIR_PROJECT=' + project.path + '\\t' + project.projectDir } } }; rootProject.allprojects { project -> project.tasks.register('voyantclairWalaArtifacts') { doLast { def sets = project.extensions.findByName('sourceSets'); if (sets != null) { println 'VOYANTCLAIR_MAIN=' + sets.main.output.classesDirs.asPath; println 'VOYANTCLAIR_TEST=' + sets.test.output.classesDirs.asPath; println 'VOYANTCLAIR_TEST_RUNTIME=' + project.configurations.testRuntimeClasspath.asPath } } } } }";
+  }
+
+  /** Resolves a selected module directory to its project path from Gradle's evaluated project map. */
+  private static java.util.Optional<String> discoveredProjectPath(String output, Path moduleRoot) {
+    Path expected = moduleRoot.toAbsolutePath().normalize();
+    for (String line : output.lines().toList()) {
+      if (!line.startsWith("VOYANTCLAIR_PROJECT=")) continue;
+      String[] fields = line.substring("VOYANTCLAIR_PROJECT=".length()).split("\\t", 2);
+      if (fields.length == 2 && Path.of(fields[1]).toAbsolutePath().normalize().equals(expected)) {
+        return java.util.Optional.of(fields[0]);
+      }
+    }
+    return java.util.Optional.empty();
   }
 
   /** Converts a Gradle module's path below the root into its colon-prefixed project path. */
