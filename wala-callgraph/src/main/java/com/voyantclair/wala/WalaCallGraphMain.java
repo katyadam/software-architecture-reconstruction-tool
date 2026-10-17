@@ -1,5 +1,7 @@
 package com.voyantclair.wala;
 
+import com.voyantclair.callgraph.AdapterArguments;
+import com.voyantclair.callgraph.CallGraphResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ibm.wala.cast.ir.ssa.AstIRFactory;
 import com.ibm.wala.cast.java.client.impl.ZeroOneContainerCFABuilderFactory;
@@ -381,40 +383,20 @@ public final class WalaCallGraphMain {
 
   /** Parses CLI arguments, runs analysis, and writes exactly one JSON result to standard output. */
   public static void main(String[] args) throws Exception {
-    Path sourceDir = null;
-    var dependencyJars = new ArrayList<Path>();
-    var applicationClassDirs = new ArrayList<Path>();
-    var entrypointSelectors = new ArrayList<BytecodeCallGraph.MethodSelector>();
-    var targetSelectors = new ArrayList<BytecodeCallGraph.TargetSelector>();
-    var bytecodeAlgorithm = BytecodeCallGraph.Algorithm.CHA;
-    for (int index = 0; index < args.length; index++) {
-      if (args[index].equals("--source-dir") && index + 1 < args.length) {
-        sourceDir = Path.of(args[++index]);
-      } else if (args[index].equals("--classpath") && index + 1 < args.length) {
-        dependencyJars.addAll(parseClasspath(args[++index]));
-      } else if (args[index].equals("--classes-dir") && index + 1 < args.length) {
-        applicationClassDirs.add(Path.of(args[++index]));
-      } else if (args[index].equals("--test-classes-dir") && index + 1 < args.length) {
-        applicationClassDirs.add(Path.of(args[++index]));
-      } else if (args[index].equals("--entrypoint") && index + 1 < args.length) {
-        entrypointSelectors.add(parseMethodSelector(args[++index]));
-      } else if (args[index].equals("--target") && index + 1 < args.length) {
-        targetSelectors.add(parseTargetSelector(args[++index]));
-      } else if (args[index].equals("--algorithm") && index + 1 < args.length) {
-        bytecodeAlgorithm = parseBytecodeAlgorithm(args[++index]);
-      }
-    }
-    if (sourceDir == null) {
-      throw new IllegalArgumentException("Missing required --source-dir argument");
-    }
+    var arguments = AdapterArguments.parse(args);
+    var applicationClassDirs = new ArrayList<Path>(arguments.applicationClassDirs());
+    applicationClassDirs.addAll(arguments.testClassDirs());
+    var entrypointSelectors =
+        arguments.entrypoints().stream().map(WalaCallGraphMain::parseMethodSelector).toList();
+    var targetSelectors = arguments.targets().stream().map(WalaCallGraphMain::parseTargetSelector).toList();
     System.out.println(
         JSON.writeValueAsString(
             runPreferred(
-                sourceDir,
+                arguments.sourceDir(),
                 applicationClassDirs,
-                dependencyJars,
+                arguments.classpath(),
                 entrypointSelectors,
                 targetSelectors,
-                bytecodeAlgorithm)));
+                parseBytecodeAlgorithm(arguments.algorithm()))));
   }
 }
