@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.List;
 import sootup.callgraph.ClassHierarchyAnalysisAlgorithm;
 import sootup.core.inputlocation.AnalysisInputLocation;
+import sootup.core.model.SourceType;
 import sootup.core.signatures.MethodSignature;
 import sootup.core.types.Type;
 import sootup.java.bytecode.frontend.inputlocation.DefaultRuntimeAnalysisInputLocation;
@@ -26,13 +27,18 @@ public final class SootUpBytecodeCallGraph {
     }
     var started = System.nanoTime();
     try {
-      var paths = new ArrayList<String>();
-      arguments.applicationClassDirs().forEach(path -> paths.add(path.toString()));
-      arguments.testClassDirs().forEach(path -> paths.add(path.toString()));
-      arguments.classpath().forEach(path -> paths.add(path.toString()));
-      List<AnalysisInputLocation> locations = List.of(
-          new JavaClassPathAnalysisInputLocation(String.join(File.pathSeparator, paths)),
-          new DefaultRuntimeAnalysisInputLocation());
+      var applicationPaths = new ArrayList<String>();
+      arguments.applicationClassDirs().forEach(path -> applicationPaths.add(path.toString()));
+      arguments.testClassDirs().forEach(path -> applicationPaths.add(path.toString()));
+      var libraryPaths = arguments.classpath().stream().map(Object::toString).toList();
+      var locations = new ArrayList<AnalysisInputLocation>();
+      locations.add(new JavaClassPathAnalysisInputLocation(
+          String.join(File.pathSeparator, applicationPaths), SourceType.Application));
+      if (!libraryPaths.isEmpty()) {
+        locations.add(new JavaClassPathAnalysisInputLocation(
+            String.join(File.pathSeparator, libraryPaths), SourceType.Library));
+      }
+      locations.add(new DefaultRuntimeAnalysisInputLocation());
       var view = new JavaView(locations);
       var methods = view.getClasses().flatMap(clazz -> clazz.getMethods().stream()).toList();
       var entrypoints = arguments.entrypoints().stream()
