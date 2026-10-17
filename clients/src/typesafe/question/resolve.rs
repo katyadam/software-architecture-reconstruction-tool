@@ -7,6 +7,8 @@ use crate::{
 
 /// Answer key of the target-service Choice.
 pub const TARGET: &str = "target";
+/// Answer key of the endpoint Choice.
+pub const ENDPOINT: &str = "endpoint";
 /// Answer key of the "facts are enough" Noul.
 pub const ENOUGH: &str = "enough";
 /// Answer key of the next-action Choice.
@@ -29,6 +31,19 @@ pub fn target(services: &[Opt]) -> Result<Question, TypeSafeError> {
     Question::choice(
         "Which service does this call send its request to?",
         services.iter().cloned().chain([none]),
+    )
+}
+
+/// Candidate endpoints + `none`.
+pub fn endpoint(candidates: &[Opt]) -> Result<Question, TypeSafeError> {
+    let none = (
+        NONE.to_string(),
+        "None of these: the call reaches another endpoint or an external API.".to_string(),
+    );
+
+    Question::choice(
+        "Which endpoint does this call send its request to?",
+        candidates.iter().cloned().chain([none]),
     )
 }
 
@@ -108,6 +123,22 @@ mod tests {
             vec![TARGET]
         );
         assert_eq!(q[TARGET], target(&opts(2)).expect("fits"));
+    }
+
+    #[test]
+    fn endpoint_choice_adds_none() {
+        let Question::Choice { criteria, .. } = endpoint(&opts(2)).expect("fits") else {
+            panic!("endpoint is a choice")
+        };
+        assert_eq!(
+            criteria.keys().map(String::as_str).collect::<Vec<_>>(),
+            vec![NONE, "o0", "o1"]
+        );
+        assert!(endpoint(&opts(MAX_CHOICE_OPTIONS - 1)).is_ok());
+        assert!(matches!(
+            endpoint(&opts(MAX_CHOICE_OPTIONS)),
+            Err(TypeSafeError::TooManyOptions { got: 256 })
+        ));
     }
 
     #[test]
