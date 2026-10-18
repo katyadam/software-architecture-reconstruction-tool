@@ -1,6 +1,5 @@
 //! Atomic Go report publishing; never write through a report symlink.
 use anyhow::{Context, Result, bail};
-use models::go_impact::GoImpactReport;
 use std::{
     io::Write,
     path::{Path, PathBuf},
@@ -33,7 +32,7 @@ pub fn validate_output_path(project_root: &Path, output: &Path) -> Result<PathBu
     }
     Ok(path)
 }
-pub fn write_report_atomic(output: &Path, report: &GoImpactReport) -> Result<()> {
+pub fn write_report_atomic<T: serde::Serialize>(output: &Path, report: &T) -> Result<()> {
     if let Ok(meta) = std::fs::symlink_metadata(output) {
         if !meta.file_type().is_file() {
             bail!("output became a symlink or nonregular file")
