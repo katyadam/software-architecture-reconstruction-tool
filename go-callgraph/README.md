@@ -29,6 +29,10 @@ It never executes tests or builds tools itself. Output must be outside the
 analyzed checkout, whose tracked/untracked state must be clean. Single root Go
 modules are supported; nested modules, workspace context and ambient `GOFLAGS`
 are rejected explicitly. Use the build-tags flag instead of hidden build flags.
+Native loading disables persisted `go env -w` configuration (`GOENV=off`) and
+clears implicit `GOFLAGS`. Set tags explicitly and export `GOOS`/`GOARCH` when
+needed; otherwise the provider's host platform is used. Persisted cache/module
+path settings must likewise be exported explicitly if needed for offline loading.
 
 A nonempty diff always produces `conservative_all` and `run_all_tests: true`.
 Discovery failure is incomplete inventory, **not** an empty test suite; callers
@@ -60,6 +64,8 @@ go build -o /tmp/go-callgraph .
 Targets use `package/import/path#Function` or
 `package/import/path#(Receiver).Method` (including `*` for pointer receivers).
 References carry Go signatures and source positions, not JVM descriptors.
+Source paths and line numbers always use physical files, ignoring `//line`
+aliases so discovery and committed-diff ownership stay consistent.
 Repeat `--target` to analyze several declarations. Uncalled declarations produce
 explicit empty reachability; unmatched targets fail explicitly.
 

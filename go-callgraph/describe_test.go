@@ -15,6 +15,17 @@ func TestDescribeOneLineMethodAndClosure(t *testing.T) {
 		t.Fatalf("spans/header: %+v %+v", a, b)
 	}
 }
+func TestDescribeLineDirectivesUsePhysicalSpans(t *testing.T) {
+	out := DescribeSources(context.Background(), []SourceInput{{SourcePath: "candidate:s.go", Source: "package p\n//line /outside/generated.go:1000\nfunc Changed() int {\n return 1\n}\n"}})
+	if out.Status != "ok" || len(out.Files) != 1 || len(out.Files[0].Declarations) != 1 {
+		t.Fatalf("describe: %+v", out)
+	}
+	d := out.Files[0].Declarations[0]
+	if d.StartLine != 3 || d.EndLine != 5 || d.BodyStartLine != 3 || d.BodyEndLine != 5 {
+		t.Fatalf("logical directive positions used for physical diff: %+v", d)
+	}
+}
+
 func TestDescribeBadSourceIsExplicit(t *testing.T) {
 	out := DescribeSources(context.Background(), []SourceInput{{SourcePath: "bad.go", Source: "package p; func broken("}})
 	if len(out.Files) != 1 || len(out.Files[0].Diagnostics) == 0 {
