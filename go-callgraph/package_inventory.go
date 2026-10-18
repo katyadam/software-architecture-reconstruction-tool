@@ -43,6 +43,11 @@ func DiscoverPackages(ctx context.Context, opts Options) PackageInventoryOutcome
 	}
 	pkgs, err := loadPackageMetadata(l)
 	if err != nil {
+		failedPackageScan(&out, err)
+		return out
+	}
+	out.Blockers, err = scanPackageBlockers(ctx, l.Root, pkgs)
+	if err != nil {
 		out.Diagnostics = append(out.Diagnostics, err.Error())
 		return out
 	}

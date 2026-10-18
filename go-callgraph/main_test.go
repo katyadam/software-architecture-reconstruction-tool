@@ -41,3 +41,30 @@ func TestCLIRejectsInvalidArgumentsAndReturnsStructuredTimeout(t *testing.T) {
 		t.Fatalf("missing structured failure: %s", stdout.String())
 	}
 }
+
+func TestPackageInventoryModeNeedsRootNotTargets(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"--mode", "package-inventory", "--source-dir", "testdata/control"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("package mode exit %d: %s %s", code, stdout.String(), stderr.String())
+	}
+	var out PackageInventoryOutcome
+	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil || !out.Complete || out.Status != "ok" {
+		t.Fatalf("bad evidence: %s", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := run([]string{"--mode", "package-inventory"}, &stdout, &stderr); code != 2 || stdout.Len() != 0 {
+		t.Fatal("accepted missing root")
+	}
+}
+
+func TestPackageInventoryModeTimeout(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"--mode", "package-inventory", "--source-dir", "testdata/control", "--timeout", "1ns"}, &stdout, &stderr); code != 1 {
+		t.Fatalf("timeout exit %d", code)
+	}
+	var out PackageInventoryOutcome
+	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil || out.Status != "failed" || out.Complete || len(out.Diagnostics) == 0 || out.EffectiveBuildContext != nil {
+		t.Fatalf("bad timeout: %s", stdout.String())
+	}
+}
