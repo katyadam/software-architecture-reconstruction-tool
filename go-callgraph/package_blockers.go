@@ -127,7 +127,7 @@ func processReference(imported, member string) bool {
 		return false
 	}
 	switch member {
-	case "Exec", "ForkExec", "StartProcess", "Syscall", "Syscall6", "Syscall9", "RawSyscall", "RawSyscall6", "RawSyscallNoError", "SyscallNoError":
+	case "Exec", "ForkExec", "StartProcess", "CreateProcess", "CreateProcessAsUser", "Syscall", "Syscall6", "Syscall9", "Syscall12", "Syscall15", "Syscall18", "SyscallN", "RawSyscall", "RawSyscall6", "RawSyscallNoError", "SyscallNoError":
 		return true
 	default:
 		return false
