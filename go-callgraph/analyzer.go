@@ -68,6 +68,7 @@ func Analyze(ctx context.Context, opts Options) (out Outcome) {
 	prog, _ := ssautil.Packages(pkgs, ssa.InstantiateGenerics)
 	prog.Build()
 	graph := cha.CallGraph(prog)
+	out.Diagnostics = append(out.Diagnostics, addSortCallbackEdges(graph)...)
 	phase("graph_ready")
 	refFor := func(fn *ssa.Function) (MethodRef, bool) {
 		if fn == nil {
