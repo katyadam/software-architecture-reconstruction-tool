@@ -7,8 +7,8 @@ checkpoint at `74efc00`. Go is the proposed next language: the existing provider
 contract already includes `Language::Go`, the workspace has a Go extractor, the
 local Go toolchain is installed, and sibling Go benchmarks contain test files.
 The standalone package-loading and reachability proof is implemented in
-`go-callgraph/`. Rust TIA integration and real-project benchmarking remain next
-steps, gated on review of the proof and its explicit coverage limitations.
+`go-callgraph/`. Rust now provides separate conservative Go impact reporting;
+real-project benchmarking and certified exclusion remain future steps.
 
 Success means that a controlled Go mutation selects the tests that actually
 fail, excludes unrelated tests, and records incomplete analysis explicitly.
@@ -102,3 +102,13 @@ Java and Go reuse only the neutral process transport, not artifact preparation,
 test discovery, or resolution. `scripts/test-go-native-adapter.sh` builds and
 checks the actual Go/Rust boundary in one command. Go change mapping and test
 selection remain a separate next slice.
+
+## Conservative impact checkpoint
+
+The separate `go-test-impact` command now maps committed Git changes, discovers
+tests before graph construction, and separates graph suggestions from actual
+conservative execution selection. `scripts/run-go-impact-control.sh` reproduces
+seven discovered tests, five suggestions matching five observed mutation
+failures, seven selected tests and zero exclusions. Unknown inventory and
+timeouts remain explicit; Java contracts are unchanged. See the approved
+`2026-10-17-go-impact-selection-design.md` for scope and acceptance requirements.

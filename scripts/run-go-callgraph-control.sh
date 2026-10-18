@@ -36,7 +36,7 @@ jq -s '[.[] | select(.Action == "fail" and .Test != null) | {package: .Package, 
 jq '[.reachability[] | select(.method.member_name == "Changed") | .entrypoints[] | {package: (if .declaring_type == "example.com/tia_test" then "example.com/tia" else .declaring_type end), test: .member_name}] | unique | sort_by(.package, .test)' "$result_dir/callgraph.json" >"$result_dir/reachable-tests.json"
 jq -en --slurpfile actual "$result_dir/observed-failures.json" --slurpfile predicted "$result_dir/reachable-tests.json" '$actual[0] == $predicted[0] and ($actual[0] | length) == 5' >/dev/null
 jq -e '(.tests | length) == 7 and ([.reachability[] | select(.method.member_name == "NeverCalled") | .entrypoints | length] == [0]) and ([.reachability[] | select(.method.member_name == "Initialize") | .entrypoints | length] == [6])' "$result_dir/callgraph.json" >/dev/null
-echo "PASS: 5 reachable tests match 5 observed failures; 2 unrelated tests excluded."
+echo "PASS: 5 reachable tests match 5 observed failures; 2 tests have no graph path."
 echo "PASS: initialization reaches 6 importing tests; an uncalled target reaches none."
-echo "Graph proof only: dependency bodies are opaque; production TIA is not integrated."
+echo "Graph proof only: opaque dependencies cannot authorize test exclusion; use scripts/run-go-impact-control.sh for the conservative report."
 echo "Results: $result_dir/callgraph.json"
