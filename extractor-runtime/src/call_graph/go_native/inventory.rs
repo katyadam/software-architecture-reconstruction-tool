@@ -3,7 +3,7 @@ use models::go_impact::*;
 use std::io::Write;
 
 impl GoNativeProvider {
-    fn metadata(
+    pub(super) fn metadata(
         &self,
         mode: &str,
         root: Option<&Path>,
