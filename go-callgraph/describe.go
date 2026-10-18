@@ -20,10 +20,10 @@ func declaration(fset *token.FileSet, fd *ast.FuncDecl) SourceDeclaration {
 		name = "(" + recv.String() + ")." + name
 	}
 	_ = format.Node(&b, fset, fd.Type)
-	out := SourceDeclaration{MemberName: name, Header: name + ":" + b.String(), StartLine: fset.Position(fd.Pos()).Line, EndLine: fset.Position(fd.End()).Line}
+	out := SourceDeclaration{MemberName: name, Header: name + ":" + b.String(), StartLine: fset.PositionFor(fd.Pos(), false).Line, EndLine: fset.PositionFor(fd.End(), false).Line}
 	if fd.Body != nil {
-		out.BodyStartLine = fset.Position(fd.Body.Pos()).Line
-		out.BodyEndLine = fset.Position(fd.Body.End()).Line
+		out.BodyStartLine = fset.PositionFor(fd.Body.Pos(), false).Line
+		out.BodyEndLine = fset.PositionFor(fd.Body.End(), false).Line
 	}
 	return out
 }

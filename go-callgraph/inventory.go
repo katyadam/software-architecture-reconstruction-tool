@@ -35,7 +35,7 @@ func Discover(ctx context.Context, opts Options) InventoryOutcome {
 			}
 		}
 		for _, file := range pkg.Syntax {
-			path := pkg.Fset.Position(file.Pos()).Filename
+			path := pkg.Fset.PositionFor(file.Pos(), false).Filename
 			if !localPath(root, path) {
 				continue
 			}
