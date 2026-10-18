@@ -41,4 +41,28 @@ Alternate race/coverage/compiler flags or a different toolchain/platform/tag con
 
 ## Verification
 
-The default control remains `scripts/run-go-impact-control.sh` (7 discovered / 5 graph-suggested / 7 selected). Real-project package controls and their recorded results are documented here once verified; mutation capture is empirical evidence, not a general soundness proof.
+The default control remains `scripts/run-go-impact-control.sh` (7 discovered / 5 graph-suggested / 7 selected).
+
+Run the real-project controls with one command:
+
+```sh
+scripts/run-go-package-selection-benchmarks.sh
+```
+
+It builds local tools offline, uses prepared dependencies, clones isolated copies of `../../../benchmarks/go/go-micro-services` and `go-coffeeshop`, and preserves all results in a newly created temporary directory. It never changes the original projects or downloads their dependencies. It prints phase logs and the final `summary.json` path. Output directories must be empty; prior results are not overwritten.
+
+Optional environment variables are `GO_BENCHMARK_ROOT`, `TIA_BENCHMARK_OUTPUT_DIR`, `GO_ANALYSIS_TIMEOUT_SECONDS` (default 300), `GO_CALLGRAPH_BINARY` and `GO_TEST_IMPACT_BINARY` (prebuilt executable overrides). Missing dependencies yield a preparation instruction, not an automatic download; cache-permission errors are reported separately.
+
+Local replay on 2026-10-18 passed all 12 controls with zero observed failing binaries excluded:
+
+| Controls | Execution result |
+| --- | --- |
+| Profile, geo, rate, frontend date/status, sort callback | 1 of 5 binaries selected; 4 excluded in each case |
+| Frontend edits | All 3 frontend TestX retained together |
+| Sort callback, graph deliberately disabled | Geo binary retained without any CHA suggestions |
+| Coffeeshop ID and uncovered helper | Both TestX retained in their single shared binary; no package reduction |
+| Configuration, signature, deletion, initialization | Whole-module fallback; execution inventory explicitly unavailable |
+
+All six failure-producing controls retained their observed failing binary. The two coffeeshop mutants survived the existing tests; they are recorded as survivors, not claimed detections. Each case also compares selected-run failures with an independent full-module run and compares package decisions with separately collected `go list -deps -test` metadata. Harness tests deliberately omit a failing binary and require the control to fail.
+
+Artifacts include committed revision IDs, mutation patches, independent package observations, analyzer reports/stderr, baseline/full-mutant/selected Go test JSON, and per-case results. Binary counts are unavailable (not zero) for incomplete fallback inventories. This is empirical evidence under the declared scope, **not a general soundness proof**.
