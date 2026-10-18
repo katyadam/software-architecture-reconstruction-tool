@@ -1,7 +1,10 @@
 //! Native Go impact analysis, separate from the Java command and identities.
 pub use super::go_changes::map_go_changes;
 pub use super::go_git::{GoFileDiff, GoGitDiff, GoHunk, read_go_diff};
+pub use super::go_package::analyze_go_package_impact;
 pub use super::go_selection::{GoSelectionDecision, select_go_tests};
+use crate::call_graph::go_native::validate_package_inventory;
+use models::go_package_impact::*;
 #[derive(Debug, thiserror::Error)]
 pub enum GoImpactError {
     #[error("Invalid Go impact input: {0}")]
@@ -46,6 +49,12 @@ fn skipped(why: &str) -> GoStageReport {
 }
 
 pub fn analyze_go_impact(options: &GoImpactOptions) -> Result<GoImpactReport, GoImpactError> {
+    analyze_go_impact_core(options, None).map(|(base, _)| base)
+}
+pub(super) fn analyze_go_impact_core(
+    options: &GoImpactOptions,
+    package_scope: Option<GoPackageTestScope>,
+) -> Result<(GoImpactReport, Option<GoPackageImpactReport>), GoImpactError> {
     if !cfg!(unix) || options.analysis_timeout.is_zero() {
         return Err(GoImpactError::Input(
             "Unix supervision and positive analysis timeout required".into(),
@@ -96,38 +105,14 @@ pub fn analyze_go_impact(options: &GoImpactOptions) -> Result<GoImpactReport, Go
     let mut analysis = skipped("no changes");
     let mut graph = None;
     let mut changes = vec![];
+    let mut package_inventory = None;
+    let mut package_stage = skipped("package evidence not requested or comparison ineligible");
     if !diff.files.is_empty() {
         eprintln!("go_impact_phase=discovery");
         let start = Instant::now();
         inventory = provider.discover(&diff.module_root);
         discovery = stage(inventory.status, inventory.diagnostics.clone(), start);
-        for path in &inventory.source_files {
-            let rel = std::path::Path::new(path)
-                .strip_prefix(&diff.module_root)
-                .map_err(|_| GoImpactError::Input("inventory source outside module".into()))?;
-            let relative = rel
-                .to_str()
-                .ok_or_else(|| GoImpactError::Input("non-UTF8 active Go source".into()))?;
-            let committed = super::go_git::git(
-                &diff.module_root,
-                &[
-                    "cat-file",
-                    "blob",
-                    &format!("{}:{relative}", diff.candidate_revision),
-                ],
-            )
-            .map_err(|_| {
-                GoImpactError::Input(format!(
-                    "active Go source is not in candidate commit: {relative}"
-                ))
-            })?;
-            let actual = std::fs::read(path).map_err(|e| GoImpactError::Input(e.to_string()))?;
-            if committed != actual {
-                return Err(GoImpactError::Input(format!(
-                    "active source differs from committed HEAD: {relative}"
-                )));
-            }
-        }
+        super::go_git::verify_committed_sources(&diff, &inventory.source_files)?;
         eprintln!("go_impact_phase=source_mapping");
         let start = Instant::now();
         let mut inputs = vec![];
@@ -181,6 +166,46 @@ pub fn analyze_go_impact(options: &GoImpactOptions) -> Result<GoImpactReport, Go
             diagnostics,
             start,
         );
+        if package_scope.is_some()
+            && inventory.status == GoStageStatus::Ok
+            && inventory.test_inventory_complete
+            && mapping.status == GoStageStatus::Ok
+            && !changes.is_empty()
+            && changes.iter().all(|c| {
+                c.kind == GoChangeKind::Callable && c.target.is_some() && c.diagnostics.is_empty()
+            })
+            && diff.files.iter().all(|f| {
+                f.status == "M"
+                    && f.old_source
+                        .as_deref()
+                        .zip(f.new_source.as_deref())
+                        .is_some_and(|(old, new)| {
+                            super::go_package_changes::only_function_bodies_changed(old, new)
+                        })
+            })
+        {
+            eprintln!("go_impact_phase=package_inventory");
+            let start = Instant::now();
+            let out = provider.discover_packages(&diff.module_root);
+            let mut diagnostics = out.diagnostics.clone();
+            diagnostics.extend(
+                out.blockers
+                    .iter()
+                    .map(|b| format!("package blocker {}: {}", b.code, b.diagnostic)),
+            );
+            match validate_package_inventory(&diff.module_root, &inventory, &out) {
+                Ok(valid) => {
+                    let files = valid.owners().keys().cloned().collect::<Vec<_>>();
+                    super::go_git::verify_committed_sources(&diff, &files)?;
+                    package_inventory = Some(valid);
+                    package_stage = stage(GoStageStatus::Ok, diagnostics, start);
+                }
+                Err(why) => {
+                    diagnostics.push(why);
+                    package_stage = stage(GoStageStatus::Failed, diagnostics, start);
+                }
+            }
+        }
         let targets: Vec<_> = changes
             .iter()
             .filter_map(|c| c.target.clone())
@@ -221,6 +246,9 @@ pub fn analyze_go_impact(options: &GoImpactOptions) -> Result<GoImpactReport, Go
         ));
     }
     eprintln!("go_impact_phase=selection");
+    let package_decision = package_inventory.as_ref().map(|e| {
+        super::go_package_selection::select_go_packages(&changes, &inventory, e, graph.as_ref())
+    });
     let decision = select_go_tests(&changes, &inventory, graph.as_ref());
     let mut diagnostics = decision.diagnostics;
     for (label, s) in [
@@ -230,7 +258,7 @@ pub fn analyze_go_impact(options: &GoImpactOptions) -> Result<GoImpactReport, Go
     ] {
         diagnostics.extend(s.diagnostics.iter().map(|d| format!("{label}: {d}")));
     }
-    Ok(GoImpactReport {
+    let base = GoImpactReport {
         schema_version: 1,
         language: Language::Go,
         module_root: diff.module_root.to_string_lossy().into(),
@@ -250,5 +278,15 @@ pub fn analyze_go_impact(options: &GoImpactOptions) -> Result<GoImpactReport, Go
         graph: graph.map(|g| g.graph),
         scope: inventory.scope,
         diagnostics,
-    })
+    };
+    let package = package_scope.map(|scope| {
+        super::go_package::package_report(
+            base.clone(),
+            scope,
+            package_stage,
+            package_inventory.as_ref(),
+            package_decision,
+        )
+    });
+    Ok((base, package))
 }
