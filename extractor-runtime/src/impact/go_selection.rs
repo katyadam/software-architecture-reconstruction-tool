@@ -55,53 +55,9 @@ pub fn select_go_tests(
     });
     d.test_inventory_complete =
         inventory.status == GoStageStatus::Ok && inventory.test_inventory_complete;
-    let targets: BTreeSet<_> = changes.iter().filter_map(|c| c.target.as_deref()).collect();
-    let mut good = false;
-    if let Some(g) = graph {
-        let returned: BTreeSet<_> = g
-            .graph
-            .reachability
-            .iter()
-            .map(|r| format!("{}#{}", r.method.declaring_type, r.method.member_name))
-            .collect();
-        good = d.test_inventory_complete
-            && matches!(
-                g.graph.status,
-                CallGraphStatus::Ok | CallGraphStatus::NoEntrypoints
-            )
-            && g.graph.source_root == inventory.source_root
-            && g.scope == inventory.scope
-            && g.graph.schema_version == 2
-            && g.graph.provider_id == "go-native"
-            && g.graph.algorithm == "cha"
-            && g.tests.len() == inventory.tests.len()
-            && g.tests
-                .iter()
-                .all(|m| inventory.tests.iter().any(|t| &t.method == m))
-            && g.graph.reachability.iter().all(|r| {
-                r.entrypoints
-                    .iter()
-                    .all(|m| inventory.tests.iter().any(|t| &t.method == m))
-            })
-            && returned.iter().map(String::as_str).collect::<BTreeSet<_>>() == targets;
-        if good {
-            for test in &d.discovered_tests {
-                let reached: BTreeSet<_> = g
-                    .graph
-                    .reachability
-                    .iter()
-                    .filter(|r| r.entrypoints.contains(&test.method))
-                    .map(|r| format!("{}#{}", r.method.declaring_type, r.method.member_name))
-                    .collect();
-                if !reached.is_empty() {
-                    d.graph_suggested_tests.push(GoSuggestedTest {
-                        test: test.clone(),
-                        changed_targets: reached.into_iter().collect(),
-                    });
-                }
-            }
-        }
-    }
+    let suggestions = validated_graph_suggestions(changes, inventory, graph);
+    let good = suggestions.is_some();
+    d.graph_suggested_tests = suggestions.unwrap_or_default();
     if !good {
         d.diagnostics.push("graph evidence absent, failed, or inconsistent with independent inventory; no graph suggestions".into())
     }
@@ -132,4 +88,62 @@ pub fn select_go_tests(
         });
     }
     d
+}
+
+/// Positive graph evidence only; absence never grants exclusion authority.
+pub(super) fn validated_graph_suggestions(
+    changes: &[GoChangedElement],
+    inventory: &GoInventoryOutcome,
+    graph: Option<&GoAnalysisResult>,
+) -> Option<Vec<GoSuggestedTest>> {
+    let mut suggestions = vec![];
+    let targets: BTreeSet<_> = changes.iter().filter_map(|c| c.target.as_deref()).collect();
+    let mut good = false;
+    if let Some(g) = graph {
+        let returned: BTreeSet<_> = g
+            .graph
+            .reachability
+            .iter()
+            .map(|r| format!("{}#{}", r.method.declaring_type, r.method.member_name))
+            .collect();
+        good = (inventory.status == GoStageStatus::Ok && inventory.test_inventory_complete)
+            && matches!(
+                g.graph.status,
+                CallGraphStatus::Ok | CallGraphStatus::NoEntrypoints
+            )
+            && g.graph.source_root == inventory.source_root
+            && g.scope == inventory.scope
+            && g.graph.schema_version == 2
+            && g.graph.provider_id == "go-native"
+            && g.graph.algorithm == "cha"
+            && g.tests.len() == inventory.tests.len()
+            && g.tests
+                .iter()
+                .all(|m| inventory.tests.iter().any(|t| &t.method == m))
+            && g.graph.reachability.iter().all(|r| {
+                r.entrypoints
+                    .iter()
+                    .all(|m| inventory.tests.iter().any(|t| &t.method == m))
+            })
+            && returned.iter().map(String::as_str).collect::<BTreeSet<_>>() == targets;
+        if good {
+            for test in &inventory.tests {
+                let reached: BTreeSet<_> = g
+                    .graph
+                    .reachability
+                    .iter()
+                    .filter(|r| r.entrypoints.contains(&test.method))
+                    .map(|r| format!("{}#{}", r.method.declaring_type, r.method.member_name))
+                    .collect();
+                if !reached.is_empty() {
+                    suggestions.push(GoSuggestedTest {
+                        test: test.clone(),
+                        changed_targets: reached.into_iter().collect(),
+                    });
+                }
+            }
+        }
+    }
+
+    good.then_some(suggestions)
 }
