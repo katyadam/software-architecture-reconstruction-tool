@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -23,6 +24,73 @@ func testModule(t *testing.T, files map[string]string) string {
 	}
 	return root
 }
+func TestLineDirectivesKeepPhysicalInventoryAndGraphOwnership(t *testing.T) {
+	root := testModule(t, map[string]string{
+		"go.mod":    "module lines.test/c\n\ngo 1.26.0\n",
+		"s.go":      "package c\n//line /outside/generated.go:1000\nfunc Changed() int { return 1 }\n",
+		"s_test.go": "//line /outside/generated.go:2000\npackage c\nimport \"testing\"\n//line /outside/generated.go:3000\nfunc TestChanged(t *testing.T) { Changed() }\n",
+	})
+	root, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := Discover(context.Background(), Options{SourceDir: root})
+	if out.Status != "ok" || !out.TestInventoryComplete || len(out.Tests) != 1 {
+		t.Fatalf("line directive hid real test: %+v", out)
+	}
+	ref := out.Tests[0].Method
+	if ref.SourcePath != filepath.Join(root, "s_test.go") || ref.SourceLine != 5 {
+		t.Fatalf("nonphysical test identity: %+v", ref)
+	}
+	if len(out.Declarations) != 2 {
+		t.Fatalf("lost physical declarations: %+v", out.Declarations)
+	}
+	for _, d := range out.Declarations {
+		if d.Syntax.StartLine != 3 && d.Syntax.StartLine != 5 {
+			t.Fatalf("nonphysical declaration span: %+v", d)
+		}
+	}
+	graph := Analyze(context.Background(), Options{SourceDir: root, Targets: []string{"lines.test/c#Changed"}})
+	if graph.Status != "ok" || len(graph.Tests) != 1 || len(graph.Reachability) != 1 || len(graph.Reachability[0].Entrypoints) != 1 || graph.Reachability[0].Method.SourceLine != 3 || graph.Tests[0] != ref {
+		t.Fatalf("line directives broke graph identities: %+v", graph)
+	}
+}
+
+func TestSavedGoConfigurationCannotChangeReportedScope(t *testing.T) {
+	config := filepath.Join(t.TempDir(), "goenv")
+	if err := os.WriteFile(config, []byte("GOFLAGS=-tags=hidden\nGOOS=plan9\nGOARCH=386\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GOENV", config)
+	t.Setenv("GOFLAGS", "")
+	t.Setenv("GOOS", "")
+	t.Setenv("GOARCH", "")
+	root := testModule(t, map[string]string{
+		"go.mod":         "module saved.test/c\n\ngo 1.26.0\n",
+		"s.go":           "package c\nfunc Changed() {}\n",
+		"host_test.go":   "//go:build " + runtime.GOOS + " && " + runtime.GOARCH + "\n\npackage c\nimport \"testing\"\nfunc TestHost(t *testing.T) { Changed() }\n",
+		"hidden_test.go": "//go:build hidden\n\npackage c\nimport \"testing\"\nfunc TestHidden(t *testing.T) { Changed() }\n",
+	})
+	for _, tags := range []string{"", "hidden"} {
+		want := 1
+		if tags != "" {
+			want = 2
+		}
+		inventory := Discover(context.Background(), Options{SourceDir: root, Tags: tags})
+		graph := Analyze(context.Background(), Options{SourceDir: root, Tags: tags, Targets: []string{"saved.test/c#Changed"}})
+		foundHost := false
+		for _, test := range inventory.Tests {
+			foundHost = foundHost || test.Method.MemberName == "TestHost"
+		}
+		if inventory.Status != "ok" || !inventory.TestInventoryComplete || len(inventory.Tests) != want || graph.Status != "ok" || len(graph.Tests) != want || inventory.Scope.GOOS != runtime.GOOS || inventory.Scope.GOARCH != runtime.GOARCH || inventory.Scope.BuildTags != tags || graph.Scope.BuildTags != tags {
+			t.Fatalf("saved configuration changed reported scope: inventory=%+v graph=%+v", inventory, graph)
+		}
+		if !foundHost || tags == "" && graph.Tests[0].MemberName != "TestHost" {
+			t.Fatalf("saved configuration changed active tests: inventory=%+v graph=%+v", inventory, graph)
+		}
+	}
+}
+
 func TestInventoryFindsSevenTestsWithoutBuildingGraph(t *testing.T) {
 	var progress bytes.Buffer
 	out := Discover(context.Background(), Options{SourceDir: "testdata/control", Progress: &progress})

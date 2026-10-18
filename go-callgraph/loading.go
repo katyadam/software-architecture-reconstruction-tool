@@ -59,11 +59,17 @@ func loadSource(ctx context.Context, opts Options) (string, []*packages.Package,
 	env := []string{}
 	for _, v := range os.Environ() {
 		k, _, _ := strings.Cut(v, "=")
-		if k != "GOWORK" && k != "GOTOOLCHAIN" && k != "GOPROXY" && k != "GOSUMDB" {
+		switch k {
+		case "GOWORK", "GOTOOLCHAIN", "GOPROXY", "GOSUMDB", "GOENV", "GOFLAGS", "GOOS", "GOARCH":
+		default:
 			env = append(env, v)
 		}
 	}
-	env = append(env, "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off", "GOSUMDB=off")
+	// Saved `go env -w` flags/platforms must not silently override reported
+	// context. Only explicit tags and process GOOS/GOARCH select this build.
+	scope := emptyOutcome(opts).Scope
+	env = append(env, "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off", "GOSUMDB=off",
+		"GOENV=off", "GOFLAGS=", "GOOS="+scope.GOOS, "GOARCH="+scope.GOARCH)
 	flags := []string{"-mod=readonly", "-modfile=" + modpath}
 	if opts.Tags != "" {
 		flags = append(flags, "-tags="+opts.Tags)

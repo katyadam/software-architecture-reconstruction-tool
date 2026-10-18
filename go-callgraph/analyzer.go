@@ -105,7 +105,7 @@ func Analyze(ctx context.Context, opts Options) (out Outcome) {
 	}
 	for _, pkg := range pkgs {
 		for _, file := range pkg.Syntax {
-			if !strings.HasSuffix(pkg.Fset.Position(file.Pos()).Filename, "_test.go") {
+			if !strings.HasSuffix(pkg.Fset.PositionFor(file.Pos(), false).Filename, "_test.go") {
 				continue
 			}
 			for _, decl := range file.Decls {
