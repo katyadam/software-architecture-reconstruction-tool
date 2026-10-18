@@ -252,3 +252,39 @@ pub fn read_go_diff(root: &Path, baseline: &str) -> Result<GoGitDiff, GoImpactEr
         files,
     })
 }
+
+/// Compare every active evidence file with the exact recorded candidate blob.
+pub(super) fn verify_committed_sources(
+    diff: &GoGitDiff,
+    files: &[String],
+) -> Result<(), GoImpactError> {
+    for path in files {
+        let rel = std::path::Path::new(path)
+            .strip_prefix(&diff.module_root)
+            .map_err(|_| GoImpactError::Input("inventory source outside module".into()))?;
+        let relative = rel
+            .to_str()
+            .ok_or_else(|| GoImpactError::Input("non-UTF8 active Go source".into()))?;
+        let committed = git(
+            &diff.module_root,
+            &[
+                "cat-file",
+                "blob",
+                &format!("{}:{relative}", diff.candidate_revision),
+            ],
+        )
+        .map_err(|_| {
+            GoImpactError::Input(format!(
+                "active Go source is not in candidate commit: {relative}"
+            ))
+        })?;
+        let actual = std::fs::read(path).map_err(|e| GoImpactError::Input(e.to_string()))?;
+        if committed != actual {
+            return Err(GoImpactError::Input(format!(
+                "active source differs from committed HEAD: {relative}"
+            )));
+        }
+    }
+
+    Ok(())
+}
