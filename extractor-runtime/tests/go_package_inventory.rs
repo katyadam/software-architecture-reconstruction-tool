@@ -126,6 +126,34 @@ fn malformed_or_incomplete_evidence_never_authorizes_exclusion() {
 }
 
 #[test]
+fn external_only_binary_requires_source_backed_production_initialization_root() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let (mut inventory, mut evidence) = support::fixture(&root);
+    inventory.tests.clear();
+    let external = &mut evidence.packages[1];
+    external.import_path = "example/a_test".into();
+    external.source_files = external.test_files.clone();
+    assert!(
+        validate_package_inventory(&root, &inventory, &evidence).is_err(),
+        "external test root alone drops production initialization dependencies"
+    );
+    evidence.execution_packages[0]
+        .roots
+        .push("production-opaque".into());
+    assert!(validate_package_inventory(&root, &inventory, &evidence).is_ok());
+    evidence.packages[0].source_files.clear();
+    inventory.source_files.retain(|f| f.ends_with("_test.go"));
+    evidence.execution_packages[0]
+        .roots
+        .retain(|id| id != "production-opaque");
+    assert!(
+        validate_package_inventory(&root, &inventory, &evidence).is_ok(),
+        "test-only directory does not need a source-less production root"
+    );
+}
+
+#[test]
 fn example_only_groups_and_truly_empty_inventory_are_distinct_from_missing_evidence() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
@@ -206,4 +234,56 @@ fn real_native_package_wire_validates_against_independent_discovery() {
     let valid = validate_package_inventory(&root, &inventory, &evidence).unwrap();
     assert_eq!(inventory.tests.len(), 7);
     assert!(!valid.evidence().execution_packages.is_empty());
+}
+
+#[test]
+#[ignore = "requires GO_CALLGRAPH_TEST_BINARY built from go-callgraph"]
+fn real_native_external_only_binaries_validate_with_and_without_production() {
+    let binary = std::env::var_os("GO_CALLGRAPH_TEST_BINARY").unwrap();
+    let provider = GoNativeProvider::new(binary, Duration::from_secs(30));
+    for production in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().canonicalize().unwrap();
+        fs::write(
+            root.join("go.mod"),
+            "module externalonly.test/control\n\ngo 1.26.0\n",
+        )
+        .unwrap();
+        fs::create_dir(root.join("app")).unwrap();
+        fs::write(
+            root.join("app/external_test.go"),
+            "package app_test\nimport \"testing\"\nfunc TestOutside(t *testing.T) {}\n",
+        )
+        .unwrap();
+        if production {
+            fs::create_dir(root.join("helper")).unwrap();
+            fs::write(root.join("helper/helper.go"), "package helper\nvar V = 1\n").unwrap();
+            fs::write(
+                root.join("app/app.go"),
+                "package app\nimport _ \"externalonly.test/control/helper\"\n",
+            )
+            .unwrap();
+        }
+        let inventory = provider.discover(&root);
+        let mut evidence = provider.discover_packages(&root);
+        let valid = validate_package_inventory(&root, &inventory, &evidence).unwrap();
+        assert_eq!(valid.evidence().execution_packages.len(), 1);
+        assert_eq!(inventory.tests.len(), 1);
+        if production {
+            let production_id = evidence
+                .packages
+                .iter()
+                .find(|node| {
+                    node.import_path == "externalonly.test/control/app"
+                        && !node.source_files.is_empty()
+                })
+                .unwrap()
+                .id
+                .clone();
+            evidence.execution_packages[0]
+                .roots
+                .retain(|id| id != &production_id);
+            assert!(validate_package_inventory(&root, &inventory, &evidence).is_err());
+        }
+    }
 }
