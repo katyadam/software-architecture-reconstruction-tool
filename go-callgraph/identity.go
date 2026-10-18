@@ -15,7 +15,8 @@ func sourceRef(fset *token.FileSet, obj *types.Func, root string) (MethodRef, bo
 	if obj == nil || obj.Pkg() == nil {
 		return MethodRef{}, false
 	}
-	pos := fset.Position(obj.Pos())
+	// Git diffs and ownership refer to physical files, not //line aliases.
+	pos := fset.PositionFor(obj.Pos(), false)
 	if !pos.IsValid() || !localPath(root, pos.Filename) {
 		return MethodRef{}, false
 	}
