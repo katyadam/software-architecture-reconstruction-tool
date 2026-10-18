@@ -1,8 +1,43 @@
-# Native Go call-graph proof
+# Native Go call graphs and conservative impact reports
 
-This standalone executable is independent of WALA, SootUp, and the Rust TIA
-selection pipeline. It proves targeted Go reachability, not production-safe
-test exclusion. Go 1.26+ is required by the pinned `golang.org/x/tools v0.52.0`.
+This native executable is independent of WALA and SootUp. It supplies targeted
+reachability and graph-free metadata to a separate Rust Go impact pipeline;
+it does not prove production-safe test exclusion. Go 1.26+ is required by the
+pinned `golang.org/x/tools v0.52.0`.
+
+## End-to-end Go impact control
+
+From the repository root, run:
+
+```sh
+scripts/run-go-impact-control.sh
+```
+
+The command creates a fresh temporary Git module, builds the tools, commits a
+baseline and a return-value mutation, writes an impact report and independently
+executes the tests. Expected: **7 discovered, 5 graph suggestions, 7 selected,
+0 unselected**. The five suggestions match the five actual mutation failures.
+Both unrelated tests stay selected by conservative fallback. Inspect
+`graph_suggested_tests`, `selected_tests`, `selection_mode`, `run_all_tests`,
+`test_inventory_complete`, stage diagnostics and timing in the printed report.
+Artifacts remain available for inspection; benchmark checkouts are untouched.
+
+The separate Rust `go-test-impact` command accepts `--project-dir`,
+`--baseline-revision`, `--go-callgraph-binary`, `--output`, `--build-tags`, and
+`--analysis-timeout-seconds` (default 300, independently per native invocation).
+It never executes tests or builds tools itself. Output must be outside the
+analyzed checkout, whose tracked/untracked state must be clean. Single root Go
+modules are supported; nested modules, workspace context and ambient `GOFLAGS`
+are rejected explicitly. Use the build-tags flag instead of hidden build flags.
+
+A nonempty diff always produces `conservative_all` and `run_all_tests: true`.
+Discovery failure is incomplete inventory, **not** an empty test suite; callers
+must run the whole module rather than execute only an incomplete per-test list.
+An empty committed diff is an explicit `no_changes` result. Positive suggestions
+are auditable evidence, not permission to skip other tests. Arbitrary safe
+exclusion and real-project benchmark evaluation remain future work.
+
+## Standalone graph proof
 
 Run the complete regression and mutation control from the repository root:
 
@@ -57,8 +92,9 @@ and exits, terminating its worker. `Analyze` alone cannot interrupt SSA mid-buil
 
 The schema-version-2 envelope includes `tests` and `scope` proof metadata.
 `reachability` contains only requested targets; `edges` is intentionally empty.
-No Go Git change mapping, Rust test discovery, selection command, or real-project
-benchmark integration has been added in this slice.
+Go Git mapping, independent discovery and conservative impact reporting consume
+this contract without changing the Java CLI or models. No real-project Go
+benchmark integration is claimed by the controlled fixture.
 
 ## Rust adapter
 
