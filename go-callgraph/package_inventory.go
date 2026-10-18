@@ -89,7 +89,7 @@ func DiscoverPackages(ctx context.Context, opts Options) PackageInventoryOutcome
 	// actual ID; never synthesize test variant or generated-main identities.
 	for _, binary := range binaries {
 		for _, p := range nodes {
-			if p.PkgPath == binary.ImportPath && (p.ForTest == binary.ImportPath || p.ForTest == "") && localPath(l.Root, p.Dir) {
+			if len(p.GoFiles) > 0 && p.PkgPath == binary.ImportPath && (p.ForTest == binary.ImportPath || p.ForTest == "") && localPath(l.Root, p.Dir) {
 				binary.Roots = append(binary.Roots, p.ID)
 			}
 		}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"golang.org/x/tools/go/packages"
 	"os"
 	"os/exec"
@@ -125,6 +126,40 @@ func TestPackageInventoryExampleFuzzAndBenchmarkOnly(t *testing.T) {
 	ordinary := Discover(context.Background(), Options{SourceDir: root})
 	if ordinary.Status != "ok" || len(ordinary.Tests) != 0 {
 		t.Fatalf("ordinary inventory changed: %+v", ordinary)
+	}
+}
+
+func TestPackageInventoryExternalOnlyRootsAreSourceBacked(t *testing.T) {
+	for _, production := range []bool{false, true} {
+		t.Run(fmt.Sprint(production), func(t *testing.T) {
+			files := map[string]string{
+				"go.mod":               "module externalonly.test/control\n\ngo 1.26.0\n",
+				"app/external_test.go": "package app_test\nimport \"testing\"\nfunc TestOutside(t *testing.T) {}\n",
+			}
+			if production {
+				files["app/app.go"] = "package app\nimport _ \"externalonly.test/control/helper\"\n"
+				files["helper/helper.go"] = "package helper\nvar V = 1\n"
+			}
+			out := packageEvidence(t, testModule(t, files))
+			if len(out.ExecutionPackages) != 1 {
+				t.Fatalf("binary grouping: %+v", out.ExecutionPackages)
+			}
+			foundProduction := false
+			for _, id := range out.ExecutionPackages[0].Roots {
+				for _, node := range out.Packages {
+					if node.ID != id {
+						continue
+					}
+					if len(node.SourceFiles) == 0 {
+						t.Fatalf("source-less root: %+v", node)
+					}
+					foundProduction = foundProduction || node.ImportPath == "externalonly.test/control/app"
+				}
+			}
+			if foundProduction != production {
+				t.Fatalf("production root present=%v want=%v", foundProduction, production)
+			}
+		})
 	}
 }
 

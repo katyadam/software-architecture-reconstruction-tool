@@ -324,6 +324,27 @@ pub fn validate_package_inventory(
         if !test_root {
             return Err("binary lacks source-backed active tests".into());
         }
+        // The generated harness initializes the package under test even when
+        // its external tests never import it. Prefer its augmented instance;
+        // a test-only directory has no source-backed production instance.
+        let production: Vec<_> = evidence
+            .packages
+            .iter()
+            .filter(|node| {
+                node.import_path == binary.import_path
+                    && node.provenance.directory == directory.to_string_lossy()
+                    && !node.source_files.is_empty()
+                    && (node.for_test.is_empty() || node.for_test == binary.import_path)
+            })
+            .collect();
+        let augmented = production
+            .iter()
+            .any(|node| node.for_test == binary.import_path);
+        if production.iter().any(|node| {
+            (!augmented || node.for_test == binary.import_path) && !binary.roots.contains(&node.id)
+        }) {
+            return Err("source-backed production initialization root omitted".into());
+        }
     }
     for node in &evidence.packages {
         if !node.test_files.is_empty() && !rooted_tests.contains(node.id.as_str()) {
