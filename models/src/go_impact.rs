@@ -96,12 +96,21 @@ pub struct GoChangedElement {
 pub enum GoSelectionMode {
     NoChanges,
     ConservativeAll,
+    ConservativePackages,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GoSelectionReason {
-    ChangedCallable { target: String },
-    ConservativeFallback { diagnostic: String },
+    ChangedCallable {
+        target: String,
+    },
+    ConservativeFallback {
+        diagnostic: String,
+    },
+    PackageDependency {
+        execution_package: String,
+        changed_owners: Vec<String>,
+    },
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GoSuggestedTest {
