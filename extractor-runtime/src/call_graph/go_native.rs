@@ -19,7 +19,9 @@ use std::{
 const PROVIDER_ID: &str = "go-native";
 const ALGORITHM: &str = "cha";
 mod inventory;
+mod packages;
 pub use models::go_impact::GoAnalysisScope;
+pub use packages::{ValidatedGoPackageInventory, validate_package_inventory};
 
 /// Native analysis context must survive deserialization: an opaque dependency
 /// scope cannot be silently treated as a complete graph by a TIA consumer.
