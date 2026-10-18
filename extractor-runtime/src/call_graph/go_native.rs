@@ -18,19 +18,11 @@ use std::{
 
 const PROVIDER_ID: &str = "go-native";
 const ALGORITHM: &str = "cha";
+mod inventory;
+pub use models::go_impact::GoAnalysisScope;
 
 /// Native analysis context must survive deserialization: an opaque dependency
 /// scope cannot be silently treated as a complete graph by a TIA consumer.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GoAnalysisScope {
-    pub dependency_bodies: String,
-    pub goos: String,
-    pub goarch: String,
-    pub go_version: String,
-    pub build_tags: String,
-    pub workspace_mode: String,
-    pub limitations: Vec<String>,
-}
 
 /// A successful graph computation is distinct from complete exclusion coverage.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -14,4 +14,5 @@ echo "Go native Rust adapter control; artifacts: $artifact_dir"
 cd "$repo_root"
 cargo test -p extractor-runtime --test go_native_provider
 GO_CALLGRAPH_TEST_BINARY="$artifact_dir/go-callgraph" cargo test -p extractor-runtime --test go_native_provider real_go_executable_preserves_seven_tests_and_five_reachable_roots -- --ignored --nocapture
+GO_CALLGRAPH_TEST_BINARY="$artifact_dir/go-callgraph" cargo test -p extractor-runtime --test go_source_inventory -- --include-ignored
 echo "PASS: Rust retains native Go tests and scope, and refuses unsafe exclusion."
