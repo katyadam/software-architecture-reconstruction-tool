@@ -4,6 +4,7 @@ mod git_diff;
 pub mod go;
 mod go_changes;
 mod go_git;
+mod go_selection;
 mod java_changes;
 mod java_modules;
 mod java_tests;
