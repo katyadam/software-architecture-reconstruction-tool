@@ -6,9 +6,13 @@ use std::collections::BTreeMap;
 #[derive(Debug)]
 pub struct ValidatedGoPackageInventory {
     evidence: GoPackageInventoryOutcome,
+    inventory: GoInventoryOutcome,
     owners: BTreeMap<String, BTreeSet<String>>,
 }
 impl ValidatedGoPackageInventory {
+    pub(crate) fn matches_inventory(&self, inventory: &GoInventoryOutcome) -> bool {
+        &self.inventory == inventory
+    }
     pub fn evidence(&self) -> &GoPackageInventoryOutcome {
         &self.evidence
     }
@@ -346,6 +350,7 @@ pub fn validate_package_inventory(
     }
     Ok(ValidatedGoPackageInventory {
         evidence: evidence.clone(),
+        inventory: inventory.clone(),
         owners,
     })
 }
