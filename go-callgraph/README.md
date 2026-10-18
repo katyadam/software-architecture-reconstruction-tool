@@ -85,10 +85,16 @@ and exits, terminating its worker. `Analyze` alone cannot interrupt SSA mid-buil
 - [`CHA`](https://pkg.go.dev/golang.org/x/tools/go/callgraph/cha) provides
   conservative interface dispatch within the built graph. It can overapproximate
   and does not establish runtime feasibility.
+- Native callback summaries add caller-specific edges for `sort.Slice` and
+  `sort.SliceStable` when the comparator is an SSA function or closure. Edges
+  do not join independent sorting callers through a shared library node.
+  Comparator values requiring further data-flow analysis (such as function
+  parameters or factory results) produce an unresolved-callback diagnostic.
+  This is not general callback support and does not enable test exclusions.
 - Package initialization is attached to tests in importing packages. `TestMain`
   is rejected explicitly until its setup/teardown is modeled. Top-level `TestX`
   functions are the selection unit; subtests belong to their parent.
-- External-library callbacks, reflection, plugins, and generic dispatch are not
+- Other external-library callbacks, reflection, plugins, and generic dispatch are not
   covered by this proof. Absence of a path is **not** a safe exclusion guarantee
   for arbitrary projects.
 - A module-root `go.mod` is required; `GOWORK=off`, `GOTOOLCHAIN=local`, and
