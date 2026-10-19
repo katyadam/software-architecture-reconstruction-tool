@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+pub mod configured_java_impact;
 pub mod go_impact_output;
 pub mod java_impact_inputs;
 use extractor_runtime::call_graph::{CallGraphProvider, resolve_edges, wala::WalaJavaProvider};

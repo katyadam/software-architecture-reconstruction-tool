@@ -27,6 +27,12 @@ struct Arguments {
     /// Candidate Git checkout whose HEAD is analyzed.
     #[arg(long, value_name = "DIR")]
     project_dir: PathBuf,
+    /// Existing service configuration, optionally extended with Java manifests.
+    #[arg(long, value_name = "FILE")]
+    config_file: Option<PathBuf>,
+    /// Base for configured service paths; defaults to the candidate checkout.
+    #[arg(long, value_name = "DIR", requires = "config_file")]
+    config_base_dir: Option<PathBuf>,
     /// Git revision used as the old side of the candidate comparison.
     #[arg(long, value_name = "REVISION")]
     baseline_revision: String,
@@ -55,6 +61,35 @@ fn run(arguments: Arguments) -> Result<()> {
     validate_project_and_revision(&arguments)?;
     let provider_kind = JavaCallGraphProviderKind::parse(&arguments.java_callgraph_provider)?;
     let candidate_revision = git_revision(&arguments.project_dir, "HEAD")?;
+    if let Some(inputs) = cli::java_impact_inputs::load_configured_impact_inputs(
+        &arguments.project_dir,
+        arguments.config_file.as_deref(),
+        arguments.config_base_dir.as_deref(),
+        &candidate_revision,
+    )? {
+        let project = arguments.project_dir.canonicalize()?;
+        let catalog = ModuleCatalog::load(&project).with_configured_inputs(&inputs);
+        let changes = extractor_runtime::impact::analyze_changes_with_catalog(
+            &project,
+            &arguments.baseline_revision,
+            &catalog,
+        )?;
+        let provider = if changes_are_module_only(&changes) || inputs.requires_full_test_run() {
+            None
+        } else {
+            Some(select_provider(&arguments, provider_kind)?)
+        };
+        let result = cli::configured_java_impact::analyze_configured_impact(
+            &project,
+            &arguments.baseline_revision,
+            &candidate_revision,
+            changes,
+            &inputs,
+            provider.as_ref().map(SelectedJavaProvider::configured),
+            arguments.quiet,
+        )?;
+        return write_result(&arguments.output, &result);
+    }
     let module_metadata_diagnostic = ModuleCatalog::load(&arguments.project_dir)
         .diagnostic()
         .map(str::to_owned);
@@ -138,6 +173,13 @@ enum SelectedJavaProvider {
 }
 
 impl SelectedJavaProvider {
+    fn configured(&self) -> &dyn cli::configured_java_impact::ConfiguredJavaProvider {
+        match self {
+            Self::Wala(provider) => provider,
+            Self::SootUp(provider) => provider,
+        }
+    }
+
     fn analyze_modules(
         &self,
         project_root: &Path,

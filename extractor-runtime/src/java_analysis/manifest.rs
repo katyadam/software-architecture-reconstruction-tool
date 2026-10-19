@@ -154,12 +154,27 @@ pub(super) fn load(
         let mut discovered = Vec::new();
         let mut identities = BTreeSet::new();
         for mut test in module.tests {
+            let class = if test.class_name.contains('.') {
+                format!("L{}", test.class_name.replace('.', "/"))
+            } else if test.class_name.starts_with('L') {
+                test.class_name.clone()
+            } else {
+                format!("L{}", test.class_name)
+            };
+            if !class
+                .strip_prefix('L')
+                .is_some_and(|c| c.split('/').all(identifier))
+            {
+                return Err(JavaInputsError::Manifest(
+                    "invalid test class identity".into(),
+                ));
+            }
+            test.class_name = class;
             let owner = directory(&root.join(&test.module_root), Some(checkout))?;
             let source = file(&root.join(&test.source_path), Some(checkout))?;
             if owner != root
                 || !test_source_roots.iter().any(|p| source.starts_with(p))
                 || !source.extension().is_some_and(|e| e == "java")
-                || !test.class_name.split('.').all(identifier)
                 || !identifier(&test.method_name)
                 || !descriptor(&test.descriptor)
                 || test.callable_signature.trim().is_empty()
