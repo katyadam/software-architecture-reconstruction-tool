@@ -94,14 +94,14 @@ func Analyze(ctx context.Context, opts Options) (out Outcome) {
 			targetRefs[key] = ref
 		}
 	}
-	roots := map[*callgraph.Node]map[MethodRef]bool{}
+	binaries := map[string]*binaryScope{}
 	tests := map[MethodRef]bool{}
-	attach := func(fn *ssa.Function, ref MethodRef) {
+	attach := func(scope *binaryScope, fn *ssa.Function, ref MethodRef) {
 		if node := graph.Nodes[fn]; node != nil {
-			if roots[node] == nil {
-				roots[node] = map[MethodRef]bool{}
+			if scope.roots[node] == nil {
+				scope.roots[node] = map[MethodRef]bool{}
 			}
-			roots[node][ref] = true
+			scope.roots[node][ref] = true
 		}
 	}
 	for _, pkg := range pkgs {
@@ -133,30 +133,20 @@ func Analyze(ctx context.Context, opts Options) (out Outcome) {
 					continue
 				}
 				tests[ref] = true
-				attach(fn, ref)
-				seen := map[*types.Package]bool{}
-				var initRoots func(*types.Package)
-				initRoots = func(p *types.Package) {
-					if seen[p] {
-						return
-					}
-					seen[p] = true
+				execution := pkg.ForTest
+				if execution == "" {
+					execution = pkg.PkgPath
+				}
+				scope := binaries[execution]
+				if scope == nil {
+					scope = newBinaryScope(execution, pkg, pkgs)
+					binaries[execution] = scope
+				}
+				attach(scope, fn, ref)
+				for p := range scope.packages {
 					if sp := prog.Package(p); sp != nil {
 						if initFn, ok := sp.Members["init"].(*ssa.Function); ok {
-							attach(initFn, ref)
-						}
-					}
-					for _, imported := range p.Imports() {
-						initRoots(imported)
-					}
-				}
-				initRoots(pkg.Types)
-				// Every package linked into the same test binary initializes
-				// before any internal or external test in that binary runs.
-				if pkg.ForTest != "" {
-					for _, sibling := range pkgs {
-						if sibling.ForTest == pkg.ForTest {
-							initRoots(sibling.Types)
+							attach(scope, initFn, ref)
 						}
 					}
 				}
@@ -165,29 +155,31 @@ func Analyze(ctx context.Context, opts Options) (out Outcome) {
 	}
 	out.Tests = sortedRefs(tests)
 	for _, key := range opts.Targets {
-		// The traversal stack is mutable; do not overwrite cached seed nodes
-		// when a caller requests the same target more than once.
-		nodes := append([]*callgraph.Node(nil), targetNodes[key]...)
-		if len(nodes) == 0 {
+		if len(targetNodes[key]) == 0 {
 			return failed(fmt.Errorf("unmatched target: %s", key))
 		}
-		visited := map[*callgraph.Node]bool{}
 		found := map[MethodRef]bool{}
-		for len(nodes) > 0 {
-			if err = ctx.Err(); err != nil {
-				return failed(err)
-			}
-			n := nodes[len(nodes)-1]
-			nodes = nodes[:len(nodes)-1]
-			if visited[n] {
-				continue
-			}
-			visited[n] = true
-			for ref := range roots[n] {
-				found[ref] = true
-			}
-			for _, edge := range n.In {
-				nodes = append(nodes, edge.Caller)
+		for _, scope := range binaries {
+			// Each binary needs its own visited set: a path valid for one
+			// binary may cross an unlinked package in another context.
+			nodes := append([]*callgraph.Node(nil), targetNodes[key]...)
+			visited := map[*callgraph.Node]bool{}
+			for len(nodes) > 0 {
+				if err = ctx.Err(); err != nil {
+					return failed(err)
+				}
+				n := nodes[len(nodes)-1]
+				nodes = nodes[:len(nodes)-1]
+				if visited[n] || !scope.contains(n.Func) {
+					continue
+				}
+				visited[n] = true
+				for ref := range scope.roots[n] {
+					found[ref] = true
+				}
+				for _, edge := range n.In {
+					nodes = append(nodes, edge.Caller)
+				}
 			}
 		}
 		out.Reachability = append(out.Reachability, Reachability{Method: targetRefs[key], Entrypoints: sortedRefs(found)})
