@@ -68,6 +68,13 @@ cat >"$fake_runner" <<'EOF'
 set -euo pipefail
 test "${JAVA_BENCHMARK_ROOT:?}" = "${EXPECTED_BENCHMARK_ROOT:?}"
 test "${WALA_TIMEOUT_SECONDS:?}" = 300
+if [[ -n ${TIA_EXPECTED_PROVIDER:-} ]]; then
+  test "${JAVA_CALLGRAPH_PROVIDER:?}" = "$TIA_EXPECTED_PROVIDER"
+  test "${JAVA_CALLGRAPH_ADAPTER_JAR:?}" = "${TIA_EXPECTED_ADAPTER_JAR:?}"
+fi
+if [[ -n ${TIA_EXPECTED_GRADLE_ARGUMENTS:-} ]]; then
+  test "${JAVA_CALLGRAPH_GRADLE_ARGUMENTS:?}" = "$TIA_EXPECTED_GRADLE_ARGUMENTS"
+fi
 if [[ -n ${TIA_EXPECTED_MAVEN_JAVA_HOME:-} ]]; then
   test "${WALA_MAVEN_JAVA_HOME:?}" = "$TIA_EXPECTED_MAVEN_JAVA_HOME"
 fi
@@ -117,3 +124,38 @@ TIA_POSITIVE_WORKTREE_ROOT="$positive_worktrees" \
 TIA_POSITIVE_OUTPUT_DIR="$positive_output" \
 TIA_POSITIVE_RUNNER="$fake_runner" \
 bash "$repo_root/scripts/run-kafka-positive-tia.sh"
+
+TIA_EXPECTED_PROVIDER=sootup \
+TIA_EXPECTED_ADAPTER_JAR="$temp_dir/sootup.jar" \
+EXPECTED_BENCHMARK_ROOT="$positive_worktrees" \
+TIA_EXPECTED_PROJECT=kafka-microservices-with-saga \
+TIA_EXPECTED_CHANGED_PATH=order/src/main/java/com/sylleryum/order/util/OrderConverter.java \
+TIA_POSITIVE_PROJECT_DIR="$positive_repo" \
+TIA_POSITIVE_WORKTREE_ROOT="$positive_worktrees" \
+TIA_POSITIVE_OUTPUT_DIR="$positive_output" \
+TIA_POSITIVE_RUNNER="$fake_runner" \
+JAVA_CALLGRAPH_ADAPTER_JAR="$temp_dir/sootup.jar" \
+bash "$repo_root/scripts/run-kafka-positive-sootup-tia.sh"
+
+grpc_repo="$temp_dir/grpc-java"
+git init -q "$grpc_repo"
+git -C "$grpc_repo" config user.email test@example.com
+git -C "$grpc_repo" config user.name test
+touch "$grpc_repo/base"
+git -C "$grpc_repo" add base
+git -C "$grpc_repo" commit -qm base
+touch "$grpc_repo/candidate"
+git -C "$grpc_repo" add candidate
+git -C "$grpc_repo" commit -qm candidate
+
+TIA_EXPECTED_PROVIDER=sootup \
+TIA_EXPECTED_ADAPTER_JAR="$temp_dir/sootup.jar" \
+TIA_EXPECTED_GRADLE_ARGUMENTS='-PskipAndroid=true -PskipCodegen=true' \
+EXPECTED_BENCHMARK_ROOT="$temp_dir" \
+TIA_EXPECTED_PROJECT=grpc-java \
+TIA_EXPECTED_CHANGED_PATH=candidate \
+TIA_GRPC_XDS_OUTPUT_DIR="$temp_dir/grpc-output" \
+TIA_GRPC_XDS_RUNNER="$fake_runner" \
+JAVA_BENCHMARK_ROOT="$temp_dir" \
+JAVA_CALLGRAPH_ADAPTER_JAR="$temp_dir/sootup.jar" \
+bash "$repo_root/scripts/run-grpc-xds-sootup-tia.sh"

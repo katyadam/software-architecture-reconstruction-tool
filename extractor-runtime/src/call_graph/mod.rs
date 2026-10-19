@@ -1,5 +1,6 @@
 //! Provider-neutral call-graph analysis and source-callable resolution.
 
+pub mod java_adapter;
 mod registry;
 mod resolver;
 pub mod wala;

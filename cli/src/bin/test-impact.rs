@@ -2,8 +2,14 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use cli::get_java_callables_for_modules_with_progress;
 use extractor_runtime::{
-    call_graph::{resolve_reachability_with_java_tests, wala::WalaJavaProvider},
-    impact::{ModuleCatalog, analyze_changes, discover_java_tests, select_tests},
+    call_graph::{
+        java_adapter::JavaAdapterProvider, resolve_reachability_with_java_tests,
+        wala::WalaJavaProvider,
+    },
+    impact::{
+        ModuleCatalog, ModuleDependencyGraph, analyze_changes, discover_java_tests,
+        include_potential_consumer_tests, select_tests,
+    },
 };
 use models::{Callable, ChangedElement, ChangedElementKind, Namespace, TestImpactResult};
 use std::{
@@ -24,9 +30,15 @@ struct Arguments {
     /// Git revision used as the old side of the candidate comparison.
     #[arg(long, value_name = "REVISION")]
     baseline_revision: String,
-    /// Standalone WALA adapter JAR with Maven test-bytecode support.
+    /// Java call-graph implementation used for callable-level analysis.
+    #[arg(long, default_value = "wala", value_name = "PROVIDER")]
+    java_callgraph_provider: String,
+    /// Adapter JAR for a non-WALA Java call-graph provider such as SootUp.
     #[arg(long, value_name = "FILE")]
-    wala_adapter_jar: PathBuf,
+    java_callgraph_adapter_jar: Option<PathBuf>,
+    /// Standalone WALA adapter JAR; preserved as the compatibility path for WALA.
+    #[arg(long, value_name = "FILE")]
+    wala_adapter_jar: Option<PathBuf>,
     /// Destination JSON file for the auditable selection result.
     #[arg(long, value_name = "FILE")]
     output: PathBuf,
@@ -41,6 +53,7 @@ struct Arguments {
 /// Runs conservative TIA and writes a JSON result even when analysis must fall back broadly.
 fn run(arguments: Arguments) -> Result<()> {
     validate_project_and_revision(&arguments)?;
+    let provider_kind = JavaCallGraphProviderKind::parse(&arguments.java_callgraph_provider)?;
     let candidate_revision = git_revision(&arguments.project_dir, "HEAD")?;
     let module_metadata_diagnostic = ModuleCatalog::load(&arguments.project_dir)
         .diagnostic()
@@ -58,7 +71,7 @@ fn run(arguments: Arguments) -> Result<()> {
     if changes_are_module_only(&changes) {
         return write_module_fallback_result(&arguments, candidate_revision, changes, diagnostics);
     }
-    validate_wala_adapter(&arguments)?;
+    let provider = select_provider(&arguments, provider_kind)?;
     let modules = changed_modules(&changes);
     let extraction_started = Instant::now();
     let callables = get_java_callables_for_modules_with_progress(
@@ -70,10 +83,6 @@ fn run(arguments: Arguments) -> Result<()> {
         "source extraction",
         extraction_started.elapsed(),
     ));
-    let provider = WalaJavaProvider::with_timeout(
-        &arguments.wala_adapter_jar,
-        Duration::from_secs(arguments.wala_timeout_seconds),
-    );
     let mut selected_tests = Vec::new();
     let mut unselected_tests = Vec::new();
 
@@ -93,6 +102,7 @@ fn run(arguments: Arguments) -> Result<()> {
         unselected_tests,
     );
     result.diagnostics.append(&mut diagnostics);
+    include_project_consumer_tests(&arguments.project_dir, Some(&provider), &mut result)?;
     write_result(&arguments.output, &result)
 }
 
@@ -106,12 +116,106 @@ fn validate_project_and_revision(arguments: &Arguments) -> Result<()> {
     Ok(())
 }
 
-/// Requires an adapter JAR only when callable-level analysis needs WALA.
-fn validate_wala_adapter(arguments: &Arguments) -> Result<()> {
-    if !arguments.wala_adapter_jar.is_file() {
-        anyhow::bail!("--wala-adapter-jar must be an existing file");
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum JavaCallGraphProviderKind {
+    Wala,
+    SootUp,
+}
+
+impl JavaCallGraphProviderKind {
+    fn parse(value: &str) -> Result<Self> {
+        match value {
+            "wala" => Ok(Self::Wala),
+            "sootup" => Ok(Self::SootUp),
+            other => anyhow::bail!("Unsupported Java call-graph provider: {other}"),
+        }
     }
-    Ok(())
+}
+
+enum SelectedJavaProvider {
+    Wala(WalaJavaProvider),
+    SootUp(JavaAdapterProvider),
+}
+
+impl SelectedJavaProvider {
+    fn analyze_modules(
+        &self,
+        project_root: &Path,
+        modules: &[PathBuf],
+        tests: &[models::JavaTestCase],
+        targets: &[String],
+    ) -> models::call_graph::CallGraphOutcome {
+        match self {
+            Self::Wala(provider) => provider.analyze_modules(project_root, modules, tests, targets),
+            Self::SootUp(provider) => {
+                provider.analyze_modules(project_root, modules, tests, targets)
+            }
+        }
+    }
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Wala(_) => "WALA",
+            Self::SootUp(_) => "SootUp",
+        }
+    }
+
+    fn analyze_test_roots(
+        &self,
+        source_root: &Path,
+        test_roots: &[models::JavaTestCase],
+        targets: &[String],
+    ) -> models::call_graph::CallGraphOutcome {
+        match self {
+            Self::Wala(provider) => provider.analyze_test_roots(source_root, test_roots, targets),
+            Self::SootUp(provider) => provider.analyze_test_roots(source_root, test_roots, targets),
+        }
+    }
+}
+
+fn select_provider(
+    arguments: &Arguments,
+    kind: JavaCallGraphProviderKind,
+) -> Result<SelectedJavaProvider> {
+    let timeout = Duration::from_secs(arguments.wala_timeout_seconds);
+    match kind {
+        JavaCallGraphProviderKind::Wala => {
+            if arguments.java_callgraph_adapter_jar.is_some() {
+                anyhow::bail!(
+                    "--java-callgraph-adapter-jar is only valid with --java-callgraph-provider sootup"
+                );
+            }
+            let jar = arguments
+                .wala_adapter_jar
+                .as_ref()
+                .context("--wala-adapter-jar must be supplied for the WALA provider")?;
+            if !jar.is_file() {
+                anyhow::bail!("--wala-adapter-jar must be an existing file");
+            }
+            Ok(SelectedJavaProvider::Wala(WalaJavaProvider::with_timeout(
+                jar, timeout,
+            )))
+        }
+        JavaCallGraphProviderKind::SootUp => {
+            if arguments.wala_adapter_jar.is_some() {
+                anyhow::bail!(
+                    "--wala-adapter-jar cannot be combined with --java-callgraph-provider sootup"
+                );
+            }
+            let jar = arguments
+                .java_callgraph_adapter_jar
+                .as_ref()
+                .context("--java-callgraph-adapter-jar must be supplied for the SootUp provider")?;
+            if !jar.is_file() {
+                anyhow::bail!("--java-callgraph-adapter-jar must be an existing file");
+            }
+            Ok(SelectedJavaProvider::SootUp(JavaAdapterProvider::new(
+                "sootup-java",
+                jar,
+                timeout,
+                "cha",
+            )))
+        }
+    }
 }
 
 /// Returns whether every change is already required to use module-wide fallback.
@@ -145,12 +249,195 @@ fn write_module_fallback_result(
         unselected_tests,
     );
     result.diagnostics.append(&mut diagnostics);
+    include_project_consumer_tests(&arguments.project_dir, None, &mut result)?;
     write_result(&arguments.output, &result)
+}
+
+/// Completes the candidate test universe before returning module-scoped decisions.
+fn include_project_consumer_tests(
+    project_dir: &Path,
+    provider: Option<&SelectedJavaProvider>,
+    result: &mut TestImpactResult,
+) -> Result<()> {
+    if result.changed_elements.is_empty() {
+        return Ok(());
+    }
+    let discovery_started = Instant::now();
+    let project_root = project_dir
+        .canonicalize()
+        .context("Unable to normalize project root")?;
+    let tests = discover_java_tests(&project_root)
+        .context("Unable to discover potential consumer tests across project modules")?;
+    result.diagnostics.push(timing_diagnostic(
+        "project consumer test discovery",
+        discovery_started.elapsed(),
+    ));
+    let metadata_started = Instant::now();
+    let graph = ModuleDependencyGraph::load(&project_root);
+    result.diagnostics.push(timing_diagnostic(
+        "module dependency metadata",
+        metadata_started.elapsed(),
+    ));
+    match graph {
+        Err(reason) => {
+            result
+                .diagnostics
+                .push(format!("module dependency metadata fallback: {reason}"));
+            include_potential_consumer_tests(result, tests);
+        }
+        Ok(graph) => {
+            let consumer_modules: BTreeSet<_> = tests
+                .iter()
+                .map(|test| PathBuf::from(&test.module_root))
+                .collect();
+            for consumer in consumer_modules {
+                let changes: Vec<_> = result
+                    .changed_elements
+                    .iter()
+                    .filter(|change| {
+                        let path = change.source_path.replace('\\', "/");
+                        !path.starts_with("src/test/")
+                            && !path.contains("/src/test/")
+                            && graph
+                                .consumers_of(Path::new(&change.module_root))
+                                .contains(&consumer)
+                    })
+                    .cloned()
+                    .collect();
+                if changes.is_empty() {
+                    continue;
+                }
+                let consumer_tests: Vec<_> = tests
+                    .iter()
+                    .filter(|test| Path::new(&test.module_root) == consumer)
+                    .cloned()
+                    .collect();
+                let mut scoped_changes = changes.clone();
+                for change in &mut scoped_changes {
+                    change.module_root = consumer.to_string_lossy().into_owned();
+                }
+                let consumer_result = if changes
+                    .iter()
+                    .all(|change| change.kind == ChangedElementKind::Module)
+                {
+                    select_tests(
+                        scoped_changes,
+                        consumer_tests,
+                        models::call_graph::CallGraphOutcome::ok(
+                            models::call_graph::CallGraphRequest::new(
+                                consumer.to_string_lossy(),
+                                models::call_graph::Language::Java,
+                            ),
+                            "not-run",
+                            "dependency-module-fallback",
+                        ),
+                        vec![],
+                    )
+                } else {
+                    let provider =
+                        provider.context("callable consumer analysis requires a provider")?;
+                    let mut modules = graph.upstream_of(&consumer);
+                    modules.insert(consumer.clone());
+                    let modules: Vec<_> = modules.into_iter().collect();
+                    let callables = get_java_callables_for_modules_with_progress(&modules, false)?;
+                    let mut targets = BTreeSet::new();
+                    for change in &changes {
+                        targets.extend(callgraph_targets(
+                            &Path::new(&change.module_root).join("src/main/java"),
+                            std::slice::from_ref(change),
+                            &callables,
+                        ));
+                    }
+                    let started = Instant::now();
+                    let mut outcome = provider.analyze_modules(
+                        &project_root,
+                        &modules,
+                        &consumer_tests,
+                        &targets.into_iter().collect::<Vec<_>>(),
+                    );
+                    let resolution = resolve_reachability_with_java_tests(
+                        &outcome,
+                        &project_root,
+                        &callables,
+                        &consumer_tests,
+                    );
+                    outcome.diagnostics.extend(resolution.diagnostics);
+                    let mut selected = extractor_runtime::impact::select_tests_with_reachability(
+                        scoped_changes,
+                        consumer_tests,
+                        outcome,
+                        resolution.edges,
+                        &resolution.reachable_tests_by_callable,
+                    );
+                    selected.diagnostics.push(timing_diagnostic(
+                        &format!("{} consumer analysis", provider.label()),
+                        started.elapsed(),
+                    ));
+                    selected
+                };
+                merge_consumer_result(result, consumer_result);
+            }
+            // Explicitly retain independent tests as excluded, rather than omitting them.
+            let known: BTreeSet<_> = result
+                .selected_tests
+                .iter()
+                .map(|selected| test_key(&selected.test))
+                .chain(result.unselected_tests.iter().map(test_key))
+                .collect();
+            result.unselected_tests.extend(
+                tests
+                    .into_iter()
+                    .filter(|test| !known.contains(&test_key(test))),
+            );
+        }
+    }
+    Ok(())
+}
+
+fn test_key(test: &models::JavaTestCase) -> (String, String, String, String) {
+    (
+        test.module_root.clone(),
+        test.class_name.clone(),
+        test.method_name.clone(),
+        test.descriptor.clone(),
+    )
+}
+
+fn merge_consumer_result(result: &mut TestImpactResult, consumer: TestImpactResult) {
+    for selected in consumer.selected_tests {
+        if let Some(existing) = result
+            .selected_tests
+            .iter_mut()
+            .find(|existing| test_key(&existing.test) == test_key(&selected.test))
+        {
+            for reason in selected.reasons {
+                if !existing.reasons.contains(&reason) {
+                    existing.reasons.push(reason);
+                }
+            }
+        } else {
+            result.selected_tests.push(selected);
+        }
+    }
+    let selected: BTreeSet<_> = result
+        .selected_tests
+        .iter()
+        .map(|selected| test_key(&selected.test))
+        .collect();
+    let mut excluded: std::collections::BTreeMap<_, _> = result
+        .unselected_tests
+        .drain(..)
+        .chain(consumer.unselected_tests)
+        .filter(|test| !selected.contains(&test_key(test)))
+        .map(|test| (test_key(&test), test))
+        .collect();
+    result.unselected_tests = std::mem::take(&mut excluded).into_values().collect();
+    result.diagnostics.extend(consumer.diagnostics);
 }
 
 /// Runs discovery, WALA, resolution, and selection for one independently affected Maven module.
 fn analyze_module(
-    provider: &WalaJavaProvider,
+    provider: &SelectedJavaProvider,
     module: &str,
     changes: Vec<ChangedElement>,
     callables: &[models::Callable],
@@ -181,10 +468,26 @@ fn analyze_module(
             return result;
         }
     };
+    if tests.is_empty() {
+        let mut result =
+            TestImpactResult::new(String::new(), String::new(), changes, vec![], vec![]);
+        result
+            .diagnostics
+            .push("skipped call-graph analysis for module without tests".into());
+        result.diagnostics.push(timing_diagnostic(
+            "test discovery",
+            discovery_started.elapsed(),
+        ));
+        return result;
+    }
     let source_root = module_path.join("src/main/java");
-    let wala_started = Instant::now();
-    let targets = wala_targets(&source_root, &changes, callables);
-    let mut outcome = provider.analyze_test_roots(&source_root, &tests, &targets);
+    let callgraph_started = Instant::now();
+    let targets = callgraph_targets(&source_root, &changes, callables);
+    let mut outcome = if module_path.join("pom.xml").is_file() {
+        provider.analyze_test_roots(&source_root, &tests, &targets)
+    } else {
+        provider.analyze_modules(module_path, &[module_path.to_path_buf()], &tests, &targets)
+    };
     let resolution_started = Instant::now();
     let resolution = resolve_reachability_with_java_tests(&outcome, module_path, callables, &tests);
     outcome.diagnostics.extend(resolution.diagnostics);
@@ -198,11 +501,11 @@ fn analyze_module(
     );
     result.diagnostics.push(timing_diagnostic(
         "test discovery",
-        wala_started.duration_since(discovery_started),
+        callgraph_started.duration_since(discovery_started),
     ));
     result.diagnostics.push(timing_diagnostic(
-        "WALA analysis",
-        resolution_started.duration_since(wala_started),
+        &format!("{} analysis", provider.label()),
+        resolution_started.duration_since(callgraph_started),
     ));
     result.diagnostics.push(timing_diagnostic(
         "edge resolution",
@@ -216,7 +519,7 @@ fn analyze_module(
 }
 
 /// Converts changed source owners into conservative WALA method targets for bounded provenance.
-fn wala_targets(
+fn callgraph_targets(
     source_root: &Path,
     changes: &[ChangedElement],
     callables: &[Callable],

@@ -115,6 +115,109 @@ fn selects_module_tests_without_a_wala_adapter_for_a_configuration_change() {
 }
 
 #[test]
+fn defaults_to_wala_provider_when_only_the_legacy_adapter_flag_is_supplied() {
+    let fixture = create_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "src/main/java/fixture/Service.java",
+        "package fixture; public class Service { public static void changed() { int value = 2; } public static void unchanged() {} }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "candidate"]);
+
+    let result = run_tia(&fixture, &baseline);
+
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.starts_with("timing: WALA analysis="))
+    );
+}
+
+#[test]
+fn sootup_provider_requires_the_provider_neutral_adapter_jar() {
+    let fixture = create_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "src/main/java/fixture/Service.java",
+        "package fixture; public class Service { public static void changed() { int value = 2; } public static void unchanged() {} }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "candidate"]);
+
+    let output = run_tia_command(
+        &fixture,
+        &baseline,
+        &[
+            "--java-callgraph-provider",
+            "sootup",
+            "--java-callgraph-adapter-jar",
+            fixture
+                .path()
+                .join("missing-sootup.jar")
+                .to_str()
+                .expect("UTF-8"),
+        ],
+    );
+
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("--java-callgraph-adapter-jar must be an existing file"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn selects_the_junit_test_with_sootup_and_prepared_bytecode() {
+    let fixture = create_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "src/main/java/fixture/Service.java",
+        "package fixture; public class Service { public static void changed() { int value = 2; } public static void unchanged() {} }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "candidate"]);
+
+    let result = run_tia_with_sootup(&fixture, &baseline);
+
+    assert_eq!(result.selected_tests.len(), 1, "{:?}", result.diagnostics);
+    assert_eq!(result.selected_tests[0].test.method_name, "coversChanged");
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.starts_with("timing: SootUp analysis="))
+    );
+}
+
+#[test]
+fn rejects_unknown_provider_before_creating_a_result() {
+    let fixture = create_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+
+    let output = run_tia_command(
+        &fixture,
+        &baseline,
+        &["--java-callgraph-provider", "unknown"],
+    );
+
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("Unsupported Java call-graph provider: unknown"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!fixture.path().join("impact.json").exists());
+}
+
+#[test]
 fn selects_every_module_test_for_a_deleted_java_source_file() {
     let fixture = create_fixture();
     let baseline = git(&fixture, &["rev-parse", "HEAD"]);
@@ -142,6 +245,164 @@ fn selects_descendant_module_tests_for_a_reactor_root_configuration_change() {
     );
 
     assert_module_fallback(&run_tia(&fixture, &baseline));
+}
+
+#[test]
+fn excludes_independent_sibling_tests_for_a_child_configuration_change() {
+    let fixture = create_reactor_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "orders/src/main/resources/mode.properties",
+        "mode=candidate",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "child configuration candidate"]);
+    let result = run_tia_with_jar(&fixture, &baseline, &fixture.path().join("missing.jar"));
+    assert_eq!(result.selected_tests.len(), 1, "{:?}", result.diagnostics);
+    assert_eq!(result.unselected_tests.len(), 1);
+    assert!(result.unselected_tests[0].module_root.ends_with("billing"));
+}
+
+#[test]
+fn excludes_independent_sibling_tests_for_a_production_callable_change() {
+    let fixture = create_reactor_fixture();
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "orders/src/main/java/fixture/orders/Service.java",
+        "package fixture.orders; public class Service { public static void run() { int value = 2; } }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "child production candidate"]);
+    let result = run_tia(&fixture, &baseline);
+    assert_eq!(result.selected_tests.len(), 1, "{:?}", result.diagnostics);
+    assert!(
+        result
+            .unselected_tests
+            .iter()
+            .any(|test| test.module_root.ends_with("billing"))
+    );
+}
+
+#[test]
+fn selects_sibling_gradle_tests_for_a_child_configuration_change() {
+    let fixture = create_reactor_fixture();
+    fs::remove_file(fixture.path().join("pom.xml")).unwrap();
+    write_source(
+        fixture.path(),
+        "settings.gradle",
+        "include ':orders', ':billing'",
+    );
+    write_source(fixture.path(), "build.gradle", "");
+    for module in ["orders", "billing"] {
+        fs::remove_file(fixture.path().join(format!("{module}/pom.xml"))).unwrap();
+        write_source(
+            fixture.path(),
+            &format!("{module}/build.gradle"),
+            "plugins { id 'java' }",
+        );
+    }
+    write_source(
+        fixture.path(),
+        "billing/build.gradle",
+        "plugins { id 'java' }\ndependencies { implementation project(':orders') }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "Gradle baseline"]);
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "orders/src/main/resources/mode.properties",
+        "mode=candidate",
+    );
+    git(&fixture, &["add", "."]);
+    git(
+        &fixture,
+        &["commit", "-m", "Gradle child configuration candidate"],
+    );
+    let result = run_tia_with_jar(&fixture, &baseline, &fixture.path().join("missing.jar"));
+    assert_eq!(result.selected_tests.len(), 2, "{:?}", result.diagnostics);
+    assert!(result.unselected_tests.is_empty());
+    assert!(
+        result
+            .selected_tests
+            .iter()
+            .any(|selected| selected.test.module_root.ends_with("billing"))
+    );
+}
+
+#[test]
+fn both_providers_select_only_the_consumer_test_reaching_the_changed_library() {
+    let fixture = create_reactor_fixture();
+    write_source(
+        fixture.path(),
+        "billing/pom.xml",
+        "<project><modelVersion>4.0.0</modelVersion><parent><groupId>fixture</groupId><artifactId>reactor</artifactId><version>1</version></parent><artifactId>billing</artifactId><dependencies><dependency><groupId>fixture</groupId><artifactId>orders</artifactId><version>1</version></dependency></dependencies></project>",
+    );
+    write_source(
+        fixture.path(),
+        "billing/src/test/java/fixture/billing/ServiceTest.java",
+        "package fixture.billing; public class ServiceTest { @org.junit.jupiter.api.Test public void coversLibrary() { fixture.orders.Service.run(); } @org.junit.jupiter.api.Test public void coversLocal() { Service.run(); } }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "consumer baseline"]);
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "orders/src/main/java/fixture/orders/Service.java",
+        "package fixture.orders; public class Service { public static void run() { int changed = 2; } }",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "library candidate"]);
+    for result in [
+        run_tia(&fixture, &baseline),
+        run_tia_with_sootup(&fixture, &baseline),
+    ] {
+        assert_eq!(result.selected_tests.len(), 2, "{:?}", result.diagnostics);
+        assert!(
+            result
+                .selected_tests
+                .iter()
+                .any(|selected| selected.test.method_name == "coversLibrary")
+        );
+        assert!(result.selected_tests.iter().all(|selected| {
+            selected
+                .reasons
+                .iter()
+                .all(|reason| matches!(reason, models::SelectionReason::ChangedCallable { .. }))
+        }));
+        assert_eq!(result.unselected_tests.len(), 1, "{:?}", result.diagnostics);
+        assert_eq!(result.unselected_tests[0].method_name, "coversLocal");
+    }
+}
+
+#[test]
+fn uncertain_dependency_metadata_retains_broad_consumer_fallback() {
+    let fixture = create_reactor_fixture();
+    write_source(
+        fixture.path(),
+        "orders/pom.xml",
+        "<project><modelVersion>4.0.0</modelVersion><parent><groupId>fixture</groupId><artifactId>reactor</artifactId><version>1</version></parent><artifactId>orders</artifactId><profiles><profile><id>dynamic</id><dependencies/></profile></profiles></project>",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "profile baseline"]);
+    let baseline = git(&fixture, &["rev-parse", "HEAD"]);
+    write_source(
+        fixture.path(),
+        "orders/src/main/resources/mode.properties",
+        "mode=candidate",
+    );
+    git(&fixture, &["add", "."]);
+    git(&fixture, &["commit", "-m", "configuration candidate"]);
+    let result = run_tia_with_jar(&fixture, &baseline, &fixture.path().join("missing.jar"));
+    assert_eq!(result.selected_tests.len(), 2);
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.starts_with("module dependency metadata fallback:"))
+    );
 }
 
 #[test]
@@ -181,6 +442,35 @@ fn run_tia_with_jar(
     run_tia_with_extra_args(fixture, baseline, wala_adapter_jar, &[]).0
 }
 
+fn run_tia_with_sootup(fixture: &TempDir, baseline: &str) -> models::TestImpactResult {
+    let _process_guard = TIA_PROCESS_LOCK
+        .lock()
+        .expect("TIA process lock is available");
+    let output = fixture.path().join("impact.json");
+    let output_result = Command::new(env!("CARGO_BIN_EXE_test-impact"))
+        .args([
+            "--project-dir",
+            fixture.path().to_str().expect("fixture path is UTF-8"),
+            "--baseline-revision",
+            baseline,
+            "--java-callgraph-provider",
+            "sootup",
+            "--java-callgraph-adapter-jar",
+            sootup_jar().to_str().expect("adapter path is UTF-8"),
+            "--output",
+            output.to_str().expect("output path is UTF-8"),
+        ])
+        .output()
+        .expect("TIA binary starts");
+    assert!(
+        output_result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output_result.stderr)
+    );
+    serde_json::from_str(&fs::read_to_string(output).expect("TIA result is written"))
+        .expect("TIA result is JSON")
+}
+
 /// Executes TIA with optional command-line switches and returns its output for CLI behavior checks.
 fn run_tia_with_extra_args(
     fixture: &TempDir,
@@ -216,6 +506,28 @@ fn run_tia_with_extra_args(
             .expect("TIA result is JSON"),
         output_result,
     )
+}
+
+fn run_tia_command(fixture: &TempDir, baseline: &str, extra_args: &[&str]) -> std::process::Output {
+    let _process_guard = TIA_PROCESS_LOCK
+        .lock()
+        .expect("TIA process lock is available");
+    Command::new(env!("CARGO_BIN_EXE_test-impact"))
+        .args([
+            "--project-dir",
+            fixture.path().to_str().expect("fixture path is UTF-8"),
+            "--baseline-revision",
+            baseline,
+            "--output",
+            fixture
+                .path()
+                .join("impact.json")
+                .to_str()
+                .expect("fixture path is UTF-8"),
+        ])
+        .args(extra_args)
+        .output()
+        .expect("TIA binary starts")
 }
 
 /// Verifies the controlled fallback contract keeps every discovered module test.
@@ -353,4 +665,11 @@ fn wala_jar() -> std::path::PathBuf {
         .parent()
         .expect("workspace root")
         .join("wala-callgraph/target/wala-callgraph-all.jar")
+}
+
+fn sootup_jar() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("workspace root")
+        .join("sootup-callgraph/target/sootup-callgraph-all.jar")
 }
