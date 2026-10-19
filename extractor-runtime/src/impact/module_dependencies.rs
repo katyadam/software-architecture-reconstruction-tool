@@ -49,8 +49,7 @@ impl ModuleDependencyGraph {
             .as_ref()
             .map(|g| g.dependencies.clone())
             .unwrap_or_default();
-        let catalog = ModuleCatalog::load(&root);
-        let known = super::java_tests::test_modules(&root, &catalog).map_err(|e| e.to_string())?;
+        let known = super::java_tests::checkout_modules(&root).map_err(|e| e.to_string())?;
         for module in known {
             let build = module.join("pom.xml").is_file()
                 || module.join("build.gradle").is_file()

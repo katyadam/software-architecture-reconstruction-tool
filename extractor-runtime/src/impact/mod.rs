@@ -16,7 +16,9 @@ mod selection;
 
 pub use git_diff::{ImpactError, analyze_changes, analyze_changes_with_catalog};
 pub use java_modules::ModuleCatalog;
-pub use java_tests::{discover_java_tests, discover_java_tests_in_roots};
+pub use java_tests::{
+    discover_java_tests, discover_java_tests_in_checkout, discover_java_tests_in_roots,
+};
 pub use module_dependencies::ModuleDependencyGraph;
 pub use selection::{
     include_potential_consumer_tests, select_tests, select_tests_with_reachability,

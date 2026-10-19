@@ -180,3 +180,67 @@ fn legacy_service_configuration_keeps_automatic_test_discovery() {
             .any(|s| s["test"]["method_name"] == "legacy")
     );
 }
+
+#[test]
+fn complete_empty_inventory_keeps_known_tests_and_requires_full_execution() {
+    let f = fixture();
+    f.inputs("ci", true, None);
+    let result = f.report();
+    assert_eq!(result["requires_full_test_run"], true);
+    assert_eq!(result["selected_tests"].as_array().unwrap().len(), 2);
+    assert_eq!(result["unselected_tests"], json!([]));
+}
+
+#[test]
+fn discovered_test_owner_without_dependency_evidence_requires_full_execution() {
+    let f = fixture();
+    f.inputs("ci", true, Some("UnitTest"));
+    write(
+        &f.root(),
+        "outside/src/test/java/ConsumerTest.java",
+        "class ConsumerTest { @Test void consumer() {} }",
+    );
+    write(&f.root(), "outside/pom.xml", "<project/>");
+    // A complete reactor must not conceal an independent nested build.
+    write(
+        &f.root(),
+        "pom.xml",
+        "<project><groupId>x</groupId><artifactId>root</artifactId><version>1</version></project>",
+    );
+    let result = f.report();
+    assert_eq!(result["requires_full_test_run"], true);
+    assert!(
+        result["selected_tests"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["test"]["method_name"] == "consumer")
+    );
+}
+
+#[test]
+fn root_tests_without_build_descriptors_are_not_assumed_independent() {
+    let f = fixture();
+    f.inputs("ci", true, None);
+    fs::create_dir(f.root().join("child")).unwrap();
+    write(
+        &f.root(),
+        "src/test/java/RootTest.java",
+        "class RootTest { @Test void rootConsumer() {} }",
+    );
+    let mut manifest: Value = serde_json::from_slice(&fs::read(f.manifest()).unwrap()).unwrap();
+    manifest["modules"][0]["root"] = json!("child");
+    manifest["modules"][0]["test_source_roots"] = json!([]);
+    manifest["modules"][0]["test_class_dirs"] = json!([]);
+    fs::write(f.manifest(), manifest.to_string()).unwrap();
+    let result = f.report();
+    assert_eq!(result["requires_full_test_run"], true);
+    assert!(
+        result["selected_tests"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["test"]["method_name"] == "rootConsumer")
+    );
+    assert_eq!(result["unselected_tests"], json!([]));
+}
