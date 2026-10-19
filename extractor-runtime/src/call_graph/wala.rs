@@ -43,6 +43,25 @@ impl WalaJavaProvider {
             .analyze_test_roots(source_root, test_roots, targets)
     }
 
+    pub fn analyze_prepared_test_roots(
+        &self,
+        root: &std::path::Path,
+        tests: &[JavaTestCase],
+        targets: &[String],
+        bytecode: &crate::java_analysis::JavaBytecodeInputs,
+    ) -> CallGraphOutcome {
+        self.inner
+            .analyze_prepared_test_roots(root, tests, targets, bytecode)
+    }
+
+    pub fn analyze_prepared(
+        &self,
+        request: &CallGraphRequest,
+        bytecode: &crate::java_analysis::JavaBytecodeInputs,
+    ) -> CallGraphOutcome {
+        self.inner.analyze_prepared(request, bytecode)
+    }
+
     pub fn analyze_modules(
         &self,
         project_root: &std::path::Path,

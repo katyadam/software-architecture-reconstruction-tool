@@ -66,10 +66,7 @@ impl JavaAdapterProvider {
         } else {
             None
         };
-        self.invoke(
-            &request,
-            test_root_arguments(source_root, test_roots, targets, artifacts.as_ref()),
-        )
+        self.invoke_with_test_roots(&request, test_roots, targets, artifacts.as_ref())
     }
 
     /// Prepares all in-project application modules for a consumer's test roots.
@@ -118,10 +115,55 @@ impl JavaAdapterProvider {
         merged.classpath.retain(|path| {
             !duplicates_application_module(std::path::Path::new(path), module_roots)
         });
-        self.invoke(
+        self.invoke_with_test_roots(&request, test_roots, targets, Some(&merged))
+    }
+
+    /// Uses supplied bytecode without executing any build preparation.
+    pub fn analyze_prepared_test_roots(
+        &self,
+        source_root: &std::path::Path,
+        tests: &[JavaTestCase],
+        targets: &[String],
+        bytecode: &crate::java_analysis::JavaBytecodeInputs,
+    ) -> CallGraphOutcome {
+        let request = CallGraphRequest::new(source_root.to_string_lossy(), Language::Java);
+        self.invoke_with_test_roots(
             &request,
-            test_root_arguments(project_root, test_roots, targets, Some(&merged)),
+            tests,
+            targets,
+            Some(&PreparedJavaArtifacts::from(bytecode)),
         )
+    }
+
+    pub fn analyze_prepared(
+        &self,
+        request: &CallGraphRequest,
+        bytecode: &crate::java_analysis::JavaBytecodeInputs,
+    ) -> CallGraphOutcome {
+        self.invoke_with_test_roots(
+            request,
+            &[],
+            &[],
+            Some(&PreparedJavaArtifacts::from(bytecode)),
+        )
+    }
+
+    fn invoke_with_test_roots(
+        &self,
+        request: &CallGraphRequest,
+        tests: &[JavaTestCase],
+        targets: &[String],
+        artifacts: Option<&PreparedJavaArtifacts>,
+    ) -> CallGraphOutcome {
+        match test_root_arguments(
+            std::path::Path::new(&request.source_root),
+            tests,
+            targets,
+            artifacts,
+        ) {
+            Ok(arguments) => self.invoke(request, arguments),
+            Err(error) => failed(request, &self.provider_id, &self.algorithm, &error),
+        }
     }
 
     fn prepare_artifacts(
@@ -196,7 +238,7 @@ impl JavaAdapterProvider {
     }
 }
 
-fn duplicates_application_module(jar: &std::path::Path, modules: &[PathBuf]) -> bool {
+pub(crate) fn duplicates_application_module(jar: &std::path::Path, modules: &[PathBuf]) -> bool {
     modules.iter().any(|module| {
         if jar.starts_with(module.join("build/libs")) {
             return true;
@@ -261,7 +303,7 @@ fn test_root_arguments(
     test_roots: &[JavaTestCase],
     targets: &[String],
     artifacts: Option<&PreparedJavaArtifacts>,
-) -> Vec<String> {
+) -> Result<Vec<String>, String> {
     let mut arguments = vec![
         "--source-dir".to_owned(),
         source_root.to_string_lossy().into_owned(),
@@ -278,9 +320,10 @@ fn test_root_arguments(
         if !artifacts.classpath.is_empty() {
             arguments.push("--classpath".to_owned());
             arguments.push(
-                artifacts
-                    .classpath
-                    .join(if cfg!(windows) { ";" } else { ":" }),
+                std::env::join_paths(&artifacts.classpath)
+                    .map_err(|e| format!("invalid classpath: {e}"))?
+                    .into_string()
+                    .map_err(|_| "non-UTF8 classpath".to_owned())?,
             );
         }
     }
@@ -295,7 +338,7 @@ fn test_root_arguments(
         arguments.push("--target".to_owned());
         arguments.push(target.clone());
     }
-    arguments
+    Ok(arguments)
 }
 
 #[derive(Debug, Deserialize)]
@@ -306,6 +349,23 @@ struct PreparedJavaArtifacts {
     test_class_dirs: Vec<String>,
     classpath: Vec<String>,
     diagnostic: String,
+}
+
+impl From<&crate::java_analysis::JavaBytecodeInputs> for PreparedJavaArtifacts {
+    fn from(inputs: &crate::java_analysis::JavaBytecodeInputs) -> Self {
+        let strings = |paths: &[PathBuf]| {
+            paths
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect()
+        };
+        Self {
+            application_class_dirs: strings(&inputs.application_class_dirs),
+            test_class_dirs: strings(&inputs.test_class_dirs),
+            classpath: strings(&inputs.classpath),
+            diagnostic: String::new(),
+        }
+    }
 }
 
 fn failed(
@@ -414,7 +474,8 @@ mod tests {
                 &tests,
                 &["Lexample/Service#run/0".into()],
                 None,
-            ),
+            )
+            .unwrap(),
             vec![
                 "--source-dir",
                 "module/src/main/java",
