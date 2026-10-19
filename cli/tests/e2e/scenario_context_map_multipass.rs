@@ -11,6 +11,7 @@ fn build_config(service_dirs: &[(&str, &str)]) -> ConfigurationData {
         service_descriptions: service_dirs
             .iter()
             .map(|(name, dir)| ServiceDescription {
+                java_analysis: None,
                 name: name.to_string(),
                 base_dir_path: dir.to_string(),
                 urls: vec![],

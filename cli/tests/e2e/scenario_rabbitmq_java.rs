@@ -30,11 +30,13 @@ async fn java_rabbitmq_pipeline_links_services_by_queue() {
     let config = ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "order-service".to_string(),
                 base_dir_path: producer_dir,
                 urls: vec![],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "billing-service".to_string(),
                 base_dir_path: consumer_dir,
                 urls: vec![],

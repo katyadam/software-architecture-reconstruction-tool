@@ -103,11 +103,13 @@ mod tests {
     fn sample_service_descriptions() -> Vec<ServiceDescription> {
         vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "ServiceA".to_string(),
                 base_dir_path: "serviceA/".to_string(),
                 urls: vec!["http://localhost:8000".to_string()],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "ServiceB".to_string(),
                 base_dir_path: "serviceB/".to_string(),
                 urls: vec!["http://localhost:7000".to_string()],
