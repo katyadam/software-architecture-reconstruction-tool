@@ -262,6 +262,30 @@ fn malformed_or_duplicate_test_identity_is_rejected() {
 }
 
 #[test]
+fn jvm_test_class_names_are_accepted_and_dotted_names_normalize_to_jvm_identity() {
+    let (dir, config) = setup();
+    write(
+        dir.path(),
+        "train-ticket/orders/checks/java/example/OrderTest.java",
+        "package example; class OrderTest { @Test void works() {} }",
+    );
+    for name in ["Lexample/OrderTest", "example.OrderTest"] {
+        let mut m = manifest();
+        m["modules"][0]["tests"] = json!([{"module_root":".","class_name":name,"method_name":"works","descriptor":"()V","callable_signature":"class:OrderTest/void works()","source_path":"checks/java/example/OrderTest.java"}]);
+        write(
+            dir.path(),
+            "train-ticket/orders/target/inputs.json",
+            &m.to_string(),
+        );
+        let inputs = run(&dir, &config).unwrap();
+        assert_eq!(
+            inputs.modules.values().next().unwrap().tests[0].class_name,
+            "Lexample/OrderTest"
+        );
+    }
+}
+
+#[test]
 fn conflicting_shared_module_contexts_are_errors() {
     let (dir, mut config) = setup();
     fs::create_dir_all(dir.path().join("train-ticket/shared")).unwrap();
