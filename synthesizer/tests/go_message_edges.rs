@@ -35,11 +35,13 @@ func serve(s *grpc.Server) {
     let configuration = ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "gateway".to_string(),
                 base_dir_path: "services/gateway".to_string(),
                 urls: vec![],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "product".to_string(),
                 base_dir_path: "services/product".to_string(),
                 urls: vec![],
@@ -95,11 +97,13 @@ func serve(s *grpc.Server) {
     let configuration = ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "gateway".to_string(),
                 base_dir_path: "services/gateway".to_string(),
                 urls: vec![],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "product".to_string(),
                 base_dir_path: "services/product".to_string(),
                 urls: vec![],
@@ -295,11 +299,13 @@ func receive(consumer *event.Consumer) {
     let configuration = ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "broker".to_string(),
                 base_dir_path: "go-microservices/broker-service".to_string(),
                 urls: vec![],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "listener".to_string(),
                 base_dir_path: "go-microservices/listener-service".to_string(),
                 urls: vec![],
@@ -356,11 +362,13 @@ func Consume(channel any) {
     let configuration = ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "order".to_string(),
                 base_dir_path: "services/order".to_string(),
                 urls: vec![],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "inventory".to_string(),
                 base_dir_path: "services/inventory".to_string(),
                 urls: vec![],
@@ -435,21 +443,25 @@ func consume(channel any) {
     let configuration = ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "order-service".to_string(),
                 base_dir_path: "order-service".to_string(),
                 urls: vec![],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "payment-service".to_string(),
                 base_dir_path: "payment-service".to_string(),
                 urls: vec![],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "product-service".to_string(),
                 base_dir_path: "product-service".to_string(),
                 urls: vec![],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "common".to_string(),
                 base_dir_path: "common".to_string(),
                 urls: vec![],
@@ -477,11 +489,13 @@ fn messaging_configuration() -> ConfigurationData {
     ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "orders".to_string(),
                 base_dir_path: "services/orders".to_string(),
                 urls: vec![],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "billing".to_string(),
                 base_dir_path: "services/billing".to_string(),
                 urls: vec![],

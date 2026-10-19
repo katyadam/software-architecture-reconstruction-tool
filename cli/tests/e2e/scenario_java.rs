@@ -44,6 +44,7 @@ async fn java_two_services_full_pipeline() {
     let config = ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "order-service".to_string(),
                 base_dir_path: order_dir.clone(),
                 urls: vec![
@@ -52,6 +53,7 @@ async fn java_two_services_full_pipeline() {
                 ],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "billing-service".to_string(),
                 base_dir_path: billing_dir.clone(),
                 urls: vec!["http://billing-service:8081".to_string()],

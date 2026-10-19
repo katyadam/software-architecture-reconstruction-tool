@@ -30,11 +30,13 @@ async fn python_kafka_pipeline_links_services_by_topic() {
     let config = ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "order-service".to_string(),
                 base_dir_path: producer_dir,
                 urls: vec![],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "billing-service".to_string(),
                 base_dir_path: consumer_dir,
                 urls: vec![],
