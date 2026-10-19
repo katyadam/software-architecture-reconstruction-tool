@@ -43,6 +43,13 @@ impl WalaJavaProvider {
             .analyze_test_roots(source_root, test_roots, targets)
     }
 
+    pub fn prepare_module_inputs(
+        &self,
+        module: &std::path::Path,
+    ) -> Result<crate::java_analysis::JavaBytecodeInputs, String> {
+        self.inner.prepare_module_inputs(module)
+    }
+
     pub fn analyze_prepared_test_roots(
         &self,
         root: &std::path::Path,

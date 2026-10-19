@@ -58,6 +58,88 @@ pub fn callgraph_targets_in_roots(
     targets.into_iter().collect()
 }
 
+pub fn load_configured_impact_inputs(
+    project_root: &Path,
+    config_file: Option<&Path>,
+    config_base_dir: Option<&Path>,
+    candidate_revision: &str,
+) -> anyhow::Result<Option<extractor_runtime::java_analysis::ConfiguredJavaInputs>> {
+    use anyhow::Context;
+    let Some(file) = config_file else {
+        anyhow::ensure!(
+            config_base_dir.is_none(),
+            "--config-base-dir requires --config-file"
+        );
+        return Ok(None);
+    };
+    let config: models::ConfigurationData = serde_json::from_slice(
+        &std::fs::read(file)
+            .with_context(|| format!("cannot read configuration {}", file.display()))?,
+    )?;
+    Ok(Some(
+        extractor_runtime::java_analysis::load_java_analysis_inputs(
+            project_root,
+            config_base_dir.unwrap_or(project_root),
+            &config,
+            candidate_revision,
+        )?,
+    ))
+}
+
+pub fn module_source_layout(
+    module: &Path,
+    inputs: Option<&extractor_runtime::java_analysis::ConfiguredJavaInputs>,
+) -> extractor_runtime::call_graph::JavaSourceLayout {
+    if let Some(m) = inputs.and_then(|i| i.modules.get(module)) {
+        return extractor_runtime::call_graph::JavaSourceLayout {
+            production_roots: m.source_roots.clone(),
+            test_roots: m.test_source_roots.clone(),
+        };
+    }
+    extractor_runtime::call_graph::JavaSourceLayout {
+        production_roots: vec![module.join("src/main/java")],
+        test_roots: vec![module.join("src/test/java")],
+    }
+}
+
+pub fn module_test_inputs(
+    module: &Path,
+    inputs: Option<&extractor_runtime::java_analysis::ConfiguredJavaInputs>,
+) -> anyhow::Result<(Vec<models::JavaTestCase>, bool)> {
+    if let Some(m) = inputs.and_then(|i| i.modules.get(module)) {
+        return Ok((m.tests.clone(), m.test_inventory_complete));
+    }
+    Ok((
+        extractor_runtime::impact::discover_java_tests(module)?,
+        true,
+    ))
+}
+
+pub fn apply_configured_execution_scope(
+    result: &mut models::TestImpactResult,
+    inputs: &extractor_runtime::java_analysis::ConfiguredJavaInputs,
+    consumer_scope_complete: bool,
+) {
+    result.analysis_contexts = inputs.contexts.clone();
+    if result.changed_elements.is_empty() {
+        return;
+    }
+    if inputs.requires_full_test_run() || !consumer_scope_complete || result.requires_full_test_run
+    {
+        result.requires_full_test_run = true;
+        let reason = "configured Java inventory/dependency scope incomplete; run the whole checkout suite in the recorded profile context; known tests are not a complete execution list";
+        result.diagnostics.push(reason.into());
+        for test in result.unselected_tests.drain(..) {
+            result.selected_tests.push(models::SelectedTest {
+                test,
+                reasons: vec![models::SelectionReason::ModuleFallback {
+                    diagnostic: reason.into(),
+                }],
+            });
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

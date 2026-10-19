@@ -118,6 +118,30 @@ impl JavaAdapterProvider {
         self.invoke_with_test_roots(&request, test_roots, targets, Some(&merged))
     }
 
+    /// Prepares only an automatic module when a configured analysis mixes input modes.
+    pub fn prepare_module_inputs(
+        &self,
+        module: &std::path::Path,
+    ) -> Result<crate::java_analysis::JavaBytecodeInputs, String> {
+        let artifacts = self.prepare_artifacts(&CallGraphRequest::new(
+            module.to_string_lossy(),
+            Language::Java,
+        ))?;
+        Ok(crate::java_analysis::JavaBytecodeInputs {
+            application_class_dirs: artifacts
+                .application_class_dirs
+                .into_iter()
+                .map(PathBuf::from)
+                .collect(),
+            test_class_dirs: artifacts
+                .test_class_dirs
+                .into_iter()
+                .map(PathBuf::from)
+                .collect(),
+            classpath: artifacts.classpath.into_iter().map(PathBuf::from).collect(),
+        })
+    }
+
     /// Uses supplied bytecode without executing any build preparation.
     pub fn analyze_prepared_test_roots(
         &self,
