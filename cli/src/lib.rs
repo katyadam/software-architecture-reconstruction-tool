@@ -238,7 +238,11 @@ pub fn enrich_with_wala_inputs(
         if !root.is_dir() {
             continue;
         }
-        let root = root.canonicalize().unwrap_or(root);
+        let root = if inputs.is_some() {
+            root.canonicalize().unwrap_or(root)
+        } else {
+            root.components().collect()
+        };
         let configured = inputs.and_then(|inputs| {
             inputs
                 .contexts

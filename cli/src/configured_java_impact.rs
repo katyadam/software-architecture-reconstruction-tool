@@ -7,7 +7,10 @@ use extractor_runtime::{
         JavaSourceLayout, java_adapter::JavaAdapterProvider, resolve_reachability_with_java_layout,
         wala::WalaJavaProvider,
     },
-    impact::{ModuleDependencyGraph, discover_java_tests, select_tests_with_reachability},
+    impact::{
+        ModuleDependencyGraph, discover_java_tests_in_checkout, discover_java_tests_in_roots,
+        select_tests_with_reachability,
+    },
     java_analysis::{ConfiguredJavaInputs, JavaBytecodeInputs},
 };
 use models::{
@@ -73,7 +76,7 @@ pub fn analyze_configured_impact(
         return Ok(result);
     }
     let discovery_started = Instant::now();
-    let mut tests = match discover_java_tests(project) {
+    let mut tests = match discover_java_tests_in_checkout(project) {
         Ok(tests) => tests,
         Err(e) => {
             result.requires_full_test_run = true;
@@ -84,6 +87,28 @@ pub fn analyze_configured_impact(
         }
     };
     for module in inputs.modules.values() {
+        if module.tests.is_empty() {
+            // An empty effective inventory cannot silently erase observable source tests.
+            match discover_java_tests_in_roots(&module.root, &module.test_source_roots) {
+                Ok(known) if !known.is_empty() => {
+                    result.requires_full_test_run = true;
+                    result.diagnostics.push(format!(
+                        "empty configured test inventory contradicts source tests: {}",
+                        module.root.display()
+                    ));
+                    tests.extend(known);
+                    continue;
+                }
+                Err(error) => {
+                    result.requires_full_test_run = true;
+                    result.diagnostics.push(format!(
+                        "configured test inventory verification failed: {error}"
+                    ));
+                    continue;
+                }
+                _ => {}
+            }
+        }
         tests.retain(|t| Path::new(&t.module_root) != module.root);
         tests.extend(module.tests.clone());
     }
@@ -118,6 +143,20 @@ pub fn analyze_configured_impact(
             return Ok(result);
         }
     };
+    let known_modules = graph.modules().collect::<std::collections::BTreeSet<_>>();
+    if result.requires_full_test_run
+        || tests
+            .iter()
+            .any(|t| !known_modules.contains(&PathBuf::from(&t.module_root)))
+    {
+        select_broad(
+            &mut result,
+            tests,
+            "test owner or configured inventory lacks complete dependency/test evidence".into(),
+        );
+        apply_configured_execution_scope(&mut result, inputs, false);
+        return Ok(result);
+    }
     let mut by_module: BTreeMap<PathBuf, Vec<JavaTestCase>> = BTreeMap::new();
     for test in tests {
         by_module

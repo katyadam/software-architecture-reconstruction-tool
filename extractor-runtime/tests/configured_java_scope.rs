@@ -164,3 +164,21 @@ fn nested_build_module_remains_deepest_owner_under_a_configured_service() {
         root.join("app/child")
     );
 }
+
+#[test]
+fn complete_reactor_does_not_hide_unlisted_build_consumers() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    write(
+        &root,
+        "pom.xml",
+        "<project><groupId>x</groupId><artifactId>root</artifactId><version>1</version></project>",
+    );
+    write(&root, "outside/pom.xml", "<project/>");
+    let mut inputs = ConfiguredJavaInputs {
+        module_inventory_complete: true,
+        ..Default::default()
+    };
+    inputs.modules.insert(root.clone(), module(root.clone()));
+    assert!(ModuleDependencyGraph::load_with_configured_inputs(&root, &inputs).is_err());
+}

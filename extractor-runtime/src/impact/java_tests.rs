@@ -21,6 +21,24 @@ pub fn discover_java_tests(module_root: &Path) -> Result<Vec<JavaTestCase>, Impa
     Ok(tests)
 }
 
+/// Discovers conventional tests across the checkout, including builds outside a reactor.
+pub fn discover_java_tests_in_checkout(root: &Path) -> Result<Vec<JavaTestCase>, ImpactError> {
+    let mut tests = Vec::new();
+    for module in checkout_modules(root)? {
+        tests.extend(discover_java_tests_in_roots(
+            &module,
+            &[module.join("src/test/java")],
+        )?);
+    }
+    Ok(tests)
+}
+
+pub(super) fn checkout_modules(root: &Path) -> Result<Vec<PathBuf>, ImpactError> {
+    let mut modules = vec![root.to_path_buf()];
+    descendant_modules(root, root, &mut modules)?;
+    Ok(modules)
+}
+
 /// Discovers source tests in explicitly supplied directories.
 pub fn discover_java_tests_in_roots(
     module_root: &Path,

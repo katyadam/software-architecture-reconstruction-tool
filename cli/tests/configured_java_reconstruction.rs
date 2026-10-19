@@ -106,3 +106,51 @@ fn reconstruction_enrichment_honors_generated_source_roots_and_prepared_classes(
         "prepared classes must reach the provider and match the generated source"
     );
 }
+
+#[test]
+fn legacy_enrichment_preserves_edges_with_relative_source_paths() {
+    let dir = tempfile::tempdir_in(".").unwrap();
+    let root = dir
+        .path()
+        .strip_prefix(std::env::current_dir().unwrap())
+        .unwrap()
+        .to_path_buf();
+    write(
+        &root,
+        "src/main/java/fixture/Service.java",
+        "package fixture; public class Service { public static void first() { second(); } public static void second() {} }",
+    );
+    let config: ConfigurationData = serde_json::from_value(
+        json!({"service_descriptions":[{"name":"app","base_dir_path":".","urls":[]}]}),
+    )
+    .unwrap();
+    let aggregate =
+        cli::get_all_code_elements_with_progress(&root, &Default::default(), false).unwrap();
+    assert!(!Path::new(&aggregate.callables[0].file_path).is_absolute());
+    let method = |name: &str| json!({"language":"java","declaring_type":"Lfixture/Service","member_name":name,"descriptor":"()V","source_path":null,"source_line":null});
+    let graph = json!({"schema_version":2,"status":"ok","provider_id":"wala-java","source_root":root.canonicalize().unwrap(),"algorithm":"cha","diagnostics":[],"reachability":[],"edges":[{"caller":method("first"),"callee":method("second"),"provider_id":"wala-java","algorithm":"cha","confidence":null}]});
+    let java = root.join("Main.java");
+    fs::write(&java,format!("public class Main {{ public static void main(String[] args) {{System.out.print({});}}}}",serde_json::to_string(&graph.to_string()).unwrap())).unwrap();
+    assert!(Command::new("javac").arg(&java).status().unwrap().success());
+    let jar = root.join("adapter.jar");
+    assert!(
+        Command::new("jar")
+            .arg("cfe")
+            .arg(&jar)
+            .arg("Main")
+            .arg("-C")
+            .arg(&root)
+            .arg("Main.class")
+            .status()
+            .unwrap()
+            .success()
+    );
+    let enriched = cli::enrich_with_wala(
+        aggregate,
+        &root,
+        &config,
+        Some(&jar),
+        Duration::from_secs(10),
+    );
+    assert_eq!(enriched.resolved_call_edges.len(), 1);
+}
