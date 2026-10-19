@@ -62,6 +62,10 @@ pub struct TestImpactResult {
     pub selected_tests: Vec<SelectedTest>,
     pub unselected_tests: Vec<JavaTestCase>,
     pub diagnostics: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub analysis_contexts: Vec<crate::java_analysis::JavaAnalysisContextRecord>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub requires_full_test_run: bool,
 }
 
 impl TestImpactResult {
@@ -80,6 +84,8 @@ impl TestImpactResult {
             selected_tests,
             unselected_tests,
             diagnostics: Vec::new(),
+            analysis_contexts: Vec::new(),
+            requires_full_test_run: false,
         }
     }
 }

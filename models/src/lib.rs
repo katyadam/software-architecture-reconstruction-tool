@@ -14,6 +14,7 @@ pub mod go_package_impact;
 pub mod impact;
 pub mod imports;
 pub mod ir;
+pub mod java_analysis;
 pub mod restcalls;
 
 pub use api::CodeElementsAggregate;
