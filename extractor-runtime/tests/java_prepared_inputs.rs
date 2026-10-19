@@ -120,3 +120,22 @@ fn merging_artifacts_keeps_dependency_directories_and_removes_application_duplic
     );
     assert_eq!(result.classpath, [Path::new("/external/classes")]);
 }
+
+#[test]
+fn empty_prepared_inputs_return_before_invoking_any_adapter() {
+    let request = CallGraphRequest::new("/module", Language::Java);
+    let provider = WalaJavaProvider::new("/missing/adapter.jar");
+    let empty = JavaBytecodeInputs::default();
+    for outcome in [
+        provider.analyze_prepared(&request, &empty),
+        provider.analyze_prepared_test_roots(Path::new("/module"), &[], &[], &empty),
+    ] {
+        assert_eq!(outcome.status, CallGraphStatus::NoEntrypoints);
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.contains("no prepared class directories"))
+        );
+    }
+}
