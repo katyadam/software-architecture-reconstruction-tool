@@ -49,6 +49,7 @@ async fn python_two_services_full_pipeline() {
     let config = ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "product-service".to_string(),
                 base_dir_path: product_dir.clone(),
                 urls: vec![
@@ -57,6 +58,7 @@ async fn python_two_services_full_pipeline() {
                 ],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "cart-service".to_string(),
                 base_dir_path: cart_dir.clone(),
                 urls: vec!["http://cart-service:8001".to_string()],
