@@ -202,7 +202,7 @@ def replace_once(path, before, after):
 def evaluate_case(case, benchmark_root, output_dir, native, cli, timeout, go="go"):
     artifacts = output_dir / case.name
     artifacts.mkdir(parents=True,exist_ok=False)
-    result = {"case":case.name,"project":case.project,"success":False,"artifact_directory":str(artifacts),"omitted_failing_binaries":None}
+    result = {"case":case.name,"project":case.project,"success":False,"inconclusive":True,"artifact_directory":str(artifacts),"omitted_failing_binaries":None}
     try:
         source = benchmark_root / case.project
         if not source.is_dir():
@@ -243,13 +243,20 @@ def evaluate_case(case, benchmark_root, output_dir, native, cli, timeout, go="go
         if command([cli,"--project-dir",root,"--baseline-revision",baseline,"--go-callgraph-binary",analysis_native,"--selection-policy","packages","--test-scope","linked-binary","--analysis-timeout-seconds",str(timeout),"--output",artifacts/"report.json"],root,artifacts,"analysis",timeout*4+60):
             raise RuntimeError("analyzer rejected control; see analysis.stderr")
         report = json.loads((artifacts/"report.json").read_text())
+        result["selection_mode"] = report.get("selection_mode")
         recorded = report.get("effective_build_context") or context
         if recorded != context:
             raise ValueError("analysis/execution effective build context drift")
         mutant_status = command([go,"test",*recorded["build_flags"],"-count=1","-json","./..."],root,artifacts,"mutant-test",timeout,recorded)
+        events = json_stream(artifacts/"mutant-test.stdout")
+        if any(event.get("Action") == "build-fail" or event.get("FailedBuild") or "[build failed]" in event.get("Output", "") for event in events):
+            result["mutation_outcome"] = "invalid_mutant"
+            raise RuntimeError("mutant failed to compile; not a captured test failure")
         failures = failing_packages(artifacts/"mutant-test.stdout")
         if mutant_status and not failures:
             raise RuntimeError("mutant test process failed without package failure events; control is inconclusive")
+        result["mutation_outcome"] = "test_failure" if failures else "survived"
+        result["observed_failing_binaries"] = failures
         arguments = execution_arguments(report,root)
         excluded = sorted(p["package"]["import_path"] for p in report["unselected_execution_packages"])
         omitted = sorted(set(failures) & set(excluded))
@@ -260,6 +267,7 @@ def evaluate_case(case, benchmark_root, output_dir, native, cli, timeout, go="go
         expected_failures = set(failures) if arguments == ["./..."] else set(failures) & {p["package"]["import_path"] for p in report["selected_execution_packages"]}
         if selected_failures != expected_failures or selected_status and not selected_failures:
             raise RuntimeError("selected test execution disagrees with full-module observation")
+        result["inconclusive"] = False
         if case.expected_mode != report["selection_mode"]:
             raise ValueError(f"expected {case.expected_mode}; got {report['selection_mode']}; inspect report diagnostics")
         if report["selection_mode"] == "conservative_packages":
@@ -281,6 +289,7 @@ def evaluate_case(case, benchmark_root, output_dir, native, cli, timeout, go="go
         result["success"] = True
     except (ValueError,RuntimeError,OSError,subprocess.SubprocessError) as error:
         result["error"] = str(error)
+    result["durations_seconds"] = {p.name.removesuffix(".command.json"): json.loads(p.read_text())["duration_seconds"] for p in artifacts.glob("*.command.json")}
     save(artifacts/"result.json",result)
     print(f"{case.name}: {'PASS' if result['success'] else 'FAIL'} selected={result.get('selected_binaries','?')} excluded={result.get('excluded_binaries','?')} omitted_failures={result['omitted_failing_binaries']}",flush=True)
     return result
@@ -318,6 +327,7 @@ def main():
     parser.add_argument("--go-callgraph-binary",type=Path,required=True)
     parser.add_argument("--go-test-impact-binary",type=Path,required=True)
     parser.add_argument("--analysis-timeout-seconds",type=int,default=300)
+    parser.add_argument("--campaign", choices=["controls", "expanded"], default="controls")
     args = parser.parse_args()
     args.output_dir = args.output_dir.resolve()
     args.output_dir.mkdir(parents=True,exist_ok=True)
@@ -328,18 +338,22 @@ def main():
         if args.analysis_timeout_seconds <= 0:
             raise ValueError("positive timeout required")
         root = args.benchmark_root.resolve()
-        for name in ["go-micro-services","go-coffeeshop"]:
+        for name in (["go-micro-services","go-coffeeshop"] if args.campaign == "controls" else []):
             if not (root/name).is_dir():
                 raise ValueError(f"missing benchmark project: {root/name}")
         for binary in [args.go_callgraph_binary,args.go_test_impact_binary]:
             if not binary.is_file() or not os.access(binary,os.X_OK):
                 raise ValueError(f"prebuilt executable unavailable: {binary}")
-        for case in cases():
-            summary["results"].append(evaluate_case(case,root,args.output_dir,args.go_callgraph_binary.resolve(),args.go_test_impact_binary.resolve(),args.analysis_timeout_seconds))
-            save(args.output_dir/"summary.json",summary)
-        summary["success"] = all(r["success"] for r in summary["results"])
-        summary["omitted_failing_binaries"] = sum(r.get("omitted_failing_binaries") or 0 for r in summary["results"])
-        summary["inconclusive_cases"] = sum(r.get("omitted_failing_binaries") is None for r in summary["results"])
+        if args.campaign == "expanded":
+            import go_package_campaign
+            summary = go_package_campaign.run(sys.modules[__name__], args)
+        else:
+            for case in cases():
+                summary["results"].append(evaluate_case(case,root,args.output_dir,args.go_callgraph_binary.resolve(),args.go_test_impact_binary.resolve(),args.analysis_timeout_seconds))
+                save(args.output_dir/"summary.json",summary)
+            summary["success"] = all(r["success"] for r in summary["results"])
+            summary["omitted_failing_binaries"] = sum(r.get("omitted_failing_binaries") or 0 for r in summary["results"])
+            summary["inconclusive_cases"] = sum(r.get("omitted_failing_binaries") is None for r in summary["results"])
     except (ValueError,RuntimeError,OSError) as error:
         summary["error"] = str(error)
         print(str(error),file=sys.stderr)

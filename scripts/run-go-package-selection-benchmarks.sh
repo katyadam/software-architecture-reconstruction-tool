@@ -15,4 +15,4 @@ if [[ -z "${GO_CALLGRAPH_BINARY:-}" ]]; then
   (cd "$repo_root/go-callgraph" && GOENV=off GOWORK=off GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go build -mod=readonly -o "$native" .)
 fi
 echo "Go package-selection controls; artifacts: $output_dir"
-PYTHONDONTWRITEBYTECODE=1 python3 "$repo_root/scripts/evaluate-go-package-selection.py" --benchmark-root "$benchmark_root" --output-dir "$output_dir" --go-callgraph-binary "$native" --go-test-impact-binary "$cli" --analysis-timeout-seconds "${GO_ANALYSIS_TIMEOUT_SECONDS:-300}"
+PYTHONDONTWRITEBYTECODE=1 python3 "$repo_root/scripts/evaluate-go-package-selection.py" --benchmark-root "$benchmark_root" --output-dir "$output_dir" --go-callgraph-binary "$native" --go-test-impact-binary "$cli" --analysis-timeout-seconds "${GO_ANALYSIS_TIMEOUT_SECONDS:-300}" --campaign "${GO_BENCHMARK_CAMPAIGN:-controls}"
