@@ -12,6 +12,7 @@ import tempfile
 import unittest
 
 repo = Path(sys.argv[1])
+sys.path.insert(0, str(repo / "scripts"))
 spec = importlib.util.spec_from_file_location("package_bench", repo / "scripts/evaluate-go-package-selection.py")
 m = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = m
@@ -63,6 +64,9 @@ elif args[0]=='list':
   print(json.dumps(item))
 elif args[0]=='test':
  mutant='return 2' in (pathlib.Path.cwd()/'a/a.go').read_text()
+ if not mutant and cfg.get('baseline_failure'): print(json.dumps({{'Action':'fail','Package':'example/a'}})); sys.exit(1)
+ if mutant and cfg.get('build_failure'):
+  print(json.dumps({{'Action':'build-fail','ImportPath':'example/a'}})); print(json.dumps({{'Action':'fail','Package':'example/a','FailedBuild':'example/a'}})); sys.exit(1)
  if mutant and cfg.get('infrastructure_failure'): print('test invocation failed',file=sys.stderr); sys.exit(2)
  targets=['example/a','example/b'] if './...' in args else [p.replace('./','example/') for p in args if p.startswith('./')]
  failed=False
@@ -100,6 +104,7 @@ args=sys.argv[1:]; out=pathlib.Path(args[args.index('--output')+1]); out.write_t
     def test_selected_execution_must_agree_with_full_module_observation(self):
         cfg=json.loads(self.config.read_text());cfg['fail_package']=None;cfg['selected_only_failure']=True;self.config.write_text(json.dumps(cfg))
         result=self.evaluate();self.assertFalse(result['success']);self.assertIn('selected',result['error'])
+        self.assertTrue(result['inconclusive'])
     def test_test_process_error_without_failure_events_is_inconclusive_not_success(self):
         cfg=json.loads(self.config.read_text());cfg['infrastructure_failure']=True;self.config.write_text(json.dumps(cfg))
         result=self.evaluate();self.assertFalse(result['success']);self.assertIn('test',result['error'])
@@ -126,6 +131,104 @@ args=sys.argv[1:]; out=pathlib.Path(args[args.index('--output')+1]); out.write_t
     def test_cache_access_denial_does_not_recommend_a_dependency_download(self):
         cfg=json.loads(self.config.read_text());cfg.update(missing_dependencies=True,load_error='open Go build cache: operation not permitted');self.config.write_text(json.dumps(cfg))
         result=self.evaluate();self.assertFalse(result['success']);self.assertIn('cache access',result['error']);self.assertNotIn('go mod download',result['error'])
+    def test_campaign_readiness_preserves_unsupported_projects_and_pinned_baselines(self):
+        import go_package_campaign as campaign
+        nested=self.projects/'nested';(nested/'service').mkdir(parents=True)
+        (nested/'service/go.mod').write_text('module nested\n')
+        m.git(nested,'init','-q');m.commit(nested,'nested module')
+        untested=self.projects/'untested';untested.mkdir()
+        (untested/'go.mod').write_text('module untested\n');(untested/'u.go').write_text('package untested\n')
+        m.git(untested,'init','-q');m.commit(untested,'no tests')
+        out=self.base/'readiness';out.mkdir()
+        results=campaign.inspect_projects(m,self.projects,out,self.cli,5,go=str(self.go))
+        by_name={r['project']:r for r in results}
+        self.assertEqual(by_name['nested']['status'],'unsupported_layout')
+        self.assertEqual(by_name['untested']['status'],'no_tests')
+        self.assertEqual(by_name['control']['revision'],self.sha)
+        self.assertFalse(by_name['control']['status']=='ready') # Fake CLI is not package evidence.
+        self.assertTrue((out/'control/result.json').is_file())
+        self.assertFalse((self.source/'go.sum').exists())
+    def test_campaign_summary_does_not_turn_fallback_or_survivors_into_detections(self):
+        import go_package_campaign as campaign
+        rows=[dict(project='a',success=True,selection_mode='conservative_packages',selected_binaries=1,excluded_binaries=4,observed_failing_binaries=['a/p'],omitted_failing_binaries=0,durations_seconds={'analysis':2,'mutant-test':10,'selected-test':3}),
+              dict(project='a',success=True,selection_mode='conservative_packages',selected_binaries=1,excluded_binaries=0,observed_failing_binaries=[],omitted_failing_binaries=0,durations_seconds={'analysis':2,'mutant-test':1,'selected-test':1}),
+              dict(project='b',success=True,selection_mode='conservative_all',selected_binaries=None,excluded_binaries=None,observed_failing_binaries=['b/p'],omitted_failing_binaries=0,durations_seconds={}),
+              dict(project='b',success=False,omitted_failing_binaries=None,error='baseline failure')]
+        summary=campaign.summarize(rows, [{'project':'a','status':'ready'},{'project':'b','status':'baseline_failed'}])
+        self.assertEqual(summary['package_selection_cases'],2)
+        self.assertEqual(summary['reduced_cases'],1)
+        self.assertEqual(summary['surviving_mutants'],1)
+        self.assertEqual(summary['failure_producing_package_cases'],1)
+        self.assertEqual(summary['fallback_cases'],1)
+        self.assertEqual(summary['inconclusive_cases'],1)
+        self.assertEqual(summary['timed_cases'][0]['analysis_plus_selected_seconds'],5)
+        self.assertEqual(summary['timed_cases'][0]['net_saving_seconds'],5)
+        self.assertFalse(summary['coverage_target_met'])
+    def test_expanded_manifest_is_unique_body_mutations_and_preserves_original_controls(self):
+        import go_package_campaign as campaign
+        cases=campaign.expanded_cases(m)
+        bodies=[c for c in cases if c.expected_mode=='conservative_packages']
+        self.assertGreaterEqual(len(bodies),30)
+        self.assertEqual(len({c.name for c in cases}),len(cases))
+        self.assertEqual(len({(c.project,c.source,c.before,c.after) for c in bodies}),len(bodies))
+        self.assertTrue(all(c.before and c.after and c.before!=c.after for c in bodies))
+        self.assertTrue(set(c.name for c in m.cases()) <= set(c.name for c in cases))
+    def test_compile_error_is_invalid_mutant_not_a_captured_test_failure(self):
+        cfg=json.loads(self.config.read_text());cfg['build_failure']=True;self.config.write_text(json.dumps(cfg))
+        result=self.evaluate()
+        self.assertFalse(result['success'])
+        self.assertEqual(result['mutation_outcome'],'invalid_mutant')
+        self.assertIsNone(result['omitted_failing_binaries'])
+    def test_readiness_baseline_failure_and_blockers_are_not_eligible(self):
+        import go_package_campaign as campaign
+        native=executable(self.base/'metadata', "import json\nprint(json.dumps({'schema_version':1,'provider_id':'go-native','status':'ok','complete':True,'execution_packages':[{'import_path':'example/a'}],'blockers':[]}))\n")
+        out=self.base/'ready';out.mkdir()
+        rows=campaign.inspect_projects(m,self.projects,out,native,5,go=str(self.go))
+        self.assertEqual(rows[0]['status'],'ready')
+        cfg=json.loads(self.config.read_text());cfg['baseline_failure']=True;self.config.write_text(json.dumps(cfg))
+        out=self.base/'bad-baseline';out.mkdir()
+        rows=campaign.inspect_projects(m,self.projects,out,native,5,go=str(self.go))
+        self.assertEqual(rows[0]['status'],'baseline_failed')
+        cfg['baseline_failure']=False;self.config.write_text(json.dumps(cfg))
+        native=executable(native, "import json\nprint(json.dumps({'schema_version':1,'provider_id':'go-native','status':'ok','complete':True,'execution_packages':[{'import_path':'example/a'}],'blockers':[{'code':'process_execution'}]}))\n")
+        out=self.base/'blocked';out.mkdir()
+        rows=campaign.inspect_projects(m,self.projects,out,native,5,go=str(self.go))
+        self.assertEqual(rows[0]['status'],'package_evidence_unavailable')
+    def test_campaign_keeps_counterexamples_in_capture_denominators(self):
+        import go_package_campaign as campaign
+        common=dict(project='a',selection_mode='conservative_packages',selected_binaries=1,excluded_binaries=4,observed_failing_binaries=['a/p'],durations_seconds={'analysis':2,'mutant-test':10,'selected-test':3})
+        rows=[dict(common,case='captured',success=True,omitted_failing_binaries=0),dict(common,case='omitted',success=False,omitted_failing_binaries=1)]
+        summary=campaign.summarize(rows,[])
+        self.assertEqual(summary['failure_producing_package_cases'],2)
+        self.assertEqual(summary['package_selection_cases'],2)
+        self.assertEqual(summary['captured_failure_cases'],1)
+        self.assertEqual(len(summary['timed_cases']),2)
+        self.assertFalse(summary['success'])
+    def test_readiness_uses_replay_revision_not_unrelated_current_head(self):
+        import go_package_campaign as campaign
+        (self.source/'nested').mkdir();(self.source/'nested/go.mod').write_text('module nested\n')
+        head=m.commit(self.source,'unsupported new head')
+        native=executable(self.base/'metadata', "import json\nprint(json.dumps({'schema_version':1,'provider_id':'go-native','status':'ok','complete':True,'execution_packages':[{'import_path':'example/a'}],'blockers':[]}))\n")
+        out=self.base/'pinned-readiness';out.mkdir()
+        rows=campaign.inspect_projects(m,self.projects,out,native,5,go=str(self.go),revisions={'control':[self.sha]})
+        self.assertEqual(rows[0]['status'],'ready')
+        self.assertEqual(rows[0]['revision'],self.sha)
+        self.assertEqual(rows[0]['checkout_head'],head)
+        self.assertEqual(m.git(self.source,'rev-parse','HEAD'),head)
+    def test_breadth_and_mutation_shortfalls_are_reported_independently(self):
+        import go_package_campaign as campaign
+        rows=[dict(project=p,success=True,selection_mode='conservative_packages',selected_binaries=1,excluded_binaries=0,observed_failing_binaries=[],omitted_failing_binaries=0) for p in ['a','b','c']]
+        summary=campaign.summarize(rows,[])
+        self.assertEqual(len(summary['limitations']),1)
+        self.assertIn('mutation',summary['limitations'][0])
+        self.assertNotIn('project',summary['limitations'][0])
+    def test_observed_survivors_include_unexpected_fallback_cases(self):
+        import go_package_campaign as campaign
+        rows=[dict(project='a',success=False,inconclusive=False,selection_mode='conservative_all',selected_binaries=5,excluded_binaries=0,observed_failing_binaries=[],omitted_failing_binaries=0)]
+        summary=campaign.summarize(rows,[])
+        self.assertEqual(summary['surviving_mutants'],1)
+        self.assertEqual(summary['fallback_cases'],1)
+        self.assertFalse(summary['success'])
 
 unittest.main(argv=[sys.argv[0]],verbosity=2)
 PY
