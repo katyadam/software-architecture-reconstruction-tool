@@ -15,6 +15,24 @@ import org.junit.jupiter.api.io.TempDir;
 /** Verifies WALA binary analysis against real Java class files. */
 class BytecodeCallGraphTest {
   @Test
+  void accepts_compiled_dependency_directories(@TempDir Path tempDir) throws Exception {
+    Path dependency = tempDir.resolve("dependency");
+    Path application = tempDir.resolve("application");
+    Files.createDirectories(dependency);
+    Files.createDirectories(application);
+    Path external = tempDir.resolve("External.java");
+    Files.writeString(external, "public class External { public static void work() {} }");
+    var compiler = ToolProvider.getSystemJavaCompiler();
+    assertEquals(0, compiler.run(null, null, null, "--release", "8", "-d", dependency.toString(), external.toString()));
+    Path main = tempDir.resolve("Main.java");
+    Files.writeString(main, "public class Main { public static void main(String[] args) { External.work(); } }");
+    assertEquals(0, compiler.run(null, null, null, "--release", "8", "-cp", dependency.toString(), "-d", application.toString(), main.toString()));
+    var result = BytecodeCallGraph.analyze(List.of(application), List.of(dependency));
+    assertEquals("ok", result.status());
+    assertTrue(result.edges().stream().anyMatch(edge -> edge.callee().declaring_type().equals("LExternal") && edge.callee().member_name().equals("work")), result.edges().toString());
+  }
+
+  @Test
   void includes_the_failure_top_frame_in_analysis_diagnostics() {
     var error = new IllegalArgumentException("Illegal target map");
     error.setStackTrace(new StackTraceElement[] {new StackTraceElement("wala.TargetMap", "add", "TargetMap.java", 42)});
