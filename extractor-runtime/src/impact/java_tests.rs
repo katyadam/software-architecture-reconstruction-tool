@@ -21,8 +21,33 @@ pub fn discover_java_tests(module_root: &Path) -> Result<Vec<JavaTestCase>, Impa
     Ok(tests)
 }
 
+/// Discovers source tests in explicitly supplied directories.
+pub fn discover_java_tests_in_roots(
+    module_root: &Path,
+    source_roots: &[PathBuf],
+) -> Result<Vec<JavaTestCase>, ImpactError> {
+    let mut tests = Vec::new();
+    for root in source_roots {
+        for source in java_sources(root)? {
+            tests.extend(discover_file(module_root, &source)?);
+        }
+    }
+    tests.sort_by(|a, b| {
+        (&a.source_path, &a.method_name, &a.descriptor).cmp(&(
+            &b.source_path,
+            &b.method_name,
+            &b.descriptor,
+        ))
+    });
+    tests.dedup();
+    Ok(tests)
+}
+
 /// Finds the supplied module and descendant conventional Maven or Gradle modules with test roots.
-fn test_modules(module_root: &Path, catalog: &ModuleCatalog) -> Result<Vec<PathBuf>, ImpactError> {
+pub(super) fn test_modules(
+    module_root: &Path,
+    catalog: &ModuleCatalog,
+) -> Result<Vec<PathBuf>, ImpactError> {
     if catalog.is_complete() {
         return Ok(catalog.descendants_of(module_root));
     }

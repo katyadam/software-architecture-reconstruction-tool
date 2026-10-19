@@ -1,7 +1,7 @@
 use models::call_graph::{CallGraphOutcome, MethodRef, ResolvedCallEdge};
 use models::{Callable, JavaTestCase, Namespace};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const MAX_UNRESOLVED_ENDPOINT_SAMPLES: usize = 10;
 
@@ -10,6 +10,65 @@ pub struct JavaCallGraphResolution {
     pub edges: Vec<ResolvedCallEdge>,
     pub reachable_tests_by_callable: BTreeMap<String, Vec<String>>,
     pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct JavaSourceLayout {
+    pub production_roots: Vec<PathBuf>,
+    pub test_roots: Vec<PathBuf>,
+}
+
+pub fn resolve_reachability_with_java_layout(
+    outcome: &CallGraphOutcome,
+    root: &Path,
+    callables: &[Callable],
+    tests: &[JavaTestCase],
+    layout: &JavaSourceLayout,
+) -> JavaCallGraphResolution {
+    let callables = callables
+        .iter()
+        .filter(|c| {
+            layout
+                .production_roots
+                .iter()
+                .any(|r| Path::new(&c.file_path).starts_with(r))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let tests = tests
+        .iter()
+        .filter(|t| {
+            layout
+                .test_roots
+                .iter()
+                .any(|r| Path::new(&t.source_path).starts_with(r))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    resolve_reachability_with_java_tests(outcome, root, &callables, &tests)
+}
+
+pub fn resolve_edges_with_java_layout(
+    outcome: &CallGraphOutcome,
+    root: &Path,
+    callables: &[Callable],
+    layout: &JavaSourceLayout,
+) -> (Vec<ResolvedCallEdge>, Vec<String>) {
+    let callables = callables
+        .iter()
+        .filter(|c| {
+            layout
+                .production_roots
+                .iter()
+                .any(|r| Path::new(&c.file_path).starts_with(r))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    resolve_edges(outcome, root, &callables)
+}
+
+fn declaring_class_matches(name: &str, bytecode: &str) -> bool {
+    name == bytecode || bytecode.rsplit('$').next() == Some(name)
 }
 
 /// Maps provider method references to unique VoyantClair callable signatures.
@@ -121,7 +180,7 @@ fn belongs_to_source(method: &MethodRef, root: &Path, callables: &[Callable]) ->
             .file_path
             .starts_with(root.to_str().unwrap_or_default())
             && matches_declaring_source_file(method, callable)
-            && matches!(&callable.namespace, Namespace::Class(name) if name == class)
+            && matches!(&callable.namespace, Namespace::Class(name) if declaring_class_matches(name, class))
     })
 }
 
@@ -143,7 +202,7 @@ fn is_lombok_generated_to_string(method: &MethodRef, root: &Path, callables: &[C
                 .file_path
                 .starts_with(root.to_str().unwrap_or_default())
                 && matches_declaring_source_file(method, callable)
-                && matches!(&callable.namespace, Namespace::Class(name) if name == class)
+                && matches!(&callable.namespace, Namespace::Class(name) if declaring_class_matches(name, class))
         })
         .any(|callable| {
             std::fs::read_to_string(&callable.file_path).is_ok_and(|source| {
@@ -169,7 +228,7 @@ fn matches_declaring_source_file(method: &MethodRef, callable: &Callable) -> boo
         return true;
     }
     let outer_type = declaring_type.split('$').next().unwrap_or(declaring_type);
-    let source_suffix = format!("src/main/java/{outer_type}.java");
+    let source_suffix = format!("/{outer_type}.java");
     callable.file_path.ends_with(&source_suffix)
 }
 
@@ -227,7 +286,7 @@ fn unresolved_endpoint_counts(
             callable
                 .file_path
                 .starts_with(root.to_str().unwrap_or_default())
-                && matches!(&callable.namespace, Namespace::Class(name) if name == class)
+                && matches!(&callable.namespace, Namespace::Class(name) if declaring_class_matches(name, class))
         })
         .collect();
     let file_candidates: Vec<_> = class_candidates
@@ -288,7 +347,7 @@ fn resolve(method: &MethodRef, root: &Path, callables: &[Callable]) -> Option<St
         .filter(|c| {
             c.file_path.starts_with(root.to_str().unwrap_or_default())
                 && matches_declaring_source_file(method, c)
-                && matches!(c.namespace, Namespace::Class(ref n) if n == class)
+                && matches!(c.namespace, Namespace::Class(ref n) if declaring_class_matches(n, class))
                 && callable_matches_method(method, c)
         })
         .collect();
@@ -305,7 +364,8 @@ fn callable_method_name(callable: &Callable) -> Option<&str> {
 
 /// Matches a source callable's method identifier and, when valid, the JVM descriptor arity.
 fn callable_matches_method(method: &MethodRef, callable: &Callable) -> bool {
-    callable_method_name(callable).is_some_and(|name| name == method.member_name)
+    (callable.is_constructor && method.member_name == "<init>"
+        || callable_method_name(callable).is_some_and(|name| name == method.member_name))
         && jvm_parameter_count(&method.descriptor)
             .is_none_or(|count| callable.parameters.len() == count)
         && jvm_parameter_types(&method.descriptor).is_none_or(|types| {
