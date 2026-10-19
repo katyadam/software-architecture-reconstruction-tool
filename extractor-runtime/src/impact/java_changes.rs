@@ -1,4 +1,4 @@
-use super::git_diff::{ImpactError, find_module_root};
+use super::{ImpactError, ModuleCatalog};
 use models::{ChangedElement, ChangedElementKind};
 use std::{ops::RangeInclusive, path::Path};
 use tree_sitter::{Node, Parser};
@@ -6,9 +6,13 @@ use tree_sitter::{Node, Parser};
 /// Maps one candidate Java diff range to its smallest safe source owner.
 pub(super) fn map_java_range(
     project_root: &Path,
+    catalog: &ModuleCatalog,
     source_path: &str,
     range: RangeInclusive<usize>,
 ) -> Result<Vec<ChangedElement>, ImpactError> {
+    if !catalog.can_narrow_source(source_path) {
+        return Ok(Vec::new());
+    }
     let code = std::fs::read_to_string(project_root.join(source_path))
         .map_err(|error| ImpactError::Source(error.to_string()))?;
     let mut parser = Parser::new();
@@ -18,7 +22,8 @@ pub(super) fn map_java_range(
     let tree = parser
         .parse(&code, None)
         .expect("Java source parses into a tree");
-    let module_root = find_module_root(project_root, source_path)
+    let module_root = catalog
+        .owner_for(source_path)
         .to_string_lossy()
         .into_owned();
     Ok(range

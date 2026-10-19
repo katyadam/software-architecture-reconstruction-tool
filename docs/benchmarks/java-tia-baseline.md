@@ -39,7 +39,9 @@ pairs validate that missing static evidence cannot silently reduce the suite.
 The measurable suite reduction in this fixture is 50% only for the isolated,
 direct static call. Current limitations are intentionally conservative:
 
-- Maven is automated; Gradle requires explicit compiled-class inputs.
+- Maven and conventional Gradle Java projects are automated. Gradle uses
+  `testClasses` and `testRuntimeClasspath` through its wrapper/init-script path;
+  explicit compiled-class inputs remain available for CI artifacts.
 - Spring DI, AOP/proxies, reflection, dynamic tests, and framework callbacks
   are not converted into graph edges.
 - Cross-service HTTP, gRPC, Kafka, and RabbitMQ paths are not part of this
@@ -51,3 +53,12 @@ Future benchmark work should add real multi-module Spring applications,
 framework-mediated calls, asynchronous communication, known-failing tests, and
 larger version histories. Report affected-test recall, selection reduction,
 WALA time, Maven preparation time, and total wall-clock time separately.
+
+## Local real-project check
+
+Run `scripts/run-java-tia-benchmarks.sh` from this repository to compare each
+selected sibling benchmark project's `HEAD~1` to `HEAD`. It defaults to the
+two Spring projects exercised during development, writes JSON results to a new
+`/tmp/sar-java-tia-benchmark.*` directory, and prints selection counts plus
+the TIA stage timings. Pass one or more project names to override that default
+set, or set `JAVA_BENCHMARK_ROOT` when the sibling checkout is elsewhere.
