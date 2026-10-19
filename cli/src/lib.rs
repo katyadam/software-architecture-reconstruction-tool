@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 pub mod go_impact_output;
+pub mod java_impact_inputs;
 use extractor_runtime::call_graph::{CallGraphProvider, resolve_edges, wala::WalaJavaProvider};
 use extractor_runtime::pipeline::pass3::{pass_attr, pass_module};
 use extractor_runtime::pipeline::{build_project_ir, dispatch_syntactic, evaluate};
@@ -56,7 +57,14 @@ pub fn get_java_callables_for_modules_with_progress(
         .iter()
         .map(|module_root| module_root.join("src/main/java"))
         .collect();
-    let paths = java_paths_for_modules(&main_roots)?;
+    get_java_callables_in_roots_with_progress(&main_roots, report_progress)
+}
+
+pub fn get_java_callables_in_roots_with_progress(
+    source_roots: &[PathBuf],
+    report_progress: bool,
+) -> Result<Vec<Callable>> {
+    let paths = java_paths_for_modules(source_roots)?;
     let files_to_process = paths.len();
     if report_progress {
         println!("Total files found: {files_to_process}");

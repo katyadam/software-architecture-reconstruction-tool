@@ -1,5 +1,7 @@
 //! Explicit Java build inputs shared by reconstruction and test-impact analysis.
 mod manifest;
+mod source;
+pub use source::declaring_type_for_callable;
 
 use models::{ConfigurationData, JavaTestCase, java_analysis::JavaAnalysisContextRecord};
 use std::{
