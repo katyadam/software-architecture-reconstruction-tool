@@ -4,6 +4,81 @@ use models::call_graph::{
 };
 use models::{Callable, JavaTestCase, Namespace, Parameter};
 
+#[test]
+fn configured_layout_resolves_nonstandard_roots_by_package_and_nested_owner() {
+    use extractor_runtime::call_graph::{JavaSourceLayout, resolve_edges_with_java_layout};
+    let method = |owner: &str| MethodRef {
+        language: Language::Java,
+        declaring_type: format!("L{owner}"),
+        member_name: "run".into(),
+        descriptor: "()V".into(),
+        source_path: None,
+        source_line: None,
+    };
+    let outcome = CallGraphOutcome {
+        schema_version: 2,
+        status: CallGraphStatus::Ok,
+        provider_id: "wala-java".into(),
+        source_root: "/project".into(),
+        algorithm: "cha".into(),
+        diagnostics: vec![],
+        reachability: vec![],
+        edges: vec![RawCallEdge {
+            caller: method("a/Service"),
+            callee: method("b/Service"),
+            provider_id: "wala-java".into(),
+            algorithm: "cha".into(),
+            confidence: None,
+        }],
+    };
+    let callables = [
+        callable("Service", "/project/source/java/a/Service.java"),
+        callable("Service", "/project/source/java/b/Service.java"),
+    ];
+    let layout = JavaSourceLayout {
+        production_roots: vec!["/project/source/java".into()],
+        test_roots: vec![],
+    };
+    let (edges, diagnostics) = resolve_edges_with_java_layout(
+        &outcome,
+        std::path::Path::new("/project"),
+        &callables,
+        &layout,
+    );
+    assert_eq!(edges.len(), 1, "{diagnostics:?}");
+    let mut nested = outcome.clone();
+    nested.edges[0].callee = method("b/Service$Inner");
+    let nested_callables = [
+        callables[0].clone(),
+        callable("Inner", "/project/source/java/b/Service.java"),
+    ];
+    assert_eq!(
+        resolve_edges_with_java_layout(
+            &nested,
+            std::path::Path::new("/project"),
+            &nested_callables,
+            &layout
+        )
+        .0
+        .len(),
+        1
+    );
+    let mut constructor = callable("Service", "/project/source/java/a/Service.java");
+    constructor.is_constructor = true;
+    constructor.name = "Service()".into();
+    constructor.return_type = None;
+    constructor.signature = "constructor-a".into();
+    nested.edges[0].caller.member_name = "<init>".into();
+    let edges = resolve_edges_with_java_layout(
+        &nested,
+        std::path::Path::new("/project"),
+        &[constructor, nested_callables[1].clone()],
+        &layout,
+    )
+    .0;
+    assert_eq!(edges[0].source_id, "constructor-a");
+}
+
 fn callable(class: &str, file: &str) -> Callable {
     callable_named(class, "run", file)
 }
