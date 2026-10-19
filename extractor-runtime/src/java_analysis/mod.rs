@@ -15,6 +15,36 @@ pub struct JavaBytecodeInputs {
     pub classpath: Vec<PathBuf>,
 }
 
+impl JavaBytecodeInputs {
+    pub fn merge(inputs: &[&Self], application_modules: &[PathBuf]) -> Self {
+        let mut merged = Self::default();
+        for input in inputs {
+            merged
+                .application_class_dirs
+                .extend(input.application_class_dirs.clone());
+            merged.test_class_dirs.extend(input.test_class_dirs.clone());
+            merged.classpath.extend(input.classpath.clone());
+        }
+        for paths in [
+            &mut merged.application_class_dirs,
+            &mut merged.test_class_dirs,
+            &mut merged.classpath,
+        ] {
+            paths.sort();
+            paths.dedup();
+        }
+        merged.classpath.retain(|p| {
+            !merged.application_class_dirs.contains(p)
+                && !merged.test_class_dirs.contains(p)
+                && !crate::call_graph::java_adapter::duplicates_application_module(
+                    p,
+                    application_modules,
+                )
+        });
+        merged
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedJavaModule {
     pub root: PathBuf,
