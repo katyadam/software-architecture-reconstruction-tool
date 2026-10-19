@@ -179,6 +179,17 @@ impl JavaAdapterProvider {
         targets: &[String],
         artifacts: Option<&PreparedJavaArtifacts>,
     ) -> CallGraphOutcome {
+        if artifacts
+            .is_some_and(|a| a.application_class_dirs.is_empty() && a.test_class_dirs.is_empty())
+        {
+            let mut outcome =
+                CallGraphOutcome::ok(request.clone(), &self.provider_id, &self.algorithm);
+            outcome.status = CallGraphStatus::NoEntrypoints;
+            outcome
+                .diagnostics
+                .push("no prepared class directories; skipped adapter invocation".into());
+            return outcome;
+        }
         match test_root_arguments(
             std::path::Path::new(&request.source_root),
             tests,

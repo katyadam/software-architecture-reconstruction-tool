@@ -108,6 +108,11 @@ If `requires_full_test_run` is true, **run the whole checkout's test suite in th
 recorded profile context**. The available method list is incomplete execution
 guidance, not a sufficient command list. `unselected_tests` is empty in this case.
 An incomplete empty inventory is therefore different from a valid empty suite.
+If a supplied empty inventory contradicts tests found in its declared source roots,
+known tests are retained and full execution is required. This also applies when
+profile filtering could explain the empty inventory: the current format cannot
+substantiate that explanation. Checkout scanning checks builds outside the declared
+reactor, and discovered test owners require dependency evidence before exclusion.
 
 With complete supplied scope, selection keeps the existing conservative graph
 fallback behavior. This feature does not repair reflection, Spring injection,
