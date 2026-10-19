@@ -70,3 +70,40 @@ Artifacts include committed revision IDs, mutation patches, independent package 
 Final review also checked Windows process-launch/function-value safeguards and external-only test directories. Production initialization roots are mandatory when source-backed production exists; a directory containing only external test files does not acquire a source-less root. These cases have native scanner/grouping regressions, Rust rejection tests and real native-to-Rust fixtures.
 
 Post-review verification on 2026-10-18: workspace tests **544 passed / 0 failed / 4 ignored**; native package integration explicitly **8 passed / 0 ignored** (including the two normally ignored real-provider tests); Go race tests and vet passed; ten benchmark-harness controls passed. Native graph, adapter and unchanged conservative controls passed. A fresh 12-case real replay again recorded zero omitted failing binaries and zero inconclusive cases.
+
+## Broader mutation campaign
+
+```sh
+scripts/run-go-package-validation.sh
+```
+
+This opt-in extension preserves the original 12-case runner. It inspects **every immediate benchmark repository** in `GO_BENCHMARK_ROOT`, recording its revision, module layout and readiness result. Manifest projects are checked at their pinned replay revisions, not an unrelated current HEAD; other repositories are inventoried at their recorded HEAD. Root-module candidates with test files get offline package loading, a complete baseline test run and native package-evidence inspection in isolated clones. Nested layouts, absent tests, missing dependencies, blockers and baseline failures remain visible in `readiness/readiness.json`; they are not silently dropped or counted as successful projects. No dependencies are installed and original checkouts remain unchanged.
+
+The fixed `manifest.json` includes the original controls plus additional body mutations covering comparisons, numeric constants, result accumulation, lookups, dates, formatting, identifiers and event collections. Cases are not chosen after observing whether their tests fail. Every case is a fresh isolated baseline/candidate pair, tested by both a full-module run and the selected whole binaries. Compilation failures are invalid mutants, not detected regressions. Mutants that pass the full suite are survivors (possibly equivalent), not detections.
+
+The summary separates package selection, cases with actual binary reduction, whole-module fallback, failure-producing cases, survivors, invalid/inconclusive cases and omitted failing binaries. Each timed case records full-suite time and analysis-plus-selected-test time, including negative savings. These sequential warm-cache timings are descriptive, not randomized performance estimates; cloning, readiness and mutation setup are outside that comparison and have separate command records.
+
+The coverage target is **30 successful body mutations across at least three independent projects**. `success` means the executed controls passed; **it does not mean the coverage target was met**. Check `coverage_target_met` and `limitations` separately. Multiple services in one repository are not counted as independent projects. All four broad-change controls remain in the campaign and must fall back rather than being forced into a reduction result.
+
+### Observed campaign: 2026-10-19
+
+The inspected set contained 13 repositories: two runnable projects, ten unsupported module layouts, and one repository without tests. The campaign ran **35 body mutations plus four broad-change controls** on the two runnable projects.
+
+| Outcome | Cases |
+| --- | ---: |
+| Actual package reduction (1 of 5 binaries retained) | 26 |
+| Valid package selection without reduction (coffeeshop's shared binary) | 7 |
+| Intended broad-change fallback | 4 |
+| Unexpected body-change fallback | 2 |
+| Mutations/controls producing full-suite failures | 17 |
+| Full-suite failing cases whose failures were retained | 17 |
+| Full-suite survivors, including six fallback cases | 22 |
+| Omitted failing binaries / invalid mutants / inconclusive cases | 0 / 0 / 0 |
+
+The run deliberately exits nonzero: **37 expectations passed and two failed**, not 39/39. `profile-empty-loaded-map` and `rate-empty-loaded-map` triggered the documented positive-graph-contradiction safeguard and selected the whole module. These safe over-selections remain failing reduction expectations; their expected modes were not changed to manufacture a passing campaign. Failed evaluations remain in observed outcome and timing denominators. The three-project breadth target is explicitly unmet even though 33 body cases successfully used package selection.
+
+Sequential warm-cache timing across the same 39 cases was **58.381s for full suites versus 81.087s for analysis plus selected tests**. None of these individual comparisons saved time after analysis overhead. These small suites demonstrate execution-scope reduction, not an end-to-end speedup. Do not extrapolate performance from this sample.
+
+Artifacts: `/private/var/folders/3k/ksjl2jsn143fn68w_1hmjqkc0000gn/T/sar-go-package-selection.BNq6uW/`. `summary-verified.json` reaggregates the unchanged per-case observations with the final survivor-counting logic; the original run summary, all candidate patches, reports, test events and command durations remain preserved. The one-command runner uses that final logic for future runs.
+
+Verification: 19 harness tests passed; workspace tests 544 passed, zero failed, four ignored; formatting, shell syntax and diff checks passed. Fresh read-only review found and prompted RED→GREEN fixes for biased success-only reporting denominators and HEAD-versus-pinned readiness. A further regression keeps unexpected-fallback survivors visible; no selection algorithm or safety guard was changed.
