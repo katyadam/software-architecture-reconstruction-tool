@@ -65,6 +65,11 @@ git clone https://github.com/FudanSELab/train-ticket
 
 2. **Run Analysis:**
 
+Existing service configs can additionally provide prepared Java build inputs for
+call-graph enrichment and test-impact analysis. These fields are optional; see
+[Java analysis inputs](docs/java-analysis-inputs.md) for the manifest format and
+the standalone `test-impact --config-file` workflow.
+
 ```bash
 # From within the software-architecture-reconstruction-tool directory
 cargo run -p cli --release -- \

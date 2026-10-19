@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "candidate_revision": "0000000000000000000000000000000000000000",
+  "build_context": {
+    "tool": "maven",
+    "requested_profiles": [],
+    "active_profiles": [],
+    "java_version": "17"
+  },
+  "module_inventory_complete": true,
+  "modules": [
+    {
+      "root": ".",
+      "source_roots": ["source/java"],
+      "test_source_roots": ["checks/java"],
+      "application_class_dirs": ["target/classes"],
+      "test_class_dirs": ["target/test-classes"],
+      "classpath": [],
+      "dependencies": [],
+      "dependency_inventory_complete": true,
+      "test_inventory_complete": true,
+      "tests": [
+        {
+          "module_root": ".",
+          "class_name": "Lfixture/ServiceTest",
+          "method_name": "coversChanged",
+          "descriptor": "()V",
+          "callable_signature": "ServiceTest.coversChanged()V",
+          "source_path": "checks/java/fixture/ServiceTest.java"
+        },
+        {
+          "module_root": ".",
+          "class_name": "Lfixture/ServiceTest",
+          "method_name": "coversUnchanged",
+          "descriptor": "()V",
+          "callable_signature": "ServiceTest.coversUnchanged()V",
+          "source_path": "checks/java/fixture/ServiceTest.java"
+        }
+      ]
+    }
+  ]
+}

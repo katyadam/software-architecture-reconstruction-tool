@@ -67,6 +67,14 @@ failures are diagnostic only; existing Tree-sitter extraction still runs.
 
 ## Conservative Java test impact analysis
 
+Java TIA can also consume the existing service config through `--config-file`.
+Optional per-service `java_analysis.artifacts_file` inputs provide resolved source
+roots, effective tests, dependencies and compiled classes to both WALA and SootUp,
+skipping preparation for those modules. See [configured Java analysis inputs](java-analysis-inputs.md)
+for path/profile rules, examples, producer responsibilities and the
+`requires_full_test_run` result flag. Service lists do not establish complete
+consumer scope or reflection/Spring coverage by themselves.
+
 Build the adapter first, then compare the checked-out candidate `HEAD` against
 any resolvable Git baseline revision:
 
