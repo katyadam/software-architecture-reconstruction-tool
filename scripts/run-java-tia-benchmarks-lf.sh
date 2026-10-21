@@ -11,9 +11,10 @@ checks sample-message-driven-microservices and sample-spring-kafka-microservices
 Environment:
   JAVA_BENCHMARK_ROOT       Benchmark checkout root (default: sibling benchmarks/java)
   TIA_BINARY                Built test-impact binary (default: target/debug/test-impact)
-  JAVA_CALLGRAPH_PROVIDER   Java call-graph provider: wala or sootup (default: wala)
+  JAVA_CALLGRAPH_PROVIDER   Java call-graph provider: wala, sootup, or spoon (default: wala)
   JAVA_CALLGRAPH_ADAPTER_JAR Adapter JAR for the selected non-WALA provider
   WALA_ADAPTER_JAR          WALA adapter JAR (default: wala-callgraph target JAR)
+  SPOON_ADAPTER_JAR         Spoon adapter JAR (default: spoon-callgraph target JAR)
   TIA_BENCHMARK_OUTPUT_DIR  Directory for JSON results (default: a new /tmp directory)
   WALA_TIMEOUT_SECONDS      Per-module adapter timeout (default: 30)
 
@@ -35,6 +36,7 @@ tia_binary=${TIA_BINARY:-"$repo_root/target/debug/test-impact"}
 wala_adapter_jar=${WALA_ADAPTER_JAR:-"$repo_root/wala-callgraph/target/wala-callgraph-all.jar"}
 java_callgraph_provider=${JAVA_CALLGRAPH_PROVIDER:-wala}
 java_callgraph_adapter_jar=${JAVA_CALLGRAPH_ADAPTER_JAR:-}
+spoon_adapter_jar=${SPOON_ADAPTER_JAR:-"$repo_root/spoon-callgraph/target/spoon-callgraph-all.jar"}
 wala_timeout_seconds=${WALA_TIMEOUT_SECONDS:-30}
 output_dir=${TIA_BENCHMARK_OUTPUT_DIR:-"$(mktemp -d /tmp/sar-java-tia-benchmark.XXXXXX)"}
 
@@ -61,6 +63,15 @@ case "$java_callgraph_provider" in
     adapter_arguments=(
       --java-callgraph-provider sootup
       --java-callgraph-adapter-jar "$java_callgraph_adapter_jar"
+    )
+    ;;
+  spoon)
+    if [[ ! -f $spoon_adapter_jar ]]; then
+      mvn -q -f "$repo_root/java-callgraph-adapters/pom.xml" -pl ../spoon-callgraph -am package -DskipTests
+    fi
+    adapter_arguments=(
+      --java-callgraph-provider spoon
+      --spoon-adapter-jar "$spoon_adapter_jar"
     )
     ;;
   *)
