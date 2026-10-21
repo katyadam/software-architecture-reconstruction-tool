@@ -19,6 +19,18 @@ pub fn analyze_changes(
     project_root: &Path,
     baseline_revision: &str,
 ) -> Result<Vec<ChangedElement>, ImpactError> {
+    analyze_changes_with_catalog(
+        project_root,
+        baseline_revision,
+        &ModuleCatalog::load(project_root),
+    )
+}
+
+pub fn analyze_changes_with_catalog(
+    project_root: &Path,
+    baseline_revision: &str,
+    catalog: &ModuleCatalog,
+) -> Result<Vec<ChangedElement>, ImpactError> {
     let statuses = git_output(
         project_root,
         &[
@@ -40,7 +52,6 @@ pub fn analyze_changes(
         ],
     )?;
     let mut changes = Vec::new();
-    let catalog = ModuleCatalog::load(project_root);
 
     for status in parse_statuses(&statuses) {
         if status.kind == 'M' || status.kind == 'A' {
@@ -50,7 +61,7 @@ pub fn analyze_changes(
                     for range in ranges {
                         changes.extend(map_java_range(
                             project_root,
-                            &catalog,
+                            catalog,
                             &status.candidate_path,
                             range,
                         )?);
@@ -59,7 +70,7 @@ pub fn analyze_changes(
                 }
             }
         }
-        changes.push(module_change(&catalog, &status.candidate_path));
+        changes.push(module_change(catalog, &status.candidate_path));
     }
     Ok(deduplicate(changes))
 }

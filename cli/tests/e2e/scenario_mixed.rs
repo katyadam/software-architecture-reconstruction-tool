@@ -47,6 +47,7 @@ async fn mixed_java_python_full_pipeline() {
     let config = ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "order-service".to_string(),
                 base_dir_path: java_order_dir.clone(),
                 urls: vec![
@@ -55,6 +56,7 @@ async fn mixed_java_python_full_pipeline() {
                 ],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "python-client-service".to_string(),
                 base_dir_path: python_client_dir.clone(),
                 urls: vec!["http://python-client:8001".to_string()],

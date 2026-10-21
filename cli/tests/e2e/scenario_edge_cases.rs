@@ -64,6 +64,7 @@ fn no_restcalls_produces_empty_sdg_connections() {
 
     let config = ConfigurationData {
         service_descriptions: vec![ServiceDescription {
+            java_analysis: None,
             name: "order-service".to_string(),
             base_dir_path: order_dir,
             urls: vec!["http://ts-order-service".to_string()],
@@ -92,11 +93,13 @@ fn cleared_entities_produces_empty_context_map() {
     let config = ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "order-service".to_string(),
                 base_dir_path: order_dir,
                 urls: vec!["http://ts-order-service".to_string()],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "billing-service".to_string(),
                 base_dir_path: billing_dir,
                 urls: vec!["http://billing-service:8081".to_string()],
@@ -130,6 +133,7 @@ fn unassigned_files_produce_anonymous_service_connections() {
     // Only configure order-service — billing files get anonymous service name ""
     let config = ConfigurationData {
         service_descriptions: vec![ServiceDescription {
+            java_analysis: None,
             name: "order-service".to_string(),
             base_dir_path: order_dir,
             urls: vec!["http://ts-order-service".to_string()],
