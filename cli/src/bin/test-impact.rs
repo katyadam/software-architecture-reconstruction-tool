@@ -4,7 +4,7 @@ use cli::get_java_callables_for_modules_with_progress;
 use extractor_runtime::{
     call_graph::{
         java_adapter::JavaAdapterProvider, resolve_reachability_with_java_tests,
-        wala::WalaJavaProvider,
+        spoon::SpoonJavaProvider, wala::WalaJavaProvider,
     },
     impact::{
         ModuleCatalog, ModuleDependencyGraph, analyze_changes, discover_java_tests,
@@ -45,6 +45,9 @@ struct Arguments {
     /// Standalone WALA adapter JAR; preserved as the compatibility path for WALA.
     #[arg(long, value_name = "FILE")]
     wala_adapter_jar: Option<PathBuf>,
+    /// Spoon source-level call-graph adapter JAR.
+    #[arg(long, value_name = "FILE")]
+    spoon_adapter_jar: Option<PathBuf>,
     /// Destination JSON file for the auditable selection result.
     #[arg(long, value_name = "FILE")]
     output: PathBuf,
@@ -155,6 +158,7 @@ fn validate_project_and_revision(arguments: &Arguments) -> Result<()> {
 enum JavaCallGraphProviderKind {
     Wala,
     SootUp,
+    Spoon,
 }
 
 impl JavaCallGraphProviderKind {
@@ -162,6 +166,7 @@ impl JavaCallGraphProviderKind {
         match value {
             "wala" => Ok(Self::Wala),
             "sootup" => Ok(Self::SootUp),
+            "spoon" => Ok(Self::Spoon),
             other => anyhow::bail!("Unsupported Java call-graph provider: {other}"),
         }
     }
@@ -170,6 +175,7 @@ impl JavaCallGraphProviderKind {
 enum SelectedJavaProvider {
     Wala(WalaJavaProvider),
     SootUp(JavaAdapterProvider),
+    Spoon(SpoonJavaProvider),
 }
 
 impl SelectedJavaProvider {
@@ -177,6 +183,7 @@ impl SelectedJavaProvider {
         match self {
             Self::Wala(provider) => provider,
             Self::SootUp(provider) => provider,
+            Self::Spoon(provider) => provider,
         }
     }
 
@@ -192,12 +199,18 @@ impl SelectedJavaProvider {
             Self::SootUp(provider) => {
                 provider.analyze_modules(project_root, modules, tests, targets)
             }
+            Self::Spoon(provider) => provider.analyze_test_roots(
+                &project_root.join("src/main/java"),
+                tests,
+                targets,
+            ),
         }
     }
     fn label(&self) -> &'static str {
         match self {
             Self::Wala(_) => "WALA",
             Self::SootUp(_) => "SootUp",
+            Self::Spoon(_) => "Spoon",
         }
     }
 
@@ -210,6 +223,7 @@ impl SelectedJavaProvider {
         match self {
             Self::Wala(provider) => provider.analyze_test_roots(source_root, test_roots, targets),
             Self::SootUp(provider) => provider.analyze_test_roots(source_root, test_roots, targets),
+            Self::Spoon(provider) => provider.analyze_test_roots(source_root, test_roots, targets),
         }
     }
 }
@@ -255,6 +269,18 @@ fn select_provider(
                 jar,
                 timeout,
                 "cha",
+            )))
+        }
+        JavaCallGraphProviderKind::Spoon => {
+            let jar = arguments
+                .spoon_adapter_jar
+                .as_ref()
+                .context("--spoon-adapter-jar must be supplied for the Spoon provider")?;
+            if !jar.is_file() {
+                anyhow::bail!("--spoon-adapter-jar must be an existing file");
+            }
+            Ok(SelectedJavaProvider::Spoon(SpoonJavaProvider::with_timeout(
+                jar, timeout,
             )))
         }
     }
