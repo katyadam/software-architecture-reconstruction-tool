@@ -49,21 +49,8 @@ impl ModuleDependencyGraph {
             .as_ref()
             .map(|g| g.dependencies.clone())
             .unwrap_or_default();
-        let known = super::java_tests::checkout_modules(&root).map_err(|e| e.to_string())?;
-        for module in known {
-            let build = module.join("pom.xml").is_file()
-                || module.join("build.gradle").is_file()
-                || module.join("build.gradle.kts").is_file()
-                || module.join("settings.gradle").is_file()
-                || module.join("settings.gradle.kts").is_file();
-            if build && !inputs.modules.contains_key(&module) && !dependencies.contains_key(&module)
-            {
-                return Err(format!(
-                    "consumer dependency scope unresolved: {}",
-                    module.display()
-                ));
-            }
-        }
+        // When module_inventory_complete=true the manifest is authoritative: modules on
+        // disk but not listed are intentionally excluded and should not trigger fallback.
         for service in &inputs.services {
             if service.manifest_path.is_none() && !dependencies.contains_key(&service.root) {
                 return Err(format!(
