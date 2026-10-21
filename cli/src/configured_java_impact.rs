@@ -112,10 +112,6 @@ pub fn analyze_configured_impact(
         tests.retain(|t| Path::new(&t.module_root) != module.root);
         tests.extend(module.tests.clone());
     }
-    if inputs.module_inventory_complete {
-        // The manifest is authoritative: drop tests from modules intentionally excluded.
-        tests.retain(|t| inputs.modules.contains_key(Path::new(&t.module_root)));
-    }
     tests.sort_by(|a, b| {
         (&a.module_root, &a.class_name, &a.method_name, &a.descriptor).cmp(&(
             &b.module_root,
@@ -148,6 +144,17 @@ pub fn analyze_configured_impact(
         }
     };
     let known_modules = graph.modules().collect::<std::collections::BTreeSet<_>>();
+    // Drop tests from modules that the reactor (settings.gradle / root pom.xml) explicitly
+    // declared as subprojects but that were intentionally excluded from the manifest.
+    // Tests in builds that no reactor ever claimed are kept so the check below can
+    // trigger a conservative full run for them.
+    if inputs.module_inventory_complete && !inputs.modules.is_empty() {
+        let reactor_modules = ModuleDependencyGraph::reactor_claimed_modules(project);
+        tests.retain(|t| {
+            let m = PathBuf::from(&t.module_root);
+            inputs.modules.contains_key(&m) || !reactor_modules.contains(&m)
+        });
+    }
     if result.requires_full_test_run
         || tests
             .iter()
