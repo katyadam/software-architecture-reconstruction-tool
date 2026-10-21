@@ -112,6 +112,10 @@ pub fn analyze_configured_impact(
         tests.retain(|t| Path::new(&t.module_root) != module.root);
         tests.extend(module.tests.clone());
     }
+    if inputs.module_inventory_complete {
+        // The manifest is authoritative: drop tests from modules intentionally excluded.
+        tests.retain(|t| inputs.modules.contains_key(Path::new(&t.module_root)));
+    }
     tests.sort_by(|a, b| {
         (&a.module_root, &a.class_name, &a.method_name, &a.descriptor).cmp(&(
             &b.module_root,
