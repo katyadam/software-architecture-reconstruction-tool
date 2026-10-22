@@ -282,6 +282,55 @@ fn test_functions_in_classes_are_discovered() {
     );
 }
 
+/// Django-style `tests.py` files are discovered alongside `test_*.py`.
+///
+/// Projects like microservices-django-kafka ship `tests.py` (the default Django app test module).
+/// This test verifies that a `tests.py` with `test_` methods is picked up by discovery.
+#[test]
+fn django_tests_py_is_discovered() {
+    let f = fixture();
+    write_file(
+        &f.root,
+        "myapp/tests.py",
+        "from django.test import TestCase\nclass MyAppTests(TestCase):\n    def test_something(self):\n        pass\n    def test_another(self):\n        pass\n",
+    );
+    git(&f.root, &["add", "."]);
+    git(&f.root, &["commit", "-qm", "add django tests"]);
+    let new_baseline = git(&f.root, &["rev-parse", "HEAD"]);
+
+    write_file(&f.root, "service.py", "def compute(x):\n    return x + 99\n");
+    git(&f.root, &["add", "."]);
+    git(&f.root, &["commit", "-qm", "candidate"]);
+
+    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
+        .args([
+            "--project-dir",
+            f.root.to_str().unwrap(),
+            "--baseline-revision",
+            &new_baseline,
+            "--output",
+            f.out.to_str().unwrap(),
+            "--pyan3-timeout-secs",
+            "0",
+        ])
+        .output()
+        .unwrap();
+    let v = read(&f, o);
+    let selected = v["selected_tests"].as_array().unwrap();
+    let names: Vec<_> = selected
+        .iter()
+        .map(|t| t["test"]["qualified_name"].as_str().unwrap())
+        .collect();
+    assert!(
+        names.iter().any(|n| n.contains("test_something")),
+        "tests.py::test_something not discovered: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n.contains("test_another")),
+        "tests.py::test_another not discovered: {names:?}"
+    );
+}
+
 /// Benchmark regression: microservices-django-kafka, commit pair a34f3d3..487c45b.
 ///
 /// Candidate commit 487c45b changes only production Python (models.py, ratios.py) with no
@@ -475,4 +524,276 @@ fn pyan3_absent_falls_back_to_conservative() {
     assert_eq!(v["selection_mode"], "conservative_all", "{v}");
     assert_eq!(v["run_all_tests"], true, "{v}");
     assert_eq!(v["selected_tests"].as_array().unwrap().len(), 2, "{v}");
+}
+
+/// Benchmark regression: kafka-ml, commit 5636347 (production-only change to models.py).
+///
+/// Commit 5636347 adds `TELEGRAF_STR_JSON` to choices in `backend/automl/models.py` only.
+/// No test files are touched. The repo has 14 test methods across 3 TestCase classes in
+/// `backend/automl/test_views.py`. All 14 must be selected conservatively.
+///
+/// Skips silently when the benchmark repo is not present (CI-safe).
+#[test]
+fn benchmark_kafka_ml_models_change_selects_all_14_tests() {
+    let tool_repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("repo root")
+        .to_path_buf();
+    let benchmark_root = tool_repo
+        .parent()
+        .expect("parent of repo root")
+        .join("benchmarks")
+        .join("python")
+        .join("kafka-ml");
+
+    if !benchmark_root.join(".git").exists() {
+        eprintln!("skip: benchmark repo not found at {}", benchmark_root.display());
+        return;
+    }
+
+    // Commit where only backend/automl/models.py was changed (added TELEGRAF_STR_JSON choice).
+    let candidate = "5636347";
+    // Parent commit as baseline.
+    let baseline_out = Command::new("git")
+        .args(["rev-parse", &format!("{candidate}^")])
+        .current_dir(&benchmark_root)
+        .output()
+        .expect("git rev-parse");
+    if !baseline_out.status.success() {
+        eprintln!("skip: required commit {candidate} not present in benchmark repo");
+        return;
+    }
+    let baseline = String::from_utf8_lossy(&baseline_out.stdout).trim().to_string();
+
+    let wt_dir = tempfile::tempdir().expect("tempdir");
+    let wt_root = wt_dir.path().join("worktree");
+    let wt_add = Command::new("git")
+        .args(["worktree", "add", wt_root.to_str().unwrap(), candidate])
+        .current_dir(&benchmark_root)
+        .output()
+        .expect("git worktree add");
+    assert!(
+        wt_add.status.success(),
+        "git worktree add failed: {}",
+        String::from_utf8_lossy(&wt_add.stderr)
+    );
+
+    let out_path = wt_dir.path().join("result.json");
+    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
+        .args([
+            "--project-dir",
+            wt_root.to_str().unwrap(),
+            "--baseline-revision",
+            &baseline,
+            "--output",
+            out_path.to_str().unwrap(),
+            "--pyan3-timeout-secs",
+            "0",
+        ])
+        .output()
+        .expect("python-test-impact");
+
+    let _ = Command::new("git")
+        .args(["worktree", "remove", "--force", wt_root.to_str().unwrap()])
+        .current_dir(&benchmark_root)
+        .output();
+
+    assert!(
+        o.status.success(),
+        "python-test-impact failed: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+
+    let v: Value = serde_json::from_slice(&fs::read(&out_path).unwrap())
+        .expect("valid JSON output");
+
+    assert_eq!(v["selection_mode"], "conservative_all", "{v}");
+    assert_eq!(v["run_all_tests"], true, "{v}");
+
+    // 14 test methods across 3 TestCase classes in backend/automl/test_views.py:
+    //   ModelViewTest         — 8 methods
+    //   ConfigurationViewTest — 5 methods
+    //   ResultViewTest        — 1 method
+    let discovered = v["discovered_tests"].as_array().unwrap().len();
+    assert_eq!(discovered, 14, "expected 14 discovered tests, got {discovered}: {v}");
+
+    let selected = v["selected_tests"].as_array().unwrap().len();
+    assert_eq!(selected, 14, "expected all 14 tests selected, got {selected}: {v}");
+}
+
+// ---------------------------------------------------------------------------
+// AST-driven discovery: new signal tests
+// ---------------------------------------------------------------------------
+
+/// A file named `logic.py` (no test_ prefix) that contains `import pytest` and a
+/// `def test_compute():` function must be discovered.
+#[test]
+fn pytest_function_in_non_test_named_file_is_discovered() {
+    let f = fixture();
+    write_file(
+        &f.root,
+        "myapp/logic.py",
+        "import pytest\n\ndef compute(x):\n    return x\n\ndef test_compute():\n    assert compute(1) == 1\n",
+    );
+    git(&f.root, &["add", "."]);
+    git(&f.root, &["commit", "-qm", "add pytest logic"]);
+    let new_baseline = git(&f.root, &["rev-parse", "HEAD"]);
+
+    write_file(&f.root, "service.py", "def compute(x):\n    return x + 99\n");
+    git(&f.root, &["add", "."]);
+    git(&f.root, &["commit", "-qm", "candidate"]);
+
+    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
+        .args([
+            "--project-dir", f.root.to_str().unwrap(),
+            "--baseline-revision", &new_baseline,
+            "--output", f.out.to_str().unwrap(),
+            "--pyan3-timeout-secs", "0",
+        ])
+        .output()
+        .unwrap();
+    let v = read(&f, o);
+    let names: Vec<_> = v["selected_tests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["test"]["qualified_name"].as_str().unwrap())
+        .collect();
+    assert!(
+        names.iter().any(|n| *n == "test_compute"),
+        "test_compute from pytest-importing logic.py not discovered: {names:?}"
+    );
+}
+
+/// A file named `service_tests.py` (no test_ prefix) with a `unittest.TestCase`
+/// subclass and `test_` methods must be discovered.
+#[test]
+fn unittest_testcase_subclass_in_non_test_named_file_is_discovered() {
+    let f = fixture();
+    write_file(
+        &f.root,
+        "myapp/service_tests.py",
+        "import unittest\n\nclass ServiceTests(unittest.TestCase):\n    def test_one(self):\n        pass\n    def test_two(self):\n        pass\n",
+    );
+    git(&f.root, &["add", "."]);
+    git(&f.root, &["commit", "-qm", "add unittest suite"]);
+    let new_baseline = git(&f.root, &["rev-parse", "HEAD"]);
+
+    write_file(&f.root, "service.py", "def compute(x):\n    return x + 99\n");
+    git(&f.root, &["add", "."]);
+    git(&f.root, &["commit", "-qm", "candidate"]);
+
+    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
+        .args([
+            "--project-dir", f.root.to_str().unwrap(),
+            "--baseline-revision", &new_baseline,
+            "--output", f.out.to_str().unwrap(),
+            "--pyan3-timeout-secs", "0",
+        ])
+        .output()
+        .unwrap();
+    let v = read(&f, o);
+    let names: Vec<_> = v["selected_tests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["test"]["qualified_name"].as_str().unwrap())
+        .collect();
+    assert!(
+        names.iter().any(|n| n.contains("test_one")),
+        "test_one from unittest service_tests.py not discovered: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n.contains("test_two")),
+        "test_two from unittest service_tests.py not discovered: {names:?}"
+    );
+}
+
+/// A file `myapp/tests/utils.py` whose name has no test_ prefix must be scanned
+/// because it lives under a `tests/` directory, and its pytest functions discovered.
+#[test]
+fn files_under_tests_dir_are_scanned_without_test_prefix() {
+    let f = fixture();
+    write_file(
+        &f.root,
+        "myapp/tests/utils.py",
+        "import pytest\n\ndef test_helper():\n    pass\n\ndef test_another():\n    pass\n",
+    );
+    git(&f.root, &["add", "."]);
+    git(&f.root, &["commit", "-qm", "add tests/utils.py"]);
+    let new_baseline = git(&f.root, &["rev-parse", "HEAD"]);
+
+    write_file(&f.root, "service.py", "def compute(x):\n    return x + 99\n");
+    git(&f.root, &["add", "."]);
+    git(&f.root, &["commit", "-qm", "candidate"]);
+
+    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
+        .args([
+            "--project-dir", f.root.to_str().unwrap(),
+            "--baseline-revision", &new_baseline,
+            "--output", f.out.to_str().unwrap(),
+            "--pyan3-timeout-secs", "0",
+        ])
+        .output()
+        .unwrap();
+    let v = read(&f, o);
+    let names: Vec<_> = v["selected_tests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["test"]["qualified_name"].as_str().unwrap())
+        .collect();
+    assert!(
+        names.iter().any(|n| *n == "test_helper"),
+        "test_helper from tests/utils.py not discovered: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| *n == "test_another"),
+        "test_another from tests/utils.py not discovered: {names:?}"
+    );
+}
+
+/// A class decorated with `@some_decorator` wrapping a `TestCase` subclass must
+/// have its test methods discovered (fixes the `decorated_definition → class_definition` gap).
+#[test]
+fn decorated_class_tests_are_discovered() {
+    let f = fixture();
+    write_file(
+        &f.root,
+        "tests/test_decorated.py",
+        "import unittest\n\ndef some_decorator(cls):\n    return cls\n\n@some_decorator\nclass DecoratedTests(unittest.TestCase):\n    def test_alpha(self):\n        pass\n    def test_beta(self):\n        pass\n",
+    );
+    git(&f.root, &["add", "."]);
+    git(&f.root, &["commit", "-qm", "add decorated test class"]);
+    let new_baseline = git(&f.root, &["rev-parse", "HEAD"]);
+
+    write_file(&f.root, "service.py", "def compute(x):\n    return x + 99\n");
+    git(&f.root, &["add", "."]);
+    git(&f.root, &["commit", "-qm", "candidate"]);
+
+    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
+        .args([
+            "--project-dir", f.root.to_str().unwrap(),
+            "--baseline-revision", &new_baseline,
+            "--output", f.out.to_str().unwrap(),
+            "--pyan3-timeout-secs", "0",
+        ])
+        .output()
+        .unwrap();
+    let v = read(&f, o);
+    let names: Vec<_> = v["selected_tests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["test"]["qualified_name"].as_str().unwrap())
+        .collect();
+    assert!(
+        names.iter().any(|n| n.contains("test_alpha")),
+        "test_alpha from decorated class not discovered: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n.contains("test_beta")),
+        "test_beta from decorated class not discovered: {names:?}"
+    );
 }
