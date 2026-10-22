@@ -11,6 +11,7 @@ pub mod entities;
 pub mod enums;
 pub mod go_impact;
 pub mod go_package_impact;
+pub mod python_impact;
 pub mod impact;
 pub mod imports;
 pub mod ir;
