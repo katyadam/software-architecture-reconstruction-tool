@@ -797,3 +797,128 @@ fn decorated_class_tests_are_discovered() {
         "test_beta from decorated class not discovered: {names:?}"
     );
 }
+
+/// Benchmark regression: microservices-django-kafka, commit 487c45b with pyan3 enabled.
+///
+/// When pyan3 is available and all changed elements are callable-level (or accompanied
+/// by harmless module-level additions), the tool uses `call_graph_precise` mode and
+/// selects only the 6 planning-service tests that transitively reach the changed callables:
+///   NetWorthToTotalAssets_Age42::{test_benchmark, test_ratio, test_status}
+///   NetWorthToTotalAssets_Age66::{test_benchmark, test_ratio, test_status}
+///
+/// The 9 events-service tests (EventsConfTestCase, OutboxItemTestCase, SaveEventDecorator)
+/// are unselected because they have no call path to the changed code.
+///
+/// Skips silently when pyan3 is not installed or the benchmark repo is absent.
+#[test]
+fn benchmark_mdk_callable_change_selects_6_tests_with_call_graph_precise() {
+    let tool_repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("repo root")
+        .to_path_buf();
+    let benchmark_root = tool_repo
+        .parent()
+        .expect("parent of repo root")
+        .join("benchmarks")
+        .join("python")
+        .join("microservices-django-kafka");
+
+    if !benchmark_root.join(".git").exists() {
+        eprintln!("skip: benchmark repo not found at {}", benchmark_root.display());
+        return;
+    }
+
+    // Verify pyan3 is installed (without it, this test would just fall back to conservative).
+    let pyan3_ok = Command::new("pyan3")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !pyan3_ok {
+        eprintln!("skip: pyan3 not installed");
+        return;
+    }
+
+    let baseline = "a34f3d37a0b69912a9bb0a1a1616d683ec7b2c1a";
+    let candidate = "487c45bc38fa3a1b79aefa339770c50be297332e";
+
+    let check = |rev: &str| {
+        Command::new("git")
+            .args(["rev-parse", "--verify", &format!("{rev}^{{commit}}")])
+            .current_dir(&benchmark_root)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    };
+    if !check(baseline) || !check(candidate) {
+        eprintln!("skip: required commits not present in benchmark repo");
+        return;
+    }
+
+    let wt_dir = tempfile::tempdir().expect("tempdir");
+    let wt_root = wt_dir.path().join("worktree");
+    let wt_add = Command::new("git")
+        .args(["worktree", "add", wt_root.to_str().unwrap(), candidate])
+        .current_dir(&benchmark_root)
+        .output()
+        .expect("git worktree add");
+    assert!(
+        wt_add.status.success(),
+        "git worktree add failed: {}",
+        String::from_utf8_lossy(&wt_add.stderr)
+    );
+
+    let out_path = wt_dir.path().join("result.json");
+    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
+        .args([
+            "--project-dir",
+            wt_root.to_str().unwrap(),
+            "--baseline-revision",
+            baseline,
+            "--output",
+            out_path.to_str().unwrap(),
+            "--pyan3-timeout-secs",
+            "60",
+        ])
+        .output()
+        .expect("python-test-impact");
+
+    let _ = Command::new("git")
+        .args(["worktree", "remove", "--force", wt_root.to_str().unwrap()])
+        .current_dir(&benchmark_root)
+        .output();
+
+    assert!(
+        o.status.success(),
+        "python-test-impact failed: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+
+    let v: Value = serde_json::from_slice(&fs::read(&out_path).unwrap())
+        .expect("valid JSON output");
+
+    // With pyan3, should use precise call graph mode and NOT run all tests.
+    assert_eq!(v["selection_mode"], "call_graph_precise", "{v}");
+    assert_eq!(v["run_all_tests"], false, "{v}");
+
+    // Only the 6 planning-service tests that reach changed callables should be selected.
+    let selected = v["selected_tests"].as_array().unwrap();
+    assert_eq!(selected.len(), 6, "expected 6 selected tests (planning-service only), got {}: {v}", selected.len());
+
+    // The 9 events-service tests must be unselected.
+    let unselected = v["unselected_tests"].as_array().unwrap();
+    assert_eq!(unselected.len(), 9, "expected 9 unselected tests (events-service), got {}: {v}", unselected.len());
+
+    // All selected tests should be from NetWorthToTotalAssets_Age42 or _Age66.
+    let selected_names: Vec<&str> = selected
+        .iter()
+        .map(|t| t["test"]["qualified_name"].as_str().unwrap())
+        .collect();
+    for name in &selected_names {
+        assert!(
+            name.starts_with("NetWorthToTotalAssets_Age"),
+            "unexpected selected test {name}: {selected_names:?}"
+        );
+    }
+}

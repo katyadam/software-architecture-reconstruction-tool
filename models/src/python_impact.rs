@@ -53,6 +53,9 @@ pub struct PythonChangedElement {
 pub enum PythonSelectionMode {
     NoChanges,
     ConservativeAll,
+    /// pyan3 call graph was available and all changed elements were callable-level;
+    /// only tests reachable from changed callables are selected.
+    CallGraphPrecise,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -68,8 +71,8 @@ pub struct PythonSelectedTest {
     pub reasons: Vec<PythonSelectionReason>,
 }
 
-/// Advisory graph suggestion: pyan3 reached this test from a changed callable.
-/// Does not imply the test can be excluded if it is absent — selection is always conservative.
+/// Graph suggestion: pyan3 reached this test from a changed callable.
+/// Used directly for selection in `CallGraphPrecise` mode; annotates reasons in other modes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PythonSuggestedTest {
     pub test: PythonTestCase,
