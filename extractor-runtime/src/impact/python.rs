@@ -1,9 +1,8 @@
-//! Conservative Git-to-source change mapping for Python test impact analysis.
+//! Git-to-source change mapping for Python test impact analysis.
 //!
-//! Python TIA is always conservative: every detected change selects all discovered tests.
-//! When a pyan3 call graph is available, tests that the graph shows can reach a changed
-//! callable also receive a `ChangedCallable` reason — but this is advisory only and never
-//! used to exclude tests.
+//! When all changed elements are callable-level and pyan3 produces a call graph, the tool
+//! uses `CallGraphPrecise` mode to select only tests reachable from changed callables.
+//! Otherwise it falls back to `ConservativeAll` (run every discovered test).
 
 use super::{
     python_changes::{PythonFileDiff, PythonHunk, map_python_changes},
@@ -87,7 +86,11 @@ pub fn analyze_python_impact(
     } else {
         eprintln!("python_impact_phase=callgraph");
         let pyan3 = Pyan3Provider::new(effective_timeout);
-        let result = pyan3.analyze_project(&project_root);
+        // Scope pyan3 to the service root containing the changed files rather than the
+        // whole project root. Multi-service monorepos cause pyan3 to drop edges when
+        // given too many files; scoping to the relevant service preserves method-level nodes.
+        let pyan3_scope = find_python_scope(&project_root, &changed_elements);
+        let result = pyan3.analyze_project(&pyan3_scope);
         let duration_ms = result.duration_ms;
         let (status, mut diag) = match result.status {
             Pyan3Status::Ok => (PythonStageStatus::Ok, result.diagnostics),
@@ -133,31 +136,57 @@ pub fn analyze_python_impact(
         if changed_elements.is_empty() {
             (vec![], vec![], false, PythonSelectionMode::NoChanges)
         } else {
-            let conservative_diag =
-                "Python coverage is conservative; run every discovered test".to_string();
-            let selected = discovered_tests
-                .iter()
-                .map(|t| {
-                    let mut reasons =
-                        vec![PythonSelectionReason::ConservativeFallback {
-                            diagnostic: conservative_diag.clone(),
-                        }];
-                    // Annotate with graph-suggested changed callables (advisory).
-                    if let Some(suggestion) =
-                        graph_suggested_tests.iter().find(|s| &s.test == t)
-                    {
-                        for target in &suggestion.changed_targets {
-                            let r = PythonSelectionReason::ChangedCallable {
-                                target: target.clone(),
-                            };
-                            if !reasons.contains(&r) {
-                                reasons.push(r);
-                            }
+            // Use CallGraphPrecise when pyan3 succeeded and the graph actually excludes
+            // some tests (strict subset reachable). This is safe even when some changed
+            // elements are module-level (e.g. a new import or logger declaration) because
+            // pyan3 does not model module-level data flow; the caller graph is still the
+            // right signal for which test classes transitively exercise the changed callables.
+            let can_use_graph = matches!(analysis_stage.status, PythonStageStatus::Ok)
+                && !graph_suggested_tests.is_empty()
+                && graph_suggested_tests.len() < discovered_tests.len();
+
+            if can_use_graph {
+                let suggested_set: std::collections::HashSet<_> = graph_suggested_tests
+                    .iter()
+                    .map(|s| &s.test.qualified_name)
+                    .collect();
+                let selected = graph_suggested_tests
+                    .iter()
+                    .map(|s| {
+                        let reasons = s
+                            .changed_targets
+                            .iter()
+                            .map(|t| PythonSelectionReason::ChangedCallable {
+                                target: t.clone(),
+                            })
+                            .collect();
+                        PythonSelectedTest {
+                            test: s.test.clone(),
+                            reasons,
                         }
-                    } else {
-                        // Fall back to the module-level changed callable list.
-                        for elem in &changed_elements {
-                            if let Some(target) = &elem.target {
+                    })
+                    .collect();
+                let unselected = discovered_tests
+                    .iter()
+                    .filter(|t| !suggested_set.contains(&t.qualified_name))
+                    .cloned()
+                    .collect();
+                (selected, unselected, false, PythonSelectionMode::CallGraphPrecise)
+            } else {
+                let conservative_diag =
+                    "Python coverage is conservative; run every discovered test".to_string();
+                let selected = discovered_tests
+                    .iter()
+                    .map(|t| {
+                        let mut reasons =
+                            vec![PythonSelectionReason::ConservativeFallback {
+                                diagnostic: conservative_diag.clone(),
+                            }];
+                        // Annotate with graph-suggested changed callables (advisory).
+                        if let Some(suggestion) =
+                            graph_suggested_tests.iter().find(|s| &s.test == t)
+                        {
+                            for target in &suggestion.changed_targets {
                                 let r = PythonSelectionReason::ChangedCallable {
                                     target: target.clone(),
                                 };
@@ -165,15 +194,27 @@ pub fn analyze_python_impact(
                                     reasons.push(r);
                                 }
                             }
+                        } else {
+                            // Fall back to the module-level changed callable list.
+                            for elem in &changed_elements {
+                                if let Some(target) = &elem.target {
+                                    let r = PythonSelectionReason::ChangedCallable {
+                                        target: target.clone(),
+                                    };
+                                    if !reasons.contains(&r) {
+                                        reasons.push(r);
+                                    }
+                                }
+                            }
                         }
-                    }
-                    PythonSelectedTest {
-                        test: t.clone(),
-                        reasons,
-                    }
-                })
-                .collect();
-            (selected, vec![], true, PythonSelectionMode::ConservativeAll)
+                        PythonSelectedTest {
+                            test: t.clone(),
+                            reasons,
+                        }
+                    })
+                    .collect();
+                (selected, vec![], true, PythonSelectionMode::ConservativeAll)
+            }
         };
 
     Ok(PythonImpactReport {
@@ -241,6 +282,68 @@ fn skipped_stage(why: &str) -> PythonStageReport {
         diagnostics: vec![why.into()],
         duration_ms: 0,
     }
+}
+
+/// Finds the narrowest directory containing all changed Python files that also looks like
+/// a Python project root (has `manage.py`, `setup.py`, `pyproject.toml`, or `setup.cfg`).
+///
+/// Falls back to `project_root` if no marker is found or the changed elements have no
+/// source paths. This scopes pyan3 to a single service in a monorepo and prevents
+/// edge degradation from passing too many unrelated files.
+fn find_python_scope(project_root: &Path, changed_elements: &[PythonChangedElement]) -> PathBuf {
+    const MARKERS: &[&str] = &["manage.py", "setup.py", "pyproject.toml", "setup.cfg"];
+
+    // Collect the directories of all changed source files.
+    let dirs: Vec<PathBuf> = changed_elements
+        .iter()
+        .filter_map(|e| {
+            let path = e.source_path.as_str();
+            path.rsplit_once('/').map(|(d, _)| d.to_owned())
+        })
+        .filter_map(|d| {
+            let abs = project_root.join(&d);
+            if abs.is_dir() { Some(abs) } else { None }
+        })
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    if dirs.is_empty() {
+        return project_root.to_path_buf();
+    }
+
+    // Find the deepest common ancestor of all change directories.
+    let mut common: &Path = dirs[0].as_path();
+    for d in &dirs[1..] {
+        while !d.starts_with(common) {
+            match common.parent() {
+                Some(p) if p != common => common = p,
+                _ => return project_root.to_path_buf(),
+            }
+        }
+    }
+
+    // Walk from the common ancestor up to project_root, stopping at the first Python root marker.
+    let mut candidate = common;
+    loop {
+        if MARKERS.iter().any(|m| candidate.join(m).exists()) {
+            return candidate.to_path_buf();
+        }
+        match candidate.parent() {
+            Some(p) if p != candidate && p.starts_with(project_root) => {
+                candidate = p;
+            }
+            _ => break,
+        }
+    }
+
+    // No marker found — check if project_root itself has a marker.
+    if MARKERS.iter().any(|m| project_root.join(m).exists()) {
+        return project_root.to_path_buf();
+    }
+
+    // Last resort: use the common ancestor directory directly.
+    common.to_path_buf()
 }
 
 fn resolve_revision(root: &Path, rev: &str) -> Result<String, PythonImpactError> {

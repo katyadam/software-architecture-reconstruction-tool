@@ -36,10 +36,16 @@ pub fn graph_suggestions(
             }
             // BFS backward from those nodes.
             let reachable = reverse_reachable(&target_nodes, &reverse);
-            // Check whether any reachable node matches this test.
+            // A test is reachable if:
+            // 1. Its own node is in the reachable set, OR
+            // 2. It belongs to a class and any sibling method of that class is reachable
+            //    (pyan3 often omits test methods that have no outgoing call edges).
             let test_matched = reachable
                 .iter()
-                .any(|id| node_matches_local(id, test_dotted.as_str()));
+                .any(|id| node_matches_local(id, test_dotted.as_str()))
+                || test.class_name.as_deref().is_some_and(|cls| {
+                    reachable.iter().any(|id| class_matches_local(id, cls))
+                });
             if test_matched && !reached_by.contains(&target.to_owned()) {
                 reached_by.push(target.to_owned());
             }
@@ -65,6 +71,21 @@ fn node_matches_local(id: &str, local: &str) -> bool {
     }
     if let Some(prefix) = id.strip_suffix(local) {
         return prefix.ends_with('.');
+    }
+    false
+}
+
+/// Returns true if `id` is any method of `class_name` (i.e. ends with `.<class_name>.<anything>`).
+///
+/// This catches sibling methods: if `setUpTestData` is reachable, then `test_ratio` in the same
+/// class is also considered reachable, because pyan3 often drops test method nodes (they have no
+/// outgoing call edges and appear as unreachable leaves).
+fn class_matches_local(id: &str, class_name: &str) -> bool {
+    // id must contain `.ClassName.something` or be `ClassName.something`
+    let class_dot = format!("{class_name}.");
+    if let Some(pos) = id.find(class_dot.as_str()) {
+        // ensure the char before class_name is a `.` boundary (or start)
+        return pos == 0 || id.as_bytes()[pos - 1] == b'.';
     }
     false
 }
@@ -176,5 +197,36 @@ mod tests {
         assert!(!node_matches_local("m.other", "other_thing"));
         // Must not match partial segment names
         assert!(!node_matches_local("m.other", "ther"));
+    }
+
+    #[test]
+    fn class_sibling_reach() {
+        // setUpTestData is reachable from changed callable but test_ratio has no call edges.
+        // The test methods should still be considered reachable via class membership.
+        let mut edges = HashMap::new();
+        edges.insert(
+            "MyClass.__init__".into(),
+            vec!["svc.Model.__init__".into()],
+        );
+        edges.insert("svc.Model.__init__".into(), vec![]);
+        // setUpTestData calls MyClass.__init__; test_ratio has no outgoing edges (absent from map)
+        edges.insert(
+            "tests.test_m.MyTests.setUpTestData".into(),
+            vec!["MyClass.__init__".into()],
+        );
+        // test_ratio intentionally omitted — pyan3 drops leaf test methods
+        let tests = vec![tc("MyTests::test_ratio"), tc("MyTests::test_status")];
+        let suggestions = graph_suggestions(&["MyClass.__init__"], &tests, &edges);
+        // Both test methods reachable via class sibling setUpTestData
+        assert_eq!(suggestions.len(), 2, "{suggestions:?}");
+    }
+
+    #[test]
+    fn class_matches_local_cases() {
+        assert!(class_matches_local("MyTests.setUpTestData", "MyTests"));
+        assert!(class_matches_local("tests.test_m.MyTests.setUpTestData", "MyTests"));
+        assert!(!class_matches_local("OtherTests.setup", "MyTests"));
+        // Partial class name must not match
+        assert!(!class_matches_local("MyTestsExtra.setup", "MyTests"));
     }
 }
