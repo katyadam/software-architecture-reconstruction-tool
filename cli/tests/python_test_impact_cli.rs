@@ -922,3 +922,92 @@ fn benchmark_mdk_callable_change_selects_6_tests_with_call_graph_precise() {
         );
     }
 }
+
+/// Synthetic fixture test for `call_graph_precise` selection.
+///
+/// Two-module project:
+///   svc_a/logic.py      — `def process(x)` (will be changed)
+///   svc_b/utils.py      — `def format_val(x)` (unchanged)
+///   tests/test_svc_a.py — imports and calls `process`   → reachable
+///   tests/test_svc_b.py — imports and calls `format_val` → NOT reachable
+///
+/// After changing `process`, pyan3 should identify `test_process` as reachable and
+/// `test_format_val` as not reachable, producing `call_graph_precise` with 1 selected
+/// and 1 unselected.
+///
+/// Skips silently if pyan3 is not installed so CI without pyan3 still passes.
+#[test]
+fn call_graph_precise_selects_only_reachable_test() {
+    let pyan3_ok = Command::new("pyan3")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !pyan3_ok {
+        eprintln!("skip: pyan3 not installed");
+        return;
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    fs::create_dir(&root).unwrap();
+    let root = root.canonicalize().unwrap();
+    git(&root, &["init", "-q"]);
+
+    write_file(&root, "svc_a/logic.py", "def process(x):\n    return x * 2\n");
+    write_file(&root, "svc_b/utils.py", "def format_val(x):\n    return str(x)\n");
+    write_file(
+        &root,
+        "tests/test_svc_a.py",
+        "from svc_a.logic import process\n\ndef test_process():\n    assert process(3) == 6\n",
+    );
+    write_file(
+        &root,
+        "tests/test_svc_b.py",
+        "from svc_b.utils import format_val\n\ndef test_format_val():\n    assert format_val(1) == '1'\n",
+    );
+    write_file(&root, "svc_a/__init__.py", "");
+    write_file(&root, "svc_b/__init__.py", "");
+
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "baseline"]);
+    let baseline = git(&root, &["rev-parse", "HEAD"]);
+
+    // Change only svc_a/logic.py — svc_b is untouched.
+    write_file(&root, "svc_a/logic.py", "def process(x):\n    return x * 3\n");
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "change process"]);
+
+    let out_path = dir.path().join("result.json");
+    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
+        .args([
+            "--project-dir", root.to_str().unwrap(),
+            "--baseline-revision", &baseline,
+            "--output", out_path.to_str().unwrap(),
+            "--pyan3-timeout-secs", "30",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let v: Value = serde_json::from_slice(&fs::read(&out_path).unwrap()).unwrap();
+
+    assert_eq!(v["selection_mode"], "call_graph_precise", "{v}");
+    assert_eq!(v["run_all_tests"], false, "{v}");
+
+    let selected: Vec<&str> = v["selected_tests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["test"]["function_name"].as_str().unwrap())
+        .collect();
+    let unselected: Vec<&str> = v["unselected_tests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["function_name"].as_str().unwrap())
+        .collect();
+
+    assert_eq!(selected, vec!["test_process"], "wrong selected: {v}");
+    assert_eq!(unselected, vec!["test_format_val"], "wrong unselected: {v}");
+}
