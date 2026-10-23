@@ -1280,3 +1280,146 @@ fn benchmark_mpd_orders_change_selects_5_tests_with_call_graph_precise() {
         );
     }
 }
+
+/// Benchmark: text-processing-microservices — synthetic commit changing `Tokenizer.process`.
+///
+/// The repo has 149 discoverable tests across unit test suites for processors, pipelines,
+/// observability, performance, and services. A one-line change to `Tokenizer.process`
+/// (adding `.strip()` to token text) selects 30 tests that transitively reach this method:
+///   TestTokenizer (7)     — directly instantiate and call Tokenizer
+///   TestPipelineManager (6), TestGRPCServer (6), TestGRPCMain (2),
+///   TestTracePropagation (7), TestPipelineComparison (2) — use ClassicalPipeline which wraps Tokenizer
+///
+/// The remaining 119 tests (NERExtractor, POSTagger, SentenceSplitter, KeywordExtractor,
+/// modern processors, config, exceptions, etc.) have no call path to Tokenizer.process.
+///
+/// Skips silently when pyan3 is not installed or the benchmark repo is absent.
+#[test]
+fn benchmark_textproc_tokenizer_change_selects_30_tests_with_call_graph_precise() {
+    let tool_repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("repo root")
+        .to_path_buf();
+    let benchmark_root = tool_repo
+        .parent()
+        .expect("parent of repo root")
+        .join("benchmarks")
+        .join("python")
+        .join("text-processing-microservices");
+
+    if !benchmark_root.join(".git").exists() {
+        eprintln!("skip: benchmark repo not found at {}", benchmark_root.display());
+        return;
+    }
+
+    let pyan3_ok = Command::new("pyan3")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !pyan3_ok {
+        eprintln!("skip: pyan3 not installed");
+        return;
+    }
+
+    // Synthetic commit: `token.text` → `token.text.strip()` in Tokenizer.process.
+    let baseline = "bb0152f1cec752ffe27207148024e3b50202ee33";
+    let candidate = "7e0a57bc65aeb489d0ff633f2a2e44fbe7b804f2";
+
+    let check = |rev: &str| {
+        Command::new("git")
+            .args(["rev-parse", "--verify", &format!("{rev}^{{commit}}")])
+            .current_dir(&benchmark_root)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    };
+    if !check(baseline) || !check(candidate) {
+        eprintln!("skip: required commits not present in benchmark repo");
+        return;
+    }
+
+    let wt_dir = tempfile::tempdir().expect("tempdir");
+    let wt_root = wt_dir.path().join("worktree");
+    let wt_add = Command::new("git")
+        .args(["worktree", "add", wt_root.to_str().unwrap(), candidate])
+        .current_dir(&benchmark_root)
+        .output()
+        .expect("git worktree add");
+    assert!(
+        wt_add.status.success(),
+        "git worktree add failed: {}",
+        String::from_utf8_lossy(&wt_add.stderr)
+    );
+
+    let out_path = wt_dir.path().join("result.json");
+    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
+        .args([
+            "--project-dir",
+            wt_root.to_str().unwrap(),
+            "--baseline-revision",
+            baseline,
+            "--output",
+            out_path.to_str().unwrap(),
+            "--pyan3-timeout-secs",
+            "60",
+        ])
+        .output()
+        .expect("python-test-impact");
+
+    let _ = Command::new("git")
+        .args(["worktree", "remove", "--force", wt_root.to_str().unwrap()])
+        .current_dir(&benchmark_root)
+        .output();
+
+    assert!(
+        o.status.success(),
+        "python-test-impact failed: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+
+    let v: Value = serde_json::from_slice(&fs::read(&out_path).unwrap())
+        .expect("valid JSON output");
+
+    assert_eq!(v["selection_mode"], "call_graph_precise", "{v}");
+    assert_eq!(v["run_all_tests"], false, "{v}");
+
+    let selected = v["selected_tests"].as_array().unwrap();
+    let unselected = v["unselected_tests"].as_array().unwrap();
+
+    // 30 tests reach Tokenizer.process (direct + via ClassicalPipeline transitive chain).
+    assert_eq!(
+        selected.len(),
+        30,
+        "expected 30 selected tests, got {}: {v}",
+        selected.len()
+    );
+    assert_eq!(
+        unselected.len(),
+        119,
+        "expected 119 unselected tests, got {}: {v}",
+        unselected.len()
+    );
+
+    // All 7 TestTokenizer tests must be selected.
+    let selected_names: Vec<&str> = selected
+        .iter()
+        .map(|t| t["test"]["qualified_name"].as_str().unwrap())
+        .collect();
+    let tokenizer_tests = [
+        "TestTokenizer::test_tokenizer_imports",
+        "TestTokenizer::test_tokenizer_implements_interface",
+        "TestTokenizer::test_tokenizer_metadata",
+        "TestTokenizer::test_simple_text_tokenization",
+        "TestTokenizer::test_technical_text_tokenization",
+        "TestTokenizer::test_edge_cases",
+        "TestTokenizer::test_punctuation_handling",
+    ];
+    for name in &tokenizer_tests {
+        assert!(
+            selected_names.contains(name),
+            "expected {name} to be selected; got: {selected_names:?}"
+        );
+    }
+}
