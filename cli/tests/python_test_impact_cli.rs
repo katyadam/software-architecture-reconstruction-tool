@@ -1011,3 +1011,143 @@ fn call_graph_precise_selects_only_reachable_test() {
     assert_eq!(selected, vec!["test_process"], "wrong selected: {v}");
     assert_eq!(unselected, vec!["test_format_val"], "wrong unselected: {v}");
 }
+
+/// Benchmark: test-billing-system — synthetic commit changing `PaymentService.create_payment`.
+///
+/// The test suite contains 32 tests spread across integration, unit, migration, and load
+/// test files. A minimal change to the log line in `PaymentService.create_payment` affects
+/// only 3 tests that directly instantiate and call `PaymentService`:
+///   TestPaymentServiceIdempotency::{test_new_payment_is_created, test_db_duplicate_returns_existing}
+///   TestDbIdempotency::test_duplicate_key_returns_existing_without_insert
+///
+/// pyan3 records `[U] PaymentService` (class instantiation) not `[U] PaymentService.create_payment`
+/// (method call), so this test validates the class-instantiation bridging logic: when the changed
+/// target is `ClassName.method`, the BFS also starts from the bare `ClassName` callee references.
+///
+/// Skips silently when pyan3 is not installed or the benchmark repo is absent.
+#[test]
+fn benchmark_tbs_class_method_change_selects_3_tests_with_call_graph_precise() {
+    let tool_repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("repo root")
+        .to_path_buf();
+    let benchmark_root = tool_repo
+        .parent()
+        .expect("parent of repo root")
+        .join("benchmarks")
+        .join("python")
+        .join("test-billing-system");
+
+    if !benchmark_root.join(".git").exists() {
+        eprintln!("skip: benchmark repo not found at {}", benchmark_root.display());
+        return;
+    }
+
+    let pyan3_ok = Command::new("pyan3")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !pyan3_ok {
+        eprintln!("skip: pyan3 not installed");
+        return;
+    }
+
+    // Synthetic commit: log line in PaymentService.create_payment extended with description.
+    let baseline = "83a184a351572c118378825f1d81a65fa1cf1fcb";
+    let candidate = "149650903039dde519a7a12cfa9b431fcb66f012";
+
+    let check = |rev: &str| {
+        Command::new("git")
+            .args(["rev-parse", "--verify", &format!("{rev}^{{commit}}")])
+            .current_dir(&benchmark_root)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    };
+    if !check(baseline) || !check(candidate) {
+        eprintln!("skip: required commits not present in benchmark repo");
+        return;
+    }
+
+    let wt_dir = tempfile::tempdir().expect("tempdir");
+    let wt_root = wt_dir.path().join("worktree");
+    let wt_add = Command::new("git")
+        .args(["worktree", "add", wt_root.to_str().unwrap(), candidate])
+        .current_dir(&benchmark_root)
+        .output()
+        .expect("git worktree add");
+    assert!(
+        wt_add.status.success(),
+        "git worktree add failed: {}",
+        String::from_utf8_lossy(&wt_add.stderr)
+    );
+
+    let out_path = wt_dir.path().join("result.json");
+    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
+        .args([
+            "--project-dir",
+            wt_root.to_str().unwrap(),
+            "--baseline-revision",
+            baseline,
+            "--output",
+            out_path.to_str().unwrap(),
+            "--pyan3-timeout-secs",
+            "60",
+        ])
+        .output()
+        .expect("python-test-impact");
+
+    let _ = Command::new("git")
+        .args(["worktree", "remove", "--force", wt_root.to_str().unwrap()])
+        .current_dir(&benchmark_root)
+        .output();
+
+    assert!(
+        o.status.success(),
+        "python-test-impact failed: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+
+    let v: Value = serde_json::from_slice(&fs::read(&out_path).unwrap())
+        .expect("valid JSON output");
+
+    assert_eq!(v["selection_mode"], "call_graph_precise", "{v}");
+    assert_eq!(v["run_all_tests"], false, "{v}");
+
+    let selected = v["selected_tests"].as_array().unwrap();
+    let unselected = v["unselected_tests"].as_array().unwrap();
+
+    // Only the 3 tests that directly instantiate PaymentService should be selected.
+    assert_eq!(
+        selected.len(),
+        3,
+        "expected 3 selected tests (PaymentService callers only), got {}: {v}",
+        selected.len()
+    );
+    // The remaining 29 tests are unselected.
+    assert_eq!(
+        unselected.len(),
+        29,
+        "expected 29 unselected tests, got {}: {v}",
+        unselected.len()
+    );
+
+    // Verify the selected tests are exactly the PaymentService callers.
+    let selected_names: Vec<&str> = selected
+        .iter()
+        .map(|t| t["test"]["qualified_name"].as_str().unwrap())
+        .collect();
+    let expected = [
+        "TestPaymentServiceIdempotency::test_new_payment_is_created",
+        "TestPaymentServiceIdempotency::test_db_duplicate_returns_existing",
+        "TestDbIdempotency::test_duplicate_key_returns_existing_without_insert",
+    ];
+    for name in &expected {
+        assert!(
+            selected_names.contains(name),
+            "expected {name} to be selected; got: {selected_names:?}"
+        );
+    }
+}

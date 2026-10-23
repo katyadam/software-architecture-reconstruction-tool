@@ -26,11 +26,36 @@ pub fn graph_suggestions(
         let mut reached_by: Vec<String> = vec![];
         for &target in changed_targets {
             // Find all pyan3 node IDs whose local suffix matches this target.
-            let target_nodes: Vec<&str> = edges
+            let mut target_nodes: Vec<&str> = edges
                 .keys()
                 .map(String::as_str)
                 .filter(|id| node_matches_local(id, target))
                 .collect();
+            // If the changed target is a method (e.g. `PaymentService.create_payment`),
+            // also seed the BFS from the class node (`PaymentService`). pyan3 records
+            // instantiation as `[U] ClassName` rather than `[U] ClassName.method`, so
+            // tests that call `svc = ClassName(); svc.method()` appear as callers of the
+            // class but not the specific method.
+            //
+            // The class node may only appear as a *callee* in pyan3 output (never as a
+            // caller), so we check both edges keys and the reverse map.
+            if let Some(class_part) = target.split_once('.').map(|(c, _)| c) {
+                for id in edges.keys().map(String::as_str) {
+                    if node_matches_local(id, class_part) && !target_nodes.contains(&id) {
+                        target_nodes.push(id);
+                    }
+                }
+                // Also include bare class-name references that appear only as callees.
+                for callee_list in edges.values() {
+                    for callee in callee_list.iter().map(String::as_str) {
+                        if node_matches_local(callee, class_part)
+                            && !target_nodes.contains(&callee)
+                        {
+                            target_nodes.push(callee);
+                        }
+                    }
+                }
+            }
             if target_nodes.is_empty() {
                 continue;
             }
@@ -219,6 +244,60 @@ mod tests {
         let suggestions = graph_suggestions(&["MyClass.__init__"], &tests, &edges);
         // Both test methods reachable via class sibling setUpTestData
         assert_eq!(suggestions.len(), 2, "{suggestions:?}");
+    }
+
+    #[test]
+    fn class_instantiation_bridges_to_method() {
+        // Test uses `svc = PaymentService(session); await svc.create_payment(...)`.
+        // pyan3 records [U] PaymentService (class ref), not [U] PaymentService.create_payment.
+        // The class node "PaymentService" appears only as a *callee*, never as a caller key.
+        // Changed target is PaymentService.create_payment — BFS must still find the test.
+        let mut edges = HashMap::new();
+        edges.insert(
+            "tests.test_payment.TestPayment.test_create".into(),
+            vec!["services.payment.PaymentService".into()],
+        );
+        // PaymentService.create_payment exists as a node (caller) with no outgoing edges.
+        // PaymentService (bare class) only appears as a callee — not a key.
+        edges.insert(
+            "services.payment.PaymentService.create_payment".into(),
+            vec![],
+        );
+        let tests = vec![tc("TestPayment::test_create")];
+        let suggestions =
+            graph_suggestions(&["PaymentService.create_payment"], &tests, &edges);
+        assert_eq!(suggestions.len(), 1, "{suggestions:?}");
+    }
+
+    #[test]
+    fn class_instantiation_does_not_over_select() {
+        // Two test classes: one uses PaymentService, one uses UnrelatedService.
+        // Changing PaymentService.create_payment must NOT select the unrelated test.
+        let mut edges = HashMap::new();
+        edges.insert(
+            "tests.test_payment.TestPayment.test_create".into(),
+            vec!["services.payment.PaymentService".into()],
+        );
+        edges.insert(
+            "tests.test_other.TestOther.test_something".into(),
+            vec!["services.other.UnrelatedService".into()],
+        );
+        // Both class nodes appear only as callees (never as caller keys).
+        edges.insert(
+            "services.payment.PaymentService.create_payment".into(),
+            vec![],
+        );
+        let tests = vec![
+            tc("TestPayment::test_create"),
+            tc("TestOther::test_something"),
+        ];
+        let suggestions =
+            graph_suggestions(&["PaymentService.create_payment"], &tests, &edges);
+        assert_eq!(suggestions.len(), 1, "{suggestions:?}");
+        assert_eq!(
+            suggestions[0].test.qualified_name,
+            "TestPayment::test_create"
+        );
     }
 
     #[test]
