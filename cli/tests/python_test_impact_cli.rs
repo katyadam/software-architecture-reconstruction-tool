@@ -1151,3 +1151,132 @@ fn benchmark_tbs_class_method_change_selects_3_tests_with_call_graph_precise() {
         );
     }
 }
+
+/// Benchmark: microservices-python-demo — synthetic commit changing `InMemoryOrders.create`.
+///
+/// The repo has 11 discoverable tests across two unit test classes and one integration test:
+///   InMemoryCatalogTest (5 tests) — tests for the catalog store, no relation to orders
+///   InMemoryOrdersTest  (5 tests) — tests for the orders store, directly call InMemoryOrders.create
+///   test_order_flow     (1 test)  — integration test, no direct production import
+///
+/// The candidate commit changes only `InMemoryOrders.create` (quantize precision).
+/// With pyan3, only the 5 InMemoryOrdersTest tests should be selected.
+///
+/// Skips silently when pyan3 is not installed or the benchmark repo is absent.
+#[test]
+fn benchmark_mpd_orders_change_selects_5_tests_with_call_graph_precise() {
+    let tool_repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("repo root")
+        .to_path_buf();
+    let benchmark_root = tool_repo
+        .parent()
+        .expect("parent of repo root")
+        .join("benchmarks")
+        .join("python")
+        .join("microservices-python-demo");
+
+    if !benchmark_root.join(".git").exists() {
+        eprintln!("skip: benchmark repo not found at {}", benchmark_root.display());
+        return;
+    }
+
+    let pyan3_ok = Command::new("pyan3")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !pyan3_ok {
+        eprintln!("skip: pyan3 not installed");
+        return;
+    }
+
+    // Synthetic commit: quantize precision in InMemoryOrders.create changed from 0.01 to 0.001.
+    let baseline = "a31a4adba59e9844a7b67728d5d816a3ec2bf897";
+    let candidate = "c21d7887d7cbe5b211222a836bceac4370475435";
+
+    let check = |rev: &str| {
+        Command::new("git")
+            .args(["rev-parse", "--verify", &format!("{rev}^{{commit}}")])
+            .current_dir(&benchmark_root)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    };
+    if !check(baseline) || !check(candidate) {
+        eprintln!("skip: required commits not present in benchmark repo");
+        return;
+    }
+
+    let wt_dir = tempfile::tempdir().expect("tempdir");
+    let wt_root = wt_dir.path().join("worktree");
+    let wt_add = Command::new("git")
+        .args(["worktree", "add", wt_root.to_str().unwrap(), candidate])
+        .current_dir(&benchmark_root)
+        .output()
+        .expect("git worktree add");
+    assert!(
+        wt_add.status.success(),
+        "git worktree add failed: {}",
+        String::from_utf8_lossy(&wt_add.stderr)
+    );
+
+    let out_path = wt_dir.path().join("result.json");
+    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
+        .args([
+            "--project-dir",
+            wt_root.to_str().unwrap(),
+            "--baseline-revision",
+            baseline,
+            "--output",
+            out_path.to_str().unwrap(),
+            "--pyan3-timeout-secs",
+            "60",
+        ])
+        .output()
+        .expect("python-test-impact");
+
+    let _ = Command::new("git")
+        .args(["worktree", "remove", "--force", wt_root.to_str().unwrap()])
+        .current_dir(&benchmark_root)
+        .output();
+
+    assert!(
+        o.status.success(),
+        "python-test-impact failed: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+
+    let v: Value = serde_json::from_slice(&fs::read(&out_path).unwrap())
+        .expect("valid JSON output");
+
+    assert_eq!(v["selection_mode"], "call_graph_precise", "{v}");
+    assert_eq!(v["run_all_tests"], false, "{v}");
+
+    let selected = v["selected_tests"].as_array().unwrap();
+    let unselected = v["unselected_tests"].as_array().unwrap();
+
+    // Only the 5 InMemoryOrdersTest tests that call InMemoryOrders.create directly.
+    assert_eq!(
+        selected.len(),
+        5,
+        "expected 5 selected tests (InMemoryOrdersTest only), got {}: {v}",
+        selected.len()
+    );
+    assert_eq!(
+        unselected.len(),
+        6,
+        "expected 6 unselected tests (catalog + integration), got {}: {v}",
+        unselected.len()
+    );
+
+    // All selected tests must be from InMemoryOrdersTest.
+    for t in selected {
+        let name = t["test"]["qualified_name"].as_str().unwrap();
+        assert!(
+            name.starts_with("InMemoryOrdersTest::"),
+            "unexpected selected test {name}: {v}"
+        );
+    }
+}
