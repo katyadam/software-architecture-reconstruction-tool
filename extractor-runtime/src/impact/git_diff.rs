@@ -1,6 +1,6 @@
-use super::{ModuleCatalog, java_changes::map_java_range};
+use super::{ModuleCatalog, java_changes::{map_java_range, map_java_range_in_source}};
 use models::{ChangedElement, ChangedElementKind};
-use std::{path::Path, process::Command};
+use std::{ops::RangeInclusive, path::Path, process::Command};
 use thiserror::Error;
 
 /// Reports failures while obtaining or interpreting a Git candidate diff.
@@ -54,18 +54,61 @@ pub fn analyze_changes_with_catalog(
     let mut changes = Vec::new();
 
     for status in parse_statuses(&statuses) {
-        if status.kind == 'M' || status.kind == 'A' {
-            if status.candidate_path.ends_with(".java") {
-                let ranges = candidate_ranges(&patch, &status.candidate_path);
-                if !ranges.is_empty() && catalog.can_narrow_source(&status.candidate_path) {
-                    for range in ranges {
-                        changes.extend(map_java_range(
+        if (status.kind == 'M' || status.kind == 'A')
+            && status.candidate_path.ends_with(".java")
+            && catalog.can_narrow_source(&status.candidate_path)
+        {
+            let hunks = diff_hunks(&patch, &status.candidate_path);
+            if !hunks.is_empty() {
+                let module_root = catalog
+                    .owner_for(&status.candidate_path)
+                    .to_string_lossy()
+                    .into_owned();
+                // Fetch baseline source only when at least one hunk is a pure deletion.
+                let old_source: Option<String> =
+                    if hunks.iter().any(|h| h.new.is_none() && h.old.is_some()) {
+                        git_output(
                             project_root,
-                            catalog,
-                            &status.candidate_path,
-                            range,
-                        )?);
+                            &[
+                                "show",
+                                &format!("{baseline_revision}:{}", status.candidate_path),
+                            ],
+                        )
+                        .ok()
+                    } else {
+                        None
+                    };
+                let mut file_changes: Vec<ChangedElement> = Vec::new();
+                let mut any_unmapped = false;
+                for hunk in &hunks {
+                    match (&hunk.old, &hunk.new) {
+                        (_, Some(new_range)) => {
+                            file_changes.extend(map_java_range(
+                                project_root,
+                                catalog,
+                                &status.candidate_path,
+                                new_range.clone(),
+                            )?);
+                        }
+                        (Some(old_range), None) => match &old_source {
+                            Some(src) => {
+                                file_changes.extend(map_java_range_in_source(
+                                    src,
+                                    &module_root,
+                                    &status.candidate_path,
+                                    old_range.clone(),
+                                ));
+                            }
+                            None => {
+                                any_unmapped = true;
+                                break;
+                            }
+                        },
+                        (None, None) => {}
                     }
+                }
+                if !any_unmapped {
+                    changes.extend(file_changes);
                     continue;
                 }
             }
@@ -117,25 +160,39 @@ fn parse_statuses(output: &str) -> Vec<FileStatus> {
         .collect()
 }
 
-/// Returns candidate-side line ranges for one file from a zero-context unified patch.
-fn candidate_ranges(patch: &str, candidate_path: &str) -> Vec<std::ops::RangeInclusive<usize>> {
+/// One hunk from a unified diff: old-side range and new-side range.
+/// A `None` range means that side has zero lines (pure addition or pure deletion).
+struct DiffHunk {
+    old: Option<RangeInclusive<usize>>,
+    new: Option<RangeInclusive<usize>>,
+}
+
+/// Returns old/new range pairs for every hunk that touches `candidate_path`.
+fn diff_hunks(patch: &str, candidate_path: &str) -> Vec<DiffHunk> {
     let mut current_path = None;
-    let mut ranges = Vec::new();
+    let mut hunks = Vec::new();
     for line in patch.lines() {
         if let Some(path) = line.strip_prefix("+++ b/") {
             current_path = Some(path);
         } else if current_path == Some(candidate_path) && line.starts_with("@@") {
-            if let Some(range) = line.split(' ').nth(2).and_then(parse_candidate_range) {
-                ranges.push(range);
-            }
+            let parts: Vec<_> = line.split(' ').collect();
+            let old = parts
+                .get(1)
+                .and_then(|s| s.strip_prefix('-'))
+                .and_then(parse_range);
+            let new = parts
+                .get(2)
+                .and_then(|s| s.strip_prefix('+'))
+                .and_then(parse_range);
+            hunks.push(DiffHunk { old, new });
         }
     }
-    ranges
+    hunks
 }
 
-/// Parses the `+start,count` side of one unified-diff hunk header.
-fn parse_candidate_range(value: &str) -> Option<std::ops::RangeInclusive<usize>> {
-    let value = value.strip_prefix('+')?;
+/// Parses a `start,count` hunk side into an inclusive line range.
+/// Returns `None` when `count` is zero (no lines on that side).
+fn parse_range(value: &str) -> Option<RangeInclusive<usize>> {
     let (start, count) = value.split_once(',').unwrap_or((value, "1"));
     let start = start.parse::<usize>().ok()?;
     let count = count.parse::<usize>().ok()?;
