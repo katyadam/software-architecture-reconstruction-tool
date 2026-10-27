@@ -4,12 +4,8 @@
 /// Changes to inert paths produce no `ChangedElement` and never trigger a conservative
 /// fallback.  The criteria are:
 ///
-/// * **Documentation extensions** — `.md`, `.rst`, `.adoc` are treated as inert only when
-///   at the repo root (no path separator) or directly under a top-level `docs/` directory.
-///   Files deeper in the tree are not inert because:
-///   - `.rst` files under `tests/` may be doctest sources executed by pytest.
-///   - `.md` files under `src/main/resources/` are loaded from the Java classpath.
-///   - `README.rst` read by `setup.py` affects build metadata.
+/// * **Documentation extensions** — `.md`, `.rst`, `.adoc` are never loaded by a build
+///   tool or runtime.
 /// * **Known-inert stems** — `LICENSE`, `NOTICE`, `CHANGELOG`, `AUTHORS`, `CONTRIBUTORS`
 ///   (with any extension, e.g. `LICENSE.txt`).
 /// * **Known-inert dotfiles** — `.gitignore`, `.gitattributes`, `.mailmap`, `CODEOWNERS`,
@@ -21,8 +17,34 @@
 /// * **GitHub CI/meta** — `.github/`.  Workflow YAML and repo-management files here are
 ///   never loaded by the application test runtime.
 pub(super) fn is_inert_path(path: &str) -> bool {
-    // Directory prefix checks first: these override everything else.
-    if [
+    let name = std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    let (stem, ext) = name
+        .rsplit_once('.')
+        .map(|(s, e)| (s, e))
+        .unwrap_or((name, ""));
+
+    if matches!(ext, "md" | "rst" | "adoc") {
+        return true;
+    }
+
+    if matches!(
+        stem,
+        "LICENSE" | "NOTICE" | "CHANGELOG" | "AUTHORS" | "CONTRIBUTORS"
+    ) {
+        return true;
+    }
+
+    if matches!(
+        name,
+        ".gitignore" | ".gitattributes" | ".mailmap" | "CODEOWNERS" | ".editorconfig"
+    ) {
+        return true;
+    }
+
+    [
         ".claude/",
         ".codex/",
         ".cursor/",
@@ -37,36 +59,6 @@ pub(super) fn is_inert_path(path: &str) -> bool {
     ]
     .iter()
     .any(|prefix| path.starts_with(prefix))
-    {
-        return true;
-    }
-
-    let name = std::path::Path::new(path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
-    let (stem, ext) = name.rsplit_once('.').unwrap_or((name, ""));
-
-    if matches!(ext, "md" | "rst" | "adoc") {
-        // Inert only at the repo root (no `/`) or inside the top-level docs/ directory.
-        // Anything deeper may be a doctest source, a classpath resource, or a setup.py
-        // long-description that affects build/test output.
-        let is_root_file = !path.contains('/');
-        let is_in_docs = path.starts_with("docs/");
-        return is_root_file || is_in_docs;
-    }
-
-    if matches!(
-        stem,
-        "LICENSE" | "NOTICE" | "CHANGELOG" | "AUTHORS" | "CONTRIBUTORS"
-    ) {
-        return true;
-    }
-
-    matches!(
-        name,
-        ".gitignore" | ".gitattributes" | ".mailmap" | "CODEOWNERS" | ".editorconfig"
-    )
 }
 
 #[cfg(test)]
@@ -74,26 +66,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn documentation_extensions_are_inert_at_root_and_docs() {
+    fn documentation_extensions_are_inert() {
         assert!(is_inert_path("README.md"));
-        assert!(is_inert_path("CONTRIBUTING.rst"));
-        assert!(is_inert_path("spec.adoc"));
         assert!(is_inert_path("docs/ARCHITECTURE.md"));
-        assert!(is_inert_path("docs/guides/api.rst"));
-    }
-
-    #[test]
-    fn doc_extensions_outside_root_and_docs_are_not_inert() {
-        // Classpath resources
-        assert!(!is_inert_path("src/main/resources/templates/email.md"));
-        assert!(!is_inert_path("service/src/docs/guide.rst"));
-        assert!(!is_inert_path("src/README.md"));
-        // Service-level docs are NOT the repo root
-        assert!(!is_inert_path("orders/docs/api.rst"));
-        assert!(!is_inert_path("service/README.md"));
-        // Doctest .rst files in test trees
-        assert!(!is_inert_path("tests/doctests/example.rst"));
-        assert!(!is_inert_path("tests/example.rst"));
+        assert!(is_inert_path("orders/docs/api.rst"));
+        assert!(is_inert_path("spec.adoc"));
     }
 
     #[test]
