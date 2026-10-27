@@ -5,7 +5,7 @@ use crate::java_impact_inputs::{
 use extractor_runtime::{
     call_graph::{
         JavaSourceLayout, java_adapter::JavaAdapterProvider, resolve_reachability_with_java_layout,
-        wala::WalaJavaProvider,
+        spoon::SpoonJavaProvider, wala::WalaJavaProvider,
     },
     impact::{
         ModuleDependencyGraph, discover_java_tests_in_checkout, discover_java_tests_in_roots,
@@ -58,6 +58,25 @@ macro_rules! configured_provider {
 }
 configured_provider!(WalaJavaProvider, "WALA");
 configured_provider!(JavaAdapterProvider, "SootUp");
+
+// Spoon is source-only and never prepares bytecode artifacts; it uses analyze_test_roots directly.
+impl ConfiguredJavaProvider for SpoonJavaProvider {
+    fn label(&self) -> &str {
+        "Spoon"
+    }
+    fn prepare_module(&self, _module: &Path) -> Result<JavaBytecodeInputs, String> {
+        Err("Spoon is a source-level provider and does not prepare bytecode artifacts".into())
+    }
+    fn analyze_prepared(
+        &self,
+        root: &Path,
+        tests: &[JavaTestCase],
+        targets: &[String],
+        _inputs: &JavaBytecodeInputs,
+    ) -> CallGraphOutcome {
+        self.analyze_test_roots(root, tests, targets)
+    }
+}
 
 pub fn analyze_configured_impact(
     project: &Path,
