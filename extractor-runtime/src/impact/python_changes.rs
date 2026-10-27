@@ -1,3 +1,4 @@
+use super::inert::is_inert_path;
 use models::python_impact::{PythonChangeKind, PythonChangedElement};
 use std::{fs, path::Path};
 use tree_sitter::{Node, Parser};
@@ -15,6 +16,9 @@ pub fn map_python_changes(
             .or(file.old_path.as_ref())
             .expect("diff path");
         // Non-Python files, renames, and deletions fall back to module-level.
+        if is_inert_path(path) {
+            continue;
+        }
         if file.status != "M" || !path.ends_with(".py") || file.hunks.is_empty() {
             out.push(broad(path, &file.old_path, "file/rename/delete change requires module fallback"));
             continue;
