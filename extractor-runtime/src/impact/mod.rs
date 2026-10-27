@@ -1,6 +1,7 @@
 //! Conservative Git-to-source change mapping for Java test impact analysis.
 
 mod git_diff;
+mod inert;
 pub mod go;
 mod go_changes;
 mod go_git;

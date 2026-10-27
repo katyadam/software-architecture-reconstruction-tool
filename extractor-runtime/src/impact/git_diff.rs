@@ -1,4 +1,4 @@
-use super::{ModuleCatalog, java_changes::{map_java_range, map_java_range_in_source}};
+use super::{ModuleCatalog, inert::is_inert_path, java_changes::{map_java_range, map_java_range_in_source}};
 use models::{ChangedElement, ChangedElementKind};
 use std::{ops::RangeInclusive, path::Path, process::Command};
 use thiserror::Error;
@@ -54,6 +54,9 @@ pub fn analyze_changes_with_catalog(
     let mut changes = Vec::new();
 
     for status in parse_statuses(&statuses) {
+        if is_inert_path(&status.candidate_path) {
+            continue;
+        }
         if (status.kind == 'M' || status.kind == 'A')
             && status.candidate_path.ends_with(".java")
             && catalog.can_narrow_source(&status.candidate_path)
