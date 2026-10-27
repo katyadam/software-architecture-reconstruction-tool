@@ -49,19 +49,31 @@ impl ModuleDependencyGraph {
             .as_ref()
             .map(|g| g.dependencies.clone())
             .unwrap_or_default();
-        let known = super::java_tests::checkout_modules(&root).map_err(|e| e.to_string())?;
-        for module in known {
-            let build = module.join("pom.xml").is_file()
-                || module.join("build.gradle").is_file()
-                || module.join("build.gradle.kts").is_file()
-                || module.join("settings.gradle").is_file()
-                || module.join("settings.gradle.kts").is_file();
-            if build && !inputs.modules.contains_key(&module) && !dependencies.contains_key(&module)
-            {
-                return Err(format!(
-                    "consumer dependency scope unresolved: {}",
-                    module.display()
-                ));
+        // When the automatic graph succeeded, check for on-disk build modules that are
+        // neither in the manifest nor already claimed by the reactor. A module the automatic
+        // graph knows about can be intentionally excluded (manifest is authoritative);
+        // a module it never claimed is an independent build that still blocks independence.
+        // When the automatic graph failed (unsupported syntax etc.), skip the check and
+        // trust the manifest's module_inventory_complete=true claim.
+        if let Ok(auto) = &automatic {
+            let auto_modules: BTreeSet<_> = auto.dependencies.keys().collect();
+            let known = super::java_tests::checkout_modules(&root).map_err(|e| e.to_string())?;
+            for module in known {
+                let build = module.join("pom.xml").is_file()
+                    || module.join("build.gradle").is_file()
+                    || module.join("build.gradle.kts").is_file()
+                    || module.join("settings.gradle").is_file()
+                    || module.join("settings.gradle.kts").is_file();
+                if build
+                    && !inputs.modules.contains_key(&module)
+                    && !dependencies.contains_key(&module)
+                    && !auto_modules.contains(&module)
+                {
+                    return Err(format!(
+                        "consumer dependency scope unresolved: {}",
+                        module.display()
+                    ));
+                }
             }
         }
         for service in &inputs.services {
@@ -80,6 +92,20 @@ impl ModuleDependencyGraph {
 
     pub fn modules(&self) -> impl Iterator<Item = &PathBuf> {
         self.dependencies.keys()
+    }
+
+    /// Returns the set of module paths that the reactor (settings.gradle / root pom.xml)
+    /// claims, regardless of whether a full dependency analysis succeeded.  Returns an
+    /// empty set when no supported reactor file is found.
+    pub fn reactor_claimed_modules(root: &Path) -> std::collections::BTreeSet<PathBuf> {
+        let Ok(root) = root.canonicalize() else {
+            return Default::default();
+        };
+        if root.join("pom.xml").is_file() {
+            reactor_modules_maven(&root).unwrap_or_default()
+        } else {
+            reactor_modules_gradle(&root).unwrap_or_default()
+        }
     }
 
     pub fn consumers_of(&self, module: &Path) -> BTreeSet<PathBuf> {
@@ -328,6 +354,59 @@ fn maven_dependencies(modules: &[PathBuf]) -> Result<BTreeMap<PathBuf, BTreeSet<
         graph.insert(module, dependencies);
     }
     Ok(graph)
+}
+
+/// Extracts declared submodule paths from a root pom.xml <modules> block.
+fn reactor_modules_maven(root: &Path) -> Result<std::collections::BTreeSet<PathBuf>, String> {
+    let source = fs::read_to_string(root.join("pom.xml")).map_err(|e| e.to_string())?;
+    let mut reader = Reader::from_str(&source);
+    reader.config_mut().trim_text(true);
+    let mut stack = Vec::<String>::new();
+    let mut modules = std::collections::BTreeSet::new();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(tag)) => {
+                stack.push(String::from_utf8_lossy(tag.local_name().as_ref()).into_owned());
+            }
+            Ok(Event::Text(value)) => {
+                if stack == ["project", "modules", "module"] {
+                    let name = value.decode().map_err(|e| e.to_string())?.trim().to_string();
+                    if !name.is_empty() {
+                        if let Ok(p) = root.join(&name).canonicalize() {
+                            modules.insert(p);
+                        }
+                    }
+                }
+            }
+            Ok(Event::End(_)) => { stack.pop(); }
+            Ok(Event::Eof) => break,
+            _ => {}
+        }
+    }
+    Ok(modules)
+}
+
+/// Extracts declared submodule paths from a Gradle settings file.
+/// Accepts both `include ':module'` (colon prefix) and `include 'module'` (bare name).
+fn reactor_modules_gradle(root: &Path) -> Result<std::collections::BTreeSet<PathBuf>, String> {
+    let settings = ["settings.gradle", "settings.gradle.kts"]
+        .into_iter()
+        .find_map(|name| fs::read_to_string(root.join(name)).ok())
+        .ok_or("no Gradle settings")?;
+    // Match both `include(':name')` and `include('name')`, with or without colon.
+    let re = Regex::new(r#"include\s*\(?\s*["']:?([^"'$:]+)["']"#).unwrap();
+    let mut modules = std::collections::BTreeSet::new();
+    for cap in re.captures_iter(&settings) {
+        let name = cap[1].trim();
+        if !name.is_empty() {
+            // Gradle uses colon as path separator for nested subprojects; convert to filesystem path.
+            let rel_path = name.replace(':', std::path::MAIN_SEPARATOR_STR);
+            if let Ok(p) = root.join(&rel_path).canonicalize() {
+                modules.insert(p);
+            }
+        }
+    }
+    Ok(modules)
 }
 
 fn gradle_dependencies(

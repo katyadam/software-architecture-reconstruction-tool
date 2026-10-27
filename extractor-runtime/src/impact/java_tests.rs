@@ -33,7 +33,7 @@ pub fn discover_java_tests_in_checkout(root: &Path) -> Result<Vec<JavaTestCase>,
     Ok(tests)
 }
 
-pub(super) fn checkout_modules(root: &Path) -> Result<Vec<PathBuf>, ImpactError> {
+pub fn checkout_modules(root: &Path) -> Result<Vec<PathBuf>, ImpactError> {
     let mut modules = vec![root.to_path_buf()];
     descendant_modules(root, root, &mut modules)?;
     Ok(modules)
