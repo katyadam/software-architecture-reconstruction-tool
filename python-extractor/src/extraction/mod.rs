@@ -13,6 +13,7 @@ pub mod parse;
 mod post_process;
 pub mod queries;
 pub mod restcalls;
+pub mod route_facts;
 
 /// Applies Python-specific Pass 2 transformations without exposing framework
 /// details to the extractor runtime.

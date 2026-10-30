@@ -2,7 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use models::{
     Endpoint, Parameter, RouteFact, Scope,
-    ir::project::{ImportGraph, TypedFileRecord},
+    ir::{
+        language::Language,
+        project::{ImportGraph, TypedFileRecord},
+    },
 };
 
 /// Max call/attach chain followed per endpoint.
@@ -20,8 +23,11 @@ pub fn resolve_route_prefixes(files: &mut [TypedFileRecord], import_graph: &Impo
 }
 
 /// Per-language route fact adapters.
-fn facts_for(_file: &TypedFileRecord) -> Vec<RouteFact> {
-    vec![]
+fn facts_for(file: &TypedFileRecord) -> Vec<RouteFact> {
+    match file.language {
+        Language::Python => python_extractor::extraction::route_facts::route_facts(file),
+        _ => vec![],
+    }
 }
 
 /// Bare function name: extractors may store `name(params) -> ret`.

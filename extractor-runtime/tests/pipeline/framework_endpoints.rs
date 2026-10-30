@@ -89,3 +89,77 @@ urlpatterns = [
             .all(|endpoint| endpoint.uri != "health/")
     );
 }
+
+fn endpoint_uris(records: Vec<models::ir::syntax::FileRecord>) -> Vec<String> {
+    let project_ir = pipeline::build_project_ir(records);
+    let mut uris: Vec<String> = project_ir
+        .files
+        .iter()
+        .flat_map(|file| file.endpoints.iter().map(|e| e.uri.clone()))
+        .collect();
+    uris.sort();
+    uris
+}
+
+#[test]
+fn fastapi_mount_prefix_follows_helper_calls() {
+    let app = r#"
+from fastapi import FastAPI
+from .api.v1 import add_routes_v1
+
+app = FastAPI()
+app_v1 = FastAPI()
+add_routes_v1(app_v1)
+app.mount("/v1", app_v1)
+
+@app.get("/alive")
+async def alive():
+    return {}
+"#;
+    let init = r#"
+from .clinical import add_routes_clinical
+
+
+def add_routes_v1(app):
+    add_routes_clinical(app)
+"#;
+    let clinical = r#"
+def add_routes_clinical(app):
+    @app.get("/cases/{case_id}")
+    async def _(case_id: str):
+        return case_id
+"#;
+    let records = vec![
+        python_extract(app, "svc/svc_pkg/app.py").expect("app.py parses"),
+        python_extract(init, "svc/svc_pkg/api/v1/__init__.py").expect("__init__.py parses"),
+        python_extract(clinical, "svc/svc_pkg/api/v1/clinical.py").expect("clinical.py parses"),
+    ];
+    assert_eq!(
+        endpoint_uris(records),
+        vec!["/alive", "/v1/cases/{case_id}"]
+    );
+}
+
+#[test]
+fn fastapi_router_own_prefix_from_module_constant() {
+    let routes = r#"
+from fastapi import APIRouter
+
+BASE_PATH = "/api/v1/consignservice"
+
+
+def create_router(service) -> APIRouter:
+    router = APIRouter(prefix=BASE_PATH)
+
+    @router.post("/consigns")
+    async def insert():
+        return None
+
+    return router
+"#;
+    let records = vec![python_extract(routes, "svc/app/api/routes.py").expect("routes.py parses")];
+    assert_eq!(
+        endpoint_uris(records),
+        vec!["/api/v1/consignservice/consigns"]
+    );
+}
