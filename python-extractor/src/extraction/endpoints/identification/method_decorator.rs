@@ -25,6 +25,7 @@ impl IdentificationStrategy for MethodDecoratorIdentificationStrategy {
                     uri: candidate.uri.clone(),
                     file_path: params.file_name.unwrap_or_default().to_string(),
                     router_variable: candidate.router_variable.clone(),
+                    enclosing_function: candidate.enclosing_function.clone(),
                 })
             })
             .collect()

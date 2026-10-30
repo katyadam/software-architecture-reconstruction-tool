@@ -71,6 +71,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                 uri: "".to_string(),
                 file_path: file_name.to_string(),
                 router_variable: None,
+                enclosing_function: None,
             };
             apply_annotations(&mut endpoint, &annotations);
             endpoints.push(endpoint);

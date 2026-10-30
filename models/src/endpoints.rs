@@ -12,4 +12,7 @@ pub struct Endpoint {
     pub uri: String,
     pub file_path: String,
     pub router_variable: Option<String>,
+    /// Function containing the route registration, `None` at module level.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enclosing_function: Option<String>,
 }

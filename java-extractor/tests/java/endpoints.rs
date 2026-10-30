@@ -22,6 +22,7 @@ fn test_spring_endpoints() {
             uri: s!("/api/v1/foodservice/welcome"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
         Endpoint {
             function_name: s!("boolean test_send_delivery()"),
@@ -31,6 +32,7 @@ fn test_spring_endpoints() {
             uri: s!("/api/v1/foodservice/test_send_delivery"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
         Endpoint {
             function_name: s!("HttpEntity findAllFoodOrder(@RequestHeader HttpHeaders headers)"),
@@ -44,6 +46,7 @@ fn test_spring_endpoints() {
             uri: s!("/api/v1/foodservice/orders"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
         Endpoint {
             function_name: s!(
@@ -66,6 +69,7 @@ fn test_spring_endpoints() {
             uri: s!("/api/v1/foodservice/orders"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
         Endpoint {
             function_name: s!(
@@ -88,6 +92,7 @@ fn test_spring_endpoints() {
             uri: s!("/api/v1/foodservice/createOrderBatch"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
         Endpoint {
             function_name: s!(
@@ -110,6 +115,7 @@ fn test_spring_endpoints() {
             uri: s!("/api/v1/foodservice/orders"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
         Endpoint {
             function_name: s!(
@@ -132,6 +138,7 @@ fn test_spring_endpoints() {
             uri: s!("/api/v1/foodservice/orders/{orderId}"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
         Endpoint {
             function_name: s!(
@@ -154,6 +161,7 @@ fn test_spring_endpoints() {
             uri: s!("/api/v1/foodservice/orders/{orderId}"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
         Endpoint {
             function_name: s!(
@@ -191,6 +199,7 @@ fn test_spring_endpoints() {
             uri: s!("/api/v1/foodservice/foods/{date}/{startStation}/{endStation}/{tripId}"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
     ];
 
@@ -219,6 +228,7 @@ fn test_jaxrs_endpoints() {
             uri: s!("/call-graph-inputs/project/{projectId}"),
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
         Endpoint {
             function_name: s!(
@@ -234,6 +244,7 @@ fn test_jaxrs_endpoints() {
             uri: s!("/call-graph-inputs/{callGraphInputId}"),
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
         Endpoint {
             function_name: s!(
@@ -249,6 +260,7 @@ fn test_jaxrs_endpoints() {
             uri: s!("/call-graph-inputs/{callGraphInputId}/summary"),
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
         Endpoint {
             function_name: s!(
@@ -271,6 +283,7 @@ fn test_jaxrs_endpoints() {
             uri: s!("/call-graph-inputs/{callGraphInputId}/method-reachability"),
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
         Endpoint {
             function_name: s!(
@@ -286,6 +299,7 @@ fn test_jaxrs_endpoints() {
             uri: s!("/call-graph-inputs"),
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
         Endpoint {
             function_name: s!("Response deleteCallGraphInputById(@PathParam(\"id\") Long id)"),
@@ -299,6 +313,7 @@ fn test_jaxrs_endpoints() {
             uri: s!("/call-graph-inputs/{id}"),
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
+            enclosing_function: None,
         },
     ];
 

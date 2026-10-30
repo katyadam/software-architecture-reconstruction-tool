@@ -108,6 +108,7 @@ fn build_endpoint(
         uri: uri.to_string(),
         file_path: file_path.to_string(),
         router_variable: None,
+        enclosing_function: None,
     }
 }
 
