@@ -10,6 +10,7 @@ use crate::pipeline::pass2::{
     endpoints::resolve_endpoint_handlers,
     entities::resolve_entity_fields,
     identification::identify_edges,
+    route_prefixes::resolve_route_prefixes,
     type_inference::resolve_call_argument_types,
 };
 
@@ -19,6 +20,7 @@ mod constants;
 mod endpoints;
 mod entities;
 mod identification;
+mod route_prefixes;
 mod type_inference;
 
 /// Pass 2: Produce a `ProjectIR` from all `FileRecord`s collected in Pass 1.
@@ -27,6 +29,7 @@ mod type_inference;
 ///   - Import graph construction (cross-file symbol resolution)
 ///   - Entity field type resolution (`Field.datatype_signature` population)
 ///   - Call type inference (`CallStatement.invoked_on` and `Argument.datatype` population)
+///   - Router composition prefixes on endpoint URIs (see `route_prefixes`)
 ///   - REST call and message edge identification (per-language, see `identification`)
 ///   - Class hierarchy building (`ClassHierarchy.parents` and `.children` population)
 pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
@@ -40,6 +43,7 @@ pub fn build_project_ir(file_records: Vec<FileRecord>) -> ProjectIR {
     resolve_endpoint_handlers(&mut files);
     resolve_entity_fields(&mut files, &import_graph);
     resolve_call_argument_types(&mut files);
+    resolve_route_prefixes(&mut files, &import_graph);
     identify_edges(&mut files);
     endpoints::post_process_endpoints(&mut files);
     let class_hierarchy = build_class_hierarchy(&files, &import_graph);
