@@ -33,6 +33,7 @@ impl IdentificationStrategy for DjangoApiViewIdentificationStrategy {
                         uri: String::new(),
                         file_path: params.file_name.unwrap_or_default().to_string(),
                         router_variable: None,
+                        enclosing_function: None,
                     })
                     .collect::<Vec<_>>()
             })
@@ -86,6 +87,7 @@ fn django_urlpattern_endpoint(
         uri: super::decorator::normalize_python_route(&route),
         file_path: params.file_name.unwrap_or_default().to_string(),
         router_variable: Some("urlpatterns".to_string()),
+        enclosing_function: None,
     })
 }
 
