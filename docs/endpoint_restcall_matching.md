@@ -59,22 +59,39 @@ api/v1/clinical:   def add_routes_clinical(app): @app.get("/cases")
 
 ### Adding an adapter
 
+New language:
+
 1. Write `fn(&TypedFileRecord) -> Vec<RouteFact>` in the language extractor crate, reading `call_statements` and `assignments`.
 2. Add one match arm to `facts_for` in `route_prefixes.rs`, keyed on `file.language`.
+
+New Python framework (`python-extractor/src/extraction/route_facts/`):
+
+1. Add `<framework>.rs` with `ATTACH: [AttachCall; N]` and `OWN: [OwnCtor; M]` tables and `facts(file) = facts_from_idioms(file, &ATTACH, &OWN)`; or a custom `facts` fn if the idiom does not fit.
+2. Add `<framework>::facts` to `FRAMEWORKS` in `route_facts/mod.rs`.
+
+- `AttachCall { method, child: (kw, pos), prefix: (kw, pos) }`: `X.method(...)` -> `Attach(X, child, prefix)`; keyword first, then positional index (`None` = keyword only); missing prefix -> `""`.
+- `OwnCtor { ctor, prefix_kw }`: `r = ctor(..., prefix_kw=...)` or `r = mod.ctor(...)` -> `Own(r, prefix)`, in the assignment's scope.
 
 The resolver has no framework names; its tests use hand-written facts.
 
 ### Current adapters
 
-Python FastAPI / Starlette (`python-extractor/src/extraction/route_facts.rs`):
+Python (`python-extractor/src/extraction/route_facts/`), all frameworks run on every Python file:
+
+FastAPI / Starlette (`fastapi.rs`):
 
 - `X.mount(path, app)`, positional or keyword -> `Attach(X, app, path)`.
 - `X.include_router(router, prefix=...)` -> `Attach(X, router, prefix)`; prefix keyword only, missing -> `""`.
-- `r = APIRouter(prefix=...)` -> `Own(r, prefix)`, in the assignment's scope.
+- `r = APIRouter(prefix=...)` -> `Own(r, prefix)`.
+
+Flask (`flask.rs`):
+
+- `X.register_blueprint(bp, url_prefix=...)` -> `Attach(X, bp, url_prefix)`; prefix keyword only, missing -> `""`.
+- `bp = Blueprint(name, __name__, url_prefix=...)` -> `Own(bp, url_prefix)`.
 
 ### Known limits
 
-- No Flask (`Blueprint(url_prefix=)`), Django `include()`, Go (`StripPrefix`, chi `Route`), or Express adapters yet.
+- No Django `include()`, Go (`StripPrefix`, chi `Route`), or Express adapters yet.
 - Spring class-level prefixes stay in the Java extractor.
 - FastAPI `root_path` ignored (deploy-time proxy prefix).
 - Prefixes from settings, env vars or f-strings stay unresolved.

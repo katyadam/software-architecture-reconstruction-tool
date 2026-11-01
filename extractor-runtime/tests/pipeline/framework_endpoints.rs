@@ -163,3 +163,21 @@ def create_router(service) -> APIRouter:
         vec!["/api/v1/consignservice/consigns"]
     );
 }
+
+#[test]
+fn flask_blueprint_prefix_and_register_prefix() {
+    let app = r#"
+from flask import Flask, Blueprint
+
+app = Flask(__name__)
+bp = Blueprint("orders", __name__, url_prefix="/orders")
+
+@bp.route("/<id>")
+def get_order(id):
+    return id
+
+app.register_blueprint(bp, url_prefix="/api")
+"#;
+    let records = vec![python_extract(app, "svc/app.py").expect("app.py parses")];
+    assert_eq!(endpoint_uris(records), vec!["/api/orders/{id}"]);
+}
