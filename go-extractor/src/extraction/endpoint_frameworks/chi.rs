@@ -4,7 +4,7 @@ use crate::extraction::shared::{
 
 use super::shared::{
     call_arguments, is_known_router_receiver, join_route_prefix, looks_like_http_path,
-    normalized_handler, router_prefix,
+    normalized_handler, router_prefix, router_variable,
 };
 use super::{EndpointIdentificationStrategy, EndpointMatch, ExtractParams};
 
@@ -58,6 +58,7 @@ impl EndpointIdentificationStrategy for ChiStrategy {
                     ))?,
                     path,
                     handler: normalized_handler(arguments[2], params.code),
+                    router: receiver_router(function_node, params),
                 })
             }
             _ => None,
@@ -85,5 +86,17 @@ fn identify_two_arg_route(
         method: parse_http_method_value(selector)?,
         path,
         handler: normalized_handler(arguments[1], params.code),
+        router: receiver_router(params.node.child_by_field_name("function")?, params),
     })
+}
+
+fn receiver_router(
+    function_node: tree_sitter::Node<'_>,
+    params: &ExtractParams<'_>,
+) -> Option<String> {
+    router_variable(
+        function_node.child_by_field_name("operand")?,
+        params.code,
+        params.imports,
+    )
 }

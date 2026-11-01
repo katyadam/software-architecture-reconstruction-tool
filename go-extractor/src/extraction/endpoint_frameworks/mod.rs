@@ -20,6 +20,7 @@ pub(super) struct EndpointMatch {
     pub method: HttpMethod,
     pub path: String,
     pub handler: String,
+    pub router: Option<String>,
 }
 
 pub(super) struct ExtractParams<'a> {

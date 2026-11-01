@@ -2,7 +2,7 @@ use crate::extraction::shared::{evaluate_expression_node, selector_name, split_m
 
 use super::shared::{
     call_arguments, infer_method_from_handler, is_serve_mux_receiver, looks_like_http_path,
-    normalized_handler,
+    normalized_handler, router_variable,
 };
 use super::{EndpointIdentificationStrategy, EndpointMatch, ExtractParams};
 
@@ -39,6 +39,11 @@ impl EndpointIdentificationStrategy for ServeMuxHandleStrategy {
             method: infer_method_from_handler(&handler),
             path,
             handler,
+            router: router_variable(
+                function_node.child_by_field_name("operand")?,
+                params.code,
+                params.imports,
+            ),
         })
     }
 }
@@ -69,6 +74,11 @@ impl EndpointIdentificationStrategy for ServeMuxHandleFuncStrategy {
             method,
             path,
             handler: normalized_handler(arguments[1], params.code),
+            router: router_variable(
+                function_node.child_by_field_name("operand")?,
+                params.code,
+                params.imports,
+            ),
         })
     }
 }

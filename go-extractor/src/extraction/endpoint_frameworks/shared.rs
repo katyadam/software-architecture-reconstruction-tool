@@ -160,6 +160,16 @@ pub(super) fn normalized_handler(node: Node, code: &str) -> String {
     normalize_whitespace(node_text(node, code))
 }
 
+/// Router receiver text, or `None` for a package-level call (`http.HandleFunc`).
+pub(super) fn router_variable(receiver: Node, code: &str, imports: &[Import]) -> Option<String> {
+    let text = normalize_whitespace(node_text(receiver, code));
+    let leading = text.split('.').next().unwrap_or(&text);
+    if imports.iter().any(|import| import.module_alias == leading) {
+        return None;
+    }
+    Some(text)
+}
+
 pub(super) fn function_node(node: Node<'_>) -> Option<Node<'_>> {
     node.child_by_field_name("function")
 }
