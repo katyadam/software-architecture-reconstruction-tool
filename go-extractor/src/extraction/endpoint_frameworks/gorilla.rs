@@ -36,11 +36,7 @@ impl EndpointIdentificationStrategy for GorillaStrategy {
             ))?,
             path: evaluate_expression_node(inner_args[0], params.code, params.globals),
             handler: normalized_handler(inner_args[1], params.code),
-            router: router_variable(
-                inner_function.child_by_field_name("operand")?,
-                params.code,
-                params.imports,
-            ),
+            router: router_variable(inner_function, params),
         })
     }
 }

@@ -645,3 +645,36 @@ func routes() { r := chi.NewRouter(); register := func() { r.Get("/x", h) }; reg
     assert_eq!(endpoint.router_variable.as_deref(), Some("r"));
     assert_eq!(endpoint.enclosing_function.as_deref(), Some("routes"));
 }
+
+#[test]
+fn go_gorilla_receiverless_registration_is_kept() {
+    let endpoint = single_endpoint(
+        r#"
+package main
+
+import "github.com/gorilla/mux"
+
+func setup() { HandleFunc("/x", h).Methods("GET") }
+"#,
+    );
+    assert_eq!(endpoint.uri, "/x");
+    assert_eq!(endpoint.http_method, models::HttpMethod::GET);
+    assert_eq!(endpoint.router_variable, None);
+    assert_eq!(endpoint.enclosing_function.as_deref(), Some("setup"));
+}
+
+#[test]
+fn go_top_level_registration_has_no_enclosing_function() {
+    let endpoint = single_endpoint(
+        r#"
+package main
+
+var r = chi.NewRouter()
+var _ = r.Get("/top", h)
+"#,
+    );
+    assert_eq!(endpoint.uri, "/top");
+    assert_eq!(endpoint.http_method, models::HttpMethod::GET);
+    assert_eq!(endpoint.router_variable.as_deref(), Some("r"));
+    assert_eq!(endpoint.enclosing_function, None);
+}

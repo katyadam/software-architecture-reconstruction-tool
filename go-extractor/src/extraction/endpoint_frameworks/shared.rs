@@ -4,6 +4,7 @@ use models::{Assignment, AssignmentKey, HttpMethod, Import};
 use statix::strings::{normalize_whitespace, strip_quotes};
 use tree_sitter::Node;
 
+use super::ExtractParams;
 use crate::extraction::shared::{infer_http_method_from_name, node_text};
 
 const ROUTER_CONSTRUCTORS: &[&str] = &[
@@ -160,11 +161,17 @@ pub(super) fn normalized_handler(node: Node, code: &str) -> String {
     normalize_whitespace(node_text(node, code))
 }
 
-/// Router receiver text, or `None` for a package-level call (`http.HandleFunc`).
-pub(super) fn router_variable(receiver: Node, code: &str, imports: &[Import]) -> Option<String> {
-    let text = normalize_whitespace(node_text(receiver, code));
-    let leading = text.split('.').next().unwrap_or(&text);
-    if imports.iter().any(|import| import.module_alias == leading) {
+/// Router receiver text, or `None` for a receiverless or package-level call (`http.HandleFunc`).
+// ponytail: a local variable shadowing an import alias gets None; check local bindings if that shows up.
+pub(super) fn router_variable(function_node: Node, params: &ExtractParams<'_>) -> Option<String> {
+    let receiver = function_node.child_by_field_name("operand")?;
+    let text = normalize_whitespace(node_text(receiver, params.code));
+    let leading = text.split('.').next();
+    if params
+        .imports
+        .iter()
+        .any(|import| leading == Some(import.module_alias.as_str()))
+    {
         return None;
     }
     Some(text)

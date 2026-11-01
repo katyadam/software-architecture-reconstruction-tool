@@ -39,11 +39,7 @@ impl EndpointIdentificationStrategy for ServeMuxHandleStrategy {
             method: infer_method_from_handler(&handler),
             path,
             handler,
-            router: router_variable(
-                function_node.child_by_field_name("operand")?,
-                params.code,
-                params.imports,
-            ),
+            router: router_variable(function_node, params),
         })
     }
 }
@@ -74,11 +70,7 @@ impl EndpointIdentificationStrategy for ServeMuxHandleFuncStrategy {
             method,
             path,
             handler: normalized_handler(arguments[1], params.code),
-            router: router_variable(
-                function_node.child_by_field_name("operand")?,
-                params.code,
-                params.imports,
-            ),
+            router: router_variable(function_node, params),
         })
     }
 }

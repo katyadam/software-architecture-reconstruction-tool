@@ -25,11 +25,7 @@ impl EndpointIdentificationStrategy for WebStrategy {
             method,
             path: evaluate_expression_node(arguments[0], params.code, params.globals),
             handler: normalized_handler(arguments[1], params.code),
-            router: router_variable(
-                function_node.child_by_field_name("operand")?,
-                params.code,
-                params.imports,
-            ),
+            router: router_variable(function_node, params),
         })
     }
 }

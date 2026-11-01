@@ -84,16 +84,10 @@ fn endpoint_from_call(
 
 /// Name of the nearest enclosing function or method declaration; closures are skipped.
 fn enclosing_function(node: Node, code: &str) -> Option<String> {
-    let mut current = node.parent();
-    while let Some(parent) = current {
-        if matches!(parent.kind(), "function_declaration" | "method_declaration") {
-            return parent
-                .child_by_field_name("name")
-                .map(|name| node_text(name, code).to_string());
-        }
-        current = parent.parent();
-    }
-    None
+    std::iter::successors(node.parent(), |n| n.parent())
+        .find(|n| matches!(n.kind(), "function_declaration" | "method_declaration"))?
+        .child_by_field_name("name")
+        .map(|name| node_text(name, code).to_string())
 }
 
 fn build_endpoint(

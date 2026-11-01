@@ -34,11 +34,21 @@ impl EndpointIdentificationStrategy for ChiStrategy {
 
         match selector.as_str() {
             "Get" | "Post" | "Put" | "Delete" | "Patch" | "Options" | "Head" => {
-                identify_two_arg_route(&prefix, selector.as_str(), &arguments, params)
+                identify_two_arg_route(
+                    function_node,
+                    &prefix,
+                    selector.as_str(),
+                    &arguments,
+                    params,
+                )
             }
-            _ if is_http_method_selector(selector.as_str()) => {
-                identify_two_arg_route(&prefix, selector.as_str(), &arguments, params)
-            }
+            _ if is_http_method_selector(selector.as_str()) => identify_two_arg_route(
+                function_node,
+                &prefix,
+                selector.as_str(),
+                &arguments,
+                params,
+            ),
             "Method" | "MethodFunc" => {
                 if arguments.len() < 3 {
                     return None;
@@ -58,7 +68,7 @@ impl EndpointIdentificationStrategy for ChiStrategy {
                     ))?,
                     path,
                     handler: normalized_handler(arguments[2], params.code),
-                    router: receiver_router(function_node, params),
+                    router: router_variable(function_node, params),
                 })
             }
             _ => None,
@@ -67,6 +77,7 @@ impl EndpointIdentificationStrategy for ChiStrategy {
 }
 
 fn identify_two_arg_route(
+    function_node: tree_sitter::Node<'_>,
     prefix: &str,
     selector: &str,
     arguments: &[tree_sitter::Node<'_>],
@@ -86,17 +97,6 @@ fn identify_two_arg_route(
         method: parse_http_method_value(selector)?,
         path,
         handler: normalized_handler(arguments[1], params.code),
-        router: receiver_router(params.node.child_by_field_name("function")?, params),
+        router: router_variable(function_node, params),
     })
-}
-
-fn receiver_router(
-    function_node: tree_sitter::Node<'_>,
-    params: &ExtractParams<'_>,
-) -> Option<String> {
-    router_variable(
-        function_node.child_by_field_name("operand")?,
-        params.code,
-        params.imports,
-    )
 }
