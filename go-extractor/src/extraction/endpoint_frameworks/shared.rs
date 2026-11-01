@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use models::{Assignment, AssignmentKey, HttpMethod, Import};
-use statix::strings::{normalize_whitespace, strip_quotes};
+use statix::strings::normalize_whitespace;
 use tree_sitter::Node;
 
 use super::ExtractParams;
@@ -23,30 +23,93 @@ const ROUTER_IMPORT_PREFIXES: &[&str] = &[
     "github.com/julienschmidt/httprouter",
 ];
 const SERVE_MUX_IMPORT_PREFIXES: &[&str] = &["net/http"];
+/// Router types by package, for parameters typed `<alias>.<Type>` (allowlist: `*gin.Context` is no router).
+pub(super) const ROUTER_PARAMETER_TYPES: &[(&str, &[&str])] = &[
+    ("github.com/go-chi/chi", &["Router", "Mux"]),
+    (
+        "github.com/gin-gonic/gin",
+        &["Engine", "RouterGroup", "IRouter", "IRoutes"],
+    ),
+    ("github.com/labstack/echo", &["Echo", "Group"]),
+    ("github.com/gofiber/fiber", &["App", "Router"]),
+    ("github.com/julienschmidt/httprouter", &["Router"]),
+    ("github.com/gorilla/mux", &["Router"]),
+];
+pub(super) const SERVE_MUX_PARAMETER_TYPES: &[(&str, &[&str])] = &[("net/http", &["ServeMux"])];
 pub(super) const WEB_IMPORT_PREFIXES: &[&str] = &["github.com/hoisie/web"];
 
+/// Receiver is a known router, or a `.Group(` / `.PathPrefix(..).Subrouter(` chain of one.
+/// The group prefix itself comes from the route-fact resolver.
 pub(super) fn is_known_router_receiver(
     function_node: Node,
     code: &str,
     assignments: &HashMap<AssignmentKey, Assignment>,
     imports: &[Import],
 ) -> bool {
-    receiver_origin(function_node, code, assignments).is_some_and(|origin| {
-        ROUTER_CONSTRUCTORS
-            .iter()
-            .any(|constructor| origin.starts_with(constructor))
-            || imported_origin_matches(origin, imports, ROUTER_IMPORT_PREFIXES)
-    })
+    receiver_origin(function_node, code, assignments)
+        .is_some_and(|origin| is_router_origin(origin, assignments, imports, &mut Vec::new()))
 }
 
-pub(super) fn router_prefix(
+/// Receiver is a parameter of the enclosing named function whose type is in `types`.
+/// Closure (`func_literal`) parameters are not accepted.
+pub(super) fn is_router_parameter(
     function_node: Node,
-    code: &str,
-    assignments: &HashMap<AssignmentKey, Assignment>,
-    imports: &[Import],
-) -> Option<String> {
-    let origin = receiver_origin(function_node, code, assignments)?;
-    router_prefix_from_origin(origin, assignments, imports, &mut Vec::new())
+    params: &ExtractParams<'_>,
+    types: &[(&str, &[&str])],
+) -> bool {
+    let code = params.code;
+    let Some(receiver) = function_node
+        .child_by_field_name("operand")
+        .filter(|operand| operand.kind() == "identifier")
+    else {
+        return false;
+    };
+    let receiver = node_text(receiver, code);
+    // ponytail: nested-block shadowing (`for _, r := range xs`) is not detected; check local bindings if false positives show up.
+    let Some(parameters) = std::iter::successors(function_node.parent(), |n| n.parent())
+        .find(|n| {
+            matches!(
+                n.kind(),
+                "function_declaration" | "method_declaration" | "func_literal"
+            )
+        })
+        .filter(|function| function.kind() != "func_literal")
+        .and_then(|function| function.child_by_field_name("parameters"))
+    else {
+        return false;
+    };
+    parameters
+        .named_children(&mut parameters.walk())
+        .filter(|declaration| {
+            declaration
+                .children_by_field_name("name", &mut declaration.walk())
+                .any(|name| node_text(name, code) == receiver)
+        })
+        .filter_map(|declaration| declaration.child_by_field_name("type"))
+        .any(|kind| {
+            let Some((alias, name)) = node_text(kind, code)
+                .trim_start_matches('*')
+                .split_once('.')
+            else {
+                return false;
+            };
+            params.imports.iter().any(|import| {
+                imports_package(import, alias)
+                    && types.iter().any(|(package, allowed)| {
+                        import.orig_module.starts_with(package) && allowed.contains(&name)
+                    })
+            })
+        })
+}
+
+/// `alias` names `import`: its alias, or the segment before a `/vN` suffix (`chi/v5` is `chi`).
+fn imports_package(import: &Import, alias: &str) -> bool {
+    let mut segments = import.orig_module.rsplit('/');
+    let versioned = segments
+        .next()
+        .and_then(|last| last.strip_prefix('v'))
+        .is_some_and(|major| !major.is_empty() && major.chars().all(|c| c.is_ascii_digit()));
+    import.module_alias == alias || (versioned && segments.next() == Some(alias))
 }
 
 pub(super) fn is_serve_mux_receiver(
@@ -62,45 +125,36 @@ pub(super) fn is_serve_mux_receiver(
     })
 }
 
-fn router_prefix_from_origin(
-    origin: &str,
-    assignments: &HashMap<AssignmentKey, Assignment>,
+fn is_router_origin<'a>(
+    origin: &'a str,
+    assignments: &'a HashMap<AssignmentKey, Assignment>,
     imports: &[Import],
-    seen: &mut Vec<String>,
-) -> Option<String> {
-    let trimmed = origin.trim();
-    if seen.iter().any(|value| value == trimmed) {
-        return None;
-    }
-    seen.push(trimmed.to_string());
-
+    seen: &mut Vec<&'a str>,
+) -> bool {
+    let origin = origin.trim();
     if ROUTER_CONSTRUCTORS
         .iter()
-        .any(|constructor| trimmed.starts_with(constructor))
-        || imported_origin_matches(trimmed, imports, ROUTER_IMPORT_PREFIXES)
+        .any(|constructor| origin.starts_with(constructor))
+        || imported_origin_matches(origin, imports, ROUTER_IMPORT_PREFIXES)
     {
-        seen.pop();
-        return Some(String::new());
+        return true;
     }
-
-    let resolved = parse_group_origin(trimmed).and_then(|(base, group_prefix)| {
-        let base_origin = assignments
-            .values()
-            .find(|assignment| assignment.variable_name == base)
-            .map(|assignment| assignment.value.as_str())
-            .unwrap_or(base);
-        router_prefix_from_origin(base_origin, assignments, imports, seen)
-            .map(|prefix| join_route_prefix(&prefix, &group_prefix))
-    });
-    seen.pop();
-    resolved
-}
-
-fn parse_group_origin(origin: &str) -> Option<(&str, String)> {
-    let (base, rest) = origin.split_once(".Group(")?;
-    let args = rest.strip_suffix(')')?;
-    let group_prefix = strip_quotes(args.trim()).to_string();
-    Some((base.trim(), group_prefix))
+    if seen.contains(&origin) {
+        return false;
+    }
+    seen.push(origin);
+    let Some(base) = [".Group(", ".PathPrefix("]
+        .iter()
+        .find_map(|method| origin.split_once(method))
+        .map(|(base, _)| base.trim())
+    else {
+        return false;
+    };
+    let base_origin = assignments
+        .values()
+        .find(|assignment| assignment.variable_name == base)
+        .map_or(base, |assignment| assignment.value.as_str());
+    is_router_origin(base_origin, assignments, imports, seen)
 }
 
 fn receiver_origin<'a>(
@@ -112,7 +166,8 @@ fn receiver_origin<'a>(
     let receiver = node_text(receiver, code).trim();
     let mut values = assignments
         .values()
-        .filter(|assignment| assignment.variable_name == receiver)
+        // Empty value: bare `var x T` declaration, not a competing origin.
+        .filter(|assignment| assignment.variable_name == receiver && !assignment.value.is_empty())
         .map(|assignment| assignment.value.as_str());
     let first = values.next().unwrap_or(receiver);
     if values.any(|value| value != first) {
@@ -137,18 +192,6 @@ pub(super) fn looks_like_http_path(path: &str) -> bool {
 
 pub(super) fn infer_method_from_handler(handler: &str) -> HttpMethod {
     infer_http_method_from_name(handler.rsplit('.').next().unwrap_or(handler))
-}
-
-pub(super) fn join_route_prefix(prefix: &str, path: &str) -> String {
-    match (prefix.is_empty(), path.is_empty()) {
-        (true, _) => path.to_string(),
-        (_, true) => prefix.to_string(),
-        _ => format!(
-            "{}/{}",
-            prefix.trim_end_matches('/'),
-            path.trim_start_matches('/')
-        ),
-    }
 }
 
 pub(super) fn call_arguments(node: Node<'_>) -> Vec<Node<'_>> {

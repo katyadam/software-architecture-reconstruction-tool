@@ -8,6 +8,7 @@ mod ir;
 mod package_resolution;
 mod project;
 pub mod restcalls;
+pub mod route_facts;
 mod shared;
 
 use std::{collections::HashMap, path::Path};

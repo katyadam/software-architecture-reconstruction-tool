@@ -26,13 +26,24 @@ pub fn resolve_route_prefixes(files: &mut [TypedFileRecord], import_graph: &Impo
 fn facts_for(file: &TypedFileRecord) -> Vec<RouteFact> {
     match file.language {
         Language::Python => python_extractor::extraction::route_facts::route_facts(file),
+        Language::Go => go_extractor::extraction::route_facts::route_facts(file),
         _ => vec![],
     }
 }
 
-/// Bare function name: extractors may store `name(params) -> ret`.
+/// Bare function name: extractors may store `name(params) -> ret`
+/// or a Go signature `func (r *R) name[T any](params) ret`.
 fn bare(name: &str) -> &str {
-    name.split('(').next().unwrap_or(name).trim()
+    let name = name.trim();
+    let Some(go) = name.strip_prefix("func ") else {
+        return name.split('(').next().unwrap_or(name).trim();
+    };
+    let go = go.trim_start();
+    let go = match go.strip_prefix('(') {
+        Some(receiver) => receiver.split_once(')').map_or(go, |(_, rest)| rest),
+        None => go,
+    };
+    go.split(['(', '[']).next().unwrap_or(go).trim()
 }
 
 /// Scope key: bare function/class name, `""` for module level.
@@ -378,7 +389,7 @@ mod tests {
         source_code::SourceSpan,
     };
 
-    use super::resolve_with_facts;
+    use super::{bare, resolve_with_facts};
 
     fn rec(path: &str) -> TypedFileRecord {
         TypedFileRecord {
@@ -547,6 +558,37 @@ mod tests {
             vec![app, routes],
             vec![(0, vec![attach("app", "app_v1", &format!("\"{prefix}\""))])],
         )
+    }
+
+    #[test]
+    fn bare_go_signatures() {
+        assert_eq!(
+            bare("func (s *Server) routes(r chi.Router) http.Handler"),
+            "routes"
+        );
+        assert_eq!(bare("func main()"), "main");
+        assert_eq!(bare("func Map[T any](x T)"), "Map");
+        assert_eq!(bare("create_router() -> Any"), "create_router");
+    }
+
+    #[test]
+    fn go_group_param_across_files() {
+        let mut main = rec("svc/main.go");
+        main.call_statements
+            .push(call("registerRoutes", &[("", "api")], Some("func main()")));
+        let mut routes = rec("svc/routes.go");
+        routes.callables.push(callable("registerRoutes", &["g"]));
+        routes
+            .endpoints
+            .push(ep("/health", Some("g"), Some("registerRoutes")));
+        let fact = RouteFact::Attach {
+            scope: Scope::Function("func main()".to_string()),
+            parent: "r".to_string(),
+            child: "api".to_string(),
+            prefix: "\"/api\"".to_string(),
+        };
+        let out = run(vec![main, routes], vec![(0, vec![fact])], &graph(&[]));
+        assert_eq!(out, pairs(&[("svc/routes.go", "/api/health")]));
     }
 
     #[test]
