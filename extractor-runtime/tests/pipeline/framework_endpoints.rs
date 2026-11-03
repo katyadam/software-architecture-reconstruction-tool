@@ -496,6 +496,234 @@ fn same_constant_name_in_two_services_rest_calls() {
     }
 }
 
+/// Target of the single REST call in `code`, through pass 3.
+fn rest_target(code: &str) -> String {
+    let ir = evaluated(vec![py(code, "svc/client.py")], &HashMap::new());
+    assert_eq!(ir.restcalls.len(), 1, "{code}");
+    ir.restcalls[0].target_uri.clone()
+}
+
+/// `requests.get(<target>)` in a function, under `header`.
+fn inline_client(header: &str, target: &str) -> String {
+    format!("import requests\n\n{header}\n\ndef call(item):\n    requests.get({target})\n")
+}
+
+#[test]
+fn inline_concat_constant_plus_literal() {
+    let code = inline_client("BASE = \"http://svc:8000\"", "BASE + \"/x\"");
+    assert_eq!(rest_target(&code), "http://svc:8000/x");
+}
+
+#[test]
+fn inline_concat_single_quoted_literal() {
+    let code = inline_client("BASE = \"http://svc:8000\"", "BASE + '/x'");
+    assert_eq!(rest_target(&code), "http://svc:8000/x");
+}
+
+#[test]
+fn inline_concat_literal_between_names() {
+    let code = inline_client(
+        "BASE = \"http://svc:8000\"\nTAIL = \"y\"",
+        "BASE + \"/x/\" + TAIL",
+    );
+    assert_eq!(rest_target(&code), "http://svc:8000/x/y");
+}
+
+#[test]
+fn inline_concat_fstring_operand() {
+    let code = inline_client("BASE = \"http://svc:8000\"", "BASE + f\"/x/{item}\"");
+    assert_eq!(rest_target(&code), "http://svc:8000/x/{item}");
+}
+
+#[test]
+fn inline_concat_fstring_prefix_variants() {
+    for operand in ["rf\"/x/{item}\"", "F\"/x/{item}\"", "f'''/x/{item}'''"] {
+        let code = inline_client("BASE = \"http://svc:8000\"", &format!("BASE + {operand}"));
+        assert_eq!(rest_target(&code), "http://svc:8000/x/{item}", "{operand}");
+    }
+}
+
+#[test]
+fn inline_concat_unresolved_operand_stays_as_text() {
+    let inline = "import requests\n\nclass Client:\n    def call(self):\n        requests.get(self.base + \"/x\")\n";
+    assert_eq!(rest_target(inline), "{self.base}/x");
+}
+
+#[test]
+fn inline_concat_constant_holding_fstring() {
+    let code = inline_client(
+        "HOST = \"svc\"\nBASE = f\"http://{HOST}:8000\"",
+        "BASE + \"/x\"",
+    );
+    assert_eq!(rest_target(&code), "http://svc:8000/x");
+}
+
+/// Value starts with `f`, but is no f-string.
+#[test]
+fn constant_starting_with_f_keeps_its_value() {
+    let header = "HOST = \"frontend:8000\"";
+    let inline = inline_client(header, "HOST + \"/x\"");
+    let variable = format!(
+        "import requests\n\n{header}\n\ndef call():\n    url = HOST + \"/x\"\n    requests.get(url)\n"
+    );
+    let fstring = inline_client(header, "f\"{HOST}/x\"");
+    // No `/` in the literal: identification drops it before pass 3.
+    let bare_fstring = inline_client(header, "f\"{HOST}\"");
+    assert_eq!(rest_target(&inline), "frontend:8000/x");
+    assert_eq!(rest_target(&variable), "frontend:8000/x");
+    assert_eq!(rest_target(&fstring), "frontend:8000/x");
+    let ir = evaluated(vec![py(&bare_fstring, "svc/client.py")], &HashMap::new());
+    assert!(ir.restcalls.is_empty(), "{:?}", ir.restcalls);
+}
+
+/// Leading hole: the matcher gives a suffix match, a literal first segment gets none.
+#[test]
+fn inline_concat_unresolved_local_becomes_hole() {
+    let code = "import requests\n\ndef call(svc_url, name):\n    requests.get(svc_url + \"/a/b/\" + name)\n";
+    assert_eq!(rest_target(code), "{svc_url}/a/b/{name}");
+}
+
+#[test]
+fn inline_concat_other_operands_keep_todays_target() {
+    let lookup = inline_client("", "lookup(item) + \"/y\"");
+    assert_eq!(rest_target(&lookup), "/y");
+    let formatted = inline_client(INLINE_HEADER, "BASE + \"/a/%s\" % item");
+    assert_eq!(rest_target(&formatted), "\"/a/%s\" % item");
+}
+
+#[test]
+fn inline_concat_same_constant_name_in_two_services() {
+    let a = inline_client("BASE = \"http://a\"", "BASE + \"/x\"");
+    let b = inline_client("BASE = \"http://b\"", "BASE + \"/x\"");
+    for (first, second) in [
+        (py(&a, "a/client.py"), py(&b, "b/client.py")),
+        (py(&b, "b/client.py"), py(&a, "a/client.py")),
+    ] {
+        let ir = evaluated(vec![first, second], &HashMap::new());
+        let of = |path: &str| {
+            ir.restcalls
+                .iter()
+                .find(|r| r.file_path == path)
+                .map(|r| r.target_uri.clone())
+        };
+        assert_eq!(of("a/client.py").as_deref(), Some("http://a/x"));
+        assert_eq!(of("b/client.py").as_deref(), Some("http://b/x"));
+    }
+}
+
+const INLINE_HEADER: &str = "BASE = \"http://svc:8000\"\nTAIL = \"y\"";
+
+#[test]
+fn inline_concat_equals_variable_form() {
+    for target in [
+        "BASE + \"/x\"",
+        "BASE + '/x'",
+        "BASE + \"/x/\" + TAIL",
+        "BASE + f\"/x/{item}\"",
+    ] {
+        let variable = format!(
+            "import requests\n\n{INLINE_HEADER}\n\ndef call(item):\n    url = {target}\n    requests.get(url)\n"
+        );
+        assert_eq!(
+            rest_target(&inline_client(INLINE_HEADER, target)),
+            rest_target(&variable),
+            "{target}"
+        );
+    }
+}
+
+#[test]
+fn inline_concat_multiline_call() {
+    for target in [
+        "\n        BASE + \"/x\"\n    ",
+        "\n        BASE\n        + \"/x\"\n    ",
+        "\n        BASE + \"/x\",  # it's a comment\n        timeout=5,\n    ",
+    ] {
+        let code = inline_client(INLINE_HEADER, target);
+        assert_eq!(rest_target(&code), "http://svc:8000/x", "{target}");
+    }
+}
+
+#[test]
+fn inline_concat_with_keyword_arguments() {
+    for target in [
+        "BASE + \"/x\", timeout=5",
+        "BASE + \"/x\", headers={\"a\": \"b+c\"}, timeout=5",
+        "url=BASE + \"/x\", timeout=5",
+    ] {
+        let code = inline_client(INLINE_HEADER, target);
+        assert_eq!(rest_target(&code), "http://svc:8000/x", "{target}");
+    }
+}
+
+#[test]
+fn inline_concat_non_ascii() {
+    for (target, expected) in [
+        ("BASE + \"/ñandú/é\"", "http://svc:8000/ñandú/é"),
+        ("BASE + '/日本語/' + TAIL", "http://svc:8000/日本語/y"),
+        ("BASE + f\"/ñ/{item}\"", "http://svc:8000/ñ/{item}"),
+        ("é + \"/ñ\"", "{é}/ñ"),
+    ] {
+        let code = inline_client(INLINE_HEADER, target);
+        assert_eq!(rest_target(&code), expected, "{target}");
+    }
+}
+
+#[test]
+fn inline_concat_literal_with_quote_or_bracket() {
+    for (target, expected) in [
+        ("BASE + \"/it's\"", "http://svc:8000/it's"),
+        ("BASE + '/say\"hi\"'", "http://svc:8000/say\"hi\""),
+        ("BASE + \"/x(\" + TAIL", "http://svc:8000/x(y"),
+        ("BASE + \"/x)\" + TAIL", "http://svc:8000/x)y"),
+    ] {
+        let code = inline_client(INLINE_HEADER, target);
+        assert_eq!(rest_target(&code), expected, "{target}");
+    }
+}
+
+/// Tree-sitter recovery decides the target, so only survival is asserted.
+#[test]
+fn inline_concat_unterminated_quote_does_not_panic() {
+    for target in [
+        "BASE + \"/x",
+        "BASE + '/é",
+        "é + \"\"\"/x",
+        "BASE + f\"/{item",
+    ] {
+        let code = format!("import requests\n\ndef call(item):\n    requests.get({target})\n");
+        evaluated(vec![py(&code, "svc/client.py")], &HashMap::new());
+    }
+}
+
+#[test]
+fn inline_concat_dictionary_lookup_not_reported_after_pass3() {
+    let code = "PREFIX = \"p\"\n\ndef call(settings):\n    settings.get(PREFIX + \"_key\")\n";
+    let ir = evaluated(vec![py(code, "svc/client.py")], &HashMap::new());
+    assert!(ir.restcalls.is_empty(), "{:?}", ir.restcalls);
+}
+
+#[test]
+fn prefix_and_inline_rest_call_share_constant_value() {
+    let code = r#"
+import requests
+from fastapi import APIRouter
+
+BASE = "/shared"
+router = APIRouter(prefix=BASE)
+
+@router.get("/items")
+async def items():
+    return None
+
+def call():
+    requests.get(BASE + "/x")
+"#;
+    let ir = evaluated(vec![py(code, "svc/app.py")], &HashMap::new());
+    assert_eq!(ir.endpoints[0].uri, "/shared/items");
+    assert_eq!(ir.restcalls[0].target_uri, "/shared/x");
+}
+
 #[test]
 fn imported_constant_beats_same_name_in_other_service() {
     let other = router_file("BASE_PATH = \"/other\"", "BASE_PATH");
