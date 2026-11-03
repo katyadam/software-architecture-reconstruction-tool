@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use log::warn;
 use models::{
-    Endpoint, Parameter, RouteFact, Scope,
+    Parameter, RouteFact, Scope,
+    endpoints::PrefixExpr,
     ir::{
         language::Language,
         project::{ImportGraph, TypedFileRecord},
@@ -10,8 +12,11 @@ use models::{
 
 /// Max call/attach chain followed per endpoint.
 const MAX_DEPTH: usize = 8;
+/// Max chains kept per router; non-literal prefixes do not collapse before pass 3.
+// ponytail: smallest chains kept, wider routers lose mounts; raise if a real project hits the warning.
+const MAX_CHAINS: usize = 256;
 
-/// Prefix every endpoint URI with the router-composition prefixes of its router.
+/// Record on every endpoint the unevaluated prefix chains of its router.
 pub fn resolve_route_prefixes(files: &mut [TypedFileRecord], import_graph: &ImportGraph) {
     let facts: Vec<(usize, Vec<RouteFact>)> = files
         .iter()
@@ -54,29 +59,6 @@ fn scope_key(scope: &Scope) -> String {
     }
 }
 
-/// `a` + `/` + `b`, empty parts skipped, leading `/`.
-fn join(a: &str, b: &str) -> String {
-    let (a, b) = (a.trim_end_matches('/'), b.trim_start_matches('/'));
-    let joined = match (a.is_empty(), b.is_empty()) {
-        (true, _) => b.to_string(),
-        (_, true) => a.to_string(),
-        _ => format!("{a}/{b}"),
-    };
-    if joined.is_empty() || joined.starts_with('/') {
-        joined
-    } else {
-        format!("/{joined}")
-    }
-}
-
-/// Content of a `"..."` or `'...'` literal.
-fn unquote(expr: &str) -> Option<String> {
-    let quote = expr.chars().next().filter(|c| *c == '"' || *c == '\'')?;
-    expr.strip_prefix(quote)?
-        .strip_suffix(quote)
-        .map(str::to_string)
-}
-
 /// A call site: caller file, caller scope key, call arguments.
 struct Site<'a> {
     file: usize,
@@ -87,8 +69,18 @@ struct Site<'a> {
 /// `(file, scope key, variable)`.
 type VarKey = (usize, String, String);
 
-/// Prefix sets: `None` marks a path with an unresolvable prefix.
-type Prefixes = BTreeSet<Option<String>>;
+/// Prefix chains, outermost first; an empty chain is a root router.
+type Prefixes = BTreeSet<Vec<PrefixExpr>>;
+
+/// Add `chains`, keeping the first `MAX_CHAINS` in set order.
+fn merge(set: &mut Prefixes, chains: impl IntoIterator<Item = Vec<PrefixExpr>>) {
+    for chain in chains {
+        set.insert(chain);
+        if set.len() > MAX_CHAINS {
+            set.pop_last();
+        }
+    }
+}
 
 struct Resolver<'a> {
     files: &'a [TypedFileRecord],
@@ -189,30 +181,6 @@ impl<'a> Resolver<'a> {
             .unwrap_or_default()
     }
 
-    /// String value of a prefix expression: quoted literal or module-level constant.
-    fn eval(&self, file: usize, expr: &str) -> Option<String> {
-        let expr = expr.trim();
-        if let Some(literal) = unquote(expr) {
-            return Some(literal);
-        }
-        let constant = |f: usize| {
-            self.files[f]
-                .assignments
-                .get(&models::AssignmentKey {
-                    scope: Scope::Global,
-                    variable_name: expr.to_string(),
-                })
-                .map(|a| a.value.trim().to_string())
-        };
-        // Only literals: an identifier-to-identifier chain stays unresolved.
-        constant(file)
-            .or_else(|| {
-                let source = self.graph.lookup(&self.files[file].file_path, expr)?;
-                constant(*self.by_path.get(source.source_file.as_str())?)
-            })
-            .and_then(|value| unquote(&value))
-    }
-
     /// Files whose callable `name` a call in `file` reaches (D5).
     fn callee_files(&self, file: usize, name: &str) -> BTreeSet<usize> {
         let candidates: Vec<usize> = self
@@ -254,27 +222,41 @@ impl<'a> Resolver<'a> {
         let out = self
             .param_prefixes(file, scope, var, path)
             .unwrap_or_else(|| {
+                let expr = |prefix: &str| PrefixExpr {
+                    file_path: self.files[file].file_path.clone(),
+                    expr: prefix.to_string(),
+                };
                 let mut outer = Prefixes::new();
                 let (fact_scope, attach) = Self::scoped(&self.attach, file, scope, var);
                 for (parent, prefix) in attach {
-                    let p = self.eval(file, prefix);
-                    for o in self.prefixes(file, fact_scope, parent, path) {
-                        outer.insert(o.zip(p.as_ref()).map(|(o, p)| join(&o, p)));
-                    }
+                    let chains = self.prefixes(file, fact_scope, parent, path);
+                    merge(
+                        &mut outer,
+                        chains.into_iter().map(|mut chain| {
+                            chain.push(expr(prefix));
+                            chain
+                        }),
+                    );
                 }
                 if attach.is_empty() {
-                    outer.insert(Some(String::new()));
+                    outer.insert(vec![]);
                 }
                 let (_, own) = Self::scoped(&self.own, file, scope, var);
-                own.iter()
-                    .map(|p| self.eval(file, p))
-                    .chain(own.is_empty().then(|| Some(String::new())))
-                    .flat_map(|p| {
-                        outer
-                            .iter()
-                            .map(move |o| o.clone().zip(p.clone()).map(|(o, p)| join(&o, &p)))
-                    })
-                    .collect()
+                if own.is_empty() {
+                    return outer;
+                }
+                let mut out = Prefixes::new();
+                for prefix in own {
+                    merge(
+                        &mut out,
+                        outer.iter().map(|chain| {
+                            let mut chain = chain.clone();
+                            chain.push(expr(prefix));
+                            chain
+                        }),
+                    );
+                }
+                out
             });
         path.pop();
         out
@@ -309,11 +291,14 @@ impl<'a> Resolver<'a> {
                 .filter(|a| a.assigned_variable.trim().is_empty())
                 .nth(index);
             if let Some(arg) = keyword.or(positional) {
-                out.extend(self.prefixes(site.file, &site.scope, arg.value.trim(), path));
+                merge(
+                    &mut out,
+                    self.prefixes(site.file, &site.scope, arg.value.trim(), path),
+                );
             }
         }
         if callers == 0 {
-            out.insert(Some(String::new()));
+            out.insert(vec![]);
         }
         Some(out)
     }
@@ -328,7 +313,7 @@ fn resolve_with_facts(
     if facts.is_empty() {
         return;
     }
-    let resolved: Vec<Vec<Endpoint>> = {
+    let chains: Vec<Vec<Vec<Vec<PrefixExpr>>>> = {
         let r = Resolver::new(files, facts, graph);
         files
             .iter()
@@ -336,41 +321,32 @@ fn resolve_with_facts(
             .map(|(i, file)| {
                 file.endpoints
                     .iter()
-                    .flat_map(|e| {
+                    .map(|e| {
                         let Some(router) = &e.router_variable else {
-                            return vec![e.clone()];
+                            return vec![];
                         };
                         let scope = e
                             .enclosing_function
                             .as_deref()
                             .map(bare)
                             .unwrap_or_default();
-                        // Unresolved path or nothing found -> current URI (`""`).
-                        let mut prefixes: BTreeSet<String> = r
-                            .prefixes(i, scope, router, &mut vec![])
-                            .into_iter()
-                            .map(Option::unwrap_or_default)
-                            .collect();
-                        if prefixes.is_empty() {
-                            prefixes.insert(String::new());
+                        let chains = r.prefixes(i, scope, router, &mut vec![]);
+                        if chains.len() >= MAX_CHAINS {
+                            warn!(
+                                "route prefixes of {} in {} may be truncated at {MAX_CHAINS} chains",
+                                e.uri, file.file_path
+                            );
                         }
-                        prefixes
-                            .into_iter()
-                            .map(|p| {
-                                let mut clone = e.clone();
-                                if !p.is_empty() {
-                                    clone.uri = join(&p, &e.uri);
-                                }
-                                clone
-                            })
-                            .collect()
+                        chains.into_iter().collect()
                     })
                     .collect()
             })
             .collect()
     };
-    for (file, endpoints) in files.iter_mut().zip(resolved) {
-        file.endpoints = endpoints;
+    for (file, file_chains) in files.iter_mut().zip(chains) {
+        for (endpoint, endpoint_chains) in file.endpoints.iter_mut().zip(file_chains) {
+            endpoint.route_prefixes = endpoint_chains;
+        }
     }
 }
 
@@ -379,8 +355,8 @@ mod tests {
     use std::collections::HashMap;
 
     use models::{
-        Argument, Assignment, AssignmentKey, CallStatement, Callable, Endpoint, Namespace,
-        Parameter, ParsedCallStatement, ParsedCallable, RouteFact, Scope,
+        Argument, CallStatement, Callable, Endpoint, Namespace, Parameter, ParsedCallStatement,
+        ParsedCallable, RouteFact, Scope,
         ir::{
             ast::CallableAst,
             language::Language,
@@ -389,7 +365,7 @@ mod tests {
         source_code::SourceSpan,
     };
 
-    use super::{bare, resolve_with_facts};
+    use super::{MAX_CHAINS, bare, resolve_with_facts};
 
     fn rec(path: &str) -> TypedFileRecord {
         TypedFileRecord {
@@ -467,20 +443,6 @@ mod tests {
         }
     }
 
-    fn global(file: &mut TypedFileRecord, name: &str, value: &str) {
-        file.assignments.insert(
-            AssignmentKey {
-                scope: Scope::Global,
-                variable_name: name.to_string(),
-            },
-            Assignment {
-                variable_name: name.to_string(),
-                variable_type: String::new(),
-                value: value.to_string(),
-            },
-        );
-    }
-
     fn attach(parent: &str, child: &str, prefix: &str) -> RouteFact {
         RouteFact::Attach {
             scope: Scope::Global,
@@ -516,28 +478,47 @@ mod tests {
         }
     }
 
+    /// `(endpoint file, uri, chains)`, chain parts rendered as `file: expr`.
+    type Chains = Vec<(String, String, Vec<Vec<String>>)>;
+
     fn run(
         mut files: Vec<TypedFileRecord>,
         facts: Vec<(usize, Vec<RouteFact>)>,
         g: &ImportGraph,
-    ) -> Vec<(String, String)> {
+    ) -> Chains {
         resolve_with_facts(&mut files, &facts, g);
-        let mut out: Vec<(String, String)> = files
+        let mut out: Chains = files
             .iter()
             .flat_map(|f| {
-                f.endpoints
-                    .iter()
-                    .map(|e| (f.file_path.clone(), e.uri.clone()))
+                f.endpoints.iter().map(|e| {
+                    let chains = e
+                        .route_prefixes
+                        .iter()
+                        .map(|chain| {
+                            chain
+                                .iter()
+                                .map(|p| format!("{}: {}", p.file_path, p.expr))
+                                .collect()
+                        })
+                        .collect();
+                    (f.file_path.clone(), e.uri.clone(), chains)
+                })
             })
             .collect();
         out.sort();
         out
     }
 
-    fn pairs(items: &[(&str, &str)]) -> Vec<(String, String)> {
+    fn expected(items: &[(&str, &str, &[&[&str]])]) -> Chains {
         items
             .iter()
-            .map(|(a, b)| (a.to_string(), b.to_string()))
+            .map(|(file, uri, chains)| {
+                let chains = chains
+                    .iter()
+                    .map(|c| c.iter().map(|p| p.to_string()).collect())
+                    .collect();
+                (file.to_string(), uri.to_string(), chains)
+            })
             .collect()
     }
 
@@ -588,7 +569,10 @@ mod tests {
             prefix: "\"/api\"".to_string(),
         };
         let out = run(vec![main, routes], vec![(0, vec![fact])], &graph(&[]));
-        assert_eq!(out, pairs(&[("svc/routes.go", "/api/health")]));
+        assert_eq!(
+            out,
+            expected(&[("svc/routes.go", "/health", &[&["svc/main.go: \"/api\""]])])
+        );
     }
 
     #[test]
@@ -600,7 +584,10 @@ mod tests {
             vec![(0, vec![attach("app", "sub", "\"/v3\"")])],
             &graph(&[]),
         );
-        assert_eq!(out, pairs(&[("svc/app.py", "/v3/x")]));
+        assert_eq!(
+            out,
+            expected(&[("svc/app.py", "/x", &[&["svc/app.py: \"/v3\""]])])
+        );
     }
 
     #[test]
@@ -615,13 +602,19 @@ mod tests {
             ],
         )];
         let out = run(vec![f], facts, &graph(&[]));
-        assert_eq!(out, pairs(&[("svc/app.py", "/api/items/{id}")]));
+        assert_eq!(
+            out,
+            expected(&[(
+                "svc/app.py",
+                "/{id}",
+                &[&["svc/app.py: \"/api\"", "svc/app.py: \"/items\""]]
+            )])
+        );
     }
 
     #[test]
-    fn prefix_from_global_constant() {
+    fn expression_kept_as_written() {
         let mut f = rec("svc/routes.py");
-        global(&mut f, "BASE_PATH", "\"/api/v1/consignservice\"");
         f.endpoints
             .push(ep("/consigns", Some("router"), Some("create_router")));
         let scope = Scope::Function("create_router() -> Any".to_string());
@@ -629,25 +622,11 @@ mod tests {
         let out = run(vec![f], facts, &graph(&[]));
         assert_eq!(
             out,
-            pairs(&[("svc/routes.py", "/api/v1/consignservice/consigns")])
-        );
-    }
-
-    #[test]
-    fn prefix_from_imported_constant() {
-        let mut routes = rec("svc/routes.py");
-        routes
-            .endpoints
-            .push(ep("/consigns", Some("router"), Some("create_router")));
-        let mut config = rec("svc/config.py");
-        global(&mut config, "BASE_PATH", "'/api/v1/consignservice'");
-        let scope = Scope::Function("create_router() -> Any".to_string());
-        let facts = vec![(0, vec![own(scope, "router", "BASE_PATH")])];
-        let g = graph(&[("svc/routes.py", "BASE_PATH", "svc/config.py")]);
-        let out = run(vec![routes, config], facts, &g);
-        assert_eq!(
-            out,
-            pairs(&[("svc/routes.py", "/api/v1/consignservice/consigns")])
+            expected(&[(
+                "svc/routes.py",
+                "/consigns",
+                &[&["svc/routes.py: BASE_PATH"]]
+            )])
         );
     }
 
@@ -676,7 +655,11 @@ mod tests {
         let out = run(vec![app, init, clinical], facts, &graph(&[]));
         assert_eq!(
             out,
-            pairs(&[("svc/api/v1/clinical.py", "/v1/cases/{case_id}")])
+            expected(&[(
+                "svc/api/v1/clinical.py",
+                "/cases/{case_id}",
+                &[&["svc/app.py: \"/v1\""]]
+            )])
         );
     }
 
@@ -696,7 +679,13 @@ mod tests {
         let facts = vec![(0, vec![attach("app", "app_v1", "\"/v1\"")])];
         let g = graph(&[("svc/app.py", "add_routes_v1", "svc/one.py")]);
         let out = run(vec![app, one, two], facts, &g);
-        assert_eq!(out, pairs(&[("svc/one.py", "/v1/x"), ("svc/two.py", "/x")]));
+        assert_eq!(
+            out,
+            expected(&[
+                ("svc/one.py", "/x", &[&["svc/app.py: \"/v1\""]]),
+                ("svc/two.py", "/x", &[&[]]),
+            ])
+        );
     }
 
     #[test]
@@ -708,7 +697,10 @@ mod tests {
         let out = run(files, facts, &graph(&[]));
         assert_eq!(
             out,
-            pairs(&[("a/api/routes.py", "/v1/x"), ("b/api/routes.py", "/v9/x")])
+            expected(&[
+                ("a/api/routes.py", "/x", &[&["a/app.py: \"/v1\""]]),
+                ("b/api/routes.py", "/x", &[&["b/app.py: \"/v9\""]]),
+            ])
         );
     }
 
@@ -733,21 +725,23 @@ mod tests {
         (vec![app, routes], facts)
     }
 
+    /// One endpoint, unchanged URI, two chains: pass 3 does the cloning.
     #[test]
-    fn helper_reused_by_two_mounts_yields_two_endpoints() {
+    fn helper_reused_by_two_mounts_records_two_chains() {
         let (files, facts) = reused_helper();
         let out = run(files, facts, &graph(&[]));
         assert_eq!(
             out,
-            pairs(&[
-                ("svc/routes.py", "/v1/alive"),
-                ("svc/routes.py", "/v3/alive")
-            ])
+            expected(&[(
+                "svc/routes.py",
+                "/alive",
+                &[&["svc/app.py: \"/v1\""], &["svc/app.py: \"/v3\""]]
+            )])
         );
     }
 
     #[test]
-    fn unresolved_prefix_keeps_uri() {
+    fn unknown_expression_recorded_verbatim() {
         let mut f = rec("svc/app.py");
         f.endpoints.push(ep("/x", Some("r"), None));
         let facts = vec![(
@@ -758,7 +752,14 @@ mod tests {
             ],
         )];
         let out = run(vec![f], facts, &graph(&[]));
-        assert_eq!(out, pairs(&[("svc/app.py", "/x")]));
+        assert_eq!(
+            out,
+            expected(&[(
+                "svc/app.py",
+                "/x",
+                &[&["svc/app.py: \"/api\"", "svc/app.py: settings.base"]]
+            )])
+        );
     }
 
     #[test]
@@ -772,7 +773,10 @@ mod tests {
         h.endpoints.push(ep("/x", Some("app"), Some("h")));
         let facts = vec![(0, vec![attach("app", "app_v1", "\"/v1\"")])];
         let out = run(vec![app, h], facts, &graph(&[]));
-        assert_eq!(out, pairs(&[("svc/h.py", "/v1/x")]));
+        assert_eq!(
+            out,
+            expected(&[("svc/h.py", "/x", &[&["svc/app.py: \"/v1\""]])])
+        );
     }
 
     #[test]
@@ -784,7 +788,7 @@ mod tests {
             vec![(0, vec![attach("app", "sub", "\"/v3\"")])],
             &graph(&[]),
         );
-        assert_eq!(out, pairs(&[("svc/App.java", "/x")]));
+        assert_eq!(out, expected(&[("svc/App.java", "/x", &[])]));
     }
 
     #[test]
@@ -805,6 +809,31 @@ mod tests {
         let facts = facts.into_iter().map(|(i, f)| (last - i, f)).collect();
         let backward = run(files, facts, &graph(&[]));
         assert_eq!(forward, backward);
-        assert_eq!(forward.len(), 3);
+        // Chains only: pass 2 never clones.
+        assert_eq!(forward.len(), 2);
+    }
+
+    /// 7 attach levels, 4 non-literal mounts each: 4^7 chains uncapped.
+    #[test]
+    fn chains_capped_deterministically() {
+        let facts: Vec<RouteFact> = (1..=7)
+            .flat_map(|level| {
+                (0..4).map(move |width| {
+                    attach(
+                        &format!("r{}", level + 1),
+                        &format!("r{level}"),
+                        &format!("settings.a{level}_{width}"),
+                    )
+                })
+            })
+            .collect();
+        let case = |facts: Vec<RouteFact>| {
+            let mut f = rec("svc/app.py");
+            f.endpoints.push(ep("/x", Some("r1"), None));
+            run(vec![f], vec![(0, facts)], &graph(&[]))
+        };
+        let forward = case(facts.clone());
+        assert_eq!(forward[0].2.len(), MAX_CHAINS);
+        assert_eq!(forward, case(facts.into_iter().rev().collect()));
     }
 }

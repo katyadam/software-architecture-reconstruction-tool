@@ -116,6 +116,7 @@ fn build_endpoint(
         file_path: file_path.to_string(),
         router_variable: endpoint.router,
         enclosing_function,
+        route_prefixes: vec![],
     }
 }
 

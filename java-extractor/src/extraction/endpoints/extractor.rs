@@ -72,6 +72,7 @@ impl Extractor<Endpoint> for EndpointsExtractor {
                 file_path: file_name.to_string(),
                 router_variable: None,
                 enclosing_function: None,
+                route_prefixes: vec![],
             };
             apply_annotations(&mut endpoint, &annotations);
             endpoints.push(endpoint);

@@ -33,21 +33,30 @@ Frameworks add URL prefixes outside the route decorator (`app.mount("/v1", app_v
 
 - `models::RouteFact::Attach { scope, parent, child, prefix }`: `child` is served under `parent` + `prefix`.
 - `models::RouteFact::Own { scope, router, prefix }`: `router` adds `prefix` to its own routes.
-- `prefix` is raw expression text (quoted literal or identifier); the resolver evaluates it.
-- `Endpoint.enclosing_function`: function containing the route decorator (Python fills it; others `None`).
+- `prefix` is raw expression text (quoted literal or identifier); pass 3 evaluates it.
+- `Endpoint.enclosing_function`: function containing the route registration (Python and Go fill it; others `None`).
 
-### Resolver (`extractor-runtime/src/pipeline/pass2/route_prefixes.rs`)
+### Resolver
 
-Runs in `build_project_ir` after `resolve_call_argument_types`, before `identify_edges` and `post_process_endpoints`. Input per endpoint: `file_path`, `enclosing_function` (or global scope), `router_variable`.
+Two steps, split at the pass boundary. Pass 2 finds the structure, pass 3 finds the values.
+
+Walk (`extractor-runtime/src/pipeline/pass2/route_prefixes.rs`) runs in `build_project_ir` after `resolve_call_argument_types`, before `identify_edges` and `post_process_endpoints`. Input per endpoint: `file_path`, `enclosing_function` (or global scope), `router_variable`. Output: `Endpoint.route_prefixes`, a set of chains of unevaluated `PrefixExpr { file_path, expr }`, outermost first. The field is not serialized.
 
 1. Variable is a parameter of its enclosing function -> follow every call site of that function; take the keyword argument with the parameter name, else the positional argument at the same index; recurse in the caller's file and scope. No callers -> no prefix.
-2. Otherwise: `Attach` facts with `child == var` (enclosing scope first, then global) give `parent prefix + prefix`, recursively; then each `Own` prefix of `var` is appended.
+2. Otherwise: `Attach` facts with `child == var` (enclosing scope first, then global) give parent chain + prefix, recursively; then each `Own` prefix of `var` is appended.
 3. Callee resolution for a call to `f` from file `F`: import graph target of `f` in `F` -> `f` defined in `F` -> all files defining `f` with the longest common path prefix with `F` (ties keep all).
-4. Prefix evaluation: quoted literal -> content; identifier -> global assignment in the same file, else the file the import graph resolves it to. One level only: the constant value itself must be a quoted literal.
-5. Depth cap 8 and a visited `(file, scope, var)` guard; a cut branch contributes nothing.
-6. One endpoint clone per distinct prefix (`BTreeSet` order), `uri = join(prefix, uri)`; join trims duplicate `/` and forces a leading `/`.
-7. Unresolved prefix on a branch -> that clone keeps the original URI.
-8. Endpoints without `router_variable` (Java, Go, Django) are untouched.
+4. Depth cap 8 and a visited `(file, scope, var)` guard; a cut branch contributes nothing.
+5. At most 256 chains per merge, first in sort order, with a warning. This bounds memory only: walk time stays exponential in mounts per level.
+
+Evaluation (`extractor-runtime/src/pipeline/pass3/route_prefixes.rs`) runs in `evaluate` and `evaluate_with_llm`, using the file env that REST calls use (`pass3/env.rs`), for the file where each expression is written:
+
+1. Quoted literal (`"`, `'`, backtick, no inner quote) -> content.
+2. Otherwise exact env key, dotted keys included (`settings.base`). Own and imported constants beat same-named project constants; external-only names keep priority.
+3. A name the file neither declares nor imports resolves only if all its project declarations share one value.
+4. Values still holding source text and raw f-strings count as unresolved. Go values are stored unquoted, so path-like values from Go files are accepted.
+5. One endpoint clone per distinct prefix (`BTreeSet` order), `uri = join(prefix, uri)`; join trims duplicate `/` and forces a leading `/`.
+6. Unresolved expression in a chain -> that clone keeps the original URI.
+7. Endpoints without chains (Java, Django) are untouched.
 
 ```
 app.py:            app.mount("/v1", app_v1); add_routes_v1(app_v1)
@@ -89,11 +98,20 @@ Flask (`flask.rs`):
 - `X.register_blueprint(bp, url_prefix=...)` -> `Attach(X, bp, url_prefix)`; prefix keyword only, missing -> `""`.
 - `bp = Blueprint(name, __name__, url_prefix=...)` -> `Own(bp, url_prefix)`.
 
+Go (`go-extractor/src/extraction/route_facts/`):
+
+- `x := r.Group("/p")` (Gin, Echo, Fiber) -> `Attach(r, x, "/p")`.
+- `x := r.PathPrefix("/p").Subrouter()` (gorilla) -> `Attach(r, x, "/p")`.
+- `r.Mount("/p", sub)` (chi, Fiber) -> `Attach(r, sub, "/p")`.
+- Same-file constants are inlined as quoted literals.
+
 ### Known limits
 
-- No Django `include()`, Go (`StripPrefix`, chi `Route`), or Express adapters yet.
+- No Django `include()`, Go (`StripPrefix`, chi `Route`) or Express adapters yet.
 - Spring class-level prefixes stay in the Java extractor.
 - FastAPI `root_path` ignored (deploy-time proxy prefix).
-- Prefixes from settings, env vars or f-strings stay unresolved.
+- Prefixes from concatenation (`ROOT + "/x"`), env vars with no supplied value, or unresolved f-strings stay unresolved.
+- REST calls keep first-wins for names not bound in the file, so prefixes and REST URLs can differ on such a collision.
+- A constant re-exported through two files can depend on file order.
 - Method calls (`self.f(app)`): `self` shifts positional argument indices; keyword arguments still match.
 - Python arguments come from a naive comma split; commas inside nested calls or literals break the child or prefix match (endpoint keeps its URI).

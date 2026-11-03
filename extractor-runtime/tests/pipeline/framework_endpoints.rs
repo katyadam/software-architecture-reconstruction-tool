@@ -1,5 +1,11 @@
-use extractor_runtime::pipeline;
+use std::collections::HashMap;
+
+use extractor_runtime::pipeline::{
+    self,
+    pass3::{pass_attr, pass_module},
+};
 use go_extractor::extraction::extract_syntactic as go_extract;
+use java_extractor::extraction::extract_syntactic as java_extract;
 use models::HttpMethod;
 use python_extractor::extraction::parse::extract_syntactic as python_extract;
 
@@ -91,15 +97,52 @@ urlpatterns = [
     );
 }
 
-fn endpoint_uris(records: Vec<models::ir::syntax::FileRecord>) -> Vec<String> {
+/// Passes 2 and 3, as both real callers run them.
+fn evaluated(
+    records: Vec<models::ir::syntax::FileRecord>,
+    external_constants: &HashMap<String, String>,
+) -> models::ir::evaluted::EvaluatedIR {
     let project_ir = pipeline::build_project_ir(records);
-    let mut uris: Vec<String> = project_ir
-        .files
-        .iter()
-        .flat_map(|file| file.endpoints.iter().map(|e| e.uri.clone()))
+    let attrs = pass_attr::resolve_all(&project_ir, external_constants);
+    let module_consts = pass_module::resolve_all(&project_ir, external_constants, &attrs);
+    pipeline::evaluate(project_ir, external_constants, &attrs, &module_consts)
+}
+
+fn endpoint_uris(records: Vec<models::ir::syntax::FileRecord>) -> Vec<String> {
+    uris_with(records, &HashMap::new())
+}
+
+fn uris_with(
+    records: Vec<models::ir::syntax::FileRecord>,
+    external_constants: &HashMap<String, String>,
+) -> Vec<String> {
+    let mut uris: Vec<String> = evaluated(records, external_constants)
+        .endpoints
+        .into_iter()
+        .map(|e| e.uri)
         .collect();
     uris.sort();
     uris
+}
+
+fn py(code: &str, path: &str) -> models::ir::syntax::FileRecord {
+    python_extract(code, path).expect("Python parses")
+}
+
+/// FastAPI router with `prefix` registering `POST /items`, preceded by `header`.
+fn router_file(header: &str, prefix: &str) -> String {
+    format!(
+        r#"
+from fastapi import APIRouter
+{header}
+
+router = APIRouter(prefix={prefix})
+
+@router.post("/items")
+async def create():
+    return None
+"#
+    )
 }
 
 #[test]
@@ -348,4 +391,723 @@ func init() {
 func reg() { api.GET("/x", h) }
 "#;
     assert_eq!(go_endpoint_uris(&[("svc/main.go", code)]), vec!["/api/x"]);
+}
+
+#[test]
+fn prefix_from_external_constant() {
+    let external = HashMap::from([("settings.base".to_string(), "/api".to_string())]);
+    let code = router_file("", "settings.base");
+    assert_eq!(
+        uris_with(vec![py(&code, "svc/app.py")], &external),
+        vec!["/api/items"]
+    );
+}
+
+#[test]
+fn prefix_from_chained_constant() {
+    let code = router_file("ROOT = \"/api\"\nBASE = ROOT", "BASE");
+    assert_eq!(
+        endpoint_uris(vec![py(&code, "svc/app.py")]),
+        vec!["/api/items"]
+    );
+}
+
+#[test]
+fn prefix_constant_imported_from_other_file() {
+    let config = "PREFIX = \"/v1\"\n";
+    let app = r#"
+from fastapi import FastAPI
+from config import PREFIX
+
+app = FastAPI()
+sub = FastAPI()
+
+@sub.get("/cases")
+async def cases():
+    return []
+
+app.mount(PREFIX, sub)
+"#;
+    assert_eq!(
+        endpoint_uris(vec![py(config, "config.py"), py(app, "app.py")]),
+        vec!["/v1/cases"]
+    );
+}
+
+#[test]
+fn prefix_and_rest_call_url_share_constant_value() {
+    let code = r#"
+import requests
+from fastapi import APIRouter
+
+BASE = "/shared"
+router = APIRouter(prefix=BASE)
+
+@router.get("/items")
+async def items():
+    return None
+
+def call():
+    url = BASE + "/x"
+    requests.get(url)
+"#;
+    let ir = evaluated(vec![py(code, "svc/app.py")], &HashMap::new());
+    assert_eq!(ir.endpoints[0].uri, "/shared/items");
+    assert_eq!(ir.restcalls[0].target_uri, "/shared/x");
+}
+
+#[test]
+fn same_constant_name_in_two_services_prefixes() {
+    // Both orders: `collect_constants` is first-wins.
+    let a = router_file("BASE_PATH = \"/api/v1/a\"", "BASE_PATH");
+    let b = router_file("BASE_PATH = \"/api/v1/b\"", "BASE_PATH");
+    for (first, second) in [
+        (py(&a, "a/routes.py"), py(&b, "b/routes.py")),
+        (py(&b, "b/routes.py"), py(&a, "a/routes.py")),
+    ] {
+        assert_eq!(
+            endpoint_uris(vec![first, second]),
+            vec!["/api/v1/a/items", "/api/v1/b/items"]
+        );
+    }
+}
+
+#[test]
+fn same_constant_name_in_two_services_rest_calls() {
+    let client = |base: &str| {
+        format!(
+            "import requests\n\nBASE = \"{base}\"\n\ndef call():\n    url = BASE + \"/x\"\n    requests.get(url)\n"
+        )
+    };
+    let (a, b) = (client("http://a"), client("http://b"));
+    for (first, second) in [
+        (py(&a, "a/client.py"), py(&b, "b/client.py")),
+        (py(&b, "b/client.py"), py(&a, "a/client.py")),
+    ] {
+        let ir = evaluated(vec![first, second], &HashMap::new());
+        let of = |path: &str| {
+            ir.restcalls
+                .iter()
+                .find(|r| r.file_path == path)
+                .map(|r| r.target_uri.clone())
+        };
+        assert_eq!(of("a/client.py").as_deref(), Some("http://a/x"));
+        assert_eq!(of("b/client.py").as_deref(), Some("http://b/x"));
+    }
+}
+
+#[test]
+fn imported_constant_beats_same_name_in_other_service() {
+    let other = router_file("BASE_PATH = \"/other\"", "BASE_PATH");
+    let config = "BASE_PATH = \"/mine\"\n";
+    let routes = router_file("from svc.config import BASE_PATH", "BASE_PATH");
+    assert_eq!(
+        endpoint_uris(vec![
+            py(&other, "other/routes.py"),
+            py(config, "svc/config.py"),
+            py(&routes, "svc/routes.py"),
+        ]),
+        vec!["/mine/items", "/other/items"]
+    );
+}
+
+/// `ROOT` must come from this service's config, also inside `BASE = ROOT`.
+#[test]
+fn chained_through_import_ignores_same_name_in_other_service() {
+    let other = "ROOT = \"/other\"\n";
+    let config = "ROOT = \"/mine\"\n";
+    let routes = router_file("from svc.config import ROOT\nBASE = ROOT", "BASE");
+    assert_eq!(
+        endpoint_uris(vec![
+            py(other, "other/config.py"),
+            py(config, "svc/config.py"),
+            py(&routes, "svc/routes.py"),
+        ]),
+        vec!["/mine/items"]
+    );
+}
+
+#[test]
+fn one_resolvable_one_unresolvable_chain() {
+    let app = r#"
+from fastapi import FastAPI
+from routes import add_routes
+
+app = FastAPI()
+app_v1 = FastAPI()
+app_x = FastAPI()
+add_routes(app_v1)
+add_routes(app_x)
+app.mount("/v1", app_v1)
+app.mount(settings.base, app_x)
+"#;
+    let routes = r#"
+def add_routes(app):
+    @app.get("/alive")
+    async def alive():
+        return {}
+"#;
+    assert_eq!(
+        endpoint_uris(vec![py(app, "app.py"), py(routes, "routes.py")]),
+        vec!["/alive", "/v1/alive"]
+    );
+}
+
+#[test]
+fn unknown_prefix_keeps_uri() {
+    let code = router_file("", "settings.base");
+    assert_eq!(endpoint_uris(vec![py(&code, "svc/app.py")]), vec!["/items"]);
+}
+
+/// Project constants keep unevaluable right-hand sides as raw text.
+#[test]
+fn constant_without_string_value_keeps_uri() {
+    for header in [
+        "BASE = settings.base",
+        "BASE = os.getenv(\"P\", \"/p\")",
+        "BASE = OTHER",
+        "BASE = 8080",
+        "BASE = f\"/x/{OTHER}\"",
+    ] {
+        let code = router_file(header, "BASE");
+        assert_eq!(
+            endpoint_uris(vec![py(&code, "svc/app.py")]),
+            vec!["/items"],
+            "{header}"
+        );
+    }
+}
+
+#[test]
+fn recursive_helper_keeps_non_recursive_prefix() {
+    let app = r#"
+from fastapi import FastAPI
+from helper import h
+
+app = FastAPI()
+sub = FastAPI()
+h(sub)
+app.mount("/v1", sub)
+"#;
+    let helper = r#"
+def h(app):
+    h(app)
+
+    @app.get("/x")
+    async def x():
+        return {}
+"#;
+    assert_eq!(
+        endpoint_uris(vec![py(app, "app.py"), py(helper, "helper.py")]),
+        vec!["/v1/x"]
+    );
+}
+
+#[test]
+fn serialized_endpoint_fields_unchanged_by_prefix() {
+    let routed = router_file("", "\"/api\"");
+    let plain = router_file("", "\"\"");
+    let keys = |code: &str| {
+        let ir = evaluated(vec![py(code, "svc/app.py")], &HashMap::new());
+        let json = serde_json::to_value(&ir.endpoints[0]).expect("endpoint serializes");
+        let mut keys: Vec<String> = json
+            .as_object()
+            .expect("endpoint is an object")
+            .keys()
+            .cloned()
+            .collect();
+        keys.sort();
+        (ir.endpoints[0].uri.clone(), keys)
+    };
+    let (routed_uri, routed_keys) = keys(&routed);
+    let (plain_uri, plain_keys) = keys(&plain);
+    assert_eq!(routed_uri, "/api/items");
+    assert_eq!(plain_uri, "/items");
+    assert_eq!(routed_keys, plain_keys);
+    assert!(!routed_keys.iter().any(|k| k == "route_prefixes"));
+}
+
+/// Own unresolvable binding must not fall through to another service's value.
+#[test]
+fn own_unresolvable_binding_ignores_other_service() {
+    let a = router_file("BASE = \"/a\"", "BASE");
+    for header in [
+        "BASE = settings.base",
+        "BASE = os.getenv(\"P\")",
+        "BASE = unknown_fn()",
+        "BASE = OTHER",
+    ] {
+        let b = router_file(header, "BASE");
+        for (first, second) in [
+            (py(&a, "a/routes.py"), py(&b, "b/routes.py")),
+            (py(&b, "b/routes.py"), py(&a, "a/routes.py")),
+        ] {
+            assert_eq!(
+                endpoint_uris(vec![first, second]),
+                vec!["/a/items", "/items"],
+                "{header}"
+            );
+        }
+    }
+}
+
+#[test]
+fn same_constant_name_in_two_go_services_rest_calls() {
+    let client = |base: &str| {
+        format!(
+            "package main\n\nimport \"net/http\"\n\nconst BASE = \"{base}\"\n\nfunc call() {{\n    url := BASE + \"/x\"\n    http.Get(url)\n}}\n"
+        )
+    };
+    let records = vec![
+        go_extract(&client("http://a"), "a/c.go").expect("Go parses"),
+        go_extract(&client("http://b"), "b/c.go").expect("Go parses"),
+    ];
+    let ir = evaluated(records, &HashMap::new());
+    let mut urls: Vec<(&str, &str)> = ir
+        .restcalls
+        .iter()
+        .map(|r| (r.file_path.as_str(), r.target_uri.as_str()))
+        .collect();
+    urls.sort();
+    assert_eq!(
+        urls,
+        vec![("a/c.go", "http://a/x"), ("b/c.go", "http://b/x")]
+    );
+}
+
+#[test]
+fn fastapi_router_own_prefix_included_under_other_prefix() {
+    let code = r#"
+from fastapi import FastAPI, APIRouter
+
+app = FastAPI()
+r = APIRouter(prefix="/items")
+
+@r.get("/{id}")
+async def get(id: str):
+    return id
+
+app.include_router(r, prefix="/api")
+"#;
+    assert_eq!(
+        endpoint_uris(vec![py(code, "svc/app.py")]),
+        vec!["/api/items/{id}"]
+    );
+}
+
+#[test]
+fn fastapi_mount_keyword_arguments() {
+    let code = r#"
+from fastapi import FastAPI
+
+app = FastAPI()
+app_v3 = FastAPI()
+
+@app_v3.get("/cases/{case_id}")
+async def case(case_id: str):
+    return case_id
+
+app.mount(path="/v3/fhir", app=app_v3)
+"#;
+    assert_eq!(
+        endpoint_uris(vec![py(code, "svc/app.py")]),
+        vec!["/v3/fhir/cases/{case_id}"]
+    );
+}
+
+#[test]
+fn fastapi_helper_reused_by_two_mounts() {
+    let app = r#"
+from fastapi import FastAPI
+from routes import add_routes
+
+app = FastAPI()
+app_v1 = FastAPI()
+app_v3 = FastAPI()
+add_routes(app_v1)
+add_routes(app_v3)
+app.mount("/v1", app_v1)
+app.mount("/v3", app_v3)
+"#;
+    let routes = r#"
+def add_routes(app):
+    @app.get("/alive")
+    async def alive():
+        return {}
+"#;
+    assert_eq!(
+        endpoint_uris(vec![py(app, "app.py"), py(routes, "routes.py")]),
+        vec!["/v1/alive", "/v3/alive"]
+    );
+}
+
+#[test]
+fn fastapi_same_helper_name_in_two_services() {
+    let app = |prefix: &str, pkg: &str| {
+        format!(
+            "from fastapi import FastAPI\nfrom {pkg}.routes import add_routes_v1\n\napp = FastAPI()\nsub = FastAPI()\nadd_routes_v1(sub)\napp.mount(\"{prefix}\", sub)\n"
+        )
+    };
+    let routes = |route: &str| {
+        format!(
+            "def add_routes_v1(app):\n    @app.get(\"{route}\")\n    async def h():\n        return {{}}\n"
+        )
+    };
+    assert_eq!(
+        endpoint_uris(vec![
+            py(&app("/a", "a"), "a/app.py"),
+            py(&routes("/x"), "a/routes.py"),
+            py(&app("/b", "b"), "b/app.py"),
+            py(&routes("/y"), "b/routes.py"),
+        ]),
+        vec!["/a/x", "/b/y"]
+    );
+}
+
+#[test]
+fn go_group_backtick_literal_prefix() {
+    let code = "package main\n\nfunc start() {\n    r := gin.New()\n    g := r.Group(`/api`)\n    g.GET(\"/items\", list)\n}\n";
+    assert_eq!(
+        go_endpoint_uris(&[("svc/main.go", code)]),
+        vec!["/api/items"]
+    );
+}
+
+#[test]
+fn go_group_unresolved_identifier_keeps_uri() {
+    let code = r#"
+package main
+
+func start() {
+    e := echo.New()
+    g := e.Group(apiBase)
+    g.POST("/carts", add)
+    v1 := g.Group("/v1")
+    v1.GET("/items", list)
+}
+"#;
+    assert_eq!(
+        go_endpoint_uris(&[("svc/main.go", code)]),
+        vec!["/carts", "/items"]
+    );
+}
+
+#[test]
+fn go_same_const_name_in_two_services_either_order() {
+    let service = |base: &str| {
+        format!(
+            "package main\n\nconst API_BASE = \"{base}\"\n\nfunc start() {{\n    e := echo.New()\n    g := e.Group(API_BASE)\n    g.POST(\"/carts\", add)\n}}\n"
+        )
+    };
+    let (a, b) = (service("/a"), service("/b"));
+    for files in [
+        [("a/main.go", a.as_str()), ("b/main.go", b.as_str())],
+        [("b/main.go", b.as_str()), ("a/main.go", a.as_str())],
+    ] {
+        assert_eq!(go_endpoint_uris(&files), vec!["/a/carts", "/b/carts"]);
+    }
+}
+
+#[test]
+fn gin_same_helper_name_in_two_services() {
+    let main = |prefix: &str| {
+        format!(
+            "package main\n\nfunc main() {{\n    r := gin.Default()\n    api := r.Group(\"{prefix}\")\n    registerRoutes(api)\n}}\n"
+        )
+    };
+    let routes = "package main\n\nimport \"github.com/gin-gonic/gin\"\n\nfunc registerRoutes(g *gin.RouterGroup) { g.GET(\"/health\", health) }\n";
+    let (a, b) = (main("/a"), main("/b"));
+    assert_eq!(
+        go_endpoint_uris(&[
+            ("a/main.go", a.as_str()),
+            ("a/routes.go", routes),
+            ("b/main.go", b.as_str()),
+            ("b/routes.go", routes),
+        ]),
+        vec!["/a/health", "/b/health"]
+    );
+}
+
+#[test]
+fn java_endpoints_untouched_by_pass3() {
+    let controller = r#"
+@RestController
+@RequestMapping("/api")
+public class ItemController {
+    private static final String BASE = "/ignored";
+
+    @GetMapping("/items")
+    public String list() { return "x"; }
+
+    @PostMapping("items/new")
+    public String create() { return "x"; }
+}
+"#;
+    let record = java_extract(controller, "svc/ItemController.java").expect("Java parses");
+    let declared = record.endpoints.clone();
+    assert_eq!(declared.len(), 2);
+    let other = router_file("BASE = \"/py\"", "BASE");
+    let ir = evaluated(vec![record, py(&other, "py/app.py")], &HashMap::new());
+    let java: Vec<_> = ir
+        .endpoints
+        .into_iter()
+        .filter(|e| e.file_path == "svc/ItemController.java")
+        .collect();
+    assert_eq!(java, declared);
+}
+
+#[test]
+fn imported_constant_wins_in_every_file_order() {
+    let other = router_file("BASE_PATH = \"/other\"", "BASE_PATH");
+    let config = "BASE_PATH = \"/mine\"\n";
+    let routes = router_file("from svc.config import BASE_PATH", "BASE_PATH");
+    let files = [
+        ("other/routes.py", other.as_str()),
+        ("svc/config.py", config),
+        ("svc/routes.py", routes.as_str()),
+    ];
+    for order in [
+        [0, 1, 2],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+    ] {
+        let records = order.iter().map(|&i| py(files[i].1, files[i].0)).collect();
+        assert_eq!(
+            endpoint_uris(records),
+            vec!["/mine/items", "/other/items"],
+            "{order:?}"
+        );
+    }
+}
+
+/// Re-export of a re-export, against both file orders.
+#[test]
+fn reexported_prefix_constant_is_order_independent() {
+    let root = "ROOT = \"/v1\"\n";
+    let mid = "from root import ROOT\nMID = ROOT\n";
+    let app = router_file("from mid import MID\nBASE = MID", "BASE");
+    let uris = |order: [(&str, &str); 3]| {
+        endpoint_uris(order.iter().map(|(path, code)| py(code, path)).collect())
+    };
+    let expected = vec!["/v1/items"];
+    assert_eq!(
+        uris([("root.py", root), ("mid.py", mid), ("app.py", &app)]),
+        expected
+    );
+    assert_eq!(
+        uris([("app.py", &app), ("mid.py", mid), ("root.py", root)]),
+        expected
+    );
+}
+
+/// A prefix that resolves for a REST call URL in the file resolves the same for an endpoint.
+#[test]
+fn go_group_const_from_other_file_matches_rest_call() {
+    let constants = "package main\n\nconst API_BASE = \"/api\"\n";
+    let main = r#"
+package main
+
+import "net/http"
+
+func start() {
+    e := echo.New()
+    g := e.Group(API_BASE)
+    g.POST("/carts", add)
+}
+
+func call() {
+    url := API_BASE + "/x"
+    http.Get(url)
+}
+"#;
+    let ir = evaluated(
+        vec![
+            go_extract(constants, "svc/constants.go").expect("Go parses"),
+            go_extract(main, "svc/main.go").expect("Go parses"),
+        ],
+        &HashMap::new(),
+    );
+    assert_eq!(ir.restcalls[0].target_uri, "/api/x");
+    assert_eq!(ir.endpoints[0].uri, "/api/carts");
+}
+
+/// `BASE` is bound in neither the file nor its imports: two other files declare it.
+#[test]
+fn unbound_prefix_with_two_same_named_constants_is_order_independent() {
+    let a = "BASE = \"/a\"\n";
+    let b = "BASE = \"/b\"\n";
+    let routes = router_file("", "BASE");
+    let uris = |order: [(&str, &str); 3]| {
+        endpoint_uris(order.iter().map(|(path, code)| py(code, path)).collect())
+    };
+    let declared = vec!["/items"];
+    assert_eq!(
+        uris([("a/c.py", a), ("b/c.py", b), ("svc/routes.py", &routes)]),
+        declared
+    );
+    assert_eq!(
+        uris([("b/c.py", b), ("a/c.py", a), ("svc/routes.py", &routes)]),
+        declared
+    );
+    assert_eq!(
+        uris([("svc/routes.py", &routes), ("b/c.py", b), ("a/c.py", a)]),
+        declared
+    );
+}
+
+/// Same value everywhere: not ambiguous, so the project constant applies.
+#[test]
+fn unbound_prefix_with_one_distinct_value_resolves() {
+    let routes = router_file("", "BASE");
+    assert_eq!(
+        endpoint_uris(vec![
+            py("BASE = \"/a\"\n", "a/c.py"),
+            py("BASE = '/a'\n", "b/c.py"),
+            py(&routes, "svc/routes.py"),
+        ]),
+        vec!["/a/items"]
+    );
+}
+
+#[test]
+fn second_module_round_independent_of_file_order() {
+    let z = "BASE = \"/z\"\n";
+    let a = "BASE = \"/a\"\n";
+    let b = "from a import BASE\nD = BASE + \"/b\"\n";
+    let c = router_file("from b import D\nE = D", "E");
+    let uris = |order: [(&str, &str); 4]| {
+        endpoint_uris(order.iter().map(|(path, code)| py(code, path)).collect())
+    };
+    assert_eq!(
+        uris([("z.py", z), ("a.py", a), ("b.py", b), ("c.py", &c)]),
+        uris([("z.py", z), ("a.py", a), ("c.py", &c), ("b.py", b)]),
+    );
+}
+
+#[test]
+fn lowercase_imported_constant_in_chain() {
+    let routes = router_file("from config import root\nBASE = root", "BASE");
+    assert_eq!(
+        endpoint_uris(vec![
+            py("root = \"/api\"\n", "config.py"),
+            py(&routes, "routes.py"),
+        ]),
+        vec!["/api/items"]
+    );
+}
+
+#[test]
+fn external_constant_beats_imported_in_module_chain() {
+    let external = HashMap::from([("root".to_string(), "/cli".to_string())]);
+    let routes = router_file("from config import root\nBASE = root", "BASE");
+    assert_eq!(
+        uris_with(
+            vec![
+                py("root = \"/api\"\n", "config.py"),
+                py(&routes, "routes.py"),
+            ],
+            &external
+        ),
+        vec!["/cli/items"]
+    );
+}
+
+#[test]
+fn quoted_concatenation_is_not_a_literal() {
+    let code = router_file("X = \"/m\"", "\"/a\" + X + \"/b\"");
+    assert_eq!(endpoint_uris(vec![py(&code, "svc/app.py")]), vec!["/items"]);
+    let constant = router_file("X = \"/m\"\nP = \"/a\" + UNKNOWN + \"/b\"", "P");
+    assert_eq!(
+        endpoint_uris(vec![py(&constant, "svc/app.py")]),
+        vec!["/items"]
+    );
+}
+
+#[test]
+fn own_value_not_poisoned_by_foreign_source_text() {
+    let a = "V = f\"{Y}\"\n";
+    let b = router_file("V = \"/x/{id}\"", "V");
+    for records in [
+        vec![py(a, "a/c.py"), py(&b, "b/routes.py")],
+        vec![py(&b, "b/routes.py"), py(a, "a/c.py")],
+    ] {
+        assert_eq!(endpoint_uris(records), vec!["/x/{id}/items"]);
+    }
+}
+
+#[test]
+fn empty_constant_prefix_under_mount() {
+    for (name, config) in [("X", "X = \"\""), ("x", "x = \"\"")] {
+        let code = format!(
+            r#"
+from fastapi import FastAPI, APIRouter
+
+{config}
+app = FastAPI()
+r = APIRouter(prefix={name})
+
+@r.get("/x")
+async def h():
+    return None
+
+app.include_router(r, prefix="/api")
+"#
+        );
+        assert_eq!(
+            endpoint_uris(vec![py(&code, "svc/app.py")]),
+            vec!["/api/x"],
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn empty_imported_constant_prefix_under_mount() {
+    let code = r#"
+from fastapi import FastAPI, APIRouter
+from config import x
+
+app = FastAPI()
+r = APIRouter(prefix=x)
+
+@r.get("/x")
+async def h():
+    return None
+
+app.include_router(r, prefix="/api")
+"#;
+    assert_eq!(
+        endpoint_uris(vec![py("x = \"\"\n", "config.py"), py(code, "app.py")]),
+        vec!["/api/x"]
+    );
+}
+
+/// `is_route_registration` reads pass-2 URIs, which no longer carry the prefix.
+#[test]
+fn go_group_route_is_not_a_rest_call() {
+    let code = r#"
+package main
+
+func start() {
+    r := gin.Default()
+    api := r.Group("/api")
+    api.GET("/x", h)
+}
+"#;
+    let ir = evaluated(
+        vec![go_extract(code, "svc/main.go").expect("Go parses")],
+        &HashMap::new(),
+    );
+    assert_eq!(ir.endpoints[0].uri, "/api/x");
+    assert!(ir.restcalls.is_empty(), "{:?}", ir.restcalls);
+}
+
+#[test]
+fn evaluated_endpoints_drop_chains() {
+    let code = router_file("", "\"/api\"");
+    let ir = evaluated(vec![py(&code, "svc/app.py")], &HashMap::new());
+    assert!(ir.endpoints[0].route_prefixes.is_empty());
 }

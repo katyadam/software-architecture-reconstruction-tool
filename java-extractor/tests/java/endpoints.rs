@@ -23,6 +23,7 @@ fn test_spring_endpoints() {
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("boolean test_send_delivery()"),
@@ -33,6 +34,7 @@ fn test_spring_endpoints() {
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("HttpEntity findAllFoodOrder(@RequestHeader HttpHeaders headers)"),
@@ -47,6 +49,7 @@ fn test_spring_endpoints() {
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!(
@@ -70,6 +73,7 @@ fn test_spring_endpoints() {
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!(
@@ -93,6 +97,7 @@ fn test_spring_endpoints() {
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!(
@@ -116,6 +121,7 @@ fn test_spring_endpoints() {
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!(
@@ -139,6 +145,7 @@ fn test_spring_endpoints() {
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!(
@@ -162,6 +169,7 @@ fn test_spring_endpoints() {
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!(
@@ -200,6 +208,7 @@ fn test_spring_endpoints() {
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
     ];
 
@@ -229,6 +238,7 @@ fn test_jaxrs_endpoints() {
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!(
@@ -245,6 +255,7 @@ fn test_jaxrs_endpoints() {
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!(
@@ -261,6 +272,7 @@ fn test_jaxrs_endpoints() {
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!(
@@ -284,6 +296,7 @@ fn test_jaxrs_endpoints() {
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!(
@@ -300,6 +313,7 @@ fn test_jaxrs_endpoints() {
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("Response deleteCallGraphInputById(@PathParam(\"id\") Long id)"),
@@ -314,6 +328,7 @@ fn test_jaxrs_endpoints() {
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
             enclosing_function: None,
+            route_prefixes: vec![],
         },
     ];
 

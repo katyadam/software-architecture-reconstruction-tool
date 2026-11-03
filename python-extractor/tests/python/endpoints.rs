@@ -33,6 +33,7 @@ fn base_test() {
             file_path: s!(filename),
             router_variable: Some(s!("app")),
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("read_items"),
@@ -60,6 +61,7 @@ fn base_test() {
             file_path: s!(filename),
             router_variable: Some(s!("app")),
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("read_item"),
@@ -75,6 +77,7 @@ fn base_test() {
             file_path: s!(filename),
             router_variable: Some(s!("app")),
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("update_item"),
@@ -97,6 +100,7 @@ fn base_test() {
             file_path: s!(filename),
             router_variable: Some(s!("app")),
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("delete_item"),
@@ -111,6 +115,7 @@ fn base_test() {
             file_path: s!(filename),
             router_variable: Some(s!("app")),
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("create_user"),
@@ -125,6 +130,7 @@ fn base_test() {
             file_path: s!(filename),
             router_variable: Some(s!("app")),
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("list_users"),
@@ -139,6 +145,7 @@ fn base_test() {
             file_path: s!(filename),
             router_variable: Some(s!("app")),
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("get_user"),
@@ -153,6 +160,7 @@ fn base_test() {
             file_path: s!(filename),
             router_variable: Some(s!("app")),
             enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("search"),
@@ -167,6 +175,7 @@ fn base_test() {
             file_path: s!(filename),
             router_variable: Some(s!("app")),
             enclosing_function: None,
+            route_prefixes: vec![],
         },
     ];
 
@@ -374,6 +383,7 @@ fn python_post_process_skips_non_python_files() {
                 file_path: "controller.java".to_string(),
                 router_variable: Some("controller".to_string()),
                 enclosing_function: None,
+                route_prefixes: vec![],
             }],
             callables: vec![],
             call_statements: vec![],
@@ -397,6 +407,7 @@ fn python_post_process_skips_non_python_files() {
                     file_path: "views.py".to_string(),
                     router_variable: None,
                     enclosing_function: None,
+                    route_prefixes: vec![],
                 },
                 Endpoint {
                     function_name: "products".to_string(),
@@ -407,6 +418,7 @@ fn python_post_process_skips_non_python_files() {
                     file_path: "views.py".to_string(),
                     router_variable: Some("urlpatterns".to_string()),
                     enclosing_function: None,
+                    route_prefixes: vec![],
                 },
             ],
             callables: vec![],
