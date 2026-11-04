@@ -215,7 +215,14 @@ impl<'a> Resolver<'a> {
     /// All prefixes under which router `var` in `scope` of `file` is served (D4).
     fn prefixes(&self, file: usize, scope: &str, var: &str, path: &mut Vec<VarKey>) -> Prefixes {
         let key = (file, scope.to_string(), var.to_string());
-        if path.len() >= MAX_DEPTH || path.contains(&key) {
+        if path.contains(&key) {
+            return Prefixes::new();
+        }
+        if path.len() >= MAX_DEPTH {
+            warn!(
+                "route prefixes of {var} in {} dropped: nested past {MAX_DEPTH} levels",
+                self.files[file].file_path
+            );
             return Prefixes::new();
         }
         path.push(key);

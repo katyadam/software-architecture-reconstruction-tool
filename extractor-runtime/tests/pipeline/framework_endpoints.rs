@@ -314,6 +314,238 @@ func routes() {
     );
 }
 
+/// Endpoint URIs of a chi file; the import lets closure parameter types resolve.
+fn chi_uris(decls: &str) -> Vec<String> {
+    let code = format!("package main\n\nimport \"github.com/go-chi/chi/v5\"\n\n{decls}\n");
+    go_endpoint_uris(&[("svc/main.go", code.as_str())])
+}
+
+#[test]
+fn chi_closure_shadows_outer_router() {
+    let uris = chi_uris(
+        r#"func routes() {
+    r := chi.NewRouter()
+    r.Route("/p", func(r chi.Router) { r.Get("/x", h) })
+}"#,
+    );
+    assert_eq!(uris, vec!["/p/x"]);
+}
+
+#[test]
+fn chi_closure_parameter_with_another_name() {
+    let uris = chi_uris(
+        r#"func routes() {
+    r := chi.NewRouter()
+    r.Route("/p", func(sub chi.Router) { sub.Get("/x", h) })
+}"#,
+    );
+    assert_eq!(uris, vec!["/p/x"]);
+}
+
+#[test]
+fn chi_closure_outer_router_is_prefixed_parameter() {
+    let uris = chi_uris(
+        r#"func main() {
+    r := chi.NewRouter()
+    api := r.Group("/api")
+    routes(api)
+}
+
+func routes(r chi.Router) {
+    r.Route("/p", func(r chi.Router) { r.Get("/x", h) })
+}"#,
+    );
+    assert_eq!(uris, vec!["/api/p/x"]);
+}
+
+#[test]
+fn chi_nested_closures() {
+    let uris = chi_uris(
+        r#"func routes() {
+    r := chi.NewRouter()
+    r.Route("/a", func(r chi.Router) {
+        r.Route("/{id}", func(r chi.Router) { r.Get("/b", h) })
+    })
+}"#,
+    );
+    assert_eq!(uris, vec!["/a/{id}/b"]);
+}
+
+#[test]
+fn chi_closure_index_route() {
+    let uris = chi_uris(
+        r#"func routes() {
+    r := chi.NewRouter()
+    r.Route("/p", func(r chi.Router) { r.Get("/", h) })
+}"#,
+    );
+    assert_eq!(uris, vec!["/p"]);
+}
+
+#[test]
+fn chi_outer_closure_router_used_from_nested_closure() {
+    let uris = chi_uris(
+        r#"func routes() {
+    r := chi.NewRouter()
+    r.Route("/a", func(a chi.Router) {
+        a.Route("/b", func(b chi.Router) { a.Get("/x", h) })
+    })
+}"#,
+    );
+    assert_eq!(uris, vec!["/a/x"]);
+}
+
+#[test]
+fn chi_group_closure_adds_no_prefix() {
+    let uris = chi_uris(
+        r#"func routes() {
+    r := chi.NewRouter()
+    r.Route("/a", func(r chi.Router) {
+        r.Group(func(r chi.Router) { r.Get("/x", h) })
+    })
+}"#,
+    );
+    assert_eq!(uris, vec!["/a/x"]);
+}
+
+#[test]
+fn chi_group_closure_parameter_with_another_name() {
+    let uris = chi_uris(
+        r#"func routes() {
+    r := chi.NewRouter()
+    r.Route("/a", func(r chi.Router) {
+        r.Group(func(sub chi.Router) { sub.Get("/x", h) })
+    })
+}"#,
+    );
+    assert_eq!(uris, vec!["/a/x"]);
+}
+
+#[test]
+fn chi_closure_prefix_from_const() {
+    let uris = chi_uris(
+        r#"const base = "/p"
+
+func routes() {
+    r := chi.NewRouter()
+    r.Route(base, func(r chi.Router) { r.Get("/x", h) })
+}"#,
+    );
+    assert_eq!(uris, vec!["/p/x"]);
+}
+
+#[test]
+fn chi_closure_unresolved_prefix() {
+    let uris = chi_uris(
+        r#"func routes() {
+    r := chi.NewRouter()
+    r.Route(cfg.Base, func(r chi.Router) { r.Get("/x", h) })
+}"#,
+    );
+    assert_eq!(uris, vec!["/x"]);
+}
+
+#[test]
+fn chi_closure_unresolved_identifier_prefix() {
+    let uris = chi_uris(
+        r#"func routes(base string) {
+    r := chi.NewRouter()
+    r.Route(base, func(r chi.Router) { r.Get("/x", h) })
+}"#,
+    );
+    assert_eq!(uris, vec!["/x"]);
+}
+
+#[test]
+fn chi_mount_inside_closure() {
+    let uris = chi_uris(
+        r#"func routes() {
+    r := chi.NewRouter()
+    admin := chi.NewRouter()
+    admin.Get("/stats", stats)
+    r.Route("/p", func(r chi.Router) { r.Mount("/admin", admin) })
+}"#,
+    );
+    assert_eq!(uris, vec!["/p/admin/stats"]);
+}
+
+#[test]
+fn closure_typed_with_another_package_not_extracted() {
+    let uris = chi_uris(
+        r#"func routes(x *Thing) {
+    x.Route("/p", func(r Local) { r.Get("/x", h) })
+}"#,
+    );
+    assert_eq!(uris, Vec::<String>::new());
+}
+
+#[test]
+fn fiber_route_closure() {
+    let code = r#"
+package main
+
+import "github.com/gofiber/fiber/v2"
+
+func routes() {
+    app := fiber.New()
+    app.Route("/p", func(r fiber.Router) { r.Get("/x", h) })
+}
+"#;
+    assert_eq!(go_endpoint_uris(&[("svc/main.go", code)]), vec!["/p/x"]);
+}
+
+#[test]
+fn chi_closure_in_method_with_router_parameter() {
+    let uris = chi_uris(
+        r#"func (s *S) routes(r chi.Router) {
+    r.Route("/p", func(r chi.Router) { r.Get("/x", s.h) })
+}"#,
+    );
+    assert_eq!(uris, vec!["/p/x"]);
+}
+
+#[test]
+fn chi_closure_in_method_called_with_prefixed_router() {
+    let uris = chi_uris(
+        r#"func main() {
+    r := chi.NewRouter()
+    api := r.Group("/api")
+    s := &S{}
+    s.routes(api)
+}
+
+func (s *S) routes(r chi.Router) {
+    r.Route("/p", func(r chi.Router) { r.Get("/x", s.h) })
+}"#,
+    );
+    assert_eq!(uris, vec!["/api/p/x"]);
+}
+
+#[test]
+fn chi_sibling_closures_and_outer_route() {
+    let mut uris = chi_uris(
+        r#"func routes() {
+    r := chi.NewRouter()
+    r.Route("/a", func(r chi.Router) { r.Get("/x", h) })
+    r.Route("/b", func(r chi.Router) { r.Get("/y", h) })
+    r.Get("/z", h)
+}"#,
+    );
+    uris.sort();
+    assert_eq!(uris, vec!["/a/x", "/b/y", "/z"]);
+}
+
+#[test]
+fn chi_method_call_in_closure() {
+    let uris = chi_uris(
+        r#"func routes() {
+    r := chi.NewRouter()
+    r.Route("/p", func(r chi.Router) { r.Method("GET", "/x", h) })
+}"#,
+    );
+    assert_eq!(uris, vec!["/p/x"]);
+}
+
 #[test]
 fn echo_group_prefix_from_const() {
     let code = r#"
@@ -1338,4 +1570,59 @@ fn evaluated_endpoints_drop_chains() {
     let code = router_file("", "\"/api\"");
     let ir = evaluated(vec![py(&code, "svc/app.py")], &HashMap::new());
     assert!(ir.endpoints[0].route_prefixes.is_empty());
+}
+
+#[test]
+fn chi_chained_route_closures_stay_separate() {
+    let code = r#"
+package main
+
+import "github.com/go-chi/chi/v5"
+
+func routes() {
+    r := chi.NewRouter()
+    r.Route("/a", func(r chi.Router) { r.Get("/x", h) }).Route("/b", func(r chi.Router) { r.Get("/y", h) })
+}
+"#;
+    assert_eq!(
+        go_endpoint_uris(&[("svc/main.go", code)]),
+        vec!["/a/x", "/b/y"]
+    );
+}
+
+#[test]
+fn chi_earlier_closure_of_a_chain_keeps_outer_router() {
+    let code = r#"
+package main
+
+import "github.com/go-chi/chi/v5"
+
+func routes() {
+    r := chi.NewRouter()
+    r.Route("/a", func(x chi.Router) { r.Get("/z", h) }).Route("/b", func(r chi.Router) { r.Get("/y", h) })
+}
+"#;
+    assert_eq!(
+        go_endpoint_uris(&[("svc/main.go", code)]),
+        vec!["/b/y", "/z"]
+    );
+}
+
+#[test]
+fn chi_closure_parameter_with_trailing_comma() {
+    let code = r#"
+package main
+
+import "github.com/go-chi/chi/v5"
+
+func routes() {
+    r := chi.NewRouter()
+    r.Route("/p", func(
+        sub chi.Router,
+    ) {
+        sub.Get("/x", h)
+    })
+}
+"#;
+    assert_eq!(go_endpoint_uris(&[("svc/main.go", code)]), vec!["/p/x"]);
 }

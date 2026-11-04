@@ -1,9 +1,11 @@
-use models::{AssignmentKey, RouteFact, Scope, ir::project::TypedFileRecord};
+use models::{AssignmentKey, CallStatement, RouteFact, Scope, ir::project::TypedFileRecord};
+
+use super::endpoint_frameworks::{closure_routers, scoped_router};
 
 /// `child := parent.<method>(prefix, ...)<suffix>`: Gin / Echo / Fiber groups, gorilla subrouters.
 const ASSIGNED: [(&str, &str); 2] = [("Group", ""), ("PathPrefix", ".Subrouter()")];
 
-/// Router composition facts for Go: groups, gorilla subrouters, mounts.
+/// Router composition facts for Go: groups, gorilla subrouters, mounts, closure routers.
 pub fn route_facts(file: &TypedFileRecord) -> Vec<RouteFact> {
     let assigned = file.assignments.iter().filter_map(|(key, a)| {
         let value = a.value.trim();
@@ -25,8 +27,23 @@ pub fn route_facts(file: &TypedFileRecord) -> Vec<RouteFact> {
             attach(file, scope, parent, &key.variable_name, prefix)
         })
     });
-    let mounted = file.call_statements.iter().filter_map(|c| {
-        let c = &c.metadata;
+    let closures = closure_routers(&file.call_statements, &file.imports);
+    let closed = closures.iter().filter_map(|closure| {
+        let parent = scoped_router(
+            &closures,
+            closure.call.call_span.start_byte,
+            closure.receiver,
+        );
+        attach(
+            file,
+            &call_scope(&closure.call.metadata),
+            &parent,
+            &closure.variable(),
+            closure.prefix,
+        )
+    });
+    let mounted = file.call_statements.iter().filter_map(|call| {
+        let c = &call.metadata;
         let (parent, method) = c.function_name.rsplit_once('.')?;
         let [prefix, child] = c.arguments.as_slice() else {
             return None;
@@ -36,13 +53,16 @@ pub fn route_facts(file: &TypedFileRecord) -> Vec<RouteFact> {
         if method != "Mount" || !is_identifier(child) {
             return None;
         }
-        let scope = c
-            .enclosing_function_name
-            .clone()
-            .map_or(Scope::Global, Scope::Function);
-        attach(file, &scope, parent, child, &prefix.value)
+        let parent = scoped_router(&closures, call.call_span.start_byte, parent.trim());
+        attach(file, &call_scope(c), &parent, child, &prefix.value)
     });
-    assigned.chain(mounted).collect()
+    assigned.chain(closed).chain(mounted).collect()
+}
+
+fn call_scope(call: &CallStatement) -> Scope {
+    call.enclosing_function_name
+        .clone()
+        .map_or(Scope::Global, Scope::Function)
 }
 
 fn attach(
@@ -158,9 +178,39 @@ mod tests {
     }
 
     #[test]
-    fn chi_group_closure_ignored() {
-        let code = "package main\n\nfunc routes() {\n\tr := chi.NewRouter()\n\tr.Group(func(r chi.Router) {})\n}\n";
+    fn chi_group_closure_attaches_empty_prefix() {
+        let code = "package main\n\nimport \"github.com/go-chi/chi/v5\"\n\nfunc routes() {\n\tr := chi.NewRouter()\n\tr.Group(func(r chi.Router) {})\n}\n";
+        let child = format!("r@{}", code.rfind(')').expect("call in code") + 1);
+        assert_eq!(
+            facts(code),
+            vec![attach("func routes()", "r", &child, "\"\"")]
+        );
+    }
+
+    #[test]
+    fn chi_route_closure_attaches_prefix() {
+        let code = "package main\n\nimport \"github.com/go-chi/chi/v5\"\n\nfunc routes() {\n\tr := chi.NewRouter()\n\tr.Route(\"/p\", func(sub chi.Router) {})\n}\n";
+        let child = format!("sub@{}", code.rfind(')').expect("call in code") + 1);
+        assert_eq!(
+            facts(code),
+            vec![attach("func routes()", "r", &child, "\"/p\"")]
+        );
+    }
+
+    #[test]
+    fn chi_route_closure_unresolved_prefix_has_no_fact() {
+        let code = "package main\n\nimport \"github.com/go-chi/chi/v5\"\n\nfunc routes() {\n\tr := chi.NewRouter()\n\tr.Route(cfg.Base, func(r chi.Router) {})\n}\n";
         assert_eq!(facts(code), vec![]);
+    }
+
+    #[test]
+    fn mount_in_closure_attaches_to_closure_router() {
+        let code = "package main\n\nimport \"github.com/go-chi/chi/v5\"\n\nfunc routes() {\n\tr := chi.NewRouter()\n\tadmin := chi.NewRouter()\n\tr.Route(\"/p\", func(r chi.Router) { r.Mount(\"/admin\", admin) })\n}\n";
+        let closure = format!("r@{}", code.rfind(')').expect("call in code") + 1);
+        let found = facts(code);
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(found.contains(&attach("func routes()", "r", &closure, "\"/p\"")));
+        assert!(found.contains(&attach("func routes()", &closure, "admin", "\"/admin\"")));
     }
 
     #[test]

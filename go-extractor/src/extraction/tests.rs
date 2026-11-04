@@ -723,7 +723,7 @@ package main
 
 import "github.com/go-chi/chi/v5"
 
-func routes(r chi.Router) { r.Route("/p", func(r chi.Router) { r.Get("/x", h) }) }
+func routes(r chi.Router) { s.Register(func(r chi.Router) { r.Get("/x", h) }) }
 "#;
     let record = extract_syntactic(code, "x.go").expect("Go extraction should succeed");
     assert!(

@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use models::{Assignment, AssignmentKey, HttpMethod, Import};
 use tree_sitter::Node;
 
+pub(super) use self::shared::{ClosureRouter, closure_routers, scoped_router};
 use self::{
     chi::ChiStrategy,
     gorilla::GorillaStrategy,
@@ -29,6 +30,7 @@ pub(super) struct ExtractParams<'a> {
     pub globals: &'a HashMap<String, String>,
     pub assignments: &'a HashMap<AssignmentKey, Assignment>,
     pub imports: &'a [Import],
+    pub closures: &'a [ClosureRouter<'a>],
 }
 
 pub(super) trait EndpointIdentificationStrategy: Sync {

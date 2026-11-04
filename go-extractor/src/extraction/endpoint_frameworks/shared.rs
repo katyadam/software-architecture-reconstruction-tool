@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use models::{Assignment, AssignmentKey, HttpMethod, Import};
+use models::{Assignment, AssignmentKey, HttpMethod, Import, ParsedCallStatement};
 use statix::strings::normalize_whitespace;
 use tree_sitter::Node;
 
@@ -86,20 +86,109 @@ pub(super) fn is_router_parameter(
                 .any(|name| node_text(name, code) == receiver)
         })
         .filter_map(|declaration| declaration.child_by_field_name("type"))
-        .any(|kind| {
-            let Some((alias, name)) = node_text(kind, code)
-                .trim_start_matches('*')
-                .split_once('.')
-            else {
-                return false;
+        .any(|kind| is_router_type(node_text(kind, code), params.imports, types))
+}
+
+/// `kind` is `[*]<alias>.<Type>` with `Type` allowed for the package `alias` imports.
+fn is_router_type(kind: &str, imports: &[Import], types: &[(&str, &[&str])]) -> bool {
+    let Some((alias, name)) = kind.trim_start_matches('*').split_once('.') else {
+        return false;
+    };
+    imports.iter().any(|import| {
+        imports_package(import, alias)
+            && types.iter().any(|(package, allowed)| {
+                import.orig_module.starts_with(package) && allowed.contains(&name)
+            })
+    })
+}
+
+/// Function literal passed to `.Route` / `.Group`, whose single parameter is a router.
+pub(crate) struct ClosureRouter<'a> {
+    pub call: &'a ParsedCallStatement,
+    pub parameter: &'a str,
+    pub receiver: &'a str,
+    /// Prefix expression text; `""` for `.Group`.
+    pub prefix: &'a str,
+}
+
+impl ClosureRouter<'_> {
+    /// Synthetic variable: an inner and an outer `r` share one resolver scope.
+    /// End byte: chained `.Route(..).Route(..)` calls share their start.
+    pub(crate) fn variable(&self) -> String {
+        format!("{}@{}", self.parameter, self.call.call_span.end_byte)
+    }
+}
+
+/// Closure routers among `calls`.
+pub(crate) fn closure_routers<'a>(
+    calls: &'a [ParsedCallStatement],
+    imports: &[Import],
+) -> Vec<ClosureRouter<'a>> {
+    calls
+        .iter()
+        .filter_map(|call| {
+            let (receiver, method) = call.metadata.function_name.rsplit_once('.')?;
+            let (prefix, literal) = match (method, call.metadata.arguments.as_slice()) {
+                ("Route", [prefix, literal, ..]) => (prefix.value.as_str(), literal),
+                ("Group", [literal, ..]) => ("\"\"", literal),
+                _ => return None,
             };
-            params.imports.iter().any(|import| {
-                imports_package(import, alias)
-                    && types.iter().any(|(package, allowed)| {
-                        import.orig_module.starts_with(package) && allowed.contains(&name)
-                    })
+            Some(ClosureRouter {
+                call,
+                parameter: closure_parameter(&literal.value, imports)?,
+                receiver: receiver.trim(),
+                prefix,
             })
         })
+        .collect()
+}
+
+/// Name of the router parameter of `func(<name> <type>)`.
+fn closure_parameter<'a>(literal: &'a str, imports: &[Import]) -> Option<&'a str> {
+    let rest = literal
+        .strip_prefix("func")?
+        .trim_start()
+        .strip_prefix('(')?;
+    let (parameters, _) = rest.split_once(')')?;
+    // gofmt keeps a trailing comma on a multi-line parameter list.
+    let parameters = parameters.trim().trim_end_matches(',');
+    let [name, kind] = parameters.split_whitespace().collect::<Vec<_>>()[..] else {
+        return None;
+    };
+    is_router_type(kind, imports, ROUTER_PARAMETER_TYPES).then_some(name)
+}
+
+/// `name` at `position`: innermost enclosing closure router with that parameter, else `name`.
+/// Strict start: a call's own receiver chain shares its start byte and is not in its closure.
+/// So is an earlier closure of a chain, which ends before the later call does.
+// ponytail: full scan per lookup, quadratic in a file's closures; index by start if a real file gets slow.
+pub(crate) fn scoped_router(closures: &[ClosureRouter<'_>], position: u32, name: &str) -> String {
+    closures
+        .iter()
+        .filter(|closure| {
+            let span = &closure.call.call_span;
+            closure.parameter == name
+                && span.start_byte < position
+                && position < span.end_byte
+                && !closures.iter().any(|earlier| {
+                    let other = &earlier.call.call_span;
+                    other.start_byte == span.start_byte
+                        && other.end_byte < span.end_byte
+                        && position < other.end_byte
+                })
+        })
+        .min_by_key(|closure| closure.call.call_span.end_byte)
+        .map_or_else(|| name.to_string(), ClosureRouter::variable)
+}
+
+/// Synthetic variable of the closure router the call is made on, if any.
+pub(super) fn closure_router(function_node: Node, params: &ExtractParams<'_>) -> Option<String> {
+    let receiver = function_node
+        .child_by_field_name("operand")
+        .filter(|operand| operand.kind() == "identifier")?;
+    let receiver = node_text(receiver, params.code);
+    let scoped = scoped_router(params.closures, params.node.start_byte() as u32, receiver);
+    (scoped != receiver).then_some(scoped)
 }
 
 /// `alias` names `import`: its alias, or the segment before a `/vN` suffix (`chi/v5` is `chi`).
@@ -222,4 +311,84 @@ pub(super) fn router_variable(function_node: Node, params: &ExtractParams<'_>) -
 
 pub(super) fn function_node(node: Node<'_>) -> Option<Node<'_>> {
     node.child_by_field_name("function")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{closure_routers, scoped_router};
+    use crate::extraction::extract_syntactic;
+
+    /// `scoped_router` for `name` at the first occurrence of `at` in a chi file's `body`.
+    fn scoped(body: &str, at: &str, name: &str) -> String {
+        let code = format!(
+            "package main\n\nimport \"github.com/go-chi/chi/v5\"\nimport \"github.com/gin-gonic/gin\"\n\nfunc routes() {{\n{body}\n}}\n"
+        );
+        let record = extract_syntactic(&code, "x.go").expect("Go parses");
+        let closures = closure_routers(&record.call_statements, &record.imports);
+        let position = code.find(at).expect("marker in code") as u32;
+        // Digits dropped: tests assert synthetic or not, not the byte.
+        scoped_router(&closures, position, name).replace(|c: char| c.is_ascii_digit(), "")
+    }
+
+    #[test]
+    fn inside_closure_is_synthetic() {
+        let body = r#"r.Route("/p", func(sub chi.Router) { sub.Get("/x", h) })"#;
+        assert_eq!(scoped(body, "sub.Get", "sub"), "sub@");
+    }
+
+    #[test]
+    fn other_name_stays() {
+        let body = r#"r.Route("/p", func(sub chi.Router) { r.Get("/x", h) })"#;
+        assert_eq!(scoped(body, "r.Get", "r"), "r");
+    }
+
+    #[test]
+    fn outside_closure_stays() {
+        let body = r#"r.Route("/p", func(r chi.Router) {}); r.Get("/x", h)"#;
+        assert_eq!(scoped(body, "r.Get", "r"), "r");
+    }
+
+    #[test]
+    fn receiver_chain_is_outside_its_closure() {
+        let body = r#"r.Route("/p", func(r chi.Router) {}).Get("/x", h)"#;
+        assert_eq!(scoped(body, "r.Route", "r"), "r");
+    }
+
+    #[test]
+    fn earlier_closure_of_a_chain_is_outside_the_later_one() {
+        let body = r#"r.Route("/a", func(x chi.Router) { r.Get("/z", h) }).Route("/b", func(r chi.Router) {})"#;
+        assert_eq!(scoped(body, "r.Get", "r"), "r");
+    }
+
+    #[test]
+    fn shadowing_picks_innermost() {
+        let code = "package main\n\nimport \"github.com/go-chi/chi/v5\"\n\nfunc routes() {\n\tr.Route(\"/a\", func(r chi.Router) { r.Route(\"/b\", func(r chi.Router) { r.Get(\"/x\", h) }) })\n}\n";
+        let record = extract_syntactic(code, "x.go").expect("Go parses");
+        let closures = closure_routers(&record.call_statements, &record.imports);
+        let inner = code.find("})").expect("inner call end") as u32 + 2;
+        let get = code.find("r.Get").expect("route") as u32;
+        assert_eq!(scoped_router(&closures, get, "r"), format!("r@{inner}"));
+    }
+
+    #[test]
+    fn nesting_reaches_outer_parameter() {
+        let code = "package main\n\nimport \"github.com/go-chi/chi/v5\"\n\nfunc routes() {\n\tr.Route(\"/a\", func(a chi.Router) { a.Route(\"/b\", func(b chi.Router) { a.Get(\"/x\", h) }) })\n}\n";
+        let record = extract_syntactic(code, "x.go").expect("Go parses");
+        let closures = closure_routers(&record.call_statements, &record.imports);
+        let outer = code.rfind("})").expect("outer call end") as u32 + 2;
+        let get = code.find("a.Get").expect("route") as u32;
+        assert_eq!(scoped_router(&closures, get, "a"), format!("a@{outer}"));
+    }
+
+    #[test]
+    fn unrecognized_closures_rejected() {
+        for literal in [
+            "func(r Local) { r.Get(\"/x\", h) }",
+            "func(r *gin.Context) { r.Get(\"/x\", h) }",
+            "func(a, r chi.Router) { r.Get(\"/x\", h) }",
+        ] {
+            let body = format!("r.Route(\"/p\", {literal})");
+            assert_eq!(scoped(&body, "r.Get", "r"), "r", "{literal}");
+        }
+    }
 }
