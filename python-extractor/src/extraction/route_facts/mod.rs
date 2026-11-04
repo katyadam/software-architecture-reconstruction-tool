@@ -1,3 +1,4 @@
+mod django;
 mod fastapi;
 mod flask;
 mod idiom;
@@ -5,7 +6,8 @@ mod idiom;
 use models::{RouteFact, ir::project::TypedFileRecord};
 
 /// Per-framework adapters; a new framework is one file plus one entry here.
-const FRAMEWORKS: [fn(&TypedFileRecord) -> Vec<RouteFact>; 2] = [fastapi::facts, flask::facts];
+const FRAMEWORKS: [fn(&TypedFileRecord) -> Vec<RouteFact>; 3] =
+    [django::facts, fastapi::facts, flask::facts];
 
 /// Router composition facts from every known Python framework.
 pub fn route_facts(file: &TypedFileRecord) -> Vec<RouteFact> {

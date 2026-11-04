@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    cell::Cell,
+    collections::{BTreeMap, BTreeSet},
+};
 
 use log::warn;
 use models::{
@@ -15,6 +18,9 @@ const MAX_DEPTH: usize = 8;
 /// Max chains kept per router; non-literal prefixes do not collapse before pass 3.
 // ponytail: smallest chains kept, wider routers lose mounts; raise if a real project hits the warning.
 const MAX_CHAINS: usize = 256;
+/// Max `prefixes` calls per endpoint (D5); the walk is fan-in^depth.
+// ponytail: walk stops at the budget, keeping chains found so far; memoize per router if real projects hit it.
+const MAX_STEPS: usize = 100_000;
 
 /// Record on every endpoint the unevaluated prefix chains of its router.
 pub fn resolve_route_prefixes(files: &mut [TypedFileRecord], import_graph: &ImportGraph) {
@@ -86,14 +92,16 @@ struct Resolver<'a> {
     files: &'a [TypedFileRecord],
     graph: &'a ImportGraph,
     by_path: BTreeMap<&'a str, usize>,
-    /// `(file, scope, child)` -> `(parent, prefix)` of `Attach` facts.
-    attach: BTreeMap<VarKey, Vec<(&'a str, &'a str)>>,
+    /// `(file, scope, child)` -> `(parent's file, parent's scope, parent, prefix)`.
+    attach: BTreeMap<VarKey, Vec<(usize, String, &'a str, &'a str)>>,
     /// `(file, scope, router)` -> own prefixes.
     own: BTreeMap<VarKey, Vec<&'a str>>,
     /// Callee last name segment -> call sites.
     calls: BTreeMap<&'a str, Vec<Site<'a>>>,
     /// Callable bare name -> `(file, parameters)`.
     callables: BTreeMap<&'a str, Vec<(usize, &'a [Parameter])>>,
+    /// `prefixes` calls for the current endpoint.
+    steps: Cell<usize>,
 }
 
 impl<'a> Resolver<'a> {
@@ -110,6 +118,7 @@ impl<'a> Resolver<'a> {
             own: BTreeMap::new(),
             calls: BTreeMap::new(),
             callables: BTreeMap::new(),
+            steps: Cell::new(0),
         };
         for (i, file) in files.iter().enumerate() {
             r.by_path.insert(&file.file_path, i);
@@ -147,7 +156,21 @@ impl<'a> Resolver<'a> {
                         .attach
                         .entry((*i, scope_key(scope), child.clone()))
                         .or_default()
-                        .push((parent.as_str(), prefix.as_str())),
+                        .push((*i, scope_key(scope), parent.as_str(), prefix.as_str())),
+                    RouteFact::AttachModule {
+                        scope,
+                        parent,
+                        paths,
+                        child,
+                        prefix,
+                    } => {
+                        if let Some(found) = r.find_module(*i, paths) {
+                            r.attach
+                                .entry((found, String::new(), child.clone()))
+                                .or_default()
+                                .push((*i, scope_key(scope), parent.as_str(), prefix.as_str()));
+                        }
+                    }
                     RouteFact::Own {
                         scope,
                         router,
@@ -163,22 +186,37 @@ impl<'a> Resolver<'a> {
         r
     }
 
-    /// Facts for `var` in `scope`, falling back to module level; returns the scope used.
-    fn scoped<'m, 's, T>(
+    /// First of `paths` under the directory of `file`, then under each ancestor (D2).
+    fn find_module(&self, file: usize, paths: &[String]) -> Option<usize> {
+        let parent = |path: &'a str| path.rsplit_once('/').map(|(dir, _)| dir);
+        let mut dir = parent(&self.files[file].file_path);
+        loop {
+            // A module never includes itself: keep walking up.
+            let found = paths.iter().find_map(|path| {
+                match dir {
+                    Some(dir) => self.by_path.get(format!("{dir}/{path}").as_str()),
+                    None => self.by_path.get(path.as_str()),
+                }
+                .filter(|found| **found != file)
+            });
+            if let Some(found) = found {
+                return Some(*found);
+            }
+            dir = parent(dir?);
+        }
+    }
+
+    /// Facts for `var` in `scope`, falling back to module level.
+    fn scoped<'m, T>(
         map: &'m BTreeMap<VarKey, Vec<T>>,
         file: usize,
-        scope: &'s str,
+        scope: &str,
         var: &str,
-    ) -> (&'s str, &'m [T]) {
+    ) -> &'m [T] {
         [scope, ""]
             .into_iter()
-            .find_map(|s| {
-                Some((
-                    s,
-                    map.get(&(file, s.to_string(), var.to_string()))?.as_slice(),
-                ))
-            })
-            .unwrap_or_default()
+            .find_map(|s| map.get(&(file, s.to_string(), var.to_string())))
+            .map_or(&[], Vec::as_slice)
     }
 
     /// Files whose callable `name` a call in `file` reaches (D5).
@@ -215,9 +253,10 @@ impl<'a> Resolver<'a> {
     /// All prefixes under which router `var` in `scope` of `file` is served (D4).
     fn prefixes(&self, file: usize, scope: &str, var: &str, path: &mut Vec<VarKey>) -> Prefixes {
         let key = (file, scope.to_string(), var.to_string());
-        if path.contains(&key) {
+        if path.contains(&key) || self.steps.get() >= MAX_STEPS {
             return Prefixes::new();
         }
+        self.steps.set(self.steps.get() + 1);
         if path.len() >= MAX_DEPTH {
             warn!(
                 "route prefixes of {var} in {} dropped: nested past {MAX_DEPTH} levels",
@@ -229,18 +268,19 @@ impl<'a> Resolver<'a> {
         let out = self
             .param_prefixes(file, scope, var, path)
             .unwrap_or_else(|| {
-                let expr = |prefix: &str| PrefixExpr {
+                // A prefix evaluates in the file that wrote it.
+                let expr = |file: usize, prefix: &str| PrefixExpr {
                     file_path: self.files[file].file_path.clone(),
                     expr: prefix.to_string(),
                 };
                 let mut outer = Prefixes::new();
-                let (fact_scope, attach) = Self::scoped(&self.attach, file, scope, var);
-                for (parent, prefix) in attach {
-                    let chains = self.prefixes(file, fact_scope, parent, path);
+                let attach = Self::scoped(&self.attach, file, scope, var);
+                for (parent_file, parent_scope, parent, prefix) in attach {
+                    let chains = self.prefixes(*parent_file, parent_scope, parent, path);
                     merge(
                         &mut outer,
                         chains.into_iter().map(|mut chain| {
-                            chain.push(expr(prefix));
+                            chain.push(expr(*parent_file, prefix));
                             chain
                         }),
                     );
@@ -248,7 +288,7 @@ impl<'a> Resolver<'a> {
                 if attach.is_empty() {
                     outer.insert(vec![]);
                 }
-                let (_, own) = Self::scoped(&self.own, file, scope, var);
+                let own = Self::scoped(&self.own, file, scope, var);
                 if own.is_empty() {
                     return outer;
                 }
@@ -258,7 +298,7 @@ impl<'a> Resolver<'a> {
                         &mut out,
                         outer.iter().map(|chain| {
                             let mut chain = chain.clone();
-                            chain.push(expr(prefix));
+                            chain.push(expr(file, prefix));
                             chain
                         }),
                     );
@@ -337,7 +377,14 @@ fn resolve_with_facts(
                             .as_deref()
                             .map(bare)
                             .unwrap_or_default();
+                        r.steps.set(0);
                         let chains = r.prefixes(i, scope, router, &mut vec![]);
+                        if r.steps.get() >= MAX_STEPS {
+                            warn!(
+                                "route prefixes of {} in {} cut at {MAX_STEPS} steps",
+                                e.uri, file.file_path
+                            );
+                        }
                         if chains.len() >= MAX_CHAINS {
                             warn!(
                                 "route prefixes of {} in {} may be truncated at {MAX_CHAINS} chains",
@@ -372,7 +419,7 @@ mod tests {
         source_code::SourceSpan,
     };
 
-    use super::{MAX_CHAINS, bare, resolve_with_facts};
+    use super::{MAX_CHAINS, MAX_STEPS, Resolver, bare, resolve_with_facts};
 
     fn rec(path: &str) -> TypedFileRecord {
         TypedFileRecord {
@@ -842,5 +889,163 @@ mod tests {
         let forward = case(facts.clone());
         assert_eq!(forward[0].2.len(), MAX_CHAINS);
         assert_eq!(forward, case(facts.into_iter().rev().collect()));
+    }
+    /// Module attachment of `app/urls.py` etc., under `root`, prefix `"api/"`.
+    fn attach_module(paths: &[&str], child: &str) -> RouteFact {
+        RouteFact::AttachModule {
+            scope: Scope::Global,
+            parent: "root".to_string(),
+            paths: paths.iter().map(|p| p.to_string()).collect(),
+            child: child.to_string(),
+            prefix: "\"api/\"".to_string(),
+        }
+    }
+
+    /// Endpoint `items/` on router `routes` in `path`.
+    fn routes_file(path: &str) -> TypedFileRecord {
+        let mut f = rec(path);
+        f.endpoints.push(ep("items/", Some("routes"), None));
+        f
+    }
+
+    #[test]
+    fn module_attachment_crosses_files() {
+        let out = run(
+            vec![rec("svc/proj/urls.py"), routes_file("svc/app/urls.py")],
+            vec![(0, vec![attach_module(&["app/urls.py"], "routes")])],
+            &graph(&[]),
+        );
+        assert_eq!(
+            out,
+            expected(&[(
+                "svc/app/urls.py",
+                "items/",
+                &[&["svc/proj/urls.py: \"api/\""]]
+            )])
+        );
+    }
+
+    #[test]
+    fn module_attachment_nearest_wins() {
+        let out = run(
+            vec![
+                rec("svc/proj/urls.py"),
+                routes_file("svc/app/urls.py"),
+                routes_file("app/urls.py"),
+            ],
+            vec![(0, vec![attach_module(&["app/urls.py"], "routes")])],
+            &graph(&[]),
+        );
+        assert_eq!(
+            out,
+            expected(&[
+                ("app/urls.py", "items/", &[&[]]),
+                (
+                    "svc/app/urls.py",
+                    "items/",
+                    &[&["svc/proj/urls.py: \"api/\""]]
+                ),
+            ])
+        );
+    }
+
+    #[test]
+    fn module_attachment_ignores_other_service() {
+        let out = run(
+            vec![
+                rec("svc_a/proj/urls.py"),
+                routes_file("svc_b/accounts/urls.py"),
+            ],
+            vec![(0, vec![attach_module(&["accounts/urls.py"], "routes")])],
+            &graph(&[]),
+        );
+        assert_eq!(
+            out,
+            expected(&[("svc_b/accounts/urls.py", "items/", &[&[]])])
+        );
+    }
+
+    #[test]
+    fn module_attachment_from_root_file_uses_bare_path() {
+        let out = run(
+            vec![rec("urls.py"), routes_file("app/urls.py")],
+            vec![(0, vec![attach_module(&["app/urls.py"], "routes")])],
+            &graph(&[]),
+        );
+        assert_eq!(
+            out,
+            expected(&[("app/urls.py", "items/", &[&["urls.py: \"api/\""]])])
+        );
+    }
+
+    #[test]
+    fn module_attachment_first_path_preferred_within_level() {
+        let out = run(
+            vec![
+                rec("svc/urls.py"),
+                routes_file("svc/app.py"),
+                routes_file("svc/app/__init__.py"),
+            ],
+            vec![(
+                0,
+                vec![attach_module(&["app.py", "app/__init__.py"], "routes")],
+            )],
+            &graph(&[]),
+        );
+        assert_eq!(
+            out,
+            expected(&[
+                ("svc/app.py", "items/", &[&["svc/urls.py: \"api/\""]]),
+                ("svc/app/__init__.py", "items/", &[&[]]),
+            ])
+        );
+    }
+
+    #[test]
+    fn module_attachment_skips_including_file() {
+        let mut proj = routes_file("proj/api/urls.py");
+        proj.endpoints.clear();
+        let out = run(
+            vec![proj, routes_file("api/urls.py")],
+            vec![(0, vec![attach_module(&["api/urls.py"], "routes")])],
+            &graph(&[]),
+        );
+        assert_eq!(
+            out,
+            expected(&[("api/urls.py", "items/", &[&["proj/api/urls.py: \"api/\""]])])
+        );
+    }
+
+    /// 6 layers across files, fan-in 10: 10^0 + ... + 10^6 = 1_111_111 calls uncapped.
+    // ponytail: guards the walk budget only, no timing; memoize per router if the cap bites real projects.
+    #[test]
+    fn wide_layers_stop_at_step_budget() {
+        let files: Vec<TypedFileRecord> = (0..=6).map(|k| rec(&format!("svc/l{k}.py"))).collect();
+        let facts: Vec<(usize, Vec<RouteFact>)> = (1..=6)
+            .map(|k| {
+                let layer = (0..10)
+                    .flat_map(|i| {
+                        (0..10).map(move |j| RouteFact::AttachModule {
+                            scope: Scope::Global,
+                            parent: format!("r{i}"),
+                            paths: vec![format!("l{}.py", k - 1)],
+                            child: format!("r{j}"),
+                            prefix: format!("settings.a{k}_{i}"),
+                        })
+                    })
+                    .collect();
+                (k, layer)
+            })
+            .collect();
+        let g = graph(&[]);
+        let walk = || {
+            let r = Resolver::new(&files, &facts, &g);
+            let chains = r.prefixes(0, "", "r0", &mut vec![]);
+            (r.steps.get(), chains)
+        };
+        let (steps, chains) = walk();
+        assert_eq!(steps, MAX_STEPS);
+        assert!(!chains.is_empty());
+        assert_eq!((steps, chains), walk());
     }
 }

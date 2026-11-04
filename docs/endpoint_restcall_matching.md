@@ -98,6 +98,11 @@ Flask (`flask.rs`):
 - `X.register_blueprint(bp, url_prefix=...)` -> `Attach(X, bp, url_prefix)`; prefix keyword only, missing -> `""`.
 - `bp = Blueprint(name, __name__, url_prefix=...)` -> `Own(bp, url_prefix)`.
 
+Django (`django.rs`, module-level calls only):
+
+- `path(p, include("a.b"))`, `re_path(r, include("a.b"))` -> `AttachModule(urlpatterns, ["a/b.py", "a/b/__init__.py"], urlpatterns, p)`. Tuple form and `namespace=` included. The resolver takes the first match walking up from the including file's directory, so a same-named module in a sibling service never matches.
+- `re_path` prefix: literal with leading `^` stripped; other regex metacharacters -> no fact.
+
 Go (`go-extractor/src/extraction/route_facts/`):
 
 - `x := r.Group("/p")` (Gin, Echo, Fiber) -> `Attach(r, x, "/p")`.
@@ -107,11 +112,13 @@ Go (`go-extractor/src/extraction/route_facts/`):
 
 ### Known limits
 
-- No Django `include()`, Go (`StripPrefix`, chi `Route`) or Express adapters yet.
+- No Go `StripPrefix` or Express adapters yet.
+- Django `include()` adds no prefix for: `include(extra_patterns)` or inline `include([path(...)])`, DRF `include(router.urls)` (its routes are not extracted), `include(module)` with an imported object, third-party modules, prefixes holding `,` or `=`, `re_path` regexes with metacharacters. Legacy `url()` is ignored. `ROOT_URLCONF` is not read: a module nothing includes is served as declared. A `re_path` child's own URI is not normalized (`/api/^x/$`). A root-level `accounts/urls.py` can match a third-party `accounts.urls` in any service. An `include()` nested in an inline or list-variable include gets only its own prefix. Converter syntax in a constant prefix (`API = "<int:org>/"`) stays as written. No fact for a comment between arguments, `u""` or implicit string concatenation, keyword `route=` / `view=` / `arg=`, or qualified `urls.include`.
 - Spring class-level prefixes stay in the Java extractor.
 - FastAPI `root_path` ignored (deploy-time proxy prefix).
 - Prefixes from concatenation (`ROOT + "/x"`), env vars with no supplied value, or unresolved f-strings stay unresolved.
 - REST calls keep first-wins for names not bound in the file, so prefixes and REST URLs can differ on such a collision.
 - A constant re-exported through two files can depend on file order.
 - Method calls (`self.f(app)`): `self` shifts positional argument indices; keyword arguments still match.
+- Prefix walk stops after 100_000 steps per endpoint (`MAX_STEPS`, one warning); chains found so far are kept.
 - Python arguments come from a naive comma split; commas inside nested calls or literals break the child or prefix match (endpoint keeps its URI).

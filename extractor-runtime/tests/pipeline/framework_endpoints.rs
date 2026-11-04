@@ -1626,3 +1626,241 @@ func routes() {
 "#;
     assert_eq!(go_endpoint_uris(&[("svc/main.go", code)]), vec!["/p/x"]);
 }
+
+/// Django `urls.py` at `path` with `entries` in its `urlpatterns`.
+fn urlconf(path: &str, entries: &[&str]) -> models::ir::syntax::FileRecord {
+    py(
+        &format!(
+            "from django.urls import include, path, re_path\n\nurlpatterns = [\n{},\n]\n",
+            entries.join(",\n")
+        ),
+        path,
+    )
+}
+
+/// URIs of `path("x/", v)` in `app/urls.py` included by `proj/urls.py` through `entries`.
+fn included_x(entries: &[&str]) -> Vec<String> {
+    endpoint_uris(vec![
+        urlconf("proj/urls.py", entries),
+        urlconf("app/urls.py", &[r#"path("x/", v)"#]),
+    ])
+}
+
+#[test]
+fn django_include_by_module_string() {
+    let uris = endpoint_uris(vec![
+        urlconf(
+            "svc/proj/urls.py",
+            &[r#"path("api/", include("app.urls"))"#],
+        ),
+        urlconf("svc/app/urls.py", &[r#"path("items/", views.items)"#]),
+    ]);
+    assert_eq!(uris, vec!["/api/items/"]);
+}
+
+#[test]
+fn django_include_module_is_package() {
+    let uris = endpoint_uris(vec![
+        urlconf(
+            "svc/proj/urls.py",
+            &[r#"path("api/", include("app.urls"))"#],
+        ),
+        urlconf(
+            "svc/app/urls/__init__.py",
+            &[r#"path("items/", views.items)"#],
+        ),
+    ]);
+    assert_eq!(uris, vec!["/api/items/"]);
+}
+
+#[test]
+fn django_include_tuple_form_and_namespace() {
+    for entry in [
+        r#"path("a/", include(("app.urls", "app")))"#,
+        r#"path("a/", include("app.urls", namespace="x"))"#,
+        r#"path("a/", include(("app.urls", "app"), namespace="x"), name="y")"#,
+    ] {
+        assert_eq!(included_x(&[entry]), vec!["/a/x/"], "{entry}");
+    }
+}
+
+#[test]
+fn django_include_nested() {
+    let uris = endpoint_uris(vec![
+        urlconf("proj/urls.py", &[r#"path("a/", include("app.urls"))"#]),
+        urlconf("app/urls.py", &[r#"path("b/", include("sub.urls"))"#]),
+        urlconf("sub/urls.py", &[r#"path("x/", v)"#]),
+    ]);
+    assert_eq!(uris, vec!["/a/b/x/"]);
+}
+
+#[test]
+fn django_include_module_twice() {
+    let uris = included_x(&[
+        r#"path("v1/", include("app.urls"))"#,
+        r#"path("v2/", include("app.urls"))"#,
+    ]);
+    assert_eq!(uris, vec!["/v1/x/", "/v2/x/"]);
+}
+
+#[test]
+fn django_include_empty_prefix() {
+    assert_eq!(
+        included_x(&[r#"path("", include("app.urls"))"#]),
+        vec!["x/"]
+    );
+}
+
+#[test]
+fn django_include_path_converter_in_prefix() {
+    assert_eq!(
+        included_x(&[r#"path("<int:org>/", include("app.urls"))"#]),
+        vec!["/{org}/x/"]
+    );
+}
+
+#[test]
+fn django_include_prefix_from_constant_in_including_file() {
+    let proj = r#"
+from django.urls import include, path
+
+API = "api/"
+
+urlpatterns = [
+    path(API, include("app.urls")),
+]
+"#;
+    let uris = endpoint_uris(vec![
+        py(proj, "proj/urls.py"),
+        urlconf("app/urls.py", &[r#"path("x/", v)"#]),
+    ]);
+    assert_eq!(uris, vec!["/api/x/"]);
+}
+
+#[test]
+fn django_include_plain_regex_prefix() {
+    assert_eq!(
+        included_x(&[r#"re_path(r"^api/", include("app.urls"))"#]),
+        vec!["/api/x/"]
+    );
+}
+
+#[test]
+fn django_include_regex_prefix_with_metacharacters() {
+    assert_eq!(
+        included_x(&[r#"re_path(r"^v(?P<n>\d+)/", include("app.urls"))"#]),
+        vec!["x/"]
+    );
+}
+
+#[test]
+fn django_include_view_methods_in_included_module() {
+    let views = r#"
+from rest_framework.decorators import api_view
+
+@api_view(["GET", "POST"])
+def view(request):
+    pass
+"#;
+    let records = vec![
+        urlconf("proj/urls.py", &[r#"path("api/", include("app.urls"))"#]),
+        urlconf("app/urls.py", &[r#"path("x/", views.view)"#]),
+        py(views, "app/views.py"),
+    ];
+    let endpoints = evaluated(records, &HashMap::new()).endpoints;
+    assert_eq!(endpoints.len(), 2);
+    for method in [HttpMethod::GET, HttpMethod::POST] {
+        assert!(
+            endpoints
+                .iter()
+                .any(|e| e.uri == "/api/x/" && e.http_method == method),
+            "{endpoints:?}"
+        );
+    }
+}
+
+#[test]
+fn django_include_module_outside_project() {
+    let uris = endpoint_uris(vec![urlconf(
+        "proj/urls.py",
+        &[
+            r#"path("health/", include("health_check.urls"))"#,
+            r#"path("x/", v)"#,
+        ],
+    )]);
+    assert_eq!(uris, vec!["x/"]);
+}
+
+#[test]
+fn django_include_non_literal_module_argument() {
+    let uris = endpoint_uris(vec![
+        urlconf(
+            "proj/urls.py",
+            &[r#"path("api/", include(router.urls))"#, r#"path("x/", v)"#],
+        ),
+        urlconf("router/urls.py", &[r#"path("y/", v)"#]),
+    ]);
+    assert_eq!(uris, vec!["x/", "y/"]);
+}
+
+#[test]
+fn django_include_including_file_is_not_its_own_module() {
+    let uris = endpoint_uris(vec![
+        urlconf("proj/api/urls.py", &[r#"path("v1/", include("api.urls"))"#]),
+        urlconf("api/urls.py", &[r#"path("x/", v)"#]),
+    ]);
+    assert_eq!(uris, vec!["/v1/x/"]);
+}
+
+#[test]
+fn django_include_circular() {
+    let uris = endpoint_uris(vec![
+        urlconf(
+            "a/urls.py",
+            &[r#"path("to_b/", include("b.urls"))"#, r#"path("x/", v)"#],
+        ),
+        urlconf(
+            "b/urls.py",
+            &[r#"path("to_a/", include("a.urls"))"#, r#"path("y/", v)"#],
+        ),
+    ]);
+    assert_eq!(uris, vec!["x/", "y/"]);
+
+    let uris = endpoint_uris(vec![
+        urlconf("proj/urls.py", &[r#"path("r/", include("a.urls"))"#]),
+        urlconf(
+            "a/urls.py",
+            &[r#"path("b/", include("b.urls"))"#, r#"path("x/", v)"#],
+        ),
+        urlconf(
+            "b/urls.py",
+            &[r#"path("a/", include("a.urls"))"#, r#"path("y/", v)"#],
+        ),
+    ]);
+    assert_eq!(uris, vec!["/r/b/y/", "/r/x/"]);
+}
+
+/// Same constant name in both files: the prefix evaluates in the including file.
+#[test]
+fn django_include_prefix_constant_shadowed_in_included_file() {
+    let proj = r#"
+from django.urls import include, path
+
+API = "api/"
+
+urlpatterns = [
+    path(API, include("app.urls")),
+]
+"#;
+    let app = r#"
+from django.urls import path
+
+API = "wrong/"
+
+urlpatterns = [
+    path("x/", v),
+]
+"#;
+    let uris = endpoint_uris(vec![py(proj, "proj/urls.py"), py(app, "app/urls.py")]);
+    assert_eq!(uris, vec!["/api/x/"]);
+}

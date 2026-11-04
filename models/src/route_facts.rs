@@ -11,6 +11,15 @@ pub enum RouteFact {
         child: String,
         prefix: String,
     },
+    /// `child` of the first module found at `paths` is served under `parent` + `prefix`.
+    /// `paths` are relative to the fact's directory or an ancestor, in preference order.
+    AttachModule {
+        scope: Scope,
+        parent: String,
+        paths: Vec<String>,
+        child: String,
+        prefix: String,
+    },
     /// `router` adds `prefix` to its own routes.
     Own {
         scope: Scope,
