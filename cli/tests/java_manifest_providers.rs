@@ -259,6 +259,7 @@ impl Fixture {
 }
 
 #[test]
+#[ignore = "requires built wala-callgraph and sootup-callgraph Maven artifacts"]
 fn both_providers_select_the_mutation_failure_using_precompiled_nonstandard_roots() {
     let f = Fixture::new(false);
     for provider in ["wala", "sootup"] {
@@ -284,6 +285,7 @@ fn both_providers_select_the_mutation_failure_using_precompiled_nonstandard_root
 }
 
 #[test]
+#[ignore = "requires built wala-callgraph and sootup-callgraph Maven artifacts"]
 fn both_providers_retain_the_failing_consumer_and_require_full_run_for_incomplete_scope() {
     let mut f = Fixture::new(true);
     for provider in ["wala", "sootup"] {
