@@ -3,6 +3,7 @@ use tempfile::TempDir;
 
 /// Runs the standalone binary against a two-version Maven fixture and reads its JSON output.
 #[test]
+#[ignore = "requires built wala-callgraph Maven artifact at wala-callgraph/target/wala-callgraph-all.jar"]
 fn selects_the_junit_test_that_reaches_a_changed_method() {
     let fixture = create_fixture();
     let baseline = git(&fixture, &["rev-parse", "HEAD"]);
