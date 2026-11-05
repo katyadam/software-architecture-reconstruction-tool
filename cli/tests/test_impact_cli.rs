@@ -174,6 +174,7 @@ fn sootup_provider_requires_the_provider_neutral_adapter_jar() {
 }
 
 #[test]
+#[ignore = "requires built sootup-callgraph Maven artifact at sootup-callgraph/target/sootup-callgraph-all.jar"]
 fn selects_the_junit_test_with_sootup_and_prepared_bytecode() {
     let fixture = create_fixture();
     let baseline = git(&fixture, &["rev-parse", "HEAD"]);
@@ -266,6 +267,7 @@ fn excludes_independent_sibling_tests_for_a_child_configuration_change() {
 }
 
 #[test]
+#[ignore = "requires built wala-callgraph Maven artifact at wala-callgraph/target/wala-callgraph-all.jar"]
 fn excludes_independent_sibling_tests_for_a_production_callable_change() {
     let fixture = create_reactor_fixture();
     let baseline = git(&fixture, &["rev-parse", "HEAD"]);
@@ -334,6 +336,7 @@ fn selects_sibling_gradle_tests_for_a_child_configuration_change() {
 }
 
 #[test]
+#[ignore = "requires built wala-callgraph and sootup-callgraph Maven artifacts"]
 fn both_providers_select_only_the_consumer_test_reaching_the_changed_library() {
     let fixture = create_reactor_fixture();
     write_source(
