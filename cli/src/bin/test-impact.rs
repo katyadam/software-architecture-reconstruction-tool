@@ -188,9 +188,6 @@ fn select_provider(
                 .wala_adapter_jar
                 .as_ref()
                 .context("--wala-adapter-jar must be supplied for the WALA provider")?;
-            if !jar.is_file() {
-                anyhow::bail!("--wala-adapter-jar must be an existing file");
-            }
             Ok(SelectedJavaProvider::Wala(WalaJavaProvider::with_timeout(
                 jar, timeout,
             )))
