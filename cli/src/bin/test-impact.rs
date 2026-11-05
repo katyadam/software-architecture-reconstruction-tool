@@ -58,7 +58,6 @@ fn run(arguments: Arguments) -> Result<()> {
     if changes_are_module_only(&changes) {
         return write_module_fallback_result(&arguments, candidate_revision, changes, diagnostics);
     }
-    validate_wala_adapter(&arguments)?;
     let modules = changed_modules(&changes);
     let extraction_started = Instant::now();
     let callables = get_java_callables_for_modules_with_progress(
