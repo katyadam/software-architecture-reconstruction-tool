@@ -80,9 +80,6 @@ fn validate_arguments(arguments: &Arguments) -> Result<()> {
     if !arguments.project_dir.is_dir() || !arguments.project_dir.join(".git").exists() {
         anyhow::bail!("--project-dir must be a Git checkout");
     }
-    if !arguments.wala_adapter_jar.is_file() {
-        anyhow::bail!("--wala-adapter-jar must be an existing file");
-    }
     git_revision(&arguments.project_dir, &arguments.baseline_revision)
         .context("--baseline-revision is not a resolvable Git revision")?;
     Ok(())
