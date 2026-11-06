@@ -808,6 +808,16 @@ fn constant_starting_with_f_keeps_its_value() {
     assert!(ir.restcalls.is_empty(), "{:?}", ir.restcalls);
 }
 
+/// Value starts with `f` and holds a placeholder: still no f-string prefix.
+#[test]
+fn constant_starting_with_f_with_placeholder_keeps_its_value() {
+    let code = inline_client(
+        "PORT = \"8000\"\nBASE = f\"frontend:{PORT}\"",
+        "BASE + \"/x\"",
+    );
+    assert_eq!(rest_target(&code), "frontend:8000/x");
+}
+
 /// Leading hole: the matcher gives a suffix match, a literal first segment gets none.
 #[test]
 fn inline_concat_unresolved_local_becomes_hole() {

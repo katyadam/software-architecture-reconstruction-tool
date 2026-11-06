@@ -114,8 +114,10 @@ fn resolve_fstring(
     let mut resolved_parts = Vec::new();
     let mut current_literal = String::new();
 
+    // `f` is a prefix only before a quote: `foo/{id}` keeps it.
     let content = string_literal
         .strip_prefix('f')
+        .filter(|rest| rest.starts_with(['"', '\'']))
         .unwrap_or(string_literal)
         .trim_matches(|c| c == '"' || c == '\'');
 
