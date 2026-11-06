@@ -4,29 +4,15 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.stream.Stream;
 
 /** Prepares compiled class directories and dependency JARs for a conventional Maven service. */
-public final class MavenBytecodeArtifacts {
-  private MavenBytecodeArtifacts() {}
-
-  /** Holds bytecode inputs produced for one selected Maven module. */
-  public record PreparedArtifacts(
-      List<Path> applicationClassDirs,
-      List<Path> testClassDirs,
-      List<Path> dependencyJars,
-      Path moduleRoot) {}
-
-  /** Carries either prepared artifacts or a diagnostic explaining why Maven preparation failed. */
-  public record Preparation(PreparedArtifacts artifacts, String diagnostic) {
-    /** Returns whether Maven preparation completed and produced usable artifact metadata. */
-    public boolean succeeded() {
-      return artifacts != null;
-    }
-  }
+public final class MavenBytecodeArtifacts implements BytecodeArtifactPreparer {
+  /** Creates a Maven artifact preparer for conventional Java source roots. */
+  public MavenBytecodeArtifacts() {}
 
   /** Builds the selected module with upstream reactor modules and collects WALA bytecode inputs. */
-  public static Preparation prepare(Path sourceRoot) {
+  @Override
+  public BytecodeArtifacts.Preparation prepare(Path sourceRoot) {
     Path modulePom = findModulePom(sourceRoot);
     if (modulePom == null) {
       return failure("No conventional Maven module POM found for " + sourceRoot);
@@ -34,14 +20,28 @@ public final class MavenBytecodeArtifacts {
     Path moduleRoot = modulePom.getParent();
     Path reactorPom = findReactorPom(modulePom);
     String selector = reactorPom.getParent().relativize(moduleRoot).toString();
-    var build = runMaven(reactorPom, List.of("-pl", selector, "-am", "install", "-DskipTests"));
+    var build =
+        runMaven(
+            reactorPom,
+            List.of(
+                "-pl",
+                selector,
+                "-am",
+                "test-compile",
+                "jar:jar",
+                "jar:test-jar",
+                "install:install",
+                "-DskipTests"));
     if (build.exitCode() != 0) {
       return failure(build.output());
     }
     var classpath =
         runMaven(
             modulePom,
-            List.of("-DincludeScope=test", "dependency:build-classpath", "-Dmdep.outputFile=target/wala-classpath.txt"));
+            List.of(
+                "-DincludeScope=test",
+                "dependency:build-classpath",
+                "-Dmdep.outputFile=target/wala-classpath.txt"));
     if (classpath.exitCode() != 0) {
       return failure(classpath.output());
     }
@@ -49,16 +49,21 @@ public final class MavenBytecodeArtifacts {
       Path classpathFile = moduleRoot.resolve("target/wala-classpath.txt");
       List<Path> dependencyJars =
           Files.exists(classpathFile) ? parseClasspath(Files.readString(classpathFile)) : List.of();
-      return new Preparation(
-          new PreparedArtifacts(
-              findClassDirs(reactorPom.getParent()),
-              findTestClassDirs(reactorPom.getParent()),
+      return new BytecodeArtifacts.Preparation(
+          new BytecodeArtifacts.PreparedArtifacts(
+              compiledOutput(moduleRoot, "classes"),
+              compiledOutput(moduleRoot, "test-classes"),
               dependencyJars,
               moduleRoot),
           "");
     } catch (IOException error) {
       return failure(error.toString());
     }
+  }
+
+  /** Returns whether the source root belongs to a conventional Maven Java module. */
+  public static boolean owns(Path sourceRoot) {
+    return findModulePom(sourceRoot) != null;
   }
 
   /** Finds the module POM only for the conventional Maven {@code src/main/java} layout. */
@@ -99,7 +104,9 @@ public final class MavenBytecodeArtifacts {
       command.add("-f");
       command.add(pom.toString());
       command.addAll(arguments);
-      var process = new ProcessBuilder(command).redirectErrorStream(true).start();
+      var builder = new ProcessBuilder(command).redirectErrorStream(true);
+      configureMavenJavaHome(builder.environment(), System.getenv("WALA_MAVEN_JAVA_HOME"));
+      var process = builder.start();
       String output = new String(process.getInputStream().readAllBytes());
       return new ProcessResult(process.waitFor(), output);
     } catch (Exception error) {
@@ -107,20 +114,18 @@ public final class MavenBytecodeArtifacts {
     }
   }
 
-  /** Locates compiled class directories produced below a direct-child Maven reactor. */
-  private static List<Path> findClassDirs(Path reactorRoot) throws IOException {
-    try (Stream<Path> paths = Files.walk(reactorRoot, 4)) {
-      return paths.filter(path -> path.endsWith("target/classes") && Files.isDirectory(path)).toList();
+  /** Applies an optional Java home only to Maven processes that prepare benchmark bytecode. */
+  static void configureMavenJavaHome(
+      java.util.Map<String, String> environment, String configuredJavaHome) {
+    if (configuredJavaHome != null && !configuredJavaHome.isBlank()) {
+      environment.put("JAVA_HOME", configuredJavaHome);
     }
   }
 
-  /** Locates test class directories produced below a direct-child Maven reactor. */
-  private static List<Path> findTestClassDirs(Path reactorRoot) throws IOException {
-    try (Stream<Path> paths = Files.walk(reactorRoot, 4)) {
-      return paths
-          .filter(path -> path.endsWith("target/test-classes") && Files.isDirectory(path))
-          .toList();
-    }
+  /** Returns one selected module output directory when Maven produced it. */
+  private static List<Path> compiledOutput(Path moduleRoot, String outputName) {
+    Path output = moduleRoot.resolve("target").resolve(outputName);
+    return Files.isDirectory(output) ? List.of(output) : List.of();
   }
 
   /** Converts Maven's platform-separated dependency classpath into readable JAR paths. */
@@ -133,8 +138,9 @@ public final class MavenBytecodeArtifacts {
   }
 
   /** Creates a failed preparation result without exposing process failures as exceptions. */
-  private static Preparation failure(String diagnostic) {
-    return new Preparation(null, diagnostic.isBlank() ? "Maven preparation failed" : diagnostic);
+  private static BytecodeArtifacts.Preparation failure(String diagnostic) {
+    return new BytecodeArtifacts.Preparation(
+        null, diagnostic.isBlank() ? "Maven preparation failed" : diagnostic);
   }
 
   /** Represents one completed Maven process invocation. */

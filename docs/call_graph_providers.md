@@ -27,8 +27,9 @@ Java syntax, including method references, which WALA's source frontend cannot pa
 normal `target/` files and install local module artifacts in the local Maven
 cache; it does not modify source files.
 
-`--wala-timeout-seconds` bounds each WALA adapter process. A timeout produces a
-non-fatal diagnostic and leaves Tree-sitter extraction intact. The adapter also
+`--wala-timeout-seconds` bounds each WALA adapter process and its Unix process
+group, so Maven or Gradle descendants are terminated and reaped with the
+adapter. A timeout produces a non-fatal diagnostic and leaves Tree-sitter extraction intact. The adapter also
 includes `analysis_duration_ms` in its JSON diagnostics. For precision studies,
 the standalone adapter accepts `--algorithm rta` or the more expensive
 `--algorithm zero-one-container-cfa`; CHA is selected by default:
@@ -39,8 +40,15 @@ java -jar wala-callgraph/target/wala-callgraph-all.jar \
   --algorithm zero-one-container-cfa
 ```
 
-For Gradle projects or CI-produced artifacts, invoke the adapter directly with
-compiled application outputs and a path-separated dependency classpath:
+For conventional Gradle Java projects, the adapter automatically prefers the
+project wrapper, runs the selected module's `testClasses`, and queries main/test
+outputs plus `testRuntimeClasspath` through a temporary Gradle init script. This
+works for Groovy and Kotlin DSL projects, including nested modules. If no wrapper
+exists it invokes `gradle` from `PATH`; `voyantclair.gradle.command` can override
+that command for controlled environments. Failures remain conservative for TIA.
+
+For CI-produced Gradle artifacts, invoke the adapter directly with compiled
+application outputs and a path-separated dependency classpath:
 
 ```bash
 java -jar wala-callgraph/target/wala-callgraph-all.jar \
@@ -72,16 +80,19 @@ cargo run -p cli --bin test-impact -- \
 ```
 
 The command maps candidate Git hunks to Java methods/classes with Tree-sitter,
-discovers JUnit 4/5-style tests, compiles Maven test bytecode, and runs WALA
+discovers JUnit 4/5-style tests, prepares Maven or Gradle test bytecode, and runs WALA
 with every discovered test method as an explicit root. It writes a JSON result
 even when analysis is uncertain. A method-level change selects reverse-reachable
 tests; class changes select tests reaching any callable in that class.
 
 Deletion, rename, resource, POM/configuration, unresolved mapping, missing test
 root, provider diagnostic, timeout, or failed analysis selects every discovered
-test in the affected Maven module. This baseline intentionally does not infer
+test in the affected Java build module. If every change is already module-wide,
+TIA skips source extraction and WALA entirely; the result records module fallback
+and `timing:` diagnostics for Git diff, discovery, WALA, edge resolution, and
+selection stages as applicable. This baseline intentionally does not infer
 Spring dependency injection/proxies, reflection, framework callbacks, dynamic
-test factories, Gradle project builds, or cross-service paths. Those cases must
+test factories, or cross-service paths. Those cases must
 remain broad until explicitly modeled.
 
 ## Adding a provider

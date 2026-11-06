@@ -57,6 +57,13 @@ pub struct RawCallEdge {
     pub confidence: Option<f32>,
 }
 
+/// Records the selected test entrypoints that WALA proved can reach one method.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MethodReachability {
+    pub method: MethodRef,
+    pub entrypoints: Vec<MethodRef>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 /// Represents an edge whose endpoints have been matched to VoyantClair callable IDs.
 pub struct ResolvedCallEdge {
@@ -73,6 +80,7 @@ pub struct CallGraphOutcome {
     pub source_root: String,
     pub algorithm: String,
     pub diagnostics: Vec<String>,
+    pub reachability: Vec<MethodReachability>,
     pub edges: Vec<RawCallEdge>,
 }
 impl CallGraphOutcome {
@@ -89,6 +97,7 @@ impl CallGraphOutcome {
             source_root: request.source_root,
             algorithm: algorithm.into(),
             diagnostics: vec![],
+            reachability: vec![],
             edges: vec![],
         }
     }
@@ -101,6 +110,7 @@ impl CallGraphOutcome {
             source_root: request.source_root.clone(),
             algorithm: "".into(),
             diagnostics: vec![format!("No call-graph provider for {:?}", request.language)],
+            reachability: vec![],
             edges: vec![],
         }
     }
