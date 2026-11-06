@@ -25,6 +25,9 @@ class MavenBytecodeArtifactsTest {
     assertTrue(
         preparation.artifacts().applicationClassDirs().stream()
             .anyMatch(path -> path.endsWith("service/target/classes")));
+    assertTrue(
+        preparation.artifacts().testClassDirs().stream()
+            .anyMatch(path -> path.endsWith("service/target/test-classes")));
     assertFalse(preparation.artifacts().dependencyJars().isEmpty());
   }
 
@@ -52,6 +55,7 @@ class MavenBytecodeArtifactsTest {
     writeModulePom(root.resolve("service"), "service", version, "base");
     writeJava(root.resolve("base/src/main/java/fixture/Base.java"), "package fixture; public class Base { public static void work() {} }");
     writeJava(root.resolve("service/src/main/java/fixture/Main.java"), "package fixture; public class Main { public static void main(String[] args) { Base.work(); } }");
+    writeJava(root.resolve("service/src/test/java/fixture/MainTest.java"), "package fixture; public class MainTest { public void testMain() { Main.main(new String[0]); } }");
     return root.resolve("service/src/main/java");
   }
 
