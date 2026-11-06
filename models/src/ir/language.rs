@@ -4,3 +4,7 @@ pub enum Language {
     Python,
     Go,
 }
+
+impl Language {
+    pub const ALL: [Self; 3] = [Self::Java, Self::Python, Self::Go];
+}
