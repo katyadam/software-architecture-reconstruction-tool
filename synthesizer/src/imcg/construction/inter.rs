@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 
-use models::{CallStatement, Callable, configuration::ServiceDescription};
+use models::{CallStatement, Callable, ResolvedCallEdge, configuration::ServiceDescription};
 
 use crate::{
     errors::builder::BuilderError,
@@ -12,11 +13,14 @@ use crate::{
     utils::assign_service_description_to_file,
 };
 
+/// Builds an inter-service method call graph from syntactic and resolved static edges.
 pub trait ImcgBuilder {
+    /// Produces an IMCG, merging external resolved edges with existing syntactic and service edges.
     fn build(
         &self,
         callables: &[Callable],
         call_statements: &[CallStatement],
+        resolved_call_edges: &[ResolvedCallEdge],
         service_descs: &[ServiceDescription],
         sdg: &Sdg,
     ) -> Result<Imcg, BuilderError>;
@@ -31,6 +35,7 @@ impl Default for ImcgBuilderImpl {
 }
 
 impl ImcgBuilderImpl {
+    /// Creates the stateless default IMCG builder.
     pub fn new() -> Self {
         Self {}
     }
@@ -92,6 +97,7 @@ impl ImcgBuilder for ImcgBuilderImpl {
         &self,
         callables: &[Callable],
         call_statements: &[CallStatement],
+        resolved_call_edges: &[ResolvedCallEdge],
         service_descs: &[ServiceDescription],
         sdg: &Sdg,
     ) -> Result<Imcg, BuilderError> {
@@ -102,6 +108,25 @@ impl ImcgBuilder for ImcgBuilderImpl {
 
         let mut imcg_calls = self.create_imcg_calls(sdg, &callables_map)?;
         let mut merged_calls = intra_cg.calls;
+        // Add only known and distinct provider edges; unresolved or duplicate data cannot
+        // introduce speculative relationships into the reconstructed architecture.
+        let mut seen_resolved = HashSet::new();
+        for edge in resolved_call_edges {
+            if service_callables
+                .iter()
+                .any(|c| c.callable.signature == edge.source_id)
+                && service_callables
+                    .iter()
+                    .any(|c| c.callable.signature == edge.target_id)
+                && seen_resolved.insert((edge.source_id.clone(), edge.target_id.clone()))
+            {
+                merged_calls.push(Call::new(
+                    edge.source_id.clone(),
+                    edge.target_id.clone(),
+                    None,
+                ));
+            }
+        }
         merged_calls.append(&mut imcg_calls);
 
         Ok(Imcg::new(intra_cg.callables, merged_calls))

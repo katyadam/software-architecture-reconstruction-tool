@@ -1,4 +1,4 @@
-use models::{CallStatement, Callable};
+use models::{CallStatement, Callable, ResolvedCallEdge};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -41,6 +41,8 @@ pub struct PostIMCG {
         }
     ]))]
     pub call_statements: Vec<CallStatement>,
+    #[serde(default)]
+    pub resolved_call_edges: Vec<ResolvedCallEdge>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema, Debug)]
