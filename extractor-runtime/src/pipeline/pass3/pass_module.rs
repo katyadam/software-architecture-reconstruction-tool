@@ -10,10 +10,10 @@
 use std::collections::HashMap;
 
 use models::{
-    ParsedCallable,
+    ParsedCallable, Scope,
     ir::{
         ast::{CallableAst, Expr},
-        project::ProjectIR,
+        project::{ImportKind, ProjectIR, TypedFileRecord},
     },
 };
 use statix::symbolic_evaluation_with_env;
@@ -21,7 +21,7 @@ use statix::symbolic_evaluation_with_env;
 use crate::pipeline::{
     pass2::callables::mangle_callable_name,
     pass3::{
-        callables::build_file_local_callables, constants::constants_to_env,
+        callables::build_file_local_callables, env::build_constants_env,
         language_backend::evaluation_for, pass_attr::PerFileAttrMap,
     },
 };
@@ -44,6 +44,10 @@ type Env = HashMap<String, (Option<String>, Expr)>;
 /// 1. Project constants (from Pass 2).
 /// 2. CLI `external_constants` (only fill gaps).
 /// 3. Per-file attribute defaults from `pass_attr::resolve_all`.
+/// 4. Second round only: values of the file's imported constants.
+///
+/// A project constant the file rebinds is not seeded, so an unresolvable rebinding
+/// drops the name instead of harvesting another file's value.
 ///
 /// Files whose language has no synthetic `<module>` callable (or whose module
 /// body produces no literals) simply contribute no entry to the result.
@@ -53,16 +57,17 @@ pub fn resolve_all(
     external_constants: &HashMap<String, String>,
     per_file_attrs: &PerFileAttrMap,
 ) -> PerFileModuleConsts {
-    let base_env = build_base_env(project_ir, external_constants);
+    let base_env = build_constants_env(&project_ir.constants, external_constants);
 
     let mut result = PerFileModuleConsts::new();
 
     for file in &project_ir.files {
         let Some(literals) = evaluate_module(
             file,
-            &project_ir.callable_map,
+            project_ir,
             &base_env,
             per_file_attrs.get(&file.file_path),
+            &HashMap::new(),
         ) else {
             continue;
         };
@@ -72,35 +77,86 @@ pub fn resolve_all(
         }
     }
 
+    // ponytail: one round read from a snapshot, a re-export of a re-export sees round-one values.
+    let second_round: PerFileModuleConsts = project_ir
+        .files
+        .iter()
+        .filter_map(|file| {
+            let imported =
+                imported_constants(file, project_ir, external_constants, &base_env, &result);
+            if imported.is_empty() {
+                return None;
+            }
+            let literals = evaluate_module(
+                file,
+                project_ir,
+                &base_env,
+                per_file_attrs.get(&file.file_path),
+                &imported,
+            )?;
+            Some((file.file_path.clone(), literals))
+        })
+        .collect();
+    result.extend(second_round);
+
     result
 }
 
-/// Build the shared base env: project constants layered above CLI externals.
-fn build_base_env(project_ir: &ProjectIR, external_constants: &HashMap<String, String>) -> Env {
-    let mut env = constants_to_env(&project_ir.constants);
-    for (name, value) in external_constants {
-        let trimmed = value
-            .trim_matches(|c: char| c == '"' || c == '\'')
-            .to_string();
-        env.entry(name.clone())
-            .or_insert_with(|| (Some("String".to_string()), Expr::Literal(trimmed)));
-    }
-    env
+/// Imported constants whose source value differs from the seed; external-only names keep priority.
+fn imported_constants(
+    file: &TypedFileRecord,
+    project_ir: &ProjectIR,
+    external_constants: &HashMap<String, String>,
+    base_env: &Env,
+    harvested: &PerFileModuleConsts,
+) -> HashMap<String, String> {
+    file.imports
+        .iter()
+        .filter_map(|import| {
+            let name = &import.codeword;
+            let resolved = project_ir.import_graph.lookup(&file.file_path, name)?;
+            if !matches!(resolved.kind, ImportKind::Constant) {
+                return None;
+            }
+            if external_constants.contains_key(name) && !project_ir.constants.contains_key(name) {
+                return None;
+            }
+            let value = harvested
+                .get(&resolved.source_file)?
+                .get(&resolved.fully_qualified_name)?;
+            let seeded = matches!(base_env.get(name), Some((_, Expr::Literal(v))) if v == value);
+            (!seeded).then(|| (name.clone(), value.clone()))
+        })
+        .collect()
 }
 
 /// Returns `None` if the file has no `<module>` callable (e.g. Java).
 fn evaluate_module(
-    file: &models::ir::project::TypedFileRecord,
-    global_callables: &HashMap<String, ParsedCallable>,
+    file: &TypedFileRecord,
+    project_ir: &ProjectIR,
     base_env: &Env,
     file_attrs: Option<&HashMap<String, String>>,
+    imported: &HashMap<String, String>,
 ) -> Option<HashMap<String, String>> {
-    let mut callables = build_file_local_callables(file, global_callables);
+    let mut callables = build_file_local_callables(file, &project_ir.callable_map);
     let evaluator = evaluation_for(file.language)?;
     let mangled = mangle_callable_name(MODULE_CALLABLE_NAME, file.language);
 
     let module_pc = callables.remove(&mangled)?;
-    let seed_env = build_seed_env(base_env, file_attrs);
+    let mut seed_env = build_seed_env(base_env, file_attrs);
+    for key in file.assignments.keys() {
+        if matches!(key.scope, Scope::Global)
+            && project_ir.constants.contains_key(&key.variable_name)
+        {
+            seed_env.remove(&key.variable_name);
+        }
+    }
+    for (name, value) in imported {
+        seed_env.insert(
+            name.clone(),
+            (Some("String".to_string()), Expr::Literal(value.clone())),
+        );
+    }
     let final_env = run_statements(&mut callables, &mangled, module_pc, evaluator, seed_env);
     Some(harvest_literals(final_env))
 }

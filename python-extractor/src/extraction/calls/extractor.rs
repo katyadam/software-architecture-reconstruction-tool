@@ -6,68 +6,10 @@ use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 
 use crate::extraction::{
     calls::{PythonCallStatement, source_span::last_class_last_function_span},
-    common::node_text,
+    common::find_enclosing_information,
     extractor::{ExtractParams, Extractor},
     queries::CALL_QUERY,
 };
-
-/// Walks the parent chain to find the nearest enclosing `function_definition`
-/// and `class_definition` of `node`. Returns a 3-tuple of:
-/// - the full function signature (`"name(params) -> return_type"`), or `None`
-/// - the enclosing class name, or `None`
-/// - the SHA-256 hex hash of the function body (for deduplication), or `None`
-fn find_enclosing_information(
-    mut node: Node,
-    code: &str,
-) -> (Option<String>, Option<String>, Option<String>) {
-    let mut function_node: Option<Node> = None;
-    let mut class_node: Option<Node> = None;
-
-    while let Some(parent) = node.parent() {
-        match parent.kind() {
-            "function_definition" if function_node.is_none() => function_node = Some(parent),
-            "class_definition" if class_node.is_none() => class_node = Some(parent),
-            _ => {}
-        }
-
-        // Optimization: stop if we found both
-        if function_node.is_some() && class_node.is_some() {
-            break;
-        }
-        node = parent;
-    }
-
-    let mut function_name_full = None;
-    let mut function_hash = None;
-
-    if let Some(f_node) = function_node {
-        let name = f_node
-            .child_by_field_name("name")
-            .map(|n| node_text(n, code))
-            .unwrap_or("unknown");
-
-        let params = f_node
-            .child_by_field_name("parameters")
-            .map(|n| node_text(n, code))
-            .unwrap_or("()");
-
-        let return_type = f_node
-            .child_by_field_name("return_type")
-            .map(|n| node_text(n, code))
-            .unwrap_or("Any");
-
-        function_name_full = Some(format!("{}{} -> {}", name, params, return_type));
-
-        function_hash = Some(statix::strings::hash_text(node_text(f_node, code)));
-    }
-
-    // 3. Process Class Information
-    let class_name = class_node
-        .and_then(|n| n.child_by_field_name("name"))
-        .map(|n| node_text(n, code).to_string());
-
-    (function_name_full, class_name, function_hash)
-}
 
 pub struct CallsExtractor;
 

@@ -4,7 +4,9 @@ mod flask;
 mod method_decorator;
 mod strategy;
 
-pub(crate) use decorator::{DecoratorEndpointMatch, collect_decorator_matches, decorator_query};
+pub(crate) use decorator::{
+    DecoratorEndpointMatch, collect_decorator_matches, decorator_query, normalize_python_route,
+};
 pub(crate) use strategy::IdentificationStrategy;
 
 use django::{DjangoApiViewIdentificationStrategy, DjangoUrlpatternsIdentificationStrategy};

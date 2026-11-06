@@ -206,45 +206,6 @@ func startRest() {
 }
 
 #[test]
-fn extracts_gin_group_routes() {
-    let code = r#"
-package main
-
-func health() {}
-func getCustomer() {}
-func addItemToBasket() {}
-
-func startRest() {
-    router := gin.Default()
-    routerGroup := router.Group("/api")
-    routerGroup.GET("/customers/:id", getCustomer)
-    routerGroup.POST("/customer-basket", addItemToBasket)
-    routerGroup.GET("/health", health)
-}
-"#;
-
-    let record = extract_syntactic(code, "gin_group.go").expect("Go extraction should succeed");
-    assert!(
-        record
-            .endpoints
-            .iter()
-            .any(|e| e.uri == "/api/customers/:id" && e.http_method == models::HttpMethod::GET)
-    );
-    assert!(
-        record
-            .endpoints
-            .iter()
-            .any(|e| e.uri == "/api/customer-basket" && e.http_method == models::HttpMethod::POST)
-    );
-    assert!(
-        record
-            .endpoints
-            .iter()
-            .any(|e| { e.uri == "/api/health" && e.http_method == models::HttpMethod::GET })
-    );
-}
-
-#[test]
 fn resolves_service_hosts_from_init_assignments() {
     let code = r#"
 package main
@@ -556,5 +517,218 @@ func load() {
     assert_eq!(
         typed.raw_restcalls[0].target_uri,
         "http://inventory-service/items"
+    );
+}
+
+fn single_endpoint(code: &str) -> models::Endpoint {
+    let record = extract_syntactic(code, "x.go").expect("Go extraction should succeed");
+    assert_eq!(record.endpoints.len(), 1, "{:?}", record.endpoints);
+    record.endpoints.into_iter().next().expect("one endpoint")
+}
+
+#[test]
+fn go_chi_endpoint_records_router_and_function() {
+    let endpoint = single_endpoint(
+        r#"
+package main
+
+func routes() http.Handler { r := chi.NewRouter(); r.Get("/status", h); return r }
+"#,
+    );
+    assert_eq!(endpoint.uri, "/status");
+    assert_eq!(endpoint.http_method, models::HttpMethod::GET);
+    assert_eq!(endpoint.router_variable.as_deref(), Some("r"));
+    assert_eq!(endpoint.enclosing_function.as_deref(), Some("routes"));
+}
+
+#[test]
+fn go_method_endpoint_records_bare_function_name() {
+    let endpoint = single_endpoint(
+        r#"
+package main
+
+import "net/http"
+
+func (s *Server) register() { mux := http.NewServeMux(); mux.HandleFunc("GET /items", s.list) }
+"#,
+    );
+    assert_eq!(endpoint.uri, "/items");
+    assert_eq!(endpoint.http_method, models::HttpMethod::GET);
+    assert_eq!(endpoint.router_variable.as_deref(), Some("mux"));
+    assert_eq!(endpoint.enclosing_function.as_deref(), Some("register"));
+}
+
+#[test]
+fn go_gorilla_endpoint_records_inner_receiver() {
+    let endpoint = single_endpoint(
+        r#"
+package main
+
+import "github.com/gorilla/mux"
+
+func setup(r *mux.Router) { r.HandleFunc("/pay", Pay).Methods("POST") }
+"#,
+    );
+    assert_eq!(endpoint.uri, "/pay");
+    assert_eq!(endpoint.http_method, models::HttpMethod::POST);
+    assert_eq!(endpoint.router_variable.as_deref(), Some("r"));
+    assert_eq!(endpoint.enclosing_function.as_deref(), Some("setup"));
+}
+
+#[test]
+fn go_package_level_registration_has_no_router() {
+    let endpoint = single_endpoint(
+        r#"
+package main
+
+import "net/http"
+
+func main() { http.HandleFunc("GET /health", h) }
+"#,
+    );
+    assert_eq!(endpoint.uri, "/health");
+    assert_eq!(endpoint.http_method, models::HttpMethod::GET);
+    assert_eq!(endpoint.router_variable, None);
+    assert_eq!(endpoint.enclosing_function.as_deref(), Some("main"));
+}
+
+#[test]
+fn go_closure_registration_uses_outer_function() {
+    let endpoint = single_endpoint(
+        r#"
+package main
+
+func routes() { r := chi.NewRouter(); register := func() { r.Get("/x", h) }; register() }
+"#,
+    );
+    assert_eq!(endpoint.uri, "/x");
+    assert_eq!(endpoint.http_method, models::HttpMethod::GET);
+    assert_eq!(endpoint.router_variable.as_deref(), Some("r"));
+    assert_eq!(endpoint.enclosing_function.as_deref(), Some("routes"));
+}
+
+#[test]
+fn go_gorilla_receiverless_registration_is_kept() {
+    let endpoint = single_endpoint(
+        r#"
+package main
+
+import "github.com/gorilla/mux"
+
+func setup() { HandleFunc("/x", h).Methods("GET") }
+"#,
+    );
+    assert_eq!(endpoint.uri, "/x");
+    assert_eq!(endpoint.http_method, models::HttpMethod::GET);
+    assert_eq!(endpoint.router_variable, None);
+    assert_eq!(endpoint.enclosing_function.as_deref(), Some("setup"));
+}
+
+#[test]
+fn go_top_level_registration_has_no_enclosing_function() {
+    let endpoint = single_endpoint(
+        r#"
+package main
+
+var r = chi.NewRouter()
+var _ = r.Get("/top", h)
+"#,
+    );
+    assert_eq!(endpoint.uri, "/top");
+    assert_eq!(endpoint.http_method, models::HttpMethod::GET);
+    assert_eq!(endpoint.router_variable.as_deref(), Some("r"));
+    assert_eq!(endpoint.enclosing_function, None);
+}
+
+#[test]
+fn gin_group_route_path_is_relative() {
+    let endpoint = single_endpoint(
+        r#"
+package main
+
+func startRest() {
+    router := gin.Default()
+    routerGroup := router.Group("/api")
+    routerGroup.GET("/customers/:id", getCustomer)
+}
+"#,
+    );
+    assert_eq!(endpoint.uri, "/customers/:id");
+    assert_eq!(endpoint.router_variable.as_deref(), Some("routerGroup"));
+}
+
+#[test]
+fn chi_router_parameter_extracted() {
+    let endpoint = single_endpoint(
+        r#"
+package main
+
+import "github.com/go-chi/chi/v5"
+
+func routes(r chi.Router) { r.Get("/status", status) }
+"#,
+    );
+    assert_eq!(endpoint.uri, "/status");
+    assert_eq!(endpoint.http_method, models::HttpMethod::GET);
+    assert_eq!(endpoint.router_variable.as_deref(), Some("r"));
+    assert_eq!(endpoint.enclosing_function.as_deref(), Some("routes"));
+}
+
+#[test]
+fn serve_mux_parameter_on_method() {
+    let endpoint = single_endpoint(
+        r#"
+package main
+
+import "net/http"
+
+func (s *Server) register(mux *http.ServeMux) { mux.HandleFunc("GET /items", s.list) }
+"#,
+    );
+    assert_eq!(endpoint.uri, "/items");
+    assert_eq!(endpoint.http_method, models::HttpMethod::GET);
+    assert_eq!(endpoint.enclosing_function.as_deref(), Some("register"));
+}
+
+#[test]
+fn unrelated_parameter_type_ignored() {
+    let code = r#"
+package main
+
+type Cache struct{}
+
+func f(c *Cache) { c.Get("/key", v) }
+"#;
+    let record = extract_syntactic(code, "x.go").expect("Go extraction should succeed");
+    assert!(record.endpoints.is_empty(), "{:?}", record.endpoints);
+}
+
+#[test]
+fn gin_context_parameter_ignored() {
+    let code = r#"
+package main
+
+import "github.com/gin-gonic/gin"
+
+func h(c *gin.Context) { c.Get("/key", v) }
+"#;
+    let record = extract_syntactic(code, "x.go").expect("Go extraction should succeed");
+    assert!(record.endpoints.is_empty(), "{:?}", record.endpoints);
+}
+
+#[test]
+fn closure_parameter_not_extracted() {
+    let code = r#"
+package main
+
+import "github.com/go-chi/chi/v5"
+
+func routes(r chi.Router) { s.Register(func(r chi.Router) { r.Get("/x", h) }) }
+"#;
+    let record = extract_syntactic(code, "x.go").expect("Go extraction should succeed");
+    assert!(
+        record.endpoints.iter().all(|e| e.uri != "/x"),
+        "{:?}",
+        record.endpoints
     );
 }

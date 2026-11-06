@@ -1,6 +1,8 @@
 pub mod extractor;
 mod identification;
 
+pub(crate) use identification::normalize_python_route;
+
 use crate::extraction::extractor::ExtractParams;
 use models::Endpoint;
 

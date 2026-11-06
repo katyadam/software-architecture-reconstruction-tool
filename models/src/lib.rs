@@ -11,6 +11,7 @@ pub mod enums;
 pub mod imports;
 pub mod ir;
 pub mod restcalls;
+pub mod route_facts;
 pub mod source_code;
 
 pub use api::CodeElementsAggregate;
@@ -24,3 +25,4 @@ pub use endpoints::Endpoint;
 pub use entities::{Entity, Field};
 pub use imports::Import;
 pub use restcalls::RestCall;
+pub use route_facts::RouteFact;

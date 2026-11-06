@@ -8,6 +8,7 @@ mod ir;
 mod package_resolution;
 mod project;
 pub mod restcalls;
+pub mod route_facts;
 mod shared;
 
 use std::{collections::HashMap, path::Path};
@@ -44,15 +45,14 @@ pub fn extract_syntactic(text: &str, file_path: &str) -> Result<FileRecord, Extr
         &mut assignments,
     );
 
-    let mut synthetic_callables = Vec::new();
-    let endpoints = endpoints::collect_endpoints(
+    let (endpoints, synthetic_callables) = endpoints::collect_endpoints(
         root,
         text,
         file_path,
         &assignments,
         &imports,
         &callable_lookup,
-        &mut synthetic_callables,
+        &call_statements,
     );
     callables.extend(synthetic_callables);
 

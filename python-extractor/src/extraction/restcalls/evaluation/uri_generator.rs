@@ -49,7 +49,13 @@ fn get_resolved_parts(
 
     for part in template.split('+') {
         let part = part.trim();
-        let lookup_key = part.trim_end_matches(".value");
+        // A whole-part `{name}` hole looks up `name`.
+        let lookup_key = part
+            .strip_prefix('{')
+            .and_then(|hole| hole.strip_suffix('}'))
+            .filter(|name| !name.contains(['{', '}']))
+            .unwrap_or(part)
+            .trim_end_matches(".value");
         let expr = analysis_result.final_env.get(lookup_key);
 
         if part.starts_with('"') && part.ends_with('"') {
@@ -59,7 +65,7 @@ fn get_resolved_parts(
 
         match expr {
             Some((_, Expr::Literal(s))) => {
-                if s.contains('{') || s.starts_with('f') {
+                if s.contains('{') || s.starts_with("f\"") || s.starts_with("f'") {
                     all_parts.extend(resolve_fstring(s, analysis_result, enums_map));
                 } else {
                     all_parts.push(vec![s.clone()]);
@@ -108,8 +114,10 @@ fn resolve_fstring(
     let mut resolved_parts = Vec::new();
     let mut current_literal = String::new();
 
+    // `f` is a prefix only before a quote: `foo/{id}` keeps it.
     let content = string_literal
         .strip_prefix('f')
+        .filter(|rest| rest.starts_with(['"', '\'']))
         .unwrap_or(string_literal)
         .trim_matches(|c| c == '"' || c == '\'');
 

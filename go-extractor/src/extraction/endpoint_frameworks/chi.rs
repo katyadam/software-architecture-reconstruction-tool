@@ -3,8 +3,8 @@ use crate::extraction::shared::{
 };
 
 use super::shared::{
-    call_arguments, is_known_router_receiver, join_route_prefix, looks_like_http_path,
-    normalized_handler, router_prefix,
+    ROUTER_PARAMETER_TYPES, call_arguments, closure_router, is_known_router_receiver,
+    is_router_parameter, looks_like_http_path, normalized_handler, router_variable,
 };
 use super::{EndpointIdentificationStrategy, EndpointMatch, ExtractParams};
 
@@ -13,40 +13,36 @@ pub(super) struct ChiStrategy;
 impl EndpointIdentificationStrategy for ChiStrategy {
     fn identify(&self, params: &ExtractParams<'_>) -> Option<EndpointMatch> {
         let function_node = params.node.child_by_field_name("function")?;
-        let prefix = router_prefix(
-            function_node,
-            params.code,
-            params.assignments,
-            params.imports,
-        )?;
-        if prefix.is_empty()
-            && !is_known_router_receiver(
+        // Closure first: `receiver_origin` would pick up a same-named outer router.
+        let router = match closure_router(function_node, params) {
+            Some(router) => Some(router),
+            None if is_known_router_receiver(
                 function_node,
                 params.code,
                 params.assignments,
                 params.imports,
-            )
-        {
-            return None;
-        }
+            ) || is_router_parameter(function_node, params, ROUTER_PARAMETER_TYPES) =>
+            {
+                router_variable(function_node, params)
+            }
+            None => return None,
+        };
         let selector = selector_name(function_node, params.code)?;
         let arguments = call_arguments(params.node);
 
         match selector.as_str() {
-            "Get" | "Post" | "Put" | "Delete" | "Patch" | "Options" | "Head" => {
-                identify_two_arg_route(&prefix, selector.as_str(), &arguments, params)
-            }
-            _ if is_http_method_selector(selector.as_str()) => {
-                identify_two_arg_route(&prefix, selector.as_str(), &arguments, params)
+            s if matches!(
+                s,
+                "Get" | "Post" | "Put" | "Delete" | "Patch" | "Options" | "Head"
+            ) || is_http_method_selector(s) =>
+            {
+                identify_two_arg_route(s, &arguments, router, params)
             }
             "Method" | "MethodFunc" => {
                 if arguments.len() < 3 {
                     return None;
                 }
-                let path = join_route_prefix(
-                    &prefix,
-                    &evaluate_expression_node(arguments[1], params.code, params.globals),
-                );
+                let path = evaluate_expression_node(arguments[1], params.code, params.globals);
                 if !looks_like_http_path(&path) {
                     return None;
                 }
@@ -58,6 +54,7 @@ impl EndpointIdentificationStrategy for ChiStrategy {
                     ))?,
                     path,
                     handler: normalized_handler(arguments[2], params.code),
+                    router,
                 })
             }
             _ => None,
@@ -66,18 +63,15 @@ impl EndpointIdentificationStrategy for ChiStrategy {
 }
 
 fn identify_two_arg_route(
-    prefix: &str,
     selector: &str,
     arguments: &[tree_sitter::Node<'_>],
+    router: Option<String>,
     params: &ExtractParams<'_>,
 ) -> Option<EndpointMatch> {
     if arguments.len() < 2 {
         return None;
     }
-    let path = join_route_prefix(
-        prefix,
-        &evaluate_expression_node(arguments[0], params.code, params.globals),
-    );
+    let path = evaluate_expression_node(arguments[0], params.code, params.globals);
     if !looks_like_http_path(&path) {
         return None;
     }
@@ -85,5 +79,6 @@ fn identify_two_arg_route(
         method: parse_http_method_value(selector)?,
         path,
         handler: normalized_handler(arguments[1], params.code),
+        router,
     })
 }

@@ -97,20 +97,16 @@ fn should_parse_spring_controller_and_populate_aggregate_correctly() {
 
     assert_eq!(record.endpoints.len(), 9);
 
-    // All endpoints must carry the class-level prefix
+    // All endpoints must carry the class-level prefix chain; pass 3 joins it.
     assert!(
-        record
-            .endpoints
-            .iter()
-            .all(|e| e.uri.starts_with("/api/v1/foodservice/")),
-        "All endpoints must carry the /api/v1/foodservice/ prefix"
+        record.endpoints.iter().all(|e| e.route_prefixes.len() == 1
+            && e.route_prefixes[0].len() == 1
+            && e.route_prefixes[0][0].expr == "\"/api/v1/foodservice\""),
+        "All endpoints must carry the /api/v1/foodservice prefix chain"
     );
 
     // Spot-check a specific endpoint
-    let welcome = record
-        .endpoints
-        .iter()
-        .find(|e| e.uri == "/api/v1/foodservice/welcome");
+    let welcome = record.endpoints.iter().find(|e| e.uri == "/welcome");
     assert!(
         welcome.is_some(),
         "GET /api/v1/foodservice/welcome should be present"
@@ -121,7 +117,7 @@ fn should_parse_spring_controller_and_populate_aggregate_correctly() {
     let order_by_id: Vec<_> = record
         .endpoints
         .iter()
-        .filter(|e| e.uri == "/api/v1/foodservice/orders/{orderId}")
+        .filter(|e| e.uri == "/orders/{orderId}")
         .collect();
     assert_eq!(
         order_by_id.len(),

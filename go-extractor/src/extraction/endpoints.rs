@@ -1,14 +1,18 @@
 use std::collections::{HashMap, HashSet};
 
 use models::{
-    Assignment, AssignmentKey, Callable, Endpoint, HttpMethod, Import, Namespace, ParsedCallable,
+    Assignment, AssignmentKey, Callable, Endpoint, HttpMethod, Import, Namespace,
+    ParsedCallStatement, ParsedCallable,
 };
 use statix::strings::hash_text;
 use tree_sitter::Node;
 
-use super::endpoint_frameworks::{ExtractParams, strategies};
+use super::endpoint_frameworks::{
+    ClosureRouter, EndpointMatch, ExtractParams, closure_routers, strategies,
+};
 use super::shared::{
-    SYNTHETIC_HANDLER_PREFIX, format_http_method, lookup_callable, scope_bindings, walk_named,
+    SYNTHETIC_HANDLER_PREFIX, format_http_method, lookup_callable, node_text, scope_bindings,
+    walk_named,
 };
 
 pub(super) fn collect_endpoints(
@@ -18,9 +22,11 @@ pub(super) fn collect_endpoints(
     assignments: &HashMap<AssignmentKey, Assignment>,
     imports: &[Import],
     callable_lookup: &HashMap<String, Callable>,
-    synthetic_callables: &mut Vec<ParsedCallable>,
-) -> Vec<Endpoint> {
+    call_statements: &[ParsedCallStatement],
+) -> (Vec<Endpoint>, Vec<ParsedCallable>) {
     let globals = scope_bindings(assignments, &models::Scope::Global);
+    let closures = closure_routers(call_statements, imports);
+    let mut synthetic_callables = Vec::new();
     let mut synthetic_hashes = HashSet::new();
     let mut endpoints = Vec::new();
 
@@ -36,15 +42,16 @@ pub(super) fn collect_endpoints(
             &globals,
             assignments,
             imports,
+            &closures,
             callable_lookup,
-            synthetic_callables,
+            &mut synthetic_callables,
             &mut synthetic_hashes,
         ) {
             endpoints.push(endpoint);
         }
     });
 
-    endpoints
+    (endpoints, synthetic_callables)
 }
 
 fn endpoint_from_call(
@@ -54,6 +61,7 @@ fn endpoint_from_call(
     globals: &HashMap<String, String>,
     assignments: &HashMap<AssignmentKey, Assignment>,
     imports: &[Import],
+    closures: &[ClosureRouter<'_>],
     callable_lookup: &HashMap<String, Callable>,
     synthetic_callables: &mut Vec<ParsedCallable>,
     synthetic_hashes: &mut HashSet<String>,
@@ -64,14 +72,14 @@ fn endpoint_from_call(
         globals,
         assignments,
         imports,
+        closures,
     };
     for strategy in strategies() {
         if let Some(endpoint) = strategy.identify(&params) {
             return Some(build_endpoint(
                 file_path,
-                &endpoint.path,
-                endpoint.method,
-                &endpoint.handler,
+                endpoint,
+                enclosing_function(node, code),
                 callable_lookup,
                 synthetic_callables,
                 synthetic_hashes,
@@ -82,20 +90,27 @@ fn endpoint_from_call(
     None
 }
 
+/// Name of the nearest enclosing function or method declaration; closures are skipped.
+fn enclosing_function(node: Node, code: &str) -> Option<String> {
+    std::iter::successors(node.parent(), |n| n.parent())
+        .find(|n| matches!(n.kind(), "function_declaration" | "method_declaration"))?
+        .child_by_field_name("name")
+        .map(|name| node_text(name, code).to_string())
+}
+
 fn build_endpoint(
     file_path: &str,
-    uri: &str,
-    method: HttpMethod,
-    handler_expr: &str,
+    endpoint: EndpointMatch,
+    enclosing_function: Option<String>,
     callable_lookup: &HashMap<String, Callable>,
     synthetic_callables: &mut Vec<ParsedCallable>,
     synthetic_hashes: &mut HashSet<String>,
 ) -> Endpoint {
     let callable = resolve_handler_callable(
         file_path,
-        handler_expr,
-        uri,
-        &method,
+        &endpoint.handler,
+        &endpoint.path,
+        &endpoint.method,
         callable_lookup,
         synthetic_callables,
         synthetic_hashes,
@@ -103,11 +118,13 @@ fn build_endpoint(
     Endpoint {
         function_name: callable.signature.clone(),
         function_hash: callable.hash,
-        http_method: method,
+        http_method: endpoint.method,
         parameters: vec![],
-        uri: uri.to_string(),
+        uri: endpoint.path,
         file_path: file_path.to_string(),
-        router_variable: None,
+        router_variable: endpoint.router,
+        enclosing_function,
+        route_prefixes: vec![],
     }
 }
 

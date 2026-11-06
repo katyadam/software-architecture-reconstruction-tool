@@ -2,9 +2,17 @@ use java_extractor::{
     extraction::{endpoints::extractor::EndpointsExtractor, extractor::Extractor},
     s,
 };
-use models::{Endpoint, HttpMethod, Parameter};
+use models::{Endpoint, HttpMethod, Parameter, endpoints::PrefixExpr};
 
 use crate::java::utils::{get_tree, load_file, parse_file};
+
+/// Single literal class-prefix chain, as the extractor records it.
+fn class_prefix(file: &str, prefix: &str) -> Vec<Vec<PrefixExpr>> {
+    vec![vec![PrefixExpr {
+        file_path: file.to_string(),
+        expr: format!("\"{prefix}\""),
+    }]]
+}
 
 #[test]
 fn test_spring_endpoints() {
@@ -19,18 +27,22 @@ fn test_spring_endpoints() {
             function_hash: s!("045a36e9dca12d9a9140d8f6bb4341ab7e328984662c9019b72e00cf7504ca57"),
             http_method: HttpMethod::GET,
             parameters: vec![],
-            uri: s!("/api/v1/foodservice/welcome"),
+            uri: s!("/welcome"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix("./examples/FoodController.java", "/api/v1/foodservice"),
         },
         Endpoint {
             function_name: s!("boolean test_send_delivery()"),
             function_hash: s!("3f5d2ea2debdf3fe3398710182abae56fa4e0dd51e7fb2e3273a1b94a866c478"),
             http_method: HttpMethod::GET,
             parameters: vec![],
-            uri: s!("/api/v1/foodservice/test_send_delivery"),
+            uri: s!("/test_send_delivery"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix("./examples/FoodController.java", "/api/v1/foodservice"),
         },
         Endpoint {
             function_name: s!("HttpEntity findAllFoodOrder(@RequestHeader HttpHeaders headers)"),
@@ -41,9 +53,11 @@ fn test_spring_endpoints() {
                 datatype: Some(s!("HttpHeaders")),
                 initial_value: None,
             }],
-            uri: s!("/api/v1/foodservice/orders"),
+            uri: s!("/orders"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix("./examples/FoodController.java", "/api/v1/foodservice"),
         },
         Endpoint {
             function_name: s!(
@@ -63,9 +77,11 @@ fn test_spring_endpoints() {
                     initial_value: None,
                 },
             ],
-            uri: s!("/api/v1/foodservice/orders"),
+            uri: s!("/orders"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix("./examples/FoodController.java", "/api/v1/foodservice"),
         },
         Endpoint {
             function_name: s!(
@@ -85,9 +101,11 @@ fn test_spring_endpoints() {
                     initial_value: None,
                 },
             ],
-            uri: s!("/api/v1/foodservice/createOrderBatch"),
+            uri: s!("/createOrderBatch"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix("./examples/FoodController.java", "/api/v1/foodservice"),
         },
         Endpoint {
             function_name: s!(
@@ -107,9 +125,11 @@ fn test_spring_endpoints() {
                     initial_value: None,
                 },
             ],
-            uri: s!("/api/v1/foodservice/orders"),
+            uri: s!("/orders"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix("./examples/FoodController.java", "/api/v1/foodservice"),
         },
         Endpoint {
             function_name: s!(
@@ -129,9 +149,11 @@ fn test_spring_endpoints() {
                     initial_value: None,
                 },
             ],
-            uri: s!("/api/v1/foodservice/orders/{orderId}"),
+            uri: s!("/orders/{orderId}"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix("./examples/FoodController.java", "/api/v1/foodservice"),
         },
         Endpoint {
             function_name: s!(
@@ -151,9 +173,11 @@ fn test_spring_endpoints() {
                     initial_value: None,
                 },
             ],
-            uri: s!("/api/v1/foodservice/orders/{orderId}"),
+            uri: s!("/orders/{orderId}"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix("./examples/FoodController.java", "/api/v1/foodservice"),
         },
         Endpoint {
             function_name: s!(
@@ -188,9 +212,11 @@ fn test_spring_endpoints() {
                     initial_value: None,
                 },
             ],
-            uri: s!("/api/v1/foodservice/foods/{date}/{startStation}/{endStation}/{tripId}"),
+            uri: s!("/foods/{date}/{startStation}/{endStation}/{tripId}"),
             file_path: s!("./examples/FoodController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix("./examples/FoodController.java", "/api/v1/foodservice"),
         },
     ];
 
@@ -216,9 +242,14 @@ fn test_jaxrs_endpoints() {
                 datatype: Some(s!("Long")),
                 initial_value: None,
             }],
-            uri: s!("/call-graph-inputs/project/{projectId}"),
+            uri: s!("/project/{projectId}"),
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix(
+                "./examples/CallGraphController.java",
+                "/call-graph-inputs",
+            ),
         },
         Endpoint {
             function_name: s!(
@@ -231,9 +262,14 @@ fn test_jaxrs_endpoints() {
                 datatype: Some(s!("Long")),
                 initial_value: None,
             }],
-            uri: s!("/call-graph-inputs/{callGraphInputId}"),
+            uri: s!("/{callGraphInputId}"),
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix(
+                "./examples/CallGraphController.java",
+                "/call-graph-inputs",
+            ),
         },
         Endpoint {
             function_name: s!(
@@ -246,9 +282,14 @@ fn test_jaxrs_endpoints() {
                 datatype: Some(s!("Long")),
                 initial_value: None,
             }],
-            uri: s!("/call-graph-inputs/{callGraphInputId}/summary"),
+            uri: s!("/{callGraphInputId}/summary"),
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix(
+                "./examples/CallGraphController.java",
+                "/call-graph-inputs",
+            ),
         },
         Endpoint {
             function_name: s!(
@@ -268,9 +309,14 @@ fn test_jaxrs_endpoints() {
                     initial_value: None,
                 },
             ],
-            uri: s!("/call-graph-inputs/{callGraphInputId}/method-reachability"),
+            uri: s!("/{callGraphInputId}/method-reachability"),
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix(
+                "./examples/CallGraphController.java",
+                "/call-graph-inputs",
+            ),
         },
         Endpoint {
             function_name: s!(
@@ -283,9 +329,14 @@ fn test_jaxrs_endpoints() {
                 datatype: Some(s!("CallGraphInputDto")),
                 initial_value: None,
             }],
-            uri: s!("/call-graph-inputs"),
+            uri: s!(""),
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix(
+                "./examples/CallGraphController.java",
+                "/call-graph-inputs",
+            ),
         },
         Endpoint {
             function_name: s!("Response deleteCallGraphInputById(@PathParam(\"id\") Long id)"),
@@ -296,9 +347,14 @@ fn test_jaxrs_endpoints() {
                 datatype: Some(s!("Long")),
                 initial_value: None,
             }],
-            uri: s!("/call-graph-inputs/{id}"),
+            uri: s!("/{id}"),
             file_path: s!("./examples/CallGraphController.java"),
             router_variable: None,
+            enclosing_function: None,
+            route_prefixes: class_prefix(
+                "./examples/CallGraphController.java",
+                "/call-graph-inputs",
+            ),
         },
     ];
 
@@ -328,7 +384,7 @@ fn test_endpoint_edge_cases() {
         "Expected exactly 1 PATCH endpoint"
     );
     assert!(patch_endpoints[0].function_name.contains("partialUpdate"));
-    assert_eq!(patch_endpoints[0].uri, s!("/api/v1/products/{id}"));
+    assert_eq!(patch_endpoints[0].uri, s!("/{id}"));
 
     // Edge case 2: Multi-level nested path with two path variables
     let review_endpoint = endpoints
@@ -336,10 +392,7 @@ fn test_endpoint_edge_cases() {
         .find(|e| e.function_name.contains("getProductReview"))
         .unwrap();
     assert_eq!(review_endpoint.http_method, HttpMethod::GET);
-    assert_eq!(
-        review_endpoint.uri,
-        s!("/api/v1/products/{productId}/reviews/{reviewId}")
-    );
+    assert_eq!(review_endpoint.uri, s!("/{productId}/reviews/{reviewId}"));
 
     // Edge case 3: @RequestMapping without method attribute defaults to GET
     // Documents that bare @RequestMapping carries no HTTP method information.
@@ -352,5 +405,9 @@ fn test_endpoint_edge_cases() {
         HttpMethod::GET,
         "@RequestMapping without method= defaults to GET"
     );
-    assert_eq!(search_endpoint.uri, s!("/api/v1/products/search"));
+    assert_eq!(search_endpoint.uri, s!("/search"));
+
+    // Class prefix is a chain, joined by pass 3.
+    assert!(endpoints.iter().all(|e| e.route_prefixes
+        == class_prefix("./examples/EndpointEdgeCases.java", "/api/v1/products")));
 }

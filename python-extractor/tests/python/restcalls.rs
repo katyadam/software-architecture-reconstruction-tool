@@ -11,7 +11,9 @@ use python_extractor::{
                 assignment::evaluate_local_and_global_assignments,
                 method_call::MethodCallEvaluationStrategy,
             },
-            identification::method_call::MethodCallIdentificationStrategy,
+            identification::{
+                method_call::MethodCallIdentificationStrategy, strategy::IdentificationStrategy,
+            },
             selection::{method_call::MethodCallSelector, selector::Selector},
         },
     },
@@ -789,5 +791,164 @@ fn different_http_method_naming_restcall_extraction() {
     for call in &calls {
         assert_eq!(call.file_path, filename);
         assert!(!call.function_hash.is_empty());
+    }
+}
+
+/// Calls in `statement`, as identification reports them.
+fn identified(statement: &str) -> Vec<String> {
+    let code = format!("def call(BASE, TAIL, path, url, a, b):\n    {statement}\n");
+    extracted_calls(&code)
+        .iter()
+        .filter_map(|call| {
+            MethodCallIdentificationStrategy::new().identify_restcall(call, "app.py")
+        })
+        .map(|restcall| restcall.target_uri)
+        .collect()
+}
+
+fn extracted_calls(code: &str) -> Vec<models::CallStatement> {
+    let tree = get_tree(code);
+    CallsExtractor
+        .extract(ExtractParams::new(&tree, code))
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .collect()
+}
+
+#[test]
+fn inline_concat_keeps_operands() {
+    for (statement, expected) in [
+        (r#"requests.get(BASE + "/x")"#, r#"{BASE} + "/x""#),
+        (r#"requests.get(BASE + '/x')"#, r#"{BASE} + "/x""#),
+        (
+            r#"requests.get(BASE + "/x/" + TAIL)"#,
+            r#"{BASE} + "/x/" + {TAIL}"#,
+        ),
+        (r#"requests.get(BASE+"/x")"#, r#"{BASE} + "/x""#),
+        (r#"requests.get(self.base + "/x")"#, r#"{self.base} + "/x""#),
+        (r#"requests.get(a.b.c + "/x")"#, r#"{a.b.c} + "/x""#),
+    ] {
+        assert_eq!(identified(statement), vec![expected], "{statement}");
+    }
+}
+
+#[test]
+fn inline_concat_normalizes_literal_styles() {
+    for literal in [
+        r#"r"/x""#,
+        r#"b'/x'"#,
+        r#"f"/x""#,
+        r#"Rb"/x""#,
+        r#""""/x""""#,
+        "'''/x'''",
+        "f'''/x'''",
+    ] {
+        let statement = format!("requests.get(BASE + {literal})");
+        assert_eq!(
+            identified(&statement),
+            vec![r#"{BASE} + "/x""#],
+            "{literal}"
+        );
+    }
+}
+
+#[test]
+fn inline_concat_keeps_fstring_with_placeholder() {
+    assert_eq!(
+        identified(r#"requests.get(BASE + f"/x/{a}")"#),
+        vec![r#"{BASE} + f"/x/{a}""#]
+    );
+    assert_eq!(
+        identified(r#"requests.get(BASE + f'/x/{a}')"#),
+        vec![r#"{BASE} + f"/x/{a}""#]
+    );
+    assert_eq!(
+        identified(r#"requests.get(BASE + rf"/x/{a}")"#),
+        vec![r#"{BASE} + f"/x/{a}""#]
+    );
+}
+
+#[test]
+fn inline_concat_literal_with_plus_takes_plain_path() {
+    for (statement, expected) in [
+        (r#"requests.get(BASE + "/a+b")"#, "/a+b"),
+        (r#"requests.get(BASE + '/a+b')"#, "/a+b"),
+        (r#"requests.get(BASE + f"/{a+b}")"#, "/{a+b}"),
+        (r#"requests.get(BASE + """/a+b""")"#, "/a+b"),
+    ] {
+        assert_eq!(identified(statement), vec![expected], "{statement}");
+    }
+}
+
+#[test]
+fn inline_concat_without_path_literal_is_not_a_restcall() {
+    for statement in [
+        r#"settings.get(BASE + "_key")"#,
+        r#"settings.get(BASE + '_key')"#,
+        r#"settings.get(BASE + f"{a}_key")"#,
+        r#"settings.get(lookup(a) + "_key")"#,
+    ] {
+        assert_eq!(identified(statement), Vec::<String>::new(), "{statement}");
+    }
+}
+
+/// Only literals and dotted names become holes. The rest keeps today's target.
+#[test]
+fn inline_concat_other_operands_take_plain_path() {
+    for (statement, expected) in [
+        (r#"requests.get(BASE + "/x/%s" % a)"#, r#""/x/%s" % a"#),
+        (r#"requests.get(BASE + "/a" "/b")"#, r#"/a" "/b"#),
+        (r#"requests.get(lookup(a) + "/y")"#, "/y"),
+        (r#"requests.get(lookup[a] + "/y")"#, "/y"),
+        (r#"requests.get((BASE) + "/y")"#, "/y"),
+        (r#"requests.get(lookup(a + b) + "/y")"#, "/y"),
+        (r#"requests.get(lookup("/a") + "_key")"#, r#"/a") + "_key"#),
+        (r#"requests.get(a..b + "/y")"#, "/y"),
+        (r#"requests.get(a.b. + "/y")"#, "/y"),
+        (r#"requests.get(1a + "/y")"#, "/y"),
+    ] {
+        assert_eq!(identified(statement), vec![expected], "{statement}");
+    }
+}
+
+#[test]
+fn other_target_forms_unchanged_by_inline_concat() {
+    for (statement, expected) in [
+        (
+            r#"requests.get("http://svc:8000/" + path)"#,
+            Some(r#""http://svc:8000/" + path"#),
+        ),
+        ("requests.get(url)", Some("url")),
+        ("requests.get(BASE + path)", Some("BASE + path")),
+        ("requests.get(BASE+path)", Some("BASE+path")),
+        (r#"requests.get(build("a" + b))"#, None),
+        (r#"requests.get(build("/a" + b))"#, Some(r#""/a" + b)"#)),
+    ] {
+        let expected: Vec<&str> = expected.into_iter().collect();
+        assert_eq!(identified(statement), expected, "{statement}");
+    }
+}
+
+/// Source text is untrusted: non-ASCII and unterminated quotes must not panic.
+#[test]
+fn inline_concat_survives_malformed_targets() {
+    for (raw, expected) in [
+        (r#"BASE + ""#, None),
+        (r#"BASE + "/x" + ""#, Some(r#"/x" + "#)),
+        (r#"BASE + """"#, None),
+        (r#"é + "/ñ"#, Some(r#""/ñ"#)),
+        (r#"é + "/ñ""#, Some(r#"{é} + "/ñ""#)),
+        (r#"é + "/ñ" + 'ü'"#, Some(r#"{é} + "/ñ" + "ü""#)),
+        (r#"é + 'ñ\"#, None),
+        ("é + ñ", Some("é + ñ")),
+    ] {
+        let mut call = extracted_calls("def call(url):\n    requests.get(url)\n")
+            .pop()
+            .expect("one call");
+        call.arguments[0].value = raw.to_string();
+        let target = MethodCallIdentificationStrategy::new()
+            .identify_restcall(&call, "app.py")
+            .map(|restcall| restcall.target_uri);
+        assert_eq!(target.as_deref(), expected, "{raw}");
     }
 }

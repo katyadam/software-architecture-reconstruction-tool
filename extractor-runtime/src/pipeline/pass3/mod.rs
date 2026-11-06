@@ -7,12 +7,13 @@ mod message_edges;
 pub mod pass_attr;
 pub mod pass_module;
 mod restcalls;
+mod route_prefixes;
 
 use std::collections::HashMap;
 
 use clients::typesafe::TypeSafeClient;
 use models::{
-    ConfigurationData, Endpoint,
+    ConfigurationData,
     ir::{evaluted::EvaluatedIR, project::ProjectIR},
 };
 
@@ -60,11 +61,12 @@ pub fn evaluate(
         per_file_module_consts,
     );
 
-    let endpoints: Vec<Endpoint> = project_ir
-        .files
-        .iter()
-        .flat_map(|f| f.endpoints.clone())
-        .collect();
+    let endpoints = route_prefixes::evaluate_endpoints(
+        &project_ir,
+        external_constants,
+        per_file_attrs,
+        per_file_module_consts,
+    );
 
     let entities = project_ir
         .files
@@ -131,11 +133,12 @@ pub async fn evaluate_with_llm(
         per_file_module_consts,
     );
 
-    let endpoints: Vec<Endpoint> = project_ir
-        .files
-        .iter()
-        .flat_map(|f| f.endpoints.clone())
-        .collect();
+    let endpoints = route_prefixes::evaluate_endpoints(
+        &project_ir,
+        external_constants,
+        per_file_attrs,
+        per_file_module_consts,
+    );
 
     let entities = project_ir
         .files

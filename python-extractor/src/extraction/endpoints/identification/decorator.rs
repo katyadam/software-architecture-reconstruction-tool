@@ -1,6 +1,7 @@
 use std::sync::OnceLock;
 
 use crate::extraction::callables::parser::parse_parameters;
+use crate::extraction::common::find_enclosing_information;
 use crate::extraction::extractor::ExtractParams;
 use crate::extraction::queries::ENDPOINTS_QUERY;
 use models::Parameter;
@@ -15,6 +16,7 @@ pub(crate) struct DecoratorEndpointMatch {
     pub uri: String,
     pub parameters: Vec<Parameter>,
     pub router_variable: Option<String>,
+    pub enclosing_function: Option<String>,
     pub decorator: String,
     pub decorator_args: String,
 }
@@ -47,7 +49,14 @@ pub(crate) fn collect_decorator_matches(params: ExtractParams<'_>) -> Vec<Decora
                 "decorator" => endpoint.decorator = value,
                 "decorator.args" => endpoint.decorator_args = value,
                 "function.params" => endpoint.parameters.extend(parse_parameters(&value)),
-                "function" => endpoint.function_hash = statix::strings::hash_text(&value),
+                "function" => {
+                    endpoint.function_hash = statix::strings::hash_text(&value);
+                    // Signature is "name(params) -> ret"; keep the bare name.
+                    endpoint.enclosing_function =
+                        find_enclosing_information(capture.node, params.code)
+                            .0
+                            .and_then(|sig| sig.split('(').next().map(str::to_string));
+                }
                 _ => {}
             }
         });

@@ -2,7 +2,7 @@ use crate::extraction::shared::{
     evaluate_expression_node, node_text, selector_name, web_route_method,
 };
 
-use super::shared::{WEB_IMPORT_PREFIXES, call_arguments, normalized_handler};
+use super::shared::{WEB_IMPORT_PREFIXES, call_arguments, normalized_handler, router_variable};
 use super::{EndpointIdentificationStrategy, EndpointMatch, ExtractParams};
 
 pub(super) struct WebStrategy;
@@ -25,6 +25,7 @@ impl EndpointIdentificationStrategy for WebStrategy {
             method,
             path: evaluate_expression_node(arguments[0], params.code, params.globals),
             handler: normalized_handler(arguments[1], params.code),
+            router: router_variable(function_node, params),
         })
     }
 }

@@ -32,6 +32,8 @@ fn base_test() {
             uri: s!("/items/"),
             file_path: s!(filename),
             router_variable: Some(s!("app")),
+            enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("read_items"),
@@ -58,6 +60,8 @@ fn base_test() {
             uri: s!("/items/"),
             file_path: s!(filename),
             router_variable: Some(s!("app")),
+            enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("read_item"),
@@ -72,6 +76,8 @@ fn base_test() {
             uri: s!("/items/{item_id}"),
             file_path: s!(filename),
             router_variable: Some(s!("app")),
+            enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("update_item"),
@@ -93,6 +99,8 @@ fn base_test() {
             uri: s!("/items/{item_id}"),
             file_path: s!(filename),
             router_variable: Some(s!("app")),
+            enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("delete_item"),
@@ -106,6 +114,8 @@ fn base_test() {
             uri: s!("/items/{item_id}"),
             file_path: s!(filename),
             router_variable: Some(s!("app")),
+            enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("create_user"),
@@ -119,6 +129,8 @@ fn base_test() {
             uri: s!("/users/"),
             file_path: s!(filename),
             router_variable: Some(s!("app")),
+            enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("list_users"),
@@ -132,6 +144,8 @@ fn base_test() {
             uri: s!("/users/"),
             file_path: s!(filename),
             router_variable: Some(s!("app")),
+            enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("get_user"),
@@ -145,6 +159,8 @@ fn base_test() {
             uri: s!("/users/{user_id}"),
             file_path: s!(filename),
             router_variable: Some(s!("app")),
+            enclosing_function: None,
+            route_prefixes: vec![],
         },
         Endpoint {
             function_name: s!("search"),
@@ -158,6 +174,8 @@ fn base_test() {
             uri: s!("/search/"),
             file_path: s!(filename),
             router_variable: Some(s!("app")),
+            enclosing_function: None,
+            route_prefixes: vec![],
         },
     ];
 
@@ -318,6 +336,37 @@ urlpatterns = [
 }
 
 #[test]
+fn decorator_endpoint_records_enclosing_function() {
+    let code = r#"
+def add_routes_clinical(app):
+    @app.get("/cases/{case_id}")
+    async def _(case_id: str): ...
+
+@app.get("/alive")
+def alive(): ...
+"#;
+    let tree = get_tree(code);
+    let endpoints =
+        EndpointsExtractor.extract(ExtractParams::new(&tree, code).file_name("routes.py"));
+
+    let nested = endpoints
+        .iter()
+        .find(|endpoint| endpoint.uri == "/cases/{case_id}")
+        .expect("nested endpoint");
+    assert_eq!(nested.router_variable.as_deref(), Some("app"));
+    assert_eq!(
+        nested.enclosing_function.as_deref(),
+        Some("add_routes_clinical")
+    );
+
+    let module_level = endpoints
+        .iter()
+        .find(|endpoint| endpoint.uri == "/alive")
+        .expect("module-level endpoint");
+    assert_eq!(module_level.enclosing_function, None);
+}
+
+#[test]
 fn python_post_process_skips_non_python_files() {
     let mut files = vec![
         TypedFileRecord {
@@ -333,6 +382,8 @@ fn python_post_process_skips_non_python_files() {
                 uri: "/status".to_string(),
                 file_path: "controller.java".to_string(),
                 router_variable: Some("controller".to_string()),
+                enclosing_function: None,
+                route_prefixes: vec![],
             }],
             callables: vec![],
             call_statements: vec![],
@@ -355,6 +406,8 @@ fn python_post_process_skips_non_python_files() {
                     uri: String::new(),
                     file_path: "views.py".to_string(),
                     router_variable: None,
+                    enclosing_function: None,
+                    route_prefixes: vec![],
                 },
                 Endpoint {
                     function_name: "products".to_string(),
@@ -364,6 +417,8 @@ fn python_post_process_skips_non_python_files() {
                     uri: "products/".to_string(),
                     file_path: "views.py".to_string(),
                     router_variable: Some("urlpatterns".to_string()),
+                    enclosing_function: None,
+                    route_prefixes: vec![],
                 },
             ],
             callables: vec![],
