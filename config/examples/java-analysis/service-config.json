@@ -1,0 +1,13 @@
+{
+  "service_descriptions": [
+    {
+      "name": "java-input-example",
+      "base_dir_path": ".",
+      "urls": [],
+      "java_analysis": {
+        "maven_profiles": [],
+        "artifacts_file": "tia-artifacts.json"
+      }
+    }
+  ]
+}

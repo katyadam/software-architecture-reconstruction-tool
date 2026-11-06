@@ -104,6 +104,7 @@ mod tests {
         ConfigurationData {
             service_descriptions: vec![
                 ServiceDescription {
+                    java_analysis: None,
                     name: "user-service".to_string(),
                     base_dir_path: "crm/user-service".to_string(),
                     urls: vec![
@@ -112,6 +113,7 @@ mod tests {
                     ],
                 },
                 ServiceDescription {
+                    java_analysis: None,
                     name: "admin-user-service".to_string(),
                     base_dir_path: "crm/admin-user-service".to_string(),
                     urls: vec![

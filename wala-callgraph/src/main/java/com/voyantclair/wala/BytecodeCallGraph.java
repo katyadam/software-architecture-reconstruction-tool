@@ -151,7 +151,11 @@ public final class BytecodeCallGraph {
           ClassLoaderReference.Application, new BinaryDirectoryTreeModule(classDir.toFile()));
     }
     for (Path dependencyJar : dependencyJars) {
-      scope.addToScope(ClassLoaderReference.Extension, new JarFile(dependencyJar.toFile()));
+      if (java.nio.file.Files.isDirectory(dependencyJar)) {
+        scope.addToScope(ClassLoaderReference.Extension, new BinaryDirectoryTreeModule(dependencyJar.toFile()));
+      } else {
+        scope.addToScope(ClassLoaderReference.Extension, new JarFile(dependencyJar.toFile()));
+      }
     }
     phase("scope_ready", startedAtNanos);
 

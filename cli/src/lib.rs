@@ -1,4 +1,7 @@
 use anyhow::{Context, Result};
+pub mod configured_java_impact;
+pub mod go_impact_output;
+pub mod java_impact_inputs;
 use extractor_runtime::call_graph::{CallGraphProvider, resolve_edges, wala::WalaJavaProvider};
 use extractor_runtime::pipeline::pass3::{pass_attr, pass_module};
 use extractor_runtime::pipeline::{build_project_ir, dispatch_syntactic, evaluate};
@@ -55,7 +58,14 @@ pub fn get_java_callables_for_modules_with_progress(
         .iter()
         .map(|module_root| module_root.join("src/main/java"))
         .collect();
-    let paths = java_paths_for_modules(&main_roots)?;
+    get_java_callables_in_roots_with_progress(&main_roots, report_progress)
+}
+
+pub fn get_java_callables_in_roots_with_progress(
+    source_roots: &[PathBuf],
+    report_progress: bool,
+) -> Result<Vec<Callable>> {
+    let paths = java_paths_for_modules(source_roots)?;
     let files_to_process = paths.len();
     if report_progress {
         println!("Total files found: {files_to_process}");
@@ -184,30 +194,122 @@ fn collect_syntactic_records(
 ///
 /// A missing adapter JAR, a deadline breach, or a non-Java service leaves syntactic extraction unchanged.
 pub fn enrich_with_wala(
-    mut aggregate: CodeElementsAggregate,
+    aggregate: CodeElementsAggregate,
     project_dir: &PathBuf,
     configuration: &ConfigurationData,
     jar: Option<&std::path::Path>,
     wala_timeout: Duration,
 ) -> CodeElementsAggregate {
+    enrich_with_wala_inputs(
+        aggregate,
+        project_dir,
+        configuration,
+        jar,
+        wala_timeout,
+        None,
+    )
+}
+
+/// Reuses declared bytecode and generated source roots without building the service.
+pub fn enrich_with_wala_inputs(
+    mut aggregate: CodeElementsAggregate,
+    project_dir: &std::path::Path,
+    configuration: &ConfigurationData,
+    jar: Option<&std::path::Path>,
+    wala_timeout: Duration,
+    inputs: Option<&extractor_runtime::java_analysis::ConfiguredJavaInputs>,
+) -> CodeElementsAggregate {
     let Some(jar) = jar else {
         return aggregate;
     };
+    let project_root = project_dir
+        .canonicalize()
+        .unwrap_or_else(|_| project_dir.to_path_buf());
+    if inputs.is_some() {
+        for callable in &mut aggregate.callables {
+            if let Ok(path) = std::path::Path::new(&callable.file_path).canonicalize() {
+                callable.file_path = path.to_string_lossy().into();
+            }
+        }
+    }
     let provider = WalaJavaProvider::with_timeout(jar, wala_timeout);
     for service in &configuration.service_descriptions {
         let root = project_dir.join(&service.base_dir_path);
         if !root.is_dir() {
             continue;
         }
-        let outcome = provider.analyze(&models::call_graph::CallGraphRequest::new(
-            root.to_string_lossy(),
-            models::call_graph::Language::Java,
-        ));
-        let (edges, diagnostics) = resolve_edges(&outcome, &root, &aggregate.callables);
+        let root = if inputs.is_some() {
+            root.canonicalize().unwrap_or(root)
+        } else {
+            root.components().collect()
+        };
+        let configured = inputs.and_then(|inputs| {
+            inputs
+                .contexts
+                .iter()
+                .find(|context| std::path::Path::new(&context.service_root) == root)
+        });
+        let (edges, diagnostics) = if let (Some(inputs), Some(context)) = (inputs, configured) {
+            let modules = context
+                .module_roots
+                .iter()
+                .filter_map(|root| inputs.modules.get(std::path::Path::new(root)))
+                .collect::<Vec<_>>();
+            let source_roots = modules
+                .iter()
+                .flat_map(|m| m.source_roots.clone())
+                .collect::<Vec<_>>();
+            match get_java_callables_in_roots_with_progress(&source_roots, false) {
+                Ok(callables) => {
+                    for callable in callables {
+                        if !aggregate.callables.iter().any(|c| {
+                            c.file_path == callable.file_path && c.signature == callable.signature
+                        }) {
+                            aggregate.callables.push(callable);
+                        }
+                    }
+                }
+                Err(error) => {
+                    eprintln!("WALA configured source extraction failed: {error}");
+                    continue;
+                }
+            }
+            let bytecode = extractor_runtime::java_analysis::JavaBytecodeInputs::merge(
+                &modules.iter().map(|m| &m.bytecode).collect::<Vec<_>>(),
+                &modules.iter().map(|m| m.root.clone()).collect::<Vec<_>>(),
+            );
+            let outcome = provider.analyze_prepared(
+                &models::call_graph::CallGraphRequest::new(
+                    project_root.to_string_lossy(),
+                    models::call_graph::Language::Java,
+                ),
+                &bytecode,
+            );
+            let layout = extractor_runtime::call_graph::JavaSourceLayout {
+                production_roots: source_roots,
+                test_roots: vec![],
+            };
+            extractor_runtime::call_graph::resolve_edges_with_java_layout(
+                &outcome,
+                &project_root,
+                &aggregate.callables,
+                &layout,
+            )
+        } else {
+            let outcome = provider.analyze(&models::call_graph::CallGraphRequest::new(
+                root.to_string_lossy(),
+                models::call_graph::Language::Java,
+            ));
+            resolve_edges(&outcome, &root, &aggregate.callables)
+        };
         for diagnostic in diagnostics {
             eprintln!("WALA: {diagnostic}");
         }
-        aggregate.resolved_call_edges.extend(edges);
+        for edge in edges {
+            if !aggregate.resolved_call_edges.contains(&edge) {
+                aggregate.resolved_call_edges.push(edge);
+            }
+        }
     }
     aggregate
 }
