@@ -14,6 +14,9 @@ static HTTP_METHOD_PREFIXES: &[(&str, HttpMethod)] = &[
     ("@PATCH", HttpMethod::PATCH),
 ];
 
+/// Cap on paths, prefixes and expanded endpoints per method (mirrors pass 2 `MAX_CHAINS`).
+pub const MAX_PATHS: usize = 256;
+
 const URI_PATH_ANNOTATIONS: &[&str] = &[
     "@RequestMapping",
     "@Path",
@@ -24,29 +27,79 @@ const URI_PATH_ANNOTATIONS: &[&str] = &[
     "@PatchMapping",
 ];
 
+/// Annotation name without arguments: `@Path("/a")` -> `@Path`.
+fn annotation_name(annot: &str) -> &str {
+    annot.split('(').next().unwrap_or(annot).trim()
+}
+
+/// `annot` is exactly `@name`, so `@PathVariable` is not `@Path`.
+pub fn is_named(annot: &str, name: &str) -> bool {
+    annotation_name(annot) == name
+}
+
+fn is_uri_annotation(annot: &str) -> bool {
+    URI_PATH_ANNOTATIONS.iter().any(|a| is_named(annot, a))
+}
+
 pub fn are_annotations_specifying_endpoint(annotations: &[String]) -> bool {
     annotations.iter().any(|annot| {
-        URI_PATH_ANNOTATIONS.iter().any(|a| annot.starts_with(a))
+        is_uri_annotation(annot)
             || HTTP_METHOD_PREFIXES
                 .iter()
                 .any(|(a, _)| annot.starts_with(a))
     })
 }
 
-pub fn apply_annotations(endpoint: &mut Endpoint, annotations: &[String]) {
+/// One endpoint per (method path x HTTP method) declared by `annotations`.
+pub fn expand_annotations(endpoint: Endpoint, annotations: &[String]) -> Vec<Endpoint> {
+    let mut methods = vec![endpoint.http_method];
+    let mut uris = vec![endpoint.uri.clone()];
     for annot in annotations {
-        // 1. HTTP method
         if let Some(method) = http_method_from_annotation(annot) {
-            endpoint.http_method = method;
+            methods = vec![method];
         }
-
-        // 2. URI path
-        if URI_PATH_ANNOTATIONS.iter().any(|a| annot.starts_with(a))
-            && let Some(uri) = extract_uri(annot)
-        {
-            endpoint.uri = uri;
+        if is_named(annot, "@RequestMapping") {
+            let declared = request_methods(annot);
+            if !declared.is_empty() {
+                methods = declared;
+            }
+        }
+        if is_uri_annotation(annot) {
+            let declared = extract_uris(annot);
+            if !declared.is_empty() {
+                uris = declared;
+            }
         }
     }
+    let methods = distinct_capped(methods, "HTTP methods");
+    let uris = distinct_capped(uris, "method paths");
+    let pairs = uris
+        .iter()
+        .flat_map(|uri| methods.iter().map(move |method| (uri, method)));
+    distinct_capped(pairs, "endpoint expansion")
+        .into_iter()
+        .map(|(uri, method)| Endpoint {
+            uri: uri.clone(),
+            http_method: *method,
+            ..endpoint.clone()
+        })
+        .collect()
+}
+
+/// First `MAX_PATHS` distinct items in order; one warning on truncation.
+pub fn distinct_capped<T: PartialEq>(items: impl IntoIterator<Item = T>, what: &str) -> Vec<T> {
+    let mut out = Vec::new();
+    for item in items {
+        if out.contains(&item) {
+            continue;
+        }
+        if out.len() == MAX_PATHS {
+            log::warn!("{what} truncated at {MAX_PATHS}");
+            break;
+        }
+        out.push(item);
+    }
+    out
 }
 
 fn http_method_from_annotation(annot: &str) -> Option<HttpMethod> {
@@ -56,24 +109,60 @@ fn http_method_from_annotation(annot: &str) -> Option<HttpMethod> {
         .map(|(_, method)| method.clone())
 }
 
-/// Extracts the URI path from a mapping annotation, e.g.
-/// `@GetMapping(path = "/a", produces = X)` -> `/a`, `@RequestMapping({"/a", "/b"})` -> `/a`.
-/// Non-literal values are returned raw (`path = Constants.X` -> `Constants.X`).
-pub fn extract_uri(annot: &str) -> Option<String> {
-    let start = annot.find('(')? + 1;
-    let end = annot.rfind(')')?;
-    let args = split_top_level_args(annot.get(start..end)?);
+/// Top-level arguments of `annot`: `@A(x, y = z)` -> `["x", "y = z"]`.
+fn annotation_args(annot: &str) -> Vec<&str> {
+    let Some(start) = annot.find('(') else {
+        return vec![];
+    };
+    let end = annot.rfind(')').unwrap_or(annot.len());
+    annot
+        .get(start + 1..end)
+        .map(split_top_level_args)
+        .unwrap_or_default()
+}
 
+/// Elements of `value`: `{a, b}` -> `[a, b]`, `a` -> `[a]`.
+fn elements(value: &str) -> Vec<&str> {
+    match value.strip_prefix('{').and_then(|v| v.strip_suffix('}')) {
+        Some(inner) => split_top_level_args(inner),
+        None => vec![value],
+    }
+}
+
+/// `method = RequestMethod.POST` or `method = {RequestMethod.GET, ...}`; empty when absent.
+fn request_methods(annot: &str) -> Vec<HttpMethod> {
+    annotation_args(annot)
+        .into_iter()
+        .filter_map(named_arg)
+        .filter(|(name, _)| *name == "method")
+        .flat_map(|(_, value)| elements(value))
+        .filter_map(|m| m.rsplit('.').next()?.trim().parse().ok())
+        .collect()
+}
+
+/// Raw path elements of a mapping annotation, quotes kept:
+/// `@RequestMapping({"/a", X})` -> `["\"/a\"", "X"]`.
+pub fn path_values(annot: &str) -> Vec<&str> {
     // Unnamed first argument -> "/users"; otherwise named `value = ...` | `path = ...`
-    let value = args
-        .iter()
+    annotation_args(annot)
+        .into_iter()
         .enumerate()
         .find_map(|(i, arg)| match named_arg(arg) {
             Some((name, value)) if name == "value" || name == "path" => Some(value),
-            None if i == 0 => Some(*arg),
+            None if i == 0 => Some(arg),
             _ => None,
-        })?;
-    Some(first_string_literal(value).unwrap_or(value).to_string())
+        })
+        .map(elements)
+        .unwrap_or_default()
+}
+
+/// Every path of a mapping annotation: `@GetMapping({"/a", "/b"})` -> `["/a", "/b"]`.
+/// Non-literal values are returned raw (`path = Constants.X` -> `Constants.X`).
+pub fn extract_uris(annot: &str) -> Vec<String> {
+    path_values(annot)
+        .into_iter()
+        .map(|v| first_string_literal(v).unwrap_or(v).to_string())
+        .collect()
 }
 
 /// Splits annotation arguments on commas outside string literals, braces and parens.
@@ -108,7 +197,7 @@ fn named_arg(arg: &str) -> Option<(&str, &str)> {
 }
 
 /// Contents of the first `"..."` literal in `value`, if any.
-fn first_string_literal(value: &str) -> Option<&str> {
+pub fn first_string_literal(value: &str) -> Option<&str> {
     let rest = &value[value.find('"')? + 1..];
     let mut escaped = false;
     let end = rest.char_indices().find_map(|(i, c)| {
@@ -140,10 +229,15 @@ pub fn get_annotations_from_modifiers(modifiers_node: Node, code: &str) -> Vec<S
 
 #[cfg(test)]
 mod tests {
-    use super::extract_uri;
+    use models::HttpMethod;
 
+    use models::Endpoint;
+
+    use super::{MAX_PATHS, expand_annotations, extract_uris, is_named, request_methods};
+
+    /// First path, as callers took it before arrays were expanded.
     fn uri(annot: &str) -> Option<String> {
-        extract_uri(annot)
+        extract_uris(annot).into_iter().next()
     }
 
     #[test]
@@ -215,5 +309,87 @@ mod tests {
         assert_eq!(uri("@GetMapping(produces = X)"), None);
         assert_eq!(uri("@GetMapping()"), None);
         assert_eq!(uri("@GetMapping"), None);
+    }
+
+    #[test]
+    fn uris_of_arrays() {
+        assert_eq!(
+            extract_uris(r#"@GetMapping({"/a", "/b"})"#),
+            vec!["/a", "/b"]
+        );
+        assert_eq!(
+            extract_uris(r#"@RequestMapping(path = {"/a", "/b"}, produces = X)"#),
+            vec!["/a", "/b"]
+        );
+        assert_eq!(extract_uris(r#"@GetMapping("/a")"#), vec!["/a"]);
+        assert!(extract_uris("@GetMapping").is_empty());
+    }
+
+    #[test]
+    fn uris_of_non_literals() {
+        assert_eq!(
+            extract_uris("@RequestMapping(Paths.BASE)"),
+            vec!["Paths.BASE"]
+        );
+        assert_eq!(
+            extract_uris(r#"@RequestMapping({Paths.A, "/b"})"#),
+            vec!["Paths.A", "/b"]
+        );
+    }
+
+    #[test]
+    fn methods_single_and_array() {
+        assert_eq!(
+            request_methods(r#"@RequestMapping(value = "/a", method = RequestMethod.POST)"#),
+            vec![HttpMethod::POST]
+        );
+        assert_eq!(
+            request_methods(
+                r#"@RequestMapping(value = "/a", method = {RequestMethod.GET, RequestMethod.PUT})"#
+            ),
+            vec![HttpMethod::GET, HttpMethod::PUT]
+        );
+        assert_eq!(
+            request_methods("@RequestMapping(method = DELETE)"),
+            vec![HttpMethod::DELETE]
+        );
+        assert!(request_methods(r#"@RequestMapping("/a")"#).is_empty());
+    }
+
+    #[test]
+    fn path_variable_is_not_path() {
+        assert!(!is_named(r#"@PathVariable("id")"#, "@Path"));
+        assert!(!is_named(r#"@PathParam("id")"#, "@Path"));
+        assert!(is_named(r#"@Path("/a")"#, "@Path"));
+        assert!(is_named("@Path", "@Path"));
+    }
+
+    fn expanded(annot: &str) -> Vec<(HttpMethod, String)> {
+        expand_annotations(Endpoint::default(), &[annot.to_string()])
+            .into_iter()
+            .map(|e| (e.http_method, e.uri))
+            .collect()
+    }
+
+    #[test]
+    fn duplicate_methods_and_paths_deduped() {
+        assert_eq!(
+            expanded(
+                r#"@RequestMapping(value = {"/a", "/a"}, method = {RequestMethod.GET, RequestMethod.GET})"#
+            ),
+            vec![(HttpMethod::GET, "/a".to_string())]
+        );
+    }
+
+    #[test]
+    fn oversize_path_array_truncated() {
+        let paths: Vec<String> = (0..MAX_PATHS + 10).map(|i| format!("\"/p{i}\"")).collect();
+        let annot = format!(
+            "@RequestMapping(value = {{{}}}, method = {{RequestMethod.GET, RequestMethod.PUT}})",
+            paths.join(", ")
+        );
+        let out = expanded(&annot);
+        assert_eq!(out.len(), MAX_PATHS);
+        assert_eq!(out[0], (HttpMethod::GET, "/p0".to_string()));
     }
 }

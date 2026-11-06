@@ -1289,7 +1289,7 @@ fn gin_same_helper_name_in_two_services() {
 }
 
 #[test]
-fn java_endpoints_untouched_by_pass3() {
+fn java_endpoints_only_get_own_class_prefix() {
     let controller = r#"
 @RestController
 @RequestMapping("/api")
@@ -1304,7 +1304,17 @@ public class ItemController {
 }
 "#;
     let record = java_extract(controller, "svc/ItemController.java").expect("Java parses");
-    let declared = record.endpoints.clone();
+    // Pass 3 only joins the class prefix and drops the chain; other fields stay.
+    let declared: Vec<_> = record
+        .endpoints
+        .iter()
+        .zip(["/api/items", "/api/items/new"])
+        .map(|(e, uri)| models::Endpoint {
+            uri: uri.to_string(),
+            route_prefixes: vec![],
+            ..e.clone()
+        })
+        .collect();
     assert_eq!(declared.len(), 2);
     let other = router_file("BASE = \"/py\"", "BASE");
     let ir = evaluated(vec![record, py(&other, "py/app.py")], &HashMap::new());
@@ -1863,4 +1873,300 @@ urlpatterns = [
 "#;
     let uris = endpoint_uris(vec![py(proj, "proj/urls.py"), py(app, "app/urls.py")]);
     assert_eq!(uris, vec!["/api/x/"]);
+}
+
+/// Pipeline `(method, uri)` pairs for Java `(path, code)` files, sorted.
+fn java_endpoints(files: &[(&str, &str)]) -> Vec<(String, String)> {
+    let records = files
+        .iter()
+        .map(|(path, code)| java_extract(code, path).expect("Java parses"))
+        .collect();
+    let mut out: Vec<_> = evaluated(records, &HashMap::new())
+        .endpoints
+        .into_iter()
+        .map(|e| (format!("{:?}", e.http_method), e.uri))
+        .collect();
+    out.sort();
+    out
+}
+
+fn java_uris(files: &[(&str, &str)]) -> Vec<String> {
+    let mut uris: Vec<_> = java_endpoints(files).into_iter().map(|(_, u)| u).collect();
+    uris.sort();
+    uris
+}
+
+/// One controller file `svc/C.java` with `class_annotations` and `body`.
+fn java_class_uris(class_annotations: &str, body: &str) -> Vec<String> {
+    let code = format!("{class_annotations}\npublic class C {{\n{body}\n}}\n");
+    java_uris(&[("svc/C.java", &code)])
+}
+
+const GET_A: &str = r#"@GetMapping("/a") public String a() { return ""; }"#;
+const GET_X: &str = r#"@GetMapping("/x") public String x() { return ""; }"#;
+
+#[test]
+fn java_jaxrs_path_with_produces() {
+    assert_eq!(
+        java_class_uris(
+            r#"@Path("/users") @Produces(MediaType.APPLICATION_JSON)"#,
+            r#"@GET @Path("/{id}") public String get(@PathParam("id") String id) { return ""; }"#,
+        ),
+        vec!["/users/{id}"]
+    );
+}
+
+#[test]
+fn java_mapping_then_annotation_with_value() {
+    assert_eq!(
+        java_class_uris(r#"@RequestMapping("/api") @CrossOrigin("*")"#, GET_A),
+        vec!["/api/a"]
+    );
+}
+
+#[test]
+fn java_mapping_then_named_argument_annotation() {
+    assert_eq!(
+        java_class_uris(r#"@RequestMapping("/api/v1") @Api(tags = "x")"#, GET_A),
+        vec!["/api/v1/a"]
+    );
+}
+
+#[test]
+fn java_two_classes_in_one_file() {
+    let code = r#"
+@RequestMapping("/one")
+class A { @GetMapping("/a") public String a() { return ""; } }
+
+@RequestMapping("/two")
+class B { @GetMapping("/b") public String b() { return ""; } }
+"#;
+    assert_eq!(
+        java_uris(&[("svc/AB.java", code)]),
+        vec!["/one/a", "/two/b"]
+    );
+}
+
+#[test]
+fn java_nested_class_takes_own_prefix() {
+    let code = r#"
+@RequestMapping("/outer")
+public class Outer {
+    @RequestMapping("/inner")
+    public static class Inner { @GetMapping("/x") public String x() { return ""; } }
+}
+"#;
+    assert_eq!(java_uris(&[("svc/Outer.java", code)]), vec!["/inner/x"]);
+}
+
+#[test]
+fn java_interface_with_mapping() {
+    let code = r#"
+@RequestMapping("/api")
+public interface Api { @GetMapping("/x") String x(); }
+"#;
+    assert_eq!(java_uris(&[("svc/Api.java", code)]), vec!["/api/x"]);
+}
+
+#[test]
+fn java_prefix_slashes_normalized() {
+    assert_eq!(
+        java_class_uris(
+            r#"@RequestMapping("/api/")"#,
+            r#"@GetMapping("x") public String x() { return ""; }"#,
+        ),
+        vec!["/api/x"]
+    );
+}
+
+#[test]
+fn java_no_class_prefix() {
+    assert_eq!(java_class_uris("@RestController", GET_A), vec!["/a"]);
+}
+
+fn java_method_endpoints(annotation: &str) -> Vec<(String, String)> {
+    let code =
+        format!("public class C {{\n{annotation} public String a() {{ return \"\"; }}\n}}\n");
+    java_endpoints(&[("svc/C.java", &code)])
+}
+
+fn pairs(items: &[(&str, &str)]) -> Vec<(String, String)> {
+    items
+        .iter()
+        .map(|(m, u)| (m.to_string(), u.to_string()))
+        .collect()
+}
+
+#[test]
+fn java_request_mapping_single_method() {
+    assert_eq!(
+        java_method_endpoints(r#"@RequestMapping(value = "/a", method = RequestMethod.POST)"#),
+        pairs(&[("POST", "/a")])
+    );
+}
+
+#[test]
+fn java_request_mapping_method_array() {
+    assert_eq!(
+        java_method_endpoints(
+            r#"@RequestMapping(value = "/a", method = {RequestMethod.GET, RequestMethod.PUT})"#
+        ),
+        pairs(&[("GET", "/a"), ("PUT", "/a")])
+    );
+}
+
+#[test]
+fn java_request_mapping_no_method() {
+    assert_eq!(
+        java_method_endpoints(r#"@RequestMapping("/a")"#),
+        pairs(&[("GET", "/a")])
+    );
+}
+
+#[test]
+fn java_feign_client_not_endpoint() {
+    let code = r#"
+@FeignClient("svc") @RequestMapping("/api")
+public interface Client { @GetMapping("/x") String x(); }
+"#;
+    assert!(java_uris(&[("svc/Client.java", code)]).is_empty());
+}
+
+#[test]
+fn java_class_prefix_array() {
+    assert_eq!(
+        java_class_uris(r#"@RequestMapping({"/a", "/b"})"#, GET_X),
+        vec!["/a/x", "/b/x"]
+    );
+}
+
+#[test]
+fn java_method_path_array() {
+    assert_eq!(
+        java_class_uris(
+            "",
+            r#"@GetMapping({"/x", "/y"}) public String x() { return ""; }"#
+        ),
+        vec!["/x", "/y"]
+    );
+}
+
+#[test]
+fn java_class_and_method_arrays() {
+    assert_eq!(
+        java_class_uris(
+            r#"@RequestMapping({"/a", "/b"})"#,
+            r#"@GetMapping({"/x", "/y"}) public String x() { return ""; }"#
+        ),
+        vec!["/a/x", "/a/y", "/b/x", "/b/y"]
+    );
+}
+
+#[test]
+fn java_qualified_constant_prefix() {
+    let paths = r#"public class Paths { public static final String BASE = "/api"; }"#;
+    let controller = format!("@RequestMapping(Paths.BASE)\npublic class C {{\n{GET_X}\n}}\n");
+    assert_eq!(
+        java_uris(&[("svc/Paths.java", paths), ("svc/C.java", &controller)]),
+        vec!["/api/x"]
+    );
+}
+
+#[test]
+fn java_same_class_constant_prefix() {
+    assert_eq!(
+        java_class_uris(
+            "@RequestMapping(BASE)",
+            &format!("static final String BASE = \"/api\";\n{GET_X}")
+        ),
+        vec!["/api/x"]
+    );
+}
+
+#[test]
+fn java_unresolved_constant_prefix_dropped() {
+    assert_eq!(
+        java_class_uris("@RequestMapping(Config.base)", GET_X),
+        vec!["/x"]
+    );
+}
+
+#[test]
+fn java_method_level_constant_unchanged() {
+    assert_eq!(
+        java_class_uris(
+            "",
+            r#"@GetMapping(Paths.ITEM) public String x() { return ""; }"#
+        ),
+        vec!["Paths.ITEM"]
+    );
+}
+
+#[test]
+fn java_and_python_in_one_project() {
+    let fastapi = r#"
+from fastapi import FastAPI, APIRouter
+
+app = FastAPI()
+r = APIRouter()
+
+@r.get("/q")
+async def q():
+    return None
+
+app.include_router(r, prefix="/p")
+"#;
+    let controller = format!("@RequestMapping(\"/api\")\npublic class C {{\n{GET_X}\n}}\n");
+    let records = vec![
+        py(fastapi, "py/app.py"),
+        java_extract(&controller, "svc/C.java").expect("Java parses"),
+    ];
+    assert_eq!(endpoint_uris(records), vec!["/api/x", "/p/q"]);
+}
+
+#[test]
+fn java_class_prefix_with_block_comment() {
+    assert_eq!(
+        java_class_uris(r#"@RequestMapping(/* v1 */ "/api")"#, GET_X),
+        vec!["/api/x"]
+    );
+}
+
+#[test]
+fn java_class_prefix_with_line_comment() {
+    assert_eq!(
+        java_class_uris("@RequestMapping(\n    \"/api\" // v1\n)", GET_X),
+        vec!["/api/x"]
+    );
+}
+
+#[test]
+fn java_anonymous_class_method_takes_no_prefix() {
+    let body = r#"
+    @GetMapping("/x") public String x() { return ""; }
+    Object h = new Object() {
+        @GetMapping("/y") public String y() { return ""; }
+    };
+"#;
+    assert_eq!(
+        java_class_uris(r#"@RequestMapping("/api")"#, body),
+        vec!["/api/x", "/y"]
+    );
+}
+
+#[test]
+fn java_class_prefix_array_capped() {
+    let paths: Vec<String> = (0..300).map(|i| format!("\"/p{i}\"")).collect();
+    let uris = java_class_uris(&format!("@RequestMapping({{{}}})", paths.join(", ")), GET_X);
+    assert_eq!(uris.len(), 256);
+    assert!(uris.contains(&"/p0/x".to_string()));
+    assert!(!uris.contains(&"/p299/x".to_string()));
+}
+
+#[test]
+fn java_concatenated_class_prefix_dropped() {
+    assert_eq!(
+        java_class_uris(r#"@RequestMapping(Paths.BASE + "/users")"#, GET_X),
+        vec!["/x"]
+    );
 }

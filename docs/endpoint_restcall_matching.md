@@ -56,7 +56,7 @@ Evaluation (`extractor-runtime/src/pipeline/pass3/route_prefixes.rs`) runs in `e
 4. Values still holding source text and raw f-strings count as unresolved. Go values are stored unquoted, so path-like values from Go files are accepted.
 5. One endpoint clone per distinct prefix (`BTreeSet` order), `uri = join(prefix, uri)`; join trims duplicate `/` and forces a leading `/`.
 6. Unresolved expression in a chain -> that clone keeps the original URI.
-7. Endpoints without chains (Java, Django) are untouched.
+7. Endpoints without chains are untouched.
 
 ```
 app.py:            app.mount("/v1", app_v1); add_routes_v1(app_v1)
@@ -110,11 +110,20 @@ Go (`go-extractor/src/extraction/route_facts/`):
 - `r.Mount("/p", sub)` (chi, Fiber) -> `Attach(r, sub, "/p")`.
 - Same-file constants are inlined as quoted literals.
 
+Java (no adapter; `java-extractor/src/extraction/endpoints/`):
+
+- The extractor writes chains directly: one single-element chain per `@RequestMapping` / `@Path` value on the method's nearest enclosing class, interface, enum or record. `uri` holds only the method path.
+- Literals keep their quotes; `Paths.BASE` / `BASE` -> `BASE` (constants are keyed by bare name). Other expressions stay as written and resolve to nothing, so the method path is kept.
+- Pass 2 keeps chains on endpoints without `router_variable`.
+- `@RequestMapping(method = ...)` gives one endpoint per listed method; none -> `GET`. Path arrays give one endpoint per element.
+- Methods of an `@FeignClient` interface are not endpoints.
+
 ### Known limits
 
 - No Go `StripPrefix` or Express adapters yet.
 - Django `include()` adds no prefix for: `include(extra_patterns)` or inline `include([path(...)])`, DRF `include(router.urls)` (its routes are not extracted), `include(module)` with an imported object, third-party modules, prefixes holding `,` or `=`, `re_path` regexes with metacharacters. Legacy `url()` is ignored. `ROOT_URLCONF` is not read: a module nothing includes is served as declared. A `re_path` child's own URI is not normalized (`/api/^x/$`). A root-level `accounts/urls.py` can match a third-party `accounts.urls` in any service. An `include()` nested in an inline or list-variable include gets only its own prefix. Converter syntax in a constant prefix (`API = "<int:org>/"`) stays as written. No fact for a comment between arguments, `u""` or implicit string concatenation, keyword `route=` / `view=` / `arg=`, or qualified `urls.include`.
-- Spring class-level prefixes stay in the Java extractor.
+- Java: JAX-RS subresource locators (#71 B7), constants in method-level paths (`@GetMapping(Paths.ITEM)` keeps raw text), and Spring `server.servlet.context-path` (#66) are not handled.
+- Java: a concatenated class prefix (`Paths.BASE + "/users"`) is dropped; a fully-qualified `@org...FeignClient` is not recognized, so its methods stay endpoints. Methods of anonymous classes get no class prefix. Paths, prefixes and per-method expansions are capped at 256 (warning).
 - FastAPI `root_path` ignored (deploy-time proxy prefix).
 - Prefixes from concatenation (`ROOT + "/x"`), env vars with no supplied value, or unresolved f-strings stay unresolved.
 - REST calls keep first-wins for names not bound in the file, so prefixes and REST URLs can differ on such a collision.

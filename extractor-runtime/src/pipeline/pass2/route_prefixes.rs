@@ -369,8 +369,9 @@ fn resolve_with_facts(
                 file.endpoints
                     .iter()
                     .map(|e| {
+                        // No router: keep extractor-provided chains (Java class prefixes).
                         let Some(router) = &e.router_variable else {
-                            return vec![];
+                            return e.route_prefixes.clone();
                         };
                         let scope = e
                             .enclosing_function
@@ -843,6 +844,25 @@ mod tests {
             &graph(&[]),
         );
         assert_eq!(out, expected(&[("svc/App.java", "/x", &[])]));
+    }
+
+    #[test]
+    fn routerless_endpoint_keeps_preset_chain() {
+        let (mut files, facts) = mounted_helper("svc", "/v1");
+        let mut java = rec("svc/A.java");
+        let mut e = ep("/x", None, None);
+        e.route_prefixes = vec![vec![models::endpoints::PrefixExpr {
+            file_path: "svc/A.java".to_string(),
+            expr: "\"/api\"".to_string(),
+        }]];
+        java.endpoints.push(e);
+        files.push(java);
+        let out = run(files, facts, &graph(&[]));
+        assert!(out.contains(&(
+            "svc/A.java".to_string(),
+            "/x".to_string(),
+            vec![vec!["svc/A.java: \"/api\"".to_string()]]
+        )));
     }
 
     #[test]
