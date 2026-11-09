@@ -12,6 +12,10 @@ mod java_changes;
 mod java_modules;
 mod java_tests;
 mod module_dependencies;
+pub mod python;
+mod python_changes;
+mod python_graph;
+mod python_tests;
 mod selection;
 
 pub use git_diff::{ImpactError, analyze_changes, analyze_changes_with_catalog};
