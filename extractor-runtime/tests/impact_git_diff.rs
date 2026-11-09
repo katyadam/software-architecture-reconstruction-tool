@@ -45,6 +45,87 @@ fn maps_java_and_non_java_git_changes_to_conservative_elements() {
     }
 }
 
+#[test]
+fn narrows_only_unconditional_maven_module_sources_when_profiles_are_present() {
+    let repository = create_repository();
+    write(
+        &repository.0,
+        "pom.xml",
+        "<project><modelVersion>4.0.0</modelVersion><modules><module>orders</module></modules><profiles><profile><modules><module>experimental</module></modules></profile></profiles></project>",
+    );
+    write(
+        &repository.0,
+        "orders/pom.xml",
+        "<project><modelVersion>4.0.0</modelVersion></project>",
+    );
+    write(
+        &repository.0,
+        "experimental/pom.xml",
+        "<project><modelVersion>4.0.0</modelVersion></project>",
+    );
+    write(
+        &repository.0,
+        "orders/src/main/java/example/Order.java",
+        "package example;\nclass Order {\n  int value() { return 1; }\n}\n",
+    );
+    write(
+        &repository.0,
+        "experimental/src/main/java/example/Experiment.java",
+        "package example;\nclass Experiment {\n  int value() { return 1; }\n}\n",
+    );
+    git(&repository.0, &["add", "."]);
+    git(&repository.0, &["commit", "-m", "baseline"]);
+
+    write(
+        &repository.0,
+        "pom.xml",
+        "<project><modelVersion>4.0.0</modelVersion><name>candidate</name><modules><module>orders</module></modules><profiles><profile><modules><module>experimental</module></modules></profile></profiles></project>",
+    );
+    write(
+        &repository.0,
+        "orders/src/main/java/example/Order.java",
+        "package example;\nclass Order {\n  int value() { return 2; }\n}\n",
+    );
+    write(
+        &repository.0,
+        "experimental/src/main/java/example/Experiment.java",
+        "package example;\nclass Experiment {\n  int value() { return 2; }\n}\n",
+    );
+    git(&repository.0, &["add", "."]);
+    git(&repository.0, &["commit", "-m", "candidate"]);
+
+    let changes = analyze_changes(&repository.0, "HEAD~1").expect("Git changes are analyzed");
+    let root = repository
+        .0
+        .canonicalize()
+        .expect("repository root canonicalizes")
+        .to_string_lossy()
+        .into_owned();
+    let orders = repository
+        .0
+        .join("orders")
+        .canonicalize()
+        .expect("orders module canonicalizes")
+        .to_string_lossy()
+        .into_owned();
+
+    assert!(changes.iter().any(|change| {
+        change.source_path == "orders/src/main/java/example/Order.java"
+            && change.module_root == orders
+            && change.kind != ChangedElementKind::Module
+    }));
+    for path in [
+        "experimental/src/main/java/example/Experiment.java",
+        "pom.xml",
+    ] {
+        assert!(changes.iter().any(|change| {
+            change.source_path == path
+                && change.module_root == root
+                && change.kind == ChangedElementKind::Module
+        }));
+    }
+}
+
 /// Creates an isolated Git repository with a unique filesystem location.
 fn create_repository() -> TemporaryRepository {
     let suffix = SystemTime::now()

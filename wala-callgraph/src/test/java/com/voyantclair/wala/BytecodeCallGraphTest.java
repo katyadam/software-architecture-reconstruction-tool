@@ -15,6 +15,16 @@ import org.junit.jupiter.api.io.TempDir;
 /** Verifies WALA binary analysis against real Java class files. */
 class BytecodeCallGraphTest {
   @Test
+  void includes_the_failure_top_frame_in_analysis_diagnostics() {
+    var error = new IllegalArgumentException("Illegal target map");
+    error.setStackTrace(new StackTraceElement[] {new StackTraceElement("wala.TargetMap", "add", "TargetMap.java", 42)});
+
+    assertEquals(
+        "IllegalArgumentException: Illegal target map; top_frame=wala.TargetMap.add(TargetMap.java:42)",
+        BytecodeCallGraph.failureDiagnostic(error));
+  }
+
+  @Test
   void resolves_interface_dispatch_from_compiled_application_classes(@TempDir Path tempDir)
       throws Exception {
     Path classesDir = compileDispatchFixture(tempDir);
@@ -73,7 +83,9 @@ class BytecodeCallGraphTest {
         BytecodeCallGraph.analyze(
             List.of(classesDir),
             List.of(),
-            List.of(new BytecodeCallGraph.MethodSelector("LExampleTest", "testChanged", "()V")),
+            List.of(
+                new BytecodeCallGraph.MethodSelector("LExampleTest", "testChanged", "()V"),
+                new BytecodeCallGraph.MethodSelector("LExampleTest", "testChangedAgain", "()V")),
             BytecodeCallGraph.Algorithm.CHA);
 
     assertEquals("ok", result.status());
@@ -86,6 +98,35 @@ class BytecodeCallGraphTest {
                         && edge.callee().declaring_type().equals("LService")
                         && edge.callee().member_name().equals("changed")),
         result.edges().toString());
+    assertTrue(
+        result.reachability().stream()
+            .anyMatch(
+                reachability ->
+                    reachability.method().declaring_type().equals("LService")
+                        && reachability.method().member_name().equals("changed")
+                        && reachability.entrypoints().stream()
+                            .anyMatch(
+                                entrypoint ->
+                                    entrypoint.declaring_type().equals("LExampleTest")
+                                        && entrypoint.member_name().equals("testChanged"))),
+        result.reachability().toString());
+    assertTrue(
+        result.reachability().stream()
+            .filter(
+                reachability ->
+                    reachability.method().declaring_type().equals("LService")
+                        && reachability.method().member_name().equals("changed"))
+            .allMatch(reachability -> reachability.entrypoints().size() == 2),
+        result.reachability().toString());
+    assertTrue(
+        result.diagnostics().stream().anyMatch(value -> value.startsWith("reachability_duration_ms=")),
+        result.diagnostics().toString());
+    assertTrue(
+        result.reachability().stream()
+            .noneMatch(
+                reachability ->
+                    reachability.method().declaring_type().startsWith("Ljava/")),
+        result.reachability().toString());
   }
 
   @Test
@@ -103,6 +144,40 @@ class BytecodeCallGraphTest {
     assertTrue(
         result.diagnostics().contains("unmatched_entrypoint=LExampleTest#missing()V"),
         result.diagnostics().toString());
+  }
+
+  @Test
+  void emits_reachability_only_for_explicit_changed_targets(@TempDir Path tempDir) throws Exception {
+    Path classesDir = compileTestRootFixture(tempDir);
+    var result = BytecodeCallGraph.analyze(
+        List.of(classesDir),
+        List.of(),
+        List.of(new BytecodeCallGraph.MethodSelector("LExampleTest", "testChanged", "()V")),
+        List.of(new BytecodeCallGraph.TargetSelector("LService", "changed", 0)),
+        BytecodeCallGraph.Algorithm.CHA);
+
+    assertEquals(1, result.reachability().size(), result.reachability().toString());
+    assertEquals("changed", result.reachability().get(0).method().member_name());
+  }
+
+  @Test
+  void emits_an_empty_reachability_record_for_a_resolved_unreached_target(
+      @TempDir Path tempDir) throws Exception {
+    Path classesDir = compileTestRootFixture(tempDir);
+    var result = BytecodeCallGraph.analyze(
+        List.of(classesDir),
+        List.of(),
+        List.of(new BytecodeCallGraph.MethodSelector("LExampleTest", "testChanged", "()V")),
+        List.of(new BytecodeCallGraph.TargetSelector("LService", "unchanged", 0)),
+        BytecodeCallGraph.Algorithm.CHA);
+
+    assertTrue(
+        result.reachability().stream()
+            .anyMatch(
+                reachability ->
+                    reachability.method().member_name().equals("unchanged")
+                        && reachability.entrypoints().isEmpty()),
+        result.reachability().toString());
   }
 
   /** Compiles a Java 8 fixture whose virtual dispatch has a known concrete target. */
@@ -125,7 +200,7 @@ class BytecodeCallGraphTest {
     Path source = tempDir.resolve("ExampleTest.java");
     Files.writeString(
         source,
-        "class Service { static void changed() {} } class ExampleTest { void testChanged() { Service.changed(); } }");
+        "class Service { static void changed() {} static void unchanged() {} } class ExampleTest { void testChanged() { Service.changed(); } void testChangedAgain() { Service.changed(); } }");
     Path classesDir = tempDir.resolve("test-classes");
     Files.createDirectories(classesDir);
     assertEquals(

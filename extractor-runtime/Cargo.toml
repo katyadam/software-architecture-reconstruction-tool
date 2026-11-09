@@ -31,7 +31,9 @@ actix-cors = { workspace = true }
 async-trait = { workspace = true }
 once_cell = { workspace = true }
 regex = { workspace = true }
+quick-xml = { workspace = true }
 strsim = { workspace = true }
+libc = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-java = { workspace = true }
 
