@@ -244,3 +244,147 @@ fn root_tests_without_build_descriptors_are_not_assumed_independent() {
     );
     assert_eq!(result["unselected_tests"], json!([]));
 }
+
+#[test]
+fn gradle_excluded_submodule_tests_are_dropped_and_analysis_is_precise() {
+    // Reproduces the ftgo-application scenario: a Gradle multi-module project where one
+    // submodule is intentionally excluded from the manifest (e.g. an integration-test-only
+    // module that can't be compiled in CI). With module_inventory_complete=true, tests
+    // discovered by the filesystem scan inside the excluded module must not appear in the
+    // result and must not force a conservative full-run.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    fs::create_dir(&root).unwrap();
+    git(&root, &["init", "-q"]);
+    git(&root, &["config", "user.name", "Fixture"]);
+    git(&root, &["config", "user.email", "fixture@example.invalid"]);
+
+    // settings.gradle lists both svc and excluded as submodules.
+    write(&root, "settings.gradle", "include ':svc'\ninclude ':excluded'");
+    write(&root, "build.gradle", "");
+    write(&root, "svc/build.gradle", "");
+    write(&root, "excluded/build.gradle", "");
+    // svc has a real unit test.
+    write(
+        &root,
+        "svc/src/test/java/fixture/SvcTest.java",
+        "package fixture; class SvcTest { @Test void svcWorks() {} }",
+    );
+    // excluded has a test too — auto-discovery would find it.
+    write(
+        &root,
+        "excluded/src/test/java/fixture/ExcludedTest.java",
+        "package fixture; class ExcludedTest { @Test void excludedWorks() {} }",
+    );
+    write(&root, "svc/config.properties", "value=1");
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "baseline"]);
+    let baseline = git(&root, &["rev-parse", "HEAD"]);
+    // Change a non-Java file in svc to produce a module-level change (no call graph needed).
+    write(&root, "svc/config.properties", "value=2");
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "candidate"]);
+    let candidate = git(&root, &["rev-parse", "HEAD"]);
+
+    fs::create_dir_all(root.join("svc/build/classes/java/test")).unwrap();
+
+    let manifest_path = dir.path().join("inputs.json");
+    let config_path = dir.path().join("config.json");
+    let result_path = dir.path().join("result.json");
+
+    // Manifest: only 'svc' listed; 'excluded' intentionally absent.
+    let svc_root = root.join("svc").to_string_lossy().into_owned();
+    let svc_test_class_dir = root
+        .join("svc/build/classes/java/test")
+        .to_string_lossy()
+        .into_owned();
+    write(
+        dir.path(),
+        "inputs.json",
+        &json!({
+            "schema_version": 1,
+            "candidate_revision": candidate,
+            "build_context": {
+                "tool": "gradle",
+                "requested_profiles": [],
+                "active_profiles": [],
+                "java_version": "11"
+            },
+            "module_inventory_complete": true,
+            "modules": [{
+                "root": svc_root,
+                "source_roots": [],
+                "test_source_roots": [root.join("svc/src/test/java").to_string_lossy().as_ref()],
+                "application_class_dirs": [],
+                "test_class_dirs": [svc_test_class_dir],
+                "classpath": [],
+                "dependencies": [],
+                "dependency_inventory_complete": true,
+                "test_inventory_complete": true,
+                "tests": [{
+                    "module_root": ".",
+                    "class_name": "fixture/SvcTest",
+                    "method_name": "svcWorks",
+                    "descriptor": "()V",
+                    "callable_signature": "SvcTest.svcWorks()V",
+                    "source_path": "src/test/java/fixture/SvcTest.java"
+                }]
+            }]
+        })
+        .to_string(),
+    );
+    write(
+        dir.path(),
+        "config.json",
+        &json!({
+            "service_descriptions": [{
+                "name": "app",
+                "base_dir_path": root.to_string_lossy().as_ref(),
+                "urls": [],
+                "java_analysis": {"artifacts_file": manifest_path}
+            }]
+        })
+        .to_string(),
+    );
+
+    let out = Command::new(env!("CARGO_BIN_EXE_test-impact"))
+        .args(["--project-dir"])
+        .arg(&root)
+        .args(["--baseline-revision", &baseline, "--config-file"])
+        .arg(&config_path)
+        .args(["--output"])
+        .arg(&result_path)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let result: Value =
+        serde_json::from_slice(&fs::read(&result_path).unwrap()).unwrap();
+
+    // The excluded module's test must not appear anywhere in the result.
+    let all_methods: Vec<_> = result["selected_tests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["test"]["method_name"].as_str().unwrap())
+        .chain(
+            result["unselected_tests"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|t| t["method_name"].as_str().unwrap()),
+        )
+        .collect();
+    assert!(
+        !all_methods.contains(&"excludedWorks"),
+        "excluded module test must not appear in result; got: {all_methods:?}"
+    );
+    // Must not force a conservative full run (field is omitted when false).
+    assert!(
+        result["requires_full_test_run"] != true,
+        "excluded submodule must not force full run"
+    );
+}

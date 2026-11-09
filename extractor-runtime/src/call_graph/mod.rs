@@ -6,6 +6,7 @@ pub mod java_adapter;
 mod registry;
 mod resolver;
 pub mod wala;
+pub mod spoon;
 pub use registry::{CallGraphProvider, ProviderRegistry};
 pub use resolver::{
     JavaCallGraphResolution, JavaSourceLayout, resolve_edges, resolve_edges_with_java_layout,

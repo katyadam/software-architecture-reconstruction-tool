@@ -108,8 +108,36 @@ fn supplied_dependencies_find_consumers_and_unknown_builds_block_independence() 
         graph.consumers_of(&root.join("shared")),
         BTreeSet::from([root.join("app")])
     );
+    // An unknown build discovered by the filesystem scan blocks independence only when the
+    // automatic dependency graph succeeded (i.e. a supported reactor file exists at root).
+    // When the automatic graph fails (no reactor, unsupported syntax), the manifest's
+    // module_inventory_complete=true claim is trusted as-is.
     write(&root, "unknown/pom.xml", "<project/>");
-    assert!(ModuleDependencyGraph::load_with_configured_inputs(&root, &inputs).is_err());
+    // No root pom.xml/settings.gradle means automatic graph fails → check skipped → no error.
+    assert!(
+        ModuleDependencyGraph::load_with_configured_inputs(&root, &inputs).is_ok(),
+        "without an automatic graph, manifest module_inventory_complete is trusted"
+    );
+    // With a root reactor that claims exactly the three known modules, the unknown/pom.xml
+    // is detectable (automatic graph succeeds, but unknown is outside it) and must still block.
+    let pom = |g: &str, a: &str| {
+        format!(
+            "<project><groupId>{g}</groupId><artifactId>{a}</artifactId><version>1</version></project>"
+        )
+    };
+    write(
+        &root,
+        "pom.xml",
+        "<project><groupId>x</groupId><artifactId>root</artifactId><version>1</version>\
+         <modules><module>shared</module><module>app</module><module>independent</module></modules></project>",
+    );
+    write(&root, "shared/pom.xml", &pom("x", "shared"));
+    write(&root, "app/pom.xml", &pom("x", "app"));
+    write(&root, "independent/pom.xml", &pom("x", "independent"));
+    assert!(
+        ModuleDependencyGraph::load_with_configured_inputs(&root, &inputs).is_err(),
+        "automatic graph knows 3 modules but finds unknown/pom.xml outside reactor — must block"
+    );
 }
 
 #[test]
@@ -181,4 +209,36 @@ fn complete_reactor_does_not_hide_unlisted_build_consumers() {
     };
     inputs.modules.insert(root.clone(), module(root.clone()));
     assert!(ModuleDependencyGraph::load_with_configured_inputs(&root, &inputs).is_err());
+}
+
+#[test]
+fn gradle_submodule_excluded_from_manifest_does_not_block_precise_analysis() {
+    // A Gradle submodule that is listed in settings.gradle but intentionally excluded
+    // from inputs.modules (e.g. an integration-test-only module) should not cause the
+    // dependency graph to error. The manifest is authoritative when
+    // module_inventory_complete=true and the automatic loader already claimed the module.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    write(
+        &root,
+        "settings.gradle",
+        "rootProject.name = 'app'\ninclude ':svc'\ninclude ':excluded'",
+    );
+    write(&root, "build.gradle", "");
+    write(&root, "svc/build.gradle", "");
+    write(&root, "excluded/build.gradle", "");
+    let mut inputs = ConfiguredJavaInputs {
+        module_inventory_complete: true,
+        ..Default::default()
+    };
+    // Only 'svc' in manifest; 'excluded' is intentionally absent.
+    inputs
+        .modules
+        .insert(root.join("svc"), module(root.join("svc")));
+    let graph = ModuleDependencyGraph::load_with_configured_inputs(&root, &inputs);
+    assert!(
+        graph.is_ok(),
+        "excluded known submodule should not cause fallback: {:?}",
+        graph.err()
+    );
 }
