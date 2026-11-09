@@ -1,4 +1,5 @@
 use super::go_git::*;
+use super::inert::is_inert_path;
 use models::go_impact::*;
 
 pub fn map_go_changes(
@@ -20,6 +21,9 @@ pub fn map_go_changes(
             target: None,
             diagnostics: vec![why.into()],
         };
+        if is_inert_path(path) {
+            continue;
+        }
         if f.status != "M" || !path.ends_with(".go") || f.hunks.is_empty() {
             out.push(broad(
                 "file/declaration/configuration change requires module fallback",
