@@ -283,8 +283,14 @@ fn collect_from_node(
             match inner.map(|n| n.kind()) {
                 Some("function_definition") => {
                     maybe_push_function(
-                        inner.unwrap(), code, source_path, module_path,
-                        enclosing_class, ctx, convention, tests,
+                        inner.unwrap(),
+                        code,
+                        source_path,
+                        module_path,
+                        enclosing_class,
+                        ctx,
+                        convention,
+                        tests,
                     );
                 }
                 Some("class_definition") => {
@@ -294,8 +300,14 @@ fn collect_from_node(
                         .map(|n| text(n, code))
                         .unwrap_or_default();
                     recurse_class_body(
-                        class_node, code, source_path, module_path,
-                        &class_name, ctx, convention, tests,
+                        class_node,
+                        code,
+                        source_path,
+                        module_path,
+                        &class_name,
+                        ctx,
+                        convention,
+                        tests,
                     );
                 }
                 _ => {}
@@ -303,16 +315,28 @@ fn collect_from_node(
         }
         "function_definition" => {
             maybe_push_function(
-                node, code, source_path, module_path,
-                enclosing_class, ctx, convention, tests,
+                node,
+                code,
+                source_path,
+                module_path,
+                enclosing_class,
+                ctx,
+                convention,
+                tests,
             );
         }
         _ => {
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
                 collect_from_node(
-                    child, code, source_path, module_path,
-                    enclosing_class, ctx, convention, tests,
+                    child,
+                    code,
+                    source_path,
+                    module_path,
+                    enclosing_class,
+                    ctx,
+                    convention,
+                    tests,
                 );
             }
         }
@@ -333,8 +357,14 @@ fn recurse_class_body(
         let mut cursor = body.walk();
         for child in body.children(&mut cursor) {
             collect_from_node(
-                child, code, source_path, module_path,
-                Some(class_name), ctx, convention, tests,
+                child,
+                code,
+                source_path,
+                module_path,
+                Some(class_name),
+                ctx,
+                convention,
+                tests,
             );
         }
     }
