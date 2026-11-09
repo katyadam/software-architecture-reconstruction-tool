@@ -1,4 +1,6 @@
-use extractor_runtime::impact::{select_tests, select_tests_with_reachability};
+use extractor_runtime::impact::{
+    include_potential_consumer_tests, select_tests, select_tests_with_reachability,
+};
 use models::{
     ChangedElement, ChangedElementKind, JavaTestCase, SelectionReason,
     call_graph::{CallGraphOutcome, CallGraphRequest, CallGraphStatus, ResolvedCallEdge},
@@ -34,6 +36,78 @@ fn successful_outcome() -> CallGraphOutcome {
         "wala-java",
         "cha_bytecode",
     )
+}
+
+#[test]
+fn includes_undiscovered_consumers_without_changing_local_reachability() {
+    let local = test_case("Local");
+    let mut consumer = test_case("Consumer");
+    consumer.module_root = "billing".into();
+    let mut result = models::TestImpactResult::new(
+        String::new(),
+        String::new(),
+        vec![callable_change()],
+        vec![],
+        vec![local.clone()],
+    );
+    include_potential_consumer_tests(&mut result, vec![local.clone(), consumer.clone()]);
+    assert_eq!(result.selected_tests.len(), 1);
+    assert_eq!(result.selected_tests[0].test, consumer);
+    assert_eq!(result.unselected_tests, vec![local]);
+    assert!(
+        matches!(&result.selected_tests[0].reasons[0], SelectionReason::ModuleFallback { diagnostic }
+        if diagnostic.starts_with("cross-module dependency scope unresolved"))
+    );
+}
+
+#[test]
+fn promotes_previously_unselected_consumers_and_deduplicates_on_repeated_application() {
+    let mut consumer = test_case("Consumer");
+    consumer.module_root = "billing".into();
+    let mut result = models::TestImpactResult::new(
+        String::new(),
+        String::new(),
+        vec![callable_change()],
+        vec![],
+        vec![consumer.clone()],
+    );
+    include_potential_consumer_tests(&mut result, vec![consumer.clone(), consumer.clone()]);
+    include_potential_consumer_tests(&mut result, vec![consumer]);
+    assert_eq!(result.selected_tests.len(), 1);
+    assert_eq!(result.selected_tests[0].reasons.len(), 1);
+    assert!(result.unselected_tests.is_empty());
+    assert_eq!(result.diagnostics.len(), 1);
+}
+
+#[test]
+fn test_only_changes_do_not_select_sibling_tests() {
+    let mut change = callable_change();
+    change.source_path = "orders/src/test/java/orders/OrderTest.java".into();
+    let mut consumer = test_case("Consumer");
+    consumer.module_root = "billing".into();
+    let mut result =
+        models::TestImpactResult::new(String::new(), String::new(), vec![change], vec![], vec![]);
+    include_potential_consumer_tests(&mut result, vec![consumer]);
+    assert!(result.selected_tests.is_empty());
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn root_changes_do_not_add_dependency_fallback_to_descendant_tests() {
+    let mut change = callable_change();
+    change.module_root = "/repo".into();
+    let mut child = test_case("Consumer");
+    child.module_root = "/repo/billing".into();
+    let mut result = models::TestImpactResult::new(
+        String::new(),
+        String::new(),
+        vec![change],
+        vec![],
+        vec![child.clone()],
+    );
+    include_potential_consumer_tests(&mut result, vec![child.clone()]);
+    assert!(result.selected_tests.is_empty());
+    assert_eq!(result.unselected_tests, vec![child]);
 }
 
 #[test]
