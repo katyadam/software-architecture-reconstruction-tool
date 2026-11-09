@@ -3,6 +3,7 @@
 mod adapter_process;
 pub mod go_native;
 pub mod java_adapter;
+pub mod pyan3;
 mod registry;
 mod resolver;
 pub mod wala;
