@@ -34,11 +34,13 @@ async fn python_rabbitmq_wrapper_pipeline_links_services_by_queue() {
     let config = ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "gateway-service".to_string(),
                 base_dir_path: producer_dir,
                 urls: vec![],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "converter-service".to_string(),
                 base_dir_path: consumer_dir,
                 urls: vec![],

@@ -6,11 +6,15 @@ use std::{
 };
 
 /// Records declared Java build modules or a conservative reason that metadata is unusable.
+#[derive(Clone)]
 pub struct ModuleCatalog {
     root: PathBuf,
     state: CatalogState,
+    configured_roots: Vec<PathBuf>,
+    configured_sources: Vec<PathBuf>,
 }
 
+#[derive(Clone)]
 enum CatalogState {
     Complete(Vec<PathBuf>),
     Partial(Vec<PathBuf>, String),
@@ -48,8 +52,50 @@ impl ModuleCatalog {
         Self::uncertain(root, "no Maven or Gradle build metadata found".into())
     }
 
+    pub fn with_configured_inputs(
+        &self,
+        inputs: &crate::java_analysis::ConfiguredJavaInputs,
+    ) -> Self {
+        let mut catalog = self.clone();
+        for module in inputs.modules.values() {
+            catalog.configured_roots.push(module.root.clone());
+            catalog
+                .configured_sources
+                .extend(module.source_roots.clone());
+            catalog
+                .configured_sources
+                .extend(module.test_source_roots.clone());
+        }
+        for service in &inputs.services {
+            if service.manifest_path.is_none() {
+                catalog.configured_roots.push(service.root.clone());
+                catalog
+                    .configured_sources
+                    .push(service.root.join("src/main/java"));
+                catalog
+                    .configured_sources
+                    .push(service.root.join("src/test/java"));
+            }
+        }
+        catalog
+    }
+
     /// Returns the deepest declared module containing a candidate-relative source path.
     pub fn owner_for(&self, source_path: &str) -> PathBuf {
+        if let Some(candidate) = normalized_candidate(&self.root, source_path) {
+            let automatic = match &self.state {
+                CatalogState::Complete(m) | CatalogState::Partial(m, _) => m.as_slice(),
+                _ => &[],
+            };
+            if let Some(owner) = automatic
+                .iter()
+                .chain(&self.configured_roots)
+                .filter(|p| candidate.starts_with(p))
+                .max_by_key(|p| p.components().count())
+            {
+                return owner.clone();
+            }
+        }
         match &self.state {
             CatalogState::Complete(modules) | CatalogState::Partial(modules, _) => {
                 let Some(candidate) = normalized_candidate(&self.root, source_path) else {
@@ -97,6 +143,13 @@ impl ModuleCatalog {
         let Some(candidate) = normalized_candidate(&self.root, source_path) else {
             return false;
         };
+        if self
+            .configured_sources
+            .iter()
+            .any(|p| candidate.starts_with(p))
+        {
+            return true;
+        }
         match &self.state {
             CatalogState::Complete(_) => true,
             CatalogState::Partial(modules, _) => modules
@@ -109,6 +162,8 @@ impl ModuleCatalog {
     pub(super) fn complete(root: PathBuf, modules: Vec<PathBuf>) -> Self {
         Self {
             root,
+            configured_roots: Vec::new(),
+            configured_sources: Vec::new(),
             state: CatalogState::Complete(modules),
         }
     }
@@ -116,6 +171,8 @@ impl ModuleCatalog {
     pub(super) fn uncertain(root: PathBuf, diagnostic: String) -> Self {
         Self {
             root,
+            configured_roots: Vec::new(),
+            configured_sources: Vec::new(),
             state: CatalogState::Uncertain(diagnostic),
         }
     }
@@ -123,6 +180,8 @@ impl ModuleCatalog {
     fn partial(root: PathBuf, modules: Vec<PathBuf>, diagnostic: String) -> Self {
         Self {
             root,
+            configured_roots: Vec::new(),
+            configured_sources: Vec::new(),
             state: CatalogState::Partial(modules, diagnostic),
         }
     }

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use cli::{enrich_with_wala, get_all_code_elements};
+use cli::{enrich_with_wala_inputs, get_all_code_elements};
 use models::ConfigurationData;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -66,6 +66,33 @@ async fn main() -> Result<()> {
     let config: ConfigurationData = serde_json::from_str(&config_raw)
         .context("Failed to parse Configuration JSON - check your schema!")?;
 
+    let java_inputs = if args.wala_adapter_jar.is_some()
+        && config.service_descriptions.iter().any(|s| {
+            s.java_analysis
+                .as_ref()
+                .is_some_and(|a| a.artifacts_file.is_some() || !a.maven_profiles.is_empty())
+        }) {
+        let output = std::process::Command::new("git")
+            .current_dir(&args.project_dir)
+            .args(["rev-parse", "--verify", "HEAD"])
+            .output()
+            .context("Unable to read Java manifest candidate revision")?;
+        anyhow::ensure!(
+            output.status.success(),
+            "Java manifests require a candidate Git checkout: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let revision = String::from_utf8(output.stdout)?;
+        Some(extractor_runtime::java_analysis::load_java_analysis_inputs(
+            &args.project_dir,
+            &args.project_dir,
+            &config,
+            revision.trim(),
+        )?)
+    } else {
+        None
+    };
+
     let constants_dto = if let Some(path) = &args.constants_file {
         let raw = fs::read_to_string(path).context("Failed to read constants file from disk")?;
 
@@ -104,12 +131,13 @@ async fn main() -> Result<()> {
     }
 
     let extraction = Instant::now();
-    let all_code_elements = enrich_with_wala(
+    let all_code_elements = enrich_with_wala_inputs(
         get_all_code_elements(&args.project_dir, &external_constants)?,
         &args.project_dir,
         &config,
         args.wala_adapter_jar.as_deref(),
         Duration::from_secs(args.wala_timeout_seconds),
+        java_inputs.as_ref(),
     );
     let extraction_elapsed = extraction.elapsed();
 

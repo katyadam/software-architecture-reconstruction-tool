@@ -1,3 +1,4 @@
+use super::adapter_process::{isolate_process_group, wait_for_output};
 use super::registry::CallGraphProvider;
 use models::{
     JavaTestCase,
@@ -5,15 +6,10 @@ use models::{
 };
 use serde::Deserialize;
 use std::{
-    io::{BufRead, BufReader, Read},
     path::PathBuf,
-    process::{Child, ChildStderr, ChildStdout, Command, Output, Stdio},
-    sync::mpsc,
+    process::{Command, Stdio},
     time::Duration,
 };
-
-#[cfg(not(unix))]
-use std::{thread, time::Instant};
 
 pub const DEFAULT_ANALYSIS_TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -70,10 +66,7 @@ impl JavaAdapterProvider {
         } else {
             None
         };
-        self.invoke(
-            &request,
-            test_root_arguments(source_root, test_roots, targets, artifacts.as_ref()),
-        )
+        self.invoke_with_test_roots(&request, test_roots, targets, artifacts.as_ref())
     }
 
     /// Prepares all in-project application modules for a consumer's test roots.
@@ -122,10 +115,90 @@ impl JavaAdapterProvider {
         merged.classpath.retain(|path| {
             !duplicates_application_module(std::path::Path::new(path), module_roots)
         });
-        self.invoke(
+        self.invoke_with_test_roots(&request, test_roots, targets, Some(&merged))
+    }
+
+    /// Prepares only an automatic module when a configured analysis mixes input modes.
+    pub fn prepare_module_inputs(
+        &self,
+        module: &std::path::Path,
+    ) -> Result<crate::java_analysis::JavaBytecodeInputs, String> {
+        let artifacts = self.prepare_artifacts(&CallGraphRequest::new(
+            module.to_string_lossy(),
+            Language::Java,
+        ))?;
+        Ok(crate::java_analysis::JavaBytecodeInputs {
+            application_class_dirs: artifacts
+                .application_class_dirs
+                .into_iter()
+                .map(PathBuf::from)
+                .collect(),
+            test_class_dirs: artifacts
+                .test_class_dirs
+                .into_iter()
+                .map(PathBuf::from)
+                .collect(),
+            classpath: artifacts.classpath.into_iter().map(PathBuf::from).collect(),
+        })
+    }
+
+    /// Uses supplied bytecode without executing any build preparation.
+    pub fn analyze_prepared_test_roots(
+        &self,
+        source_root: &std::path::Path,
+        tests: &[JavaTestCase],
+        targets: &[String],
+        bytecode: &crate::java_analysis::JavaBytecodeInputs,
+    ) -> CallGraphOutcome {
+        let request = CallGraphRequest::new(source_root.to_string_lossy(), Language::Java);
+        self.invoke_with_test_roots(
             &request,
-            test_root_arguments(project_root, test_roots, targets, Some(&merged)),
+            tests,
+            targets,
+            Some(&PreparedJavaArtifacts::from(bytecode)),
         )
+    }
+
+    pub fn analyze_prepared(
+        &self,
+        request: &CallGraphRequest,
+        bytecode: &crate::java_analysis::JavaBytecodeInputs,
+    ) -> CallGraphOutcome {
+        self.invoke_with_test_roots(
+            request,
+            &[],
+            &[],
+            Some(&PreparedJavaArtifacts::from(bytecode)),
+        )
+    }
+
+    fn invoke_with_test_roots(
+        &self,
+        request: &CallGraphRequest,
+        tests: &[JavaTestCase],
+        targets: &[String],
+        artifacts: Option<&PreparedJavaArtifacts>,
+    ) -> CallGraphOutcome {
+        if artifacts
+            .is_some_and(|a| a.application_class_dirs.is_empty() && a.test_class_dirs.is_empty())
+        {
+            let mut outcome =
+                CallGraphOutcome::ok(request.clone(), &self.provider_id, &self.algorithm);
+            outcome.status = CallGraphStatus::NoEntrypoints;
+            outcome
+                .diagnostics
+                .push("no prepared class directories; skipped adapter invocation".into());
+            return outcome;
+        }
+        match test_root_arguments(
+            std::path::Path::new(&request.source_root),
+            tests,
+            targets,
+            artifacts,
+        ) {
+            Ok(arguments) => self.invoke(request, arguments),
+            Err(error) => failed(request, &self.provider_id, &self.algorithm, &error),
+        }
     }
 
     fn prepare_artifacts(
@@ -200,7 +273,7 @@ impl JavaAdapterProvider {
     }
 }
 
-fn duplicates_application_module(jar: &std::path::Path, modules: &[PathBuf]) -> bool {
+pub(crate) fn duplicates_application_module(jar: &std::path::Path, modules: &[PathBuf]) -> bool {
     modules.iter().any(|module| {
         if jar.starts_with(module.join("build/libs")) {
             return true;
@@ -265,7 +338,7 @@ fn test_root_arguments(
     test_roots: &[JavaTestCase],
     targets: &[String],
     artifacts: Option<&PreparedJavaArtifacts>,
-) -> Vec<String> {
+) -> Result<Vec<String>, String> {
     let mut arguments = vec![
         "--source-dir".to_owned(),
         source_root.to_string_lossy().into_owned(),
@@ -282,9 +355,10 @@ fn test_root_arguments(
         if !artifacts.classpath.is_empty() {
             arguments.push("--classpath".to_owned());
             arguments.push(
-                artifacts
-                    .classpath
-                    .join(if cfg!(windows) { ";" } else { ":" }),
+                std::env::join_paths(&artifacts.classpath)
+                    .map_err(|e| format!("invalid classpath: {e}"))?
+                    .into_string()
+                    .map_err(|_| "non-UTF8 classpath".to_owned())?,
             );
         }
     }
@@ -299,7 +373,7 @@ fn test_root_arguments(
         arguments.push("--target".to_owned());
         arguments.push(target.clone());
     }
-    arguments
+    Ok(arguments)
 }
 
 #[derive(Debug, Deserialize)]
@@ -312,146 +386,20 @@ struct PreparedJavaArtifacts {
     diagnostic: String,
 }
 
-#[cfg(unix)]
-pub(crate) fn wait_for_output(
-    mut child: Child,
-    timeout: Duration,
-    provider_id: &str,
-) -> Result<Output, String> {
-    let process_id = child.id();
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-    let stdout_collector = std::thread::spawn(move || collect_stdout(stdout));
-    let provider_id = provider_id.to_owned();
-    let stderr_provider_id = provider_id.clone();
-    let stderr_collector = std::thread::spawn(move || collect_stderr(stderr, &stderr_provider_id));
-    let (sender, receiver) = mpsc::sync_channel(1);
-    let collector = std::thread::spawn(move || {
-        let output: Result<Output, String> = (|| {
-            let status = child.wait().map_err(|error| error.to_string())?;
-            let stdout = stdout_collector.join().map_err(|_| {
-                "adapter standard-output collector stopped unexpectedly".to_owned()
-            })??;
-            let stderr = stderr_collector.join().map_err(|_| {
-                "adapter standard-error collector stopped unexpectedly".to_owned()
-            })??;
-            Ok(Output {
-                status,
-                stdout,
-                stderr,
-            })
-        })();
-        let _ = sender.send(output);
-    });
-    let (output, timed_out) = match receiver.recv_timeout(timeout) {
-        Ok(output) => (output, false),
-        Err(mpsc::RecvTimeoutError::Timeout) => {
-            terminate_process_group(process_id);
-            (
-                receiver.recv().map_err(|_| {
-                    "adapter process-output collector stopped unexpectedly".to_owned()
-                })?,
-                true,
-            )
+impl From<&crate::java_analysis::JavaBytecodeInputs> for PreparedJavaArtifacts {
+    fn from(inputs: &crate::java_analysis::JavaBytecodeInputs) -> Self {
+        let strings = |paths: &[PathBuf]| {
+            paths
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect()
+        };
+        Self {
+            application_class_dirs: strings(&inputs.application_class_dirs),
+            test_class_dirs: strings(&inputs.test_class_dirs),
+            classpath: strings(&inputs.classpath),
+            diagnostic: String::new(),
         }
-        Err(mpsc::RecvTimeoutError::Disconnected) => {
-            return Err("adapter process-output collector stopped unexpectedly".into());
-        }
-    };
-    if collector.join().is_err() {
-        return Err("adapter process-output collector stopped unexpectedly".into());
-    }
-    let output = output?;
-    if timed_out {
-        return Err(timeout_diagnostic(timeout, &output.stderr, &provider_id));
-    }
-    Ok(output)
-}
-
-#[cfg(unix)]
-fn collect_stdout(stdout: Option<ChildStdout>) -> Result<Vec<u8>, String> {
-    let mut output = vec![];
-    if let Some(mut stdout) = stdout {
-        stdout
-            .read_to_end(&mut output)
-            .map_err(|error| error.to_string())?;
-    }
-    Ok(output)
-}
-
-#[cfg(unix)]
-fn collect_stderr(stderr: Option<ChildStderr>, provider_id: &str) -> Result<Vec<u8>, String> {
-    let mut output = vec![];
-    let Some(stderr) = stderr else {
-        return Ok(output);
-    };
-    let mut lines = BufReader::new(stderr).split(b'\n');
-    while let Some(line) = lines.next() {
-        let line = line.map_err(|error| error.to_string())?;
-        if line
-            .windows(b"_phase=".len())
-            .any(|window| window == b"_phase=")
-        {
-            eprintln!("{provider_id}: {}", String::from_utf8_lossy(&line));
-        }
-        output.extend_from_slice(&line);
-        output.push(b'\n');
-    }
-    Ok(output)
-}
-
-#[cfg(unix)]
-fn timeout_diagnostic(timeout: Duration, stderr: &[u8], provider_id: &str) -> String {
-    const MAX_STDERR_BYTES: usize = 4_096;
-    let tail_start = stderr.len().saturating_sub(MAX_STDERR_BYTES);
-    let tail = String::from_utf8_lossy(&stderr[tail_start..])
-        .trim()
-        .to_owned();
-    if tail.is_empty() {
-        format!("{provider_id} analysis timed out after {timeout:?}")
-    } else {
-        format!("{provider_id} analysis timed out after {timeout:?}; adapter stderr: {tail}")
-    }
-}
-
-#[cfg(not(unix))]
-pub(crate) fn wait_for_output(
-    mut child: Child,
-    timeout: Duration,
-    provider_id: &str,
-) -> Result<Output, String> {
-    let deadline = Instant::now() + timeout;
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => return child.wait_with_output().map_err(|error| error.to_string()),
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(format!(
-                    "{provider_id} analysis timed out after {timeout:?}"
-                ));
-            }
-            Ok(None) => thread::sleep(Duration::from_millis(10)),
-            Err(error) => return Err(error.to_string()),
-        }
-    }
-}
-
-#[cfg(unix)]
-pub(crate) fn isolate_process_group(command: &mut Command) {
-    use std::os::unix::process::CommandExt;
-    command.process_group(0);
-}
-
-#[cfg(not(unix))]
-pub(crate) fn isolate_process_group(_: &mut Command) {}
-
-#[cfg(unix)]
-fn terminate_process_group(process_id: u32) {
-    let process_group = -(process_id as i32);
-    let killed_group = unsafe { libc::kill(process_group, libc::SIGKILL) } == 0;
-    if !killed_group {
-        unsafe { libc::kill(process_id as i32, libc::SIGKILL) };
     }
 }
 
@@ -561,7 +509,8 @@ mod tests {
                 &tests,
                 &["Lexample/Service#run/0".into()],
                 None,
-            ),
+            )
+            .unwrap(),
             vec![
                 "--source-dir",
                 "module/src/main/java",
