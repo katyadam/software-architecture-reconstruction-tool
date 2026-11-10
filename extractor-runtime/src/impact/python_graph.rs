@@ -216,7 +216,10 @@ mod tests {
 
     #[test]
     fn node_matches_local_cases() {
-        assert!(node_matches_local("tests.test_x.TestClass.method", "TestClass.method"));
+        assert!(node_matches_local(
+            "tests.test_x.TestClass.method",
+            "TestClass.method"
+        ));
         assert!(node_matches_local("mymodule.function", "function"));
         assert!(node_matches_local("bare", "bare"));
         assert!(!node_matches_local("m.other", "other_thing"));
@@ -229,10 +232,7 @@ mod tests {
         // setUpTestData is reachable from changed callable but test_ratio has no call edges.
         // The test methods should still be considered reachable via class membership.
         let mut edges = HashMap::new();
-        edges.insert(
-            "MyClass.__init__".into(),
-            vec!["svc.Model.__init__".into()],
-        );
+        edges.insert("MyClass.__init__".into(), vec!["svc.Model.__init__".into()]);
         edges.insert("svc.Model.__init__".into(), vec![]);
         // setUpTestData calls MyClass.__init__; test_ratio has no outgoing edges (absent from map)
         edges.insert(
@@ -264,8 +264,7 @@ mod tests {
             vec![],
         );
         let tests = vec![tc("TestPayment::test_create")];
-        let suggestions =
-            graph_suggestions(&["PaymentService.create_payment"], &tests, &edges);
+        let suggestions = graph_suggestions(&["PaymentService.create_payment"], &tests, &edges);
         assert_eq!(suggestions.len(), 1, "{suggestions:?}");
     }
 
@@ -291,8 +290,7 @@ mod tests {
             tc("TestPayment::test_create"),
             tc("TestOther::test_something"),
         ];
-        let suggestions =
-            graph_suggestions(&["PaymentService.create_payment"], &tests, &edges);
+        let suggestions = graph_suggestions(&["PaymentService.create_payment"], &tests, &edges);
         assert_eq!(suggestions.len(), 1, "{suggestions:?}");
         assert_eq!(
             suggestions[0].test.qualified_name,
@@ -303,7 +301,10 @@ mod tests {
     #[test]
     fn class_matches_local_cases() {
         assert!(class_matches_local("MyTests.setUpTestData", "MyTests"));
-        assert!(class_matches_local("tests.test_m.MyTests.setUpTestData", "MyTests"));
+        assert!(class_matches_local(
+            "tests.test_m.MyTests.setUpTestData",
+            "MyTests"
+        ));
         assert!(!class_matches_local("OtherTests.setup", "MyTests"));
         // Partial class name must not match
         assert!(!class_matches_local("MyTestsExtra.setup", "MyTests"));

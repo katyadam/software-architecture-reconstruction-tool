@@ -112,8 +112,12 @@ fn scan_file_context(root: Node<'_>, code: &str) -> FileTestContext {
                     match child.kind() {
                         "dotted_name" | "identifier" => {
                             let t = text(child, code);
-                            if t == "pytest" { imports_pytest = true; }
-                            if t == "unittest" { imports_unittest = true; }
+                            if t == "pytest" {
+                                imports_pytest = true;
+                            }
+                            if t == "unittest" {
+                                imports_unittest = true;
+                            }
                         }
                         _ => {}
                     }
@@ -127,8 +131,12 @@ fn scan_file_context(root: Node<'_>, code: &str) -> FileTestContext {
                     match child.kind() {
                         "dotted_name" | "relative_import" => {
                             let t = text(child, code);
-                            if t == "pytest" || t.starts_with("pytest.") { imports_pytest = true; }
-                            if t == "unittest" || t.starts_with("unittest.") { imports_unittest = true; }
+                            if t == "pytest" || t.starts_with("pytest.") {
+                                imports_pytest = true;
+                            }
+                            if t == "unittest" || t.starts_with("unittest.") {
+                                imports_unittest = true;
+                            }
                             break;
                         }
                         _ => {}
@@ -165,7 +173,11 @@ fn scan_file_context(root: Node<'_>, code: &str) -> FileTestContext {
         }
     }
 
-    FileTestContext { imports_pytest, imports_unittest, unittest_subclasses }
+    FileTestContext {
+        imports_pytest,
+        imports_unittest,
+        unittest_subclasses,
+    }
 }
 
 /// Returns the simple class name and its base-class names for a `class_definition`
@@ -272,7 +284,16 @@ fn collect_from_node(
                 .child_by_field_name("name")
                 .map(|n| text(n, code))
                 .unwrap_or_default();
-            recurse_class_body(node, code, source_path, module_path, &class_name, ctx, convention, tests);
+            recurse_class_body(
+                node,
+                code,
+                source_path,
+                module_path,
+                &class_name,
+                ctx,
+                convention,
+                tests,
+            );
         }
         "decorated_definition" => {
             // May wrap either a function_definition or a class_definition.
