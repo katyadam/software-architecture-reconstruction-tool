@@ -199,11 +199,9 @@ impl SelectedJavaProvider {
             Self::SootUp(provider) => {
                 provider.analyze_modules(project_root, modules, tests, targets)
             }
-            Self::Spoon(provider) => provider.analyze_test_roots(
-                &project_root.join("src/main/java"),
-                tests,
-                targets,
-            ),
+            Self::Spoon(provider) => {
+                provider.analyze_test_roots(&project_root.join("src/main/java"), tests, targets)
+            }
         }
     }
     fn label(&self) -> &'static str {
@@ -276,9 +274,9 @@ fn select_provider(
             if !jar.is_file() {
                 anyhow::bail!("--spoon-adapter-jar must be an existing file");
             }
-            Ok(SelectedJavaProvider::Spoon(SpoonJavaProvider::with_timeout(
-                jar, timeout,
-            )))
+            Ok(SelectedJavaProvider::Spoon(
+                SpoonJavaProvider::with_timeout(jar, timeout),
+            ))
         }
     }
 }

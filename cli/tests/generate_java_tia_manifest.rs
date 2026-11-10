@@ -72,7 +72,10 @@ public class ServiceTest {
         output.to_str().unwrap(),
     ]);
     assert!(ok, "generator failed: {stderr}");
-    assert!(stderr.contains("manifest.json"), "expected wrote confirmation in stderr");
+    assert!(
+        stderr.contains("manifest.json"),
+        "expected wrote confirmation in stderr"
+    );
 
     let manifest: Value = serde_json::from_str(&fs::read_to_string(&output).unwrap()).unwrap();
     assert_eq!(manifest["schema_version"], 1);
@@ -94,7 +97,10 @@ public class ServiceTest {
         .collect();
     assert!(method_names.contains(&"checksValue"), "missing checksValue");
     assert!(method_names.contains(&"checksEdge"), "missing checksEdge");
-    assert!(!method_names.contains(&"helper"), "helper must not be included");
+    assert!(
+        !method_names.contains(&"helper"),
+        "helper must not be included"
+    );
 
     let class_names: Vec<&str> = tests
         .iter()
@@ -232,8 +238,7 @@ fn writes_service_config_when_flag_supplied() {
     assert!(ok, "{stderr}");
     assert!(config_path.exists(), "service-config.json not created");
 
-    let config: Value =
-        serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
+    let config: Value = serde_json::from_str(&fs::read_to_string(&config_path).unwrap()).unwrap();
     let desc = &config["service_descriptions"][0];
     assert_eq!(desc["name"], "my-service");
     assert_eq!(desc["base_dir_path"], ".");

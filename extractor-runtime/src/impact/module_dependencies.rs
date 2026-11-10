@@ -370,7 +370,11 @@ fn reactor_modules_maven(root: &Path) -> Result<std::collections::BTreeSet<PathB
             }
             Ok(Event::Text(value)) => {
                 if stack == ["project", "modules", "module"] {
-                    let name = value.decode().map_err(|e| e.to_string())?.trim().to_string();
+                    let name = value
+                        .decode()
+                        .map_err(|e| e.to_string())?
+                        .trim()
+                        .to_string();
                     if !name.is_empty() {
                         if let Ok(p) = root.join(&name).canonicalize() {
                             modules.insert(p);
@@ -378,7 +382,9 @@ fn reactor_modules_maven(root: &Path) -> Result<std::collections::BTreeSet<PathB
                     }
                 }
             }
-            Ok(Event::End(_)) => { stack.pop(); }
+            Ok(Event::End(_)) => {
+                stack.pop();
+            }
             Ok(Event::Eof) => break,
             _ => {}
         }

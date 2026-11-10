@@ -20,14 +20,22 @@ pub fn map_python_changes(
             continue;
         }
         if file.status != "M" || !path.ends_with(".py") || file.hunks.is_empty() {
-            out.push(broad(path, &file.old_path, "file/rename/delete change requires module fallback"));
+            out.push(broad(
+                path,
+                &file.old_path,
+                "file/rename/delete change requires module fallback",
+            ));
             continue;
         }
         let full = project_root.join(path);
         let code = match fs::read_to_string(&full) {
             Ok(c) => c,
             Err(e) => {
-                out.push(broad(path, &file.old_path, &format!("cannot read source: {e}")));
+                out.push(broad(
+                    path,
+                    &file.old_path,
+                    &format!("cannot read source: {e}"),
+                ));
                 continue;
             }
         };
@@ -53,7 +61,11 @@ pub fn map_python_changes(
                         hunk.old_start,
                         hunk.old_count,
                     ),
-                    None => vec![broad(path, &file.old_path, "deletion hunk: old source unavailable")],
+                    None => vec![broad(
+                        path,
+                        &file.old_path,
+                        "deletion hunk: old source unavailable",
+                    )],
                 }
             } else {
                 map_hunk(tree.root_node(), &code, path, &file.old_path, hunk)
@@ -87,7 +99,11 @@ fn map_hunk(
     hunk: &PythonHunk,
 ) -> Vec<PythonChangedElement> {
     if hunk.new_count == 0 {
-        return vec![broad(path, old_path, "deletion hunk requires module fallback")];
+        return vec![broad(
+            path,
+            old_path,
+            "deletion hunk requires module fallback",
+        )];
     }
     let start_line = hunk.new_start as usize;
     let end_line = (hunk.new_start + hunk.new_count - 1) as usize;
@@ -123,7 +139,12 @@ fn owning_callable(root: Node<'_>, code: &str, line: usize) -> Option<String> {
     find_owner(root, code, line, None)
 }
 
-fn find_owner(node: Node<'_>, code: &str, line: usize, enclosing: Option<String>) -> Option<String> {
+fn find_owner(
+    node: Node<'_>,
+    code: &str,
+    line: usize,
+    enclosing: Option<String>,
+) -> Option<String> {
     let start = node.start_position().row;
     let end = node.end_position().row;
     if line < start || line > end {
@@ -217,7 +238,11 @@ fn map_deletion_hunk(
         .set_language(&tree_sitter_python::LANGUAGE.into())
         .is_err()
     {
-        return vec![broad(path, old_path, "Python grammar init failed (old source)")];
+        return vec![broad(
+            path,
+            old_path,
+            "Python grammar init failed (old source)",
+        )];
     }
     let Some(tree) = parser.parse(old_source, None) else {
         return vec![broad(path, old_path, "Python parse failed (old source)")];

@@ -49,13 +49,15 @@ fn main() {
 }
 
 fn run(arguments: Arguments) -> Result<()> {
-    let project = arguments
-        .project_dir
-        .canonicalize()
-        .with_context(|| format!("cannot access project dir: {}", arguments.project_dir.display()))?;
+    let project = arguments.project_dir.canonicalize().with_context(|| {
+        format!(
+            "cannot access project dir: {}",
+            arguments.project_dir.display()
+        )
+    })?;
 
-    let candidate_revision = git_revision(&project, "HEAD")
-        .context("failed to read git HEAD revision")?;
+    let candidate_revision =
+        git_revision(&project, "HEAD").context("failed to read git HEAD revision")?;
 
     let profiles: Vec<String> = arguments
         .profiles
@@ -67,8 +69,7 @@ fn run(arguments: Arguments) -> Result<()> {
         .map(str::to_owned)
         .collect();
 
-    let modules =
-        checkout_modules(&project).context("failed to discover Maven modules")?;
+    let modules = checkout_modules(&project).context("failed to discover Maven modules")?;
 
     let mut manifest_modules = Vec::new();
     for module in &modules {

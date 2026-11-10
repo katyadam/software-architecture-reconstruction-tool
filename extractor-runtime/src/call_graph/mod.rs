@@ -6,8 +6,8 @@ pub mod java_adapter;
 pub mod pyan3;
 mod registry;
 mod resolver;
-pub mod wala;
 pub mod spoon;
+pub mod wala;
 pub use registry::{CallGraphProvider, ProviderRegistry};
 pub use resolver::{
     JavaCallGraphResolution, JavaSourceLayout, resolve_edges, resolve_edges_with_java_layout,

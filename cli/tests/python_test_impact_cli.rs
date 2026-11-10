@@ -1,7 +1,6 @@
 use serde_json::Value;
 use std::{
-    env,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     process::{Command, Output},
 };
@@ -60,7 +59,12 @@ fn fixture() -> Fixture {
     git(&root, &["commit", "-qm", "baseline"]);
     let baseline = git(&root, &["rev-parse", "HEAD"]);
     let out = dir.path().join("result.json");
-    Fixture { dir, root, baseline, out }
+    Fixture {
+        dir,
+        root,
+        baseline,
+        out,
+    }
 }
 
 fn run(f: &Fixture) -> Output {
@@ -233,7 +237,10 @@ fn output_path_inside_project_dir_is_rejected() {
         ])
         .output()
         .unwrap();
-    assert!(!o.status.success(), "should reject output inside project dir");
+    assert!(
+        !o.status.success(),
+        "should reject output inside project dir"
+    );
 }
 
 #[test]
@@ -249,7 +256,11 @@ fn test_functions_in_classes_are_discovered() {
     let new_baseline = git(&f.root, &["rev-parse", "HEAD"]);
 
     // Now make a change to trigger selection.
-    write_file(&f.root, "service.py", "def compute(x):\n    return x + 99\n");
+    write_file(
+        &f.root,
+        "service.py",
+        "def compute(x):\n    return x + 99\n",
+    );
     git(&f.root, &["add", "."]);
     git(&f.root, &["commit", "-qm", "candidate"]);
 
@@ -298,7 +309,11 @@ fn django_tests_py_is_discovered() {
     git(&f.root, &["commit", "-qm", "add django tests"]);
     let new_baseline = git(&f.root, &["rev-parse", "HEAD"]);
 
-    write_file(&f.root, "service.py", "def compute(x):\n    return x + 99\n");
+    write_file(
+        &f.root,
+        "service.py",
+        "def compute(x):\n    return x + 99\n",
+    );
     git(&f.root, &["add", "."]);
     git(&f.root, &["commit", "-qm", "candidate"]);
 
@@ -356,7 +371,10 @@ fn benchmark_microservices_django_kafka_production_change_selects_all_15_tests()
 
     if !benchmark_root.join(".git").exists() {
         // Benchmark repo not present; skip without failing.
-        eprintln!("skip: benchmark repo not found at {}", benchmark_root.display());
+        eprintln!(
+            "skip: benchmark repo not found at {}",
+            benchmark_root.display()
+        );
         return;
     }
 
@@ -421,8 +439,8 @@ fn benchmark_microservices_django_kafka_production_change_selects_all_15_tests()
         String::from_utf8_lossy(&o.stderr)
     );
 
-    let v: Value = serde_json::from_slice(&fs::read(&out_path).unwrap())
-        .expect("valid JSON output");
+    let v: Value =
+        serde_json::from_slice(&fs::read(&out_path).unwrap()).expect("valid JSON output");
 
     // Production-only change → conservative_all, run_all_tests=true.
     assert_eq!(v["selection_mode"], "conservative_all", "{v}");
@@ -434,10 +452,16 @@ fn benchmark_microservices_django_kafka_production_change_selects_all_15_tests()
     //   events/tests/test_models.py      — 1 method
     //   planning-service/.../test_ratios.py — 6 methods (2 classes × 3 methods each)
     let discovered = v["discovered_tests"].as_array().unwrap().len();
-    assert_eq!(discovered, 15, "expected 15 discovered tests, got {discovered}: {v}");
+    assert_eq!(
+        discovered, 15,
+        "expected 15 discovered tests, got {discovered}: {v}"
+    );
 
     let selected = v["selected_tests"].as_array().unwrap().len();
-    assert_eq!(selected, 15, "expected all 15 tests selected, got {selected}: {v}");
+    assert_eq!(
+        selected, 15,
+        "expected all 15 tests selected, got {selected}: {v}"
+    );
 
     // Both changed callables should appear as reasons.
     let all_targets: Vec<&str> = v["selected_tests"]
@@ -451,8 +475,12 @@ fn benchmark_microservices_django_kafka_production_change_selects_all_15_tests()
                 .and_then(|t| t.as_str())
         })
         .collect();
-    let has_models = all_targets.iter().any(|t| t.contains("Person") || t.contains("age"));
-    let has_ratios = all_targets.iter().any(|t| t.contains("NetWorthToTotalAssets") || t.contains("__init__"));
+    let has_models = all_targets
+        .iter()
+        .any(|t| t.contains("Person") || t.contains("age"));
+    let has_ratios = all_targets
+        .iter()
+        .any(|t| t.contains("NetWorthToTotalAssets") || t.contains("__init__"));
     assert!(
         has_models || has_ratios,
         "expected at least one callable-level reason for models.py or ratios.py change; targets={all_targets:?}"
@@ -503,7 +531,11 @@ fn pyan3_absent_falls_back_to_conservative() {
     // Since this test runs regardless of pyan3 availability, we just verify robustness of the
     // zero-timeout path as the unit-testable proxy.
     let f = fixture();
-    write_file(&f.root, "service.py", "def compute(x):\n    return x + 99\n");
+    write_file(
+        &f.root,
+        "service.py",
+        "def compute(x):\n    return x + 99\n",
+    );
     commit(&f);
     // With timeout=0 the graph phase is explicitly skipped — no crash, full conservative selection.
     let out = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
@@ -519,7 +551,11 @@ fn pyan3_absent_falls_back_to_conservative() {
         ])
         .output()
         .unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let v = read(&f, out);
     assert_eq!(v["selection_mode"], "conservative_all", "{v}");
     assert_eq!(v["run_all_tests"], true, "{v}");
@@ -548,7 +584,10 @@ fn benchmark_kafka_ml_models_change_selects_all_14_tests() {
         .join("kafka-ml");
 
     if !benchmark_root.join(".git").exists() {
-        eprintln!("skip: benchmark repo not found at {}", benchmark_root.display());
+        eprintln!(
+            "skip: benchmark repo not found at {}",
+            benchmark_root.display()
+        );
         return;
     }
 
@@ -564,7 +603,9 @@ fn benchmark_kafka_ml_models_change_selects_all_14_tests() {
         eprintln!("skip: required commit {candidate} not present in benchmark repo");
         return;
     }
-    let baseline = String::from_utf8_lossy(&baseline_out.stdout).trim().to_string();
+    let baseline = String::from_utf8_lossy(&baseline_out.stdout)
+        .trim()
+        .to_string();
 
     let wt_dir = tempfile::tempdir().expect("tempdir");
     let wt_root = wt_dir.path().join("worktree");
@@ -605,8 +646,8 @@ fn benchmark_kafka_ml_models_change_selects_all_14_tests() {
         String::from_utf8_lossy(&o.stderr)
     );
 
-    let v: Value = serde_json::from_slice(&fs::read(&out_path).unwrap())
-        .expect("valid JSON output");
+    let v: Value =
+        serde_json::from_slice(&fs::read(&out_path).unwrap()).expect("valid JSON output");
 
     assert_eq!(v["selection_mode"], "conservative_all", "{v}");
     assert_eq!(v["run_all_tests"], true, "{v}");
@@ -616,10 +657,16 @@ fn benchmark_kafka_ml_models_change_selects_all_14_tests() {
     //   ConfigurationViewTest — 5 methods
     //   ResultViewTest        — 1 method
     let discovered = v["discovered_tests"].as_array().unwrap().len();
-    assert_eq!(discovered, 14, "expected 14 discovered tests, got {discovered}: {v}");
+    assert_eq!(
+        discovered, 14,
+        "expected 14 discovered tests, got {discovered}: {v}"
+    );
 
     let selected = v["selected_tests"].as_array().unwrap().len();
-    assert_eq!(selected, 14, "expected all 14 tests selected, got {selected}: {v}");
+    assert_eq!(
+        selected, 14,
+        "expected all 14 tests selected, got {selected}: {v}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -640,16 +687,24 @@ fn pytest_function_in_non_test_named_file_is_discovered() {
     git(&f.root, &["commit", "-qm", "add pytest logic"]);
     let new_baseline = git(&f.root, &["rev-parse", "HEAD"]);
 
-    write_file(&f.root, "service.py", "def compute(x):\n    return x + 99\n");
+    write_file(
+        &f.root,
+        "service.py",
+        "def compute(x):\n    return x + 99\n",
+    );
     git(&f.root, &["add", "."]);
     git(&f.root, &["commit", "-qm", "candidate"]);
 
     let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
         .args([
-            "--project-dir", f.root.to_str().unwrap(),
-            "--baseline-revision", &new_baseline,
-            "--output", f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs", "0",
+            "--project-dir",
+            f.root.to_str().unwrap(),
+            "--baseline-revision",
+            &new_baseline,
+            "--output",
+            f.out.to_str().unwrap(),
+            "--pyan3-timeout-secs",
+            "0",
         ])
         .output()
         .unwrap();
@@ -680,16 +735,24 @@ fn unittest_testcase_subclass_in_non_test_named_file_is_discovered() {
     git(&f.root, &["commit", "-qm", "add unittest suite"]);
     let new_baseline = git(&f.root, &["rev-parse", "HEAD"]);
 
-    write_file(&f.root, "service.py", "def compute(x):\n    return x + 99\n");
+    write_file(
+        &f.root,
+        "service.py",
+        "def compute(x):\n    return x + 99\n",
+    );
     git(&f.root, &["add", "."]);
     git(&f.root, &["commit", "-qm", "candidate"]);
 
     let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
         .args([
-            "--project-dir", f.root.to_str().unwrap(),
-            "--baseline-revision", &new_baseline,
-            "--output", f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs", "0",
+            "--project-dir",
+            f.root.to_str().unwrap(),
+            "--baseline-revision",
+            &new_baseline,
+            "--output",
+            f.out.to_str().unwrap(),
+            "--pyan3-timeout-secs",
+            "0",
         ])
         .output()
         .unwrap();
@@ -724,16 +787,24 @@ fn files_under_tests_dir_are_scanned_without_test_prefix() {
     git(&f.root, &["commit", "-qm", "add tests/utils.py"]);
     let new_baseline = git(&f.root, &["rev-parse", "HEAD"]);
 
-    write_file(&f.root, "service.py", "def compute(x):\n    return x + 99\n");
+    write_file(
+        &f.root,
+        "service.py",
+        "def compute(x):\n    return x + 99\n",
+    );
     git(&f.root, &["add", "."]);
     git(&f.root, &["commit", "-qm", "candidate"]);
 
     let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
         .args([
-            "--project-dir", f.root.to_str().unwrap(),
-            "--baseline-revision", &new_baseline,
-            "--output", f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs", "0",
+            "--project-dir",
+            f.root.to_str().unwrap(),
+            "--baseline-revision",
+            &new_baseline,
+            "--output",
+            f.out.to_str().unwrap(),
+            "--pyan3-timeout-secs",
+            "0",
         ])
         .output()
         .unwrap();
@@ -768,16 +839,24 @@ fn decorated_class_tests_are_discovered() {
     git(&f.root, &["commit", "-qm", "add decorated test class"]);
     let new_baseline = git(&f.root, &["rev-parse", "HEAD"]);
 
-    write_file(&f.root, "service.py", "def compute(x):\n    return x + 99\n");
+    write_file(
+        &f.root,
+        "service.py",
+        "def compute(x):\n    return x + 99\n",
+    );
     git(&f.root, &["add", "."]);
     git(&f.root, &["commit", "-qm", "candidate"]);
 
     let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
         .args([
-            "--project-dir", f.root.to_str().unwrap(),
-            "--baseline-revision", &new_baseline,
-            "--output", f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs", "0",
+            "--project-dir",
+            f.root.to_str().unwrap(),
+            "--baseline-revision",
+            &new_baseline,
+            "--output",
+            f.out.to_str().unwrap(),
+            "--pyan3-timeout-secs",
+            "0",
         ])
         .output()
         .unwrap();
@@ -825,7 +904,10 @@ fn benchmark_mdk_callable_change_selects_6_tests_with_call_graph_precise() {
         .join("microservices-django-kafka");
 
     if !benchmark_root.join(".git").exists() {
-        eprintln!("skip: benchmark repo not found at {}", benchmark_root.display());
+        eprintln!(
+            "skip: benchmark repo not found at {}",
+            benchmark_root.display()
+        );
         return;
     }
 
@@ -895,8 +977,8 @@ fn benchmark_mdk_callable_change_selects_6_tests_with_call_graph_precise() {
         String::from_utf8_lossy(&o.stderr)
     );
 
-    let v: Value = serde_json::from_slice(&fs::read(&out_path).unwrap())
-        .expect("valid JSON output");
+    let v: Value =
+        serde_json::from_slice(&fs::read(&out_path).unwrap()).expect("valid JSON output");
 
     // With pyan3, should use precise call graph mode and NOT run all tests.
     assert_eq!(v["selection_mode"], "call_graph_precise", "{v}");
@@ -904,11 +986,21 @@ fn benchmark_mdk_callable_change_selects_6_tests_with_call_graph_precise() {
 
     // Only the 6 planning-service tests that reach changed callables should be selected.
     let selected = v["selected_tests"].as_array().unwrap();
-    assert_eq!(selected.len(), 6, "expected 6 selected tests (planning-service only), got {}: {v}", selected.len());
+    assert_eq!(
+        selected.len(),
+        6,
+        "expected 6 selected tests (planning-service only), got {}: {v}",
+        selected.len()
+    );
 
     // The 9 events-service tests must be unselected.
     let unselected = v["unselected_tests"].as_array().unwrap();
-    assert_eq!(unselected.len(), 9, "expected 9 unselected tests (events-service), got {}: {v}", unselected.len());
+    assert_eq!(
+        unselected.len(),
+        9,
+        "expected 9 unselected tests (events-service), got {}: {v}",
+        unselected.len()
+    );
 
     // All selected tests should be from NetWorthToTotalAssets_Age42 or _Age66.
     let selected_names: Vec<&str> = selected
@@ -954,8 +1046,16 @@ fn call_graph_precise_selects_only_reachable_test() {
     let root = root.canonicalize().unwrap();
     git(&root, &["init", "-q"]);
 
-    write_file(&root, "svc_a/logic.py", "def process(x):\n    return x * 2\n");
-    write_file(&root, "svc_b/utils.py", "def format_val(x):\n    return str(x)\n");
+    write_file(
+        &root,
+        "svc_a/logic.py",
+        "def process(x):\n    return x * 2\n",
+    );
+    write_file(
+        &root,
+        "svc_b/utils.py",
+        "def format_val(x):\n    return str(x)\n",
+    );
     write_file(
         &root,
         "tests/test_svc_a.py",
@@ -974,17 +1074,25 @@ fn call_graph_precise_selects_only_reachable_test() {
     let baseline = git(&root, &["rev-parse", "HEAD"]);
 
     // Change only svc_a/logic.py — svc_b is untouched.
-    write_file(&root, "svc_a/logic.py", "def process(x):\n    return x * 3\n");
+    write_file(
+        &root,
+        "svc_a/logic.py",
+        "def process(x):\n    return x * 3\n",
+    );
     git(&root, &["add", "."]);
     git(&root, &["commit", "-qm", "change process"]);
 
     let out_path = dir.path().join("result.json");
     let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
         .args([
-            "--project-dir", root.to_str().unwrap(),
-            "--baseline-revision", &baseline,
-            "--output", out_path.to_str().unwrap(),
-            "--pyan3-timeout-secs", "30",
+            "--project-dir",
+            root.to_str().unwrap(),
+            "--baseline-revision",
+            &baseline,
+            "--output",
+            out_path.to_str().unwrap(),
+            "--pyan3-timeout-secs",
+            "30",
         ])
         .output()
         .unwrap();
@@ -1040,7 +1148,10 @@ fn benchmark_tbs_class_method_change_selects_3_tests_with_call_graph_precise() {
         .join("test-billing-system");
 
     if !benchmark_root.join(".git").exists() {
-        eprintln!("skip: benchmark repo not found at {}", benchmark_root.display());
+        eprintln!(
+            "skip: benchmark repo not found at {}",
+            benchmark_root.display()
+        );
         return;
     }
 
@@ -1110,8 +1221,8 @@ fn benchmark_tbs_class_method_change_selects_3_tests_with_call_graph_precise() {
         String::from_utf8_lossy(&o.stderr)
     );
 
-    let v: Value = serde_json::from_slice(&fs::read(&out_path).unwrap())
-        .expect("valid JSON output");
+    let v: Value =
+        serde_json::from_slice(&fs::read(&out_path).unwrap()).expect("valid JSON output");
 
     assert_eq!(v["selection_mode"], "call_graph_precise", "{v}");
     assert_eq!(v["run_all_tests"], false, "{v}");
@@ -1178,7 +1289,10 @@ fn benchmark_mpd_orders_change_selects_5_tests_with_call_graph_precise() {
         .join("microservices-python-demo");
 
     if !benchmark_root.join(".git").exists() {
-        eprintln!("skip: benchmark repo not found at {}", benchmark_root.display());
+        eprintln!(
+            "skip: benchmark repo not found at {}",
+            benchmark_root.display()
+        );
         return;
     }
 
@@ -1248,8 +1362,8 @@ fn benchmark_mpd_orders_change_selects_5_tests_with_call_graph_precise() {
         String::from_utf8_lossy(&o.stderr)
     );
 
-    let v: Value = serde_json::from_slice(&fs::read(&out_path).unwrap())
-        .expect("valid JSON output");
+    let v: Value =
+        serde_json::from_slice(&fs::read(&out_path).unwrap()).expect("valid JSON output");
 
     assert_eq!(v["selection_mode"], "call_graph_precise", "{v}");
     assert_eq!(v["run_all_tests"], false, "{v}");
@@ -1309,7 +1423,10 @@ fn benchmark_textproc_tokenizer_change_selects_30_tests_with_call_graph_precise(
         .join("text-processing-microservices");
 
     if !benchmark_root.join(".git").exists() {
-        eprintln!("skip: benchmark repo not found at {}", benchmark_root.display());
+        eprintln!(
+            "skip: benchmark repo not found at {}",
+            benchmark_root.display()
+        );
         return;
     }
 
@@ -1379,8 +1496,8 @@ fn benchmark_textproc_tokenizer_change_selects_30_tests_with_call_graph_precise(
         String::from_utf8_lossy(&o.stderr)
     );
 
-    let v: Value = serde_json::from_slice(&fs::read(&out_path).unwrap())
-        .expect("valid JSON output");
+    let v: Value =
+        serde_json::from_slice(&fs::read(&out_path).unwrap()).expect("valid JSON output");
 
     assert_eq!(v["selection_mode"], "call_graph_precise", "{v}");
     assert_eq!(v["run_all_tests"], false, "{v}");

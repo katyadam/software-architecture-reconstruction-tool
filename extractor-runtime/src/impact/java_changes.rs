@@ -19,7 +19,12 @@ pub(super) fn map_java_range(
         .owner_for(source_path)
         .to_string_lossy()
         .into_owned();
-    Ok(map_java_range_in_source(&code, &module_root, source_path, range))
+    Ok(map_java_range_in_source(
+        &code,
+        &module_root,
+        source_path,
+        range,
+    ))
 }
 
 /// Maps a line range in already-loaded Java source to changed elements.
@@ -182,7 +187,10 @@ mod tests {
         parser.parse(code, None).unwrap()
     }
 
-    fn first_node_of_kind<'t>(root: tree_sitter::Node<'t>, kind: &str) -> Option<tree_sitter::Node<'t>> {
+    fn first_node_of_kind<'t>(
+        root: tree_sitter::Node<'t>,
+        kind: &str,
+    ) -> Option<tree_sitter::Node<'t>> {
         if root.kind() == kind {
             return Some(root);
         }
@@ -208,7 +216,10 @@ mod tests {
         let code = "class Svc { int process(String name, int count) { return 0; } }";
         let tree = parse_java(code);
         let node = first_node_of_kind(tree.root_node(), "method_declaration").unwrap();
-        assert_eq!(method_signature(node, code).unwrap(), "Svc.process(String, int)");
+        assert_eq!(
+            method_signature(node, code).unwrap(),
+            "Svc.process(String, int)"
+        );
     }
 
     #[test]
@@ -216,7 +227,10 @@ mod tests {
         let code = "class Svc { void log(String fmt, Object... args) {} }";
         let tree = parse_java(code);
         let node = first_node_of_kind(tree.root_node(), "method_declaration").unwrap();
-        assert_eq!(method_signature(node, code).unwrap(), "Svc.log(String, Object...)");
+        assert_eq!(
+            method_signature(node, code).unwrap(),
+            "Svc.log(String, Object...)"
+        );
     }
 
     #[test]
@@ -225,7 +239,10 @@ mod tests {
         let tree = parse_java(code);
         let node = first_node_of_kind(tree.root_node(), "constructor_declaration").unwrap();
         // constructor_signature should use the constructor name, not an enclosing class
-        assert_eq!(constructor_signature(node, code).unwrap(), "Order(String, int)");
+        assert_eq!(
+            constructor_signature(node, code).unwrap(),
+            "Order(String, int)"
+        );
         // smallest_owner must pick up constructor_declaration
         let line = node.start_position().row;
         let owner = smallest_owner(tree.root_node(), line).unwrap();

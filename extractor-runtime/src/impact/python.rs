@@ -10,10 +10,7 @@ use super::{
     python_tests::discover_python_tests,
 };
 use crate::call_graph::pyan3::{Pyan3Provider, Pyan3Status};
-use models::{
-    call_graph::Language,
-    python_impact::*,
-};
+use models::{call_graph::Language, python_impact::*};
 use std::{
     path::{Path, PathBuf},
     process::Command,
@@ -101,7 +98,10 @@ pub fn analyze_python_impact(
             }
             Pyan3Status::Failed => {
                 let mut d = result.diagnostics;
-                d.insert(0, "pyan3 failed; falling back to conservative selection".into());
+                d.insert(
+                    0,
+                    "pyan3 failed; falling back to conservative selection".into(),
+                );
                 (PythonStageStatus::Failed, d)
             }
         };
@@ -132,61 +132,73 @@ pub fn analyze_python_impact(
 
     // --- selection phase ---
     eprintln!("python_impact_phase=selection");
-    let (selected_tests, unselected_tests, run_all_tests, selection_mode) =
-        if changed_elements.is_empty() {
-            (vec![], vec![], false, PythonSelectionMode::NoChanges)
-        } else {
-            // Use CallGraphPrecise when pyan3 succeeded and the graph actually excludes
-            // some tests (strict subset reachable). This is safe even when some changed
-            // elements are module-level (e.g. a new import or logger declaration) because
-            // pyan3 does not model module-level data flow; the caller graph is still the
-            // right signal for which test classes transitively exercise the changed callables.
-            let can_use_graph = matches!(analysis_stage.status, PythonStageStatus::Ok)
-                && !graph_suggested_tests.is_empty()
-                && graph_suggested_tests.len() < discovered_tests.len();
+    let (selected_tests, unselected_tests, run_all_tests, selection_mode) = if changed_elements
+        .is_empty()
+    {
+        (vec![], vec![], false, PythonSelectionMode::NoChanges)
+    } else {
+        // Use CallGraphPrecise when pyan3 succeeded and the graph actually excludes
+        // some tests (strict subset reachable). This is safe even when some changed
+        // elements are module-level (e.g. a new import or logger declaration) because
+        // pyan3 does not model module-level data flow; the caller graph is still the
+        // right signal for which test classes transitively exercise the changed callables.
+        let can_use_graph = matches!(analysis_stage.status, PythonStageStatus::Ok)
+            && !graph_suggested_tests.is_empty()
+            && graph_suggested_tests.len() < discovered_tests.len();
 
-            if can_use_graph {
-                let suggested_set: std::collections::HashSet<_> = graph_suggested_tests
-                    .iter()
-                    .map(|s| &s.test.qualified_name)
-                    .collect();
-                let selected = graph_suggested_tests
-                    .iter()
-                    .map(|s| {
-                        let reasons = s
-                            .changed_targets
-                            .iter()
-                            .map(|t| PythonSelectionReason::ChangedCallable {
-                                target: t.clone(),
-                            })
-                            .collect();
-                        PythonSelectedTest {
-                            test: s.test.clone(),
-                            reasons,
+        if can_use_graph {
+            let suggested_set: std::collections::HashSet<_> = graph_suggested_tests
+                .iter()
+                .map(|s| &s.test.qualified_name)
+                .collect();
+            let selected = graph_suggested_tests
+                .iter()
+                .map(|s| {
+                    let reasons = s
+                        .changed_targets
+                        .iter()
+                        .map(|t| PythonSelectionReason::ChangedCallable { target: t.clone() })
+                        .collect();
+                    PythonSelectedTest {
+                        test: s.test.clone(),
+                        reasons,
+                    }
+                })
+                .collect();
+            let unselected = discovered_tests
+                .iter()
+                .filter(|t| !suggested_set.contains(&t.qualified_name))
+                .cloned()
+                .collect();
+            (
+                selected,
+                unselected,
+                false,
+                PythonSelectionMode::CallGraphPrecise,
+            )
+        } else {
+            let conservative_diag =
+                "Python coverage is conservative; run every discovered test".to_string();
+            let selected = discovered_tests
+                .iter()
+                .map(|t| {
+                    let mut reasons = vec![PythonSelectionReason::ConservativeFallback {
+                        diagnostic: conservative_diag.clone(),
+                    }];
+                    // Annotate with graph-suggested changed callables (advisory).
+                    if let Some(suggestion) = graph_suggested_tests.iter().find(|s| &s.test == t) {
+                        for target in &suggestion.changed_targets {
+                            let r = PythonSelectionReason::ChangedCallable {
+                                target: target.clone(),
+                            };
+                            if !reasons.contains(&r) {
+                                reasons.push(r);
+                            }
                         }
-                    })
-                    .collect();
-                let unselected = discovered_tests
-                    .iter()
-                    .filter(|t| !suggested_set.contains(&t.qualified_name))
-                    .cloned()
-                    .collect();
-                (selected, unselected, false, PythonSelectionMode::CallGraphPrecise)
-            } else {
-                let conservative_diag =
-                    "Python coverage is conservative; run every discovered test".to_string();
-                let selected = discovered_tests
-                    .iter()
-                    .map(|t| {
-                        let mut reasons =
-                            vec![PythonSelectionReason::ConservativeFallback {
-                                diagnostic: conservative_diag.clone(),
-                            }];
-                        // Annotate with graph-suggested changed callables (advisory).
-                        if let Some(suggestion) =
-                            graph_suggested_tests.iter().find(|s| &s.test == t)
-                        {
-                            for target in &suggestion.changed_targets {
+                    } else {
+                        // Fall back to the module-level changed callable list.
+                        for elem in &changed_elements {
+                            if let Some(target) = &elem.target {
                                 let r = PythonSelectionReason::ChangedCallable {
                                     target: target.clone(),
                                 };
@@ -194,28 +206,17 @@ pub fn analyze_python_impact(
                                     reasons.push(r);
                                 }
                             }
-                        } else {
-                            // Fall back to the module-level changed callable list.
-                            for elem in &changed_elements {
-                                if let Some(target) = &elem.target {
-                                    let r = PythonSelectionReason::ChangedCallable {
-                                        target: target.clone(),
-                                    };
-                                    if !reasons.contains(&r) {
-                                        reasons.push(r);
-                                    }
-                                }
-                            }
                         }
-                        PythonSelectedTest {
-                            test: t.clone(),
-                            reasons,
-                        }
-                    })
-                    .collect();
-                (selected, vec![], true, PythonSelectionMode::ConservativeAll)
-            }
-        };
+                    }
+                    PythonSelectedTest {
+                        test: t.clone(),
+                        reasons,
+                    }
+                })
+                .collect();
+            (selected, vec![], true, PythonSelectionMode::ConservativeAll)
+        }
+    };
 
     Ok(PythonImpactReport {
         schema_version: 1,
@@ -459,8 +460,14 @@ fn read_python_diff(
                 .filter(|l| l.starts_with("@@ "))
             {
                 let parts: Vec<_> = line.split(' ').collect();
-                let old = parts.get(1).and_then(|s| s.strip_prefix('-')).and_then(parse_hunk_side);
-                let new = parts.get(2).and_then(|s| s.strip_prefix('+')).and_then(parse_hunk_side);
+                let old = parts
+                    .get(1)
+                    .and_then(|s| s.strip_prefix('-'))
+                    .and_then(parse_hunk_side);
+                let new = parts
+                    .get(2)
+                    .and_then(|s| s.strip_prefix('+'))
+                    .and_then(parse_hunk_side);
                 if let (Some((os, oc)), Some((ns, nc))) = (old, new) {
                     hunks.push(PythonHunk {
                         old_start: os,

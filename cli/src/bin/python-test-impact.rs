@@ -73,10 +73,7 @@ fn write_report_atomic<T: serde::Serialize>(path: &Path, report: &T) -> Result<(
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(
-        &tmp,
-        serde_json::to_string_pretty(report)?,
-    )?;
+    fs::write(&tmp, serde_json::to_string_pretty(report)?)?;
     fs::rename(&tmp, path)?;
     Ok(())
 }
@@ -87,7 +84,15 @@ mod tests {
 
     #[test]
     fn rejects_empty_baseline_revision() {
-        let args = ["python-test-impact", "--project-dir", "/p", "--baseline-revision", "", "--output", "/tmp/out.json"];
+        let args = [
+            "python-test-impact",
+            "--project-dir",
+            "/p",
+            "--baseline-revision",
+            "",
+            "--output",
+            "/tmp/out.json",
+        ];
         let parsed = Arguments::try_parse_from(args);
         // Parsing succeeds; runtime validation happens in analyze_python_impact.
         // At minimum the flag is accepted syntactically.

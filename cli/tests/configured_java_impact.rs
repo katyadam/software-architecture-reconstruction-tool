@@ -260,7 +260,11 @@ fn gradle_excluded_submodule_tests_are_dropped_and_analysis_is_precise() {
     git(&root, &["config", "user.email", "fixture@example.invalid"]);
 
     // settings.gradle lists both svc and excluded as submodules.
-    write(&root, "settings.gradle", "include ':svc'\ninclude ':excluded'");
+    write(
+        &root,
+        "settings.gradle",
+        "include ':svc'\ninclude ':excluded'",
+    );
     write(&root, "build.gradle", "");
     write(&root, "svc/build.gradle", "");
     write(&root, "excluded/build.gradle", "");
@@ -361,8 +365,7 @@ fn gradle_excluded_submodule_tests_are_dropped_and_analysis_is_precise() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let result: Value =
-        serde_json::from_slice(&fs::read(&result_path).unwrap()).unwrap();
+    let result: Value = serde_json::from_slice(&fs::read(&result_path).unwrap()).unwrap();
 
     // The excluded module's test must not appear anywhere in the result.
     let all_methods: Vec<_> = result["selected_tests"]

@@ -1,4 +1,8 @@
-use super::{ModuleCatalog, inert::is_inert_path, java_changes::{map_java_range, map_java_range_in_source}};
+use super::{
+    ModuleCatalog,
+    inert::is_inert_path,
+    java_changes::{map_java_range, map_java_range_in_source},
+};
 use models::{ChangedElement, ChangedElementKind};
 use std::{ops::RangeInclusive, path::Path, process::Command};
 use thiserror::Error;

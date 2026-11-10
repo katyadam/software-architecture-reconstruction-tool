@@ -48,8 +48,7 @@ pub fn graph_suggestions(
                 // Also include bare class-name references that appear only as callees.
                 for callee_list in edges.values() {
                     for callee in callee_list.iter().map(String::as_str) {
-                        if node_matches_local(callee, class_part)
-                            && !target_nodes.contains(&callee)
+                        if node_matches_local(callee, class_part) && !target_nodes.contains(&callee)
                         {
                             target_nodes.push(callee);
                         }
@@ -68,9 +67,10 @@ pub fn graph_suggestions(
             let test_matched = reachable
                 .iter()
                 .any(|id| node_matches_local(id, test_dotted.as_str()))
-                || test.class_name.as_deref().is_some_and(|cls| {
-                    reachable.iter().any(|id| class_matches_local(id, cls))
-                });
+                || test
+                    .class_name
+                    .as_deref()
+                    .is_some_and(|cls| reachable.iter().any(|id| class_matches_local(id, cls)));
             if test_matched && !reached_by.contains(&target.to_owned()) {
                 reached_by.push(target.to_owned());
             }
@@ -119,7 +119,9 @@ fn build_reverse<'a>(edges: &'a HashMap<String, Vec<String>>) -> HashMap<&'a str
     let mut rev: HashMap<&str, Vec<&str>> = HashMap::new();
     for (caller, callees) in edges {
         for callee in callees {
-            rev.entry(callee.as_str()).or_default().push(caller.as_str());
+            rev.entry(callee.as_str())
+                .or_default()
+                .push(caller.as_str());
         }
     }
     rev
