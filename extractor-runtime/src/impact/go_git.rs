@@ -2,7 +2,6 @@ use super::go::GoImpactError;
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 #[derive(Debug)]
@@ -29,40 +28,14 @@ pub struct GoGitDiff {
     pub files: Vec<GoFileDiff>,
 }
 pub(super) fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, GoImpactError> {
-    let out = Command::new("git")
-        .env("GIT_LITERAL_PATHSPECS", "1")
-        .args(args)
-        .current_dir(root)
-        .output()
-        .map_err(|e| GoImpactError::Git(e.to_string()))?;
-    if !out.status.success() {
-        return Err(GoImpactError::Git(
-            String::from_utf8_lossy(&out.stderr).trim().into(),
-        ));
-    }
-    Ok(out.stdout)
+    super::git_diff::run_git(root, args).map_err(GoImpactError::Git)
 }
 fn utf8(data: Vec<u8>) -> Result<String, GoImpactError> {
     String::from_utf8(data)
         .map_err(|_| GoImpactError::Input("non-UTF8 Git path or revision output".into()))
 }
 pub(super) fn revision(root: &Path, rev: &str) -> Result<String, GoImpactError> {
-    if rev.is_empty() || rev.starts_with('-') {
-        return Err(GoImpactError::Input(
-            "revision must not be empty or a Git option".into(),
-        ));
-    }
-    Ok(utf8(git(
-        root,
-        &[
-            "rev-parse",
-            "--verify",
-            "--end-of-options",
-            &format!("{rev}^{{commit}}"),
-        ],
-    )?)?
-    .trim()
-    .into())
+    super::git_diff::resolve_revision(root, rev).map_err(GoImpactError::Git)
 }
 pub(super) fn check_clean(root: &Path) -> Result<(), GoImpactError> {
     if !git(

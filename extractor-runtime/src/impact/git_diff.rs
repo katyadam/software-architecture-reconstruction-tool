@@ -125,20 +125,47 @@ pub fn analyze_changes_with_catalog(
     Ok(deduplicate(changes))
 }
 
+/// Runs Git in `root` with the given arguments, returning raw stdout bytes.
+/// Sets `GIT_LITERAL_PATHSPECS=1` so path arguments are never glob-expanded.
+/// Returns `Err(message)` on launch failure or non-zero exit.
+pub(super) fn run_git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
+    let out = Command::new("git")
+        .env("GIT_LITERAL_PATHSPECS", "1")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().into());
+    }
+    Ok(out.stdout)
+}
+
+/// Resolves `rev` to a full commit SHA using `git rev-parse --verify`.
+/// Returns `Err(message)` for empty/option-like revisions or git failures.
+pub(super) fn resolve_revision(root: &Path, rev: &str) -> Result<String, String> {
+    if rev.is_empty() || rev.starts_with('-') {
+        return Err("revision must not be empty or a Git option".into());
+    }
+    let raw = run_git(
+        root,
+        &[
+            "rev-parse",
+            "--verify",
+            "--end-of-options",
+            &format!("{rev}^{{commit}}"),
+        ],
+    )?;
+    String::from_utf8(raw)
+        .map_err(|_| "non-UTF8 revision output".into())
+        .map(|s| s.trim().into())
+}
+
 /// Runs Git in the candidate checkout and returns UTF-8 standard output.
 fn git_output(project_root: &Path, arguments: &[&str]) -> Result<String, ImpactError> {
-    let output = Command::new("git")
-        .args(arguments)
-        .current_dir(project_root)
-        .output()
-        .map_err(|error| ImpactError::Git(error.to_string()))?;
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-    } else {
-        Err(ImpactError::Git(
-            String::from_utf8_lossy(&output.stderr).into_owned(),
-        ))
-    }
+    run_git(project_root, arguments)
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        .map_err(ImpactError::Git)
 }
 
 /// Holds one Git name-status record and the candidate path used for impact ownership.

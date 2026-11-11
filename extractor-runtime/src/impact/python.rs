@@ -13,7 +13,6 @@ use crate::call_graph::pyan3::{Pyan3Provider, Pyan3Status};
 use models::{call_graph::Language, python_impact::*};
 use std::{
     path::{Path, PathBuf},
-    process::Command,
     time::{Duration, Instant},
 };
 
@@ -282,42 +281,17 @@ fn skipped_stage(why: &str) -> PythonStageReport {
 }
 
 fn resolve_revision(root: &Path, rev: &str) -> Result<String, PythonImpactError> {
-    if rev.is_empty() || rev.starts_with('-') {
-        return Err(PythonImpactError::Input(
-            "revision must not be empty or a Git option".into(),
-        ));
-    }
-    let out = Command::new("git")
-        .args([
-            "rev-parse",
-            "--verify",
-            "--end-of-options",
-            &format!("{rev}^{{commit}}"),
-        ])
-        .current_dir(root)
-        .output()
-        .map_err(|e| PythonImpactError::Git(e.to_string()))?;
-    if !out.status.success() {
-        return Err(PythonImpactError::Git(
-            String::from_utf8_lossy(&out.stderr).trim().into(),
-        ));
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().into())
+    super::git_diff::resolve_revision(root, rev).map_err(|e| {
+        if e.contains("empty") || e.contains("Git option") {
+            PythonImpactError::Input(e)
+        } else {
+            PythonImpactError::Git(e)
+        }
+    })
 }
 
 fn git_bytes(root: &Path, args: &[&str]) -> Result<Vec<u8>, PythonImpactError> {
-    let out = Command::new("git")
-        .env("GIT_LITERAL_PATHSPECS", "1")
-        .args(args)
-        .current_dir(root)
-        .output()
-        .map_err(|e| PythonImpactError::Git(e.to_string()))?;
-    if !out.status.success() {
-        return Err(PythonImpactError::Git(
-            String::from_utf8_lossy(&out.stderr).trim().into(),
-        ));
-    }
-    Ok(out.stdout)
+    super::git_diff::run_git(root, args).map_err(PythonImpactError::Git)
 }
 
 /// Reads a name-status diff and parses it into `PythonFileDiff` records with hunk data.
