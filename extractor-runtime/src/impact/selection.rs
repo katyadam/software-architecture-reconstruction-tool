@@ -337,7 +337,7 @@ fn changed_targets<'a>(change: &ChangedElement, edges: &'a [ResolvedCallEdge]) -
 }
 
 /// Returns all callers that can transitively reach a changed target, including the targets.
-fn reverse_reachable<'a>(
+pub(super) fn reverse_reachable<'a>(
     targets: &[&'a str],
     reverse: &HashMap<&'a str, Vec<&'a str>>,
 ) -> HashSet<&'a str> {

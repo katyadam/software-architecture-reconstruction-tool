@@ -31,7 +31,6 @@ removed_unexpected = 0
 for mod in m["modules"]:
     root = mod["root"] or "."
     has_tests = bool(mod["tests"])
-    has_class_dirs = bool(mod["test_class_dirs"]) or bool(mod["application_class_dirs"])
     if root in expected_absent:
         print(f"  [exclude] {root}: {len(mod['tests'])} tests, no test_class_dirs (expected absent)")
         # drop entirely — don't keep even as an empty module

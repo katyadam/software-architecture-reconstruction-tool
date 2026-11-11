@@ -1,5 +1,5 @@
 use models::python_impact::{PythonSuggestedTest, PythonTestCase};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 
 /// Derives graph-based test suggestions from a pyan3 adjacency map.
 ///
@@ -17,15 +17,15 @@ pub fn graph_suggestions(
     if changed_targets.is_empty() || edges.is_empty() {
         return vec![];
     }
-    // Build reverse map: callee → callers.
     let reverse = build_reverse(edges);
-    let mut suggestions: Vec<PythonSuggestedTest> = vec![];
-    for test in tests {
-        // Normalise test identity to dotted form (ClassName.test_foo or test_foo).
-        let test_dotted = test.qualified_name.replace("::", ".");
-        let mut reached_by: Vec<String> = vec![];
-        for &target in changed_targets {
-            // Find all pyan3 node IDs whose local suffix matches this target.
+
+    // Pre-compute the reverse-reachable set for each target once.
+    // Target-node lookup and BFS are independent of the test list; hoisting them
+    // here reduces the cost from O(tests × targets × graph) to
+    // O(targets × graph + tests × reachable).
+    let target_reachable: Vec<(&str, HashSet<&str>)> = changed_targets
+        .iter()
+        .filter_map(|&target| {
             let mut target_nodes: Vec<&str> = edges
                 .keys()
                 .map(String::as_str)
@@ -56,25 +56,36 @@ pub fn graph_suggestions(
                 }
             }
             if target_nodes.is_empty() {
-                continue;
+                return None;
             }
-            // BFS backward from those nodes.
-            let reachable = reverse_reachable(&target_nodes, &reverse);
-            // A test is reachable if:
-            // 1. Its own node is in the reachable set, OR
-            // 2. It belongs to a class and any sibling method of that class is reachable
-            //    (pyan3 often omits test methods that have no outgoing call edges).
-            let test_matched = reachable
-                .iter()
-                .any(|id| node_matches_local(id, test_dotted.as_str()))
-                || test
-                    .class_name
-                    .as_deref()
-                    .is_some_and(|cls| reachable.iter().any(|id| class_matches_local(id, cls)));
-            if test_matched && !reached_by.contains(&target.to_owned()) {
-                reached_by.push(target.to_owned());
-            }
-        }
+            Some((
+                target,
+                super::selection::reverse_reachable(&target_nodes, &reverse),
+            ))
+        })
+        .collect();
+
+    let mut suggestions: Vec<PythonSuggestedTest> = vec![];
+    for test in tests {
+        // Normalise test identity to dotted form (ClassName.test_foo or test_foo).
+        let test_dotted = test.qualified_name.replace("::", ".");
+        // A test is reachable if:
+        // 1. Its own node is in the reachable set, OR
+        // 2. It belongs to a class and any sibling method of that class is reachable
+        //    (pyan3 often omits test methods that have no outgoing call edges).
+        let reached_by: Vec<String> = target_reachable
+            .iter()
+            .filter(|(_, reachable)| {
+                reachable
+                    .iter()
+                    .any(|id| node_matches_local(id, test_dotted.as_str()))
+                    || test
+                        .class_name
+                        .as_deref()
+                        .is_some_and(|cls| reachable.iter().any(|id| class_matches_local(id, cls)))
+            })
+            .map(|(target, _)| target.to_string())
+            .collect();
         if !reached_by.is_empty() {
             suggestions.push(PythonSuggestedTest {
                 test: test.clone(),
@@ -125,29 +136,6 @@ fn build_reverse<'a>(edges: &'a HashMap<String, Vec<String>>) -> HashMap<&'a str
         }
     }
     rev
-}
-
-fn reverse_reachable<'a>(
-    starts: &[&'a str],
-    reverse: &HashMap<&'a str, Vec<&'a str>>,
-) -> HashSet<&'a str> {
-    let mut visited: HashSet<&str> = HashSet::new();
-    let mut queue: VecDeque<&str> = VecDeque::new();
-    for &s in starts {
-        if visited.insert(s) {
-            queue.push_back(s);
-        }
-    }
-    while let Some(node) = queue.pop_front() {
-        if let Some(callers) = reverse.get(node) {
-            for &caller in callers {
-                if visited.insert(caller) {
-                    queue.push_back(caller);
-                }
-            }
-        }
-    }
-    visited
 }
 
 #[cfg(test)]
