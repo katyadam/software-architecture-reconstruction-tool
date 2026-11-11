@@ -2,7 +2,7 @@ use models::python_impact::PythonTestCase;
 use std::{
     collections::HashSet,
     fs,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 use tree_sitter::{Node, Parser};
 
@@ -26,41 +26,36 @@ use tree_sitter::{Node, Parser};
 ///    - Either way, a `@decorator class TestFoo(…):` is recursed into so its methods
 ///      are not silently skipped.
 pub fn discover_python_tests(project_root: &Path) -> Vec<PythonTestCase> {
-    let mut tests = Vec::new();
-    collect_tests(project_root, project_root, false, &mut tests);
+    let mut tests: Vec<PythonTestCase> = crate::py_walk::collect_py_paths(project_root)
+        .into_iter()
+        .flat_map(|path| {
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default();
+            let convention = is_in_test_dir(&path, project_root) || is_test_filename(name);
+            discover_tests_in_file(project_root, &path, convention)
+        })
+        .collect();
     tests.sort_by(|a, b| {
         (&a.source_path, &a.qualified_name).cmp(&(&b.source_path, &b.qualified_name))
     });
     tests
 }
 
-fn collect_tests(
-    project_root: &Path,
-    dir: &Path,
-    in_test_dir: bool,
-    tests: &mut Vec<PythonTestCase>,
-) {
-    let entries = match fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = match entry.file_name().into_string() {
-            Ok(n) => n,
-            Err(_) => continue,
-        };
-        if path.is_dir() {
-            if name.starts_with('.') || name == "__pycache__" || name == ".git" {
-                continue;
-            }
-            let child_in_test_dir = in_test_dir || name == "tests" || name == "test";
-            collect_tests(project_root, &path, child_in_test_dir, tests);
-        } else if name.ends_with(".py") {
-            let convention = in_test_dir || is_test_filename(&name);
-            tests.extend(discover_tests_in_file(project_root, &path, convention));
-        }
-    }
+/// True when any parent directory component of `abs_path` (relative to `root`) is
+/// named `test` or `tests`.
+fn is_in_test_dir(abs_path: &Path, root: &Path) -> bool {
+    abs_path
+        .strip_prefix(root)
+        .unwrap_or(abs_path)
+        .parent()
+        .map(|rel_dir| {
+            rel_dir
+                .components()
+                .any(|c| matches!(c, Component::Normal(n) if n == "test" || n == "tests"))
+        })
+        .unwrap_or(false)
 }
 
 /// True when the filename alone marks this as a test file (original convention rules).

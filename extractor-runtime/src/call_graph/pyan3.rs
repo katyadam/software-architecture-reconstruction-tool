@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    fs,
     path::Path,
     process::{Command, Stdio},
     time::{Duration, Instant},
@@ -38,12 +37,11 @@ impl Pyan3Provider {
         let start = Instant::now();
         let files = collect_py_files(source_root);
         if files.is_empty() {
-            return Pyan3Result {
-                status: Pyan3Status::Ok,
-                edges: HashMap::new(),
-                diagnostics: vec!["no Python source files found".into()],
-                duration_ms: start.elapsed().as_millis() as u64,
-            };
+            return early(
+                Pyan3Status::Ok,
+                "no Python source files found",
+                start.elapsed().as_millis() as u64,
+            );
         }
         let mut cmd = Command::new("pyan3");
         cmd.args(&files)
@@ -56,44 +54,32 @@ impl Pyan3Provider {
         let child = match cmd.spawn() {
             Ok(c) => c,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Pyan3Result {
-                    status: Pyan3Status::NotInstalled,
-                    edges: HashMap::new(),
-                    diagnostics: vec![format!("pyan3 not found in PATH: {e}")],
-                    duration_ms: start.elapsed().as_millis() as u64,
-                };
+                return early(
+                    Pyan3Status::NotInstalled,
+                    format!("pyan3 not found in PATH: {e}"),
+                    start.elapsed().as_millis() as u64,
+                );
             }
             Err(e) => {
-                return Pyan3Result {
-                    status: Pyan3Status::Failed,
-                    edges: HashMap::new(),
-                    diagnostics: vec![format!("failed to start pyan3: {e}")],
-                    duration_ms: start.elapsed().as_millis() as u64,
-                };
+                return early(
+                    Pyan3Status::Failed,
+                    format!("failed to start pyan3: {e}"),
+                    start.elapsed().as_millis() as u64,
+                );
             }
         };
         let output = adapter_process::wait_for_output(child, self.timeout, "pyan3");
         let duration_ms = start.elapsed().as_millis() as u64;
         match output {
-            Err(e) => Pyan3Result {
-                status: Pyan3Status::Failed,
-                edges: HashMap::new(),
-                diagnostics: vec![e],
-                duration_ms,
-            },
+            Err(e) => early(Pyan3Status::Failed, e, duration_ms),
             Ok(out) => {
                 let stderr = String::from_utf8_lossy(&out.stderr);
                 if !out.status.success() {
-                    return Pyan3Result {
-                        status: Pyan3Status::Failed,
-                        edges: HashMap::new(),
-                        diagnostics: vec![format!(
-                            "pyan3 exited {}: {}",
-                            out.status,
-                            tail(&stderr)
-                        )],
+                    return early(
+                        Pyan3Status::Failed,
+                        format!("pyan3 exited {}: {}", out.status, tail(&stderr)),
                         duration_ms,
-                    };
+                    );
                 }
                 let text = String::from_utf8_lossy(&out.stdout);
                 let mut diag = vec![];
@@ -112,36 +98,17 @@ impl Pyan3Provider {
     }
 }
 
-/// Collects all `.py` files under `root`, skipping `.git`, `__pycache__`, and hidden dirs.
+/// Collects all `.py` files under `root` as relative paths (POSIX separators),
+/// ready to pass as arguments to the `pyan3` CLI.
 fn collect_py_files(root: &Path) -> Vec<String> {
-    let mut files = Vec::new();
-    collect_recursive(root, root, &mut files);
-    files.sort();
-    files
-}
-
-fn collect_recursive(root: &Path, dir: &Path, out: &mut Vec<String>) {
-    let entries = match fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = match entry.file_name().into_string() {
-            Ok(n) => n,
-            Err(_) => continue,
-        };
-        if path.is_dir() {
-            if name.starts_with('.') || name == "__pycache__" {
-                continue;
-            }
-            collect_recursive(root, &path, out);
-        } else if name.ends_with(".py") {
-            if let Ok(rel) = path.strip_prefix(root) {
-                out.push(rel.to_string_lossy().replace('\\', "/"));
-            }
-        }
-    }
+    crate::py_walk::collect_py_paths(root)
+        .into_iter()
+        .filter_map(|p| {
+            p.strip_prefix(root)
+                .ok()
+                .map(|rel| rel.to_string_lossy().replace('\\', "/"))
+        })
+        .collect()
 }
 
 /// Parses pyan3 `--text` output into a caller → callees adjacency map.
@@ -176,13 +143,17 @@ pub fn parse_text_output(text: &str) -> HashMap<String, Vec<String>> {
     edges
 }
 
-fn skipped(msg: &str) -> Pyan3Result {
+fn early(status: Pyan3Status, msg: impl Into<String>, duration_ms: u64) -> Pyan3Result {
     Pyan3Result {
-        status: Pyan3Status::Ok,
+        status,
         edges: HashMap::new(),
         diagnostics: vec![msg.into()],
-        duration_ms: 0,
+        duration_ms,
     }
+}
+
+fn skipped(msg: &str) -> Pyan3Result {
+    early(Pyan3Status::Ok, msg, 0)
 }
 
 fn tail(text: &str) -> &str {
