@@ -21,13 +21,11 @@ pub(super) fn is_inert_path(path: &str) -> bool {
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("");
-    let (stem, ext) = name
-        .rsplit_once('.')
-        .map(|(s, e)| (s, e))
-        .unwrap_or((name, ""));
+    let (stem, ext) = name.rsplit_once('.').unwrap_or((name, ""));
 
     if matches!(ext, "md" | "rst" | "adoc") {
-        return true;
+        // Only inert when not under a source or resource tree that may be loaded at runtime.
+        return !path.contains("/src/") && !path.starts_with("src/");
     }
 
     if matches!(
@@ -71,6 +69,13 @@ mod tests {
         assert!(is_inert_path("docs/ARCHITECTURE.md"));
         assert!(is_inert_path("orders/docs/api.rst"));
         assert!(is_inert_path("spec.adoc"));
+    }
+
+    #[test]
+    fn doc_extensions_under_src_are_not_inert() {
+        assert!(!is_inert_path("src/main/resources/templates/email.md"));
+        assert!(!is_inert_path("service/src/docs/guide.rst"));
+        assert!(!is_inert_path("src/README.md"));
     }
 
     #[test]

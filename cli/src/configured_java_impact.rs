@@ -59,13 +59,14 @@ macro_rules! configured_provider {
 configured_provider!(WalaJavaProvider, "WALA");
 configured_provider!(JavaAdapterProvider, "SootUp");
 
-// Spoon is source-only and never prepares bytecode artifacts; it uses analyze_test_roots directly.
+// Spoon is source-only; it never needs bytecode artifacts and ignores the inputs in
+// analyze_prepared, so prepare_module just returns a default empty value.
 impl ConfiguredJavaProvider for SpoonJavaProvider {
     fn label(&self) -> &str {
         "Spoon"
     }
     fn prepare_module(&self, _module: &Path) -> Result<JavaBytecodeInputs, String> {
-        Err("Spoon is a source-level provider and does not prepare bytecode artifacts".into())
+        Ok(JavaBytecodeInputs::default())
     }
     fn analyze_prepared(
         &self,

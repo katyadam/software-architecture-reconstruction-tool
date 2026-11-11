@@ -199,9 +199,7 @@ impl SelectedJavaProvider {
             Self::SootUp(provider) => {
                 provider.analyze_modules(project_root, modules, tests, targets)
             }
-            Self::Spoon(provider) => {
-                provider.analyze_test_roots(&project_root.join("src/main/java"), tests, targets)
-            }
+            Self::Spoon(provider) => provider.analyze_test_roots(project_root, tests, targets),
         }
     }
     fn label(&self) -> &'static str {

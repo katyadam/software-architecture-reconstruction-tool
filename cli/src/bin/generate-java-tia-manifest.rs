@@ -160,7 +160,7 @@ fn module_entry(module: &Path, project: &Path) -> Result<JavaModuleManifest> {
             .unwrap_or_default(),
         classpath: vec![],
         dependencies: vec![],
-        dependency_inventory_complete: true,
+        dependency_inventory_complete: false,
         test_inventory_complete: true,
         tests,
     })

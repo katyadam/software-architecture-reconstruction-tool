@@ -1,7 +1,4 @@
-use super::{
-    java_adapter::{DEFAULT_ANALYSIS_TIMEOUT, JavaAdapterProvider},
-    registry::CallGraphProvider,
-};
+use super::{java_adapter::JavaAdapterProvider, registry::CallGraphProvider};
 use models::{
     JavaTestCase,
     call_graph::{CallGraphOutcome, CallGraphRequest, Language},
@@ -17,11 +14,6 @@ pub struct SpoonJavaProvider {
 }
 
 impl SpoonJavaProvider {
-    /// Creates a Spoon provider that launches the adapter JAR at `jar`.
-    pub fn new(jar: impl Into<PathBuf>) -> Self {
-        Self::with_timeout(jar, DEFAULT_ANALYSIS_TIMEOUT)
-    }
-
     /// Creates a Spoon provider with a caller-specified analysis deadline.
     pub fn with_timeout(jar: impl Into<PathBuf>, timeout: Duration) -> Self {
         Self {

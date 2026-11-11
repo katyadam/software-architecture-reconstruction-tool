@@ -55,8 +55,7 @@ impl ModuleDependencyGraph {
         // a module it never claimed is an independent build that still blocks independence.
         // When the automatic graph failed (unsupported syntax etc.), skip the check and
         // trust the manifest's module_inventory_complete=true claim.
-        if let Ok(auto) = &automatic {
-            let auto_modules: BTreeSet<_> = auto.dependencies.keys().collect();
+        if automatic.is_ok() {
             let known = super::java_tests::checkout_modules(&root).map_err(|e| e.to_string())?;
             for module in known {
                 let build = module.join("pom.xml").is_file()
@@ -67,7 +66,6 @@ impl ModuleDependencyGraph {
                 if build
                     && !inputs.modules.contains_key(&module)
                     && !dependencies.contains_key(&module)
-                    && !auto_modules.contains(&module)
                 {
                     return Err(format!(
                         "consumer dependency scope unresolved: {}",
@@ -399,11 +397,12 @@ fn reactor_modules_gradle(root: &Path) -> Result<std::collections::BTreeSet<Path
         .into_iter()
         .find_map(|name| fs::read_to_string(root.join(name)).ok())
         .ok_or("no Gradle settings")?;
-    // Match both `include(':name')` and `include('name')`, with or without colon.
-    let re = Regex::new(r#"include\s*\(?\s*["']:?([^"'$:]+)["']"#).unwrap();
+    // Match both `include(':name')` and `include('name')`, with or without colon prefix.
+    let re =
+        Regex::new(r#"include\s*\(?\s*["']([^"'$]+)["']"#).expect("valid Gradle include regex");
     let mut modules = std::collections::BTreeSet::new();
     for cap in re.captures_iter(&settings) {
-        let name = cap[1].trim();
+        let name = cap[1].trim().trim_start_matches(':');
         if !name.is_empty() {
             // Gradle uses colon as path separator for nested subprojects; convert to filesystem path.
             let rel_path = name.replace(':', std::path::MAIN_SEPARATOR_STR);

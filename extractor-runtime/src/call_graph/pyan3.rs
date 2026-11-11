@@ -6,6 +6,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use super::adapter_process;
+
 pub enum Pyan3Status {
     Ok,
     NotInstalled,
@@ -50,6 +52,7 @@ impl Pyan3Provider {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        adapter_process::isolate_process_group(&mut cmd);
         let child = match cmd.spawn() {
             Ok(c) => c,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -69,8 +72,7 @@ impl Pyan3Provider {
                 };
             }
         };
-        // Wait with timeout via a thread.
-        let output = wait_with_timeout(child, self.timeout);
+        let output = adapter_process::wait_for_output(child, self.timeout, "pyan3");
         let duration_ms = start.elapsed().as_millis() as u64;
         match output {
             Err(e) => Pyan3Result {
@@ -190,23 +192,6 @@ fn tail(text: &str) -> &str {
         s += 1;
     }
     &text[s..]
-}
-
-/// Waits for a child process, killing it if the timeout elapses.
-fn wait_with_timeout(
-    child: std::process::Child,
-    timeout: Duration,
-) -> Result<std::process::Output, String> {
-    use std::{sync::mpsc, thread};
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let _ = tx.send(child.wait_with_output());
-    });
-    match rx.recv_timeout(timeout) {
-        Ok(Ok(output)) => Ok(output),
-        Ok(Err(e)) => Err(format!("pyan3 I/O error: {e}")),
-        Err(_) => Err(format!("pyan3 timed out after {}s", timeout.as_secs())),
-    }
 }
 
 #[cfg(test)]
