@@ -200,10 +200,16 @@ fn diff_hunks(patch: &str, candidate_path: &str) -> Vec<DiffHunk> {
 /// Parses a `start,count` hunk side into an inclusive line range.
 /// Returns `None` when `count` is zero (no lines on that side).
 fn parse_range(value: &str) -> Option<RangeInclusive<usize>> {
-    let (start, count) = value.split_once(',').unwrap_or((value, "1"));
-    let start = start.parse::<usize>().ok()?;
-    let count = count.parse::<usize>().ok()?;
-    (count > 0).then_some(start..=start + count - 1)
+    let (start, count) = parse_hunk_side(value)?;
+    (count > 0).then_some(start as usize..=start as usize + count as usize - 1)
+}
+
+/// Parses `start,count` from one side of a unified-diff hunk header (e.g. `5,3`).
+/// A bare number without a comma is treated as `start,1`.
+/// Returns `None` on any parse failure.
+pub(super) fn parse_hunk_side(value: &str) -> Option<(u32, u32)> {
+    let (s, c) = value.split_once(',').unwrap_or((value, "1"));
+    Some((s.parse().ok()?, c.parse().ok()?))
 }
 
 /// Creates a module-level fallback element for a path that cannot be narrowed safely.

@@ -117,19 +117,6 @@ fn check_scope(root: &Path) -> Result<(), GoImpactError> {
     }
     visit(root, root)
 }
-fn count(value: &str) -> Result<(u32, u32), GoImpactError> {
-    let (s, c) = value.split_once(',').unwrap_or((value, "1"));
-    let start = s
-        .parse::<u32>()
-        .map_err(|_| GoImpactError::Git("malformed hunk start".into()))?;
-    let count = c
-        .parse::<u32>()
-        .map_err(|_| GoImpactError::Git("malformed hunk count".into()))?;
-    if start.checked_add(count).is_none() {
-        return Err(GoImpactError::Git("hunk range overflow".into()));
-    }
-    Ok((start, count))
-}
 pub fn read_go_diff(root: &Path, baseline: &str) -> Result<GoGitDiff, GoImpactError> {
     let root = root
         .canonicalize()
@@ -226,8 +213,10 @@ pub fn read_go_diff(root: &Path, baseline: &str) -> Result<GoGitDiff, GoImpactEr
                     .get(2)
                     .and_then(|s| s.strip_prefix('+'))
                     .ok_or_else(|| GoImpactError::Git("malformed hunk".into()))?;
-                let (os, oc) = count(a)?;
-                let (ns, nc) = count(b)?;
+                let (os, oc) = super::git_diff::parse_hunk_side(a)
+                    .ok_or_else(|| GoImpactError::Git("malformed hunk".into()))?;
+                let (ns, nc) = super::git_diff::parse_hunk_side(b)
+                    .ok_or_else(|| GoImpactError::Git("malformed hunk".into()))?;
                 hunks.push(GoHunk {
                     old_start: os,
                     old_count: oc,

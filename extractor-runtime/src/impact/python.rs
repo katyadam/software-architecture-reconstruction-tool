@@ -281,12 +281,6 @@ fn skipped_stage(why: &str) -> PythonStageReport {
     }
 }
 
-/// Parses `start,count` from one side of a unified-diff hunk header.
-fn parse_hunk_side(value: &str) -> Option<(u32, u32)> {
-    let (s, c) = value.split_once(',').unwrap_or((value, "1"));
-    Some((s.parse().ok()?, c.parse().ok()?))
-}
-
 fn resolve_revision(root: &Path, rev: &str) -> Result<String, PythonImpactError> {
     if rev.is_empty() || rev.starts_with('-') {
         return Err(PythonImpactError::Input(
@@ -397,11 +391,11 @@ fn read_python_diff(
                 let old = parts
                     .get(1)
                     .and_then(|s| s.strip_prefix('-'))
-                    .and_then(parse_hunk_side);
+                    .and_then(super::git_diff::parse_hunk_side);
                 let new = parts
                     .get(2)
                     .and_then(|s| s.strip_prefix('+'))
-                    .and_then(parse_hunk_side);
+                    .and_then(super::git_diff::parse_hunk_side);
                 if let (Some((os, oc)), Some((ns, nc))) = (old, new) {
                     hunks.push(PythonHunk {
                         old_start: os,
