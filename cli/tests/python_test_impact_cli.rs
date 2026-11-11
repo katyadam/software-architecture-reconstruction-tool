@@ -67,20 +67,18 @@ fn fixture() -> Fixture {
     }
 }
 
-fn run(f: &Fixture) -> Output {
+fn run_with(project_dir: &Path, baseline: &str, output: &Path, pyan3_secs: u64) -> Output {
     Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            f.root.to_str().unwrap(),
-            "--baseline-revision",
-            &f.baseline,
-            "--output",
-            f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "0",
-        ])
+        .args(["--project-dir", project_dir.to_str().unwrap()])
+        .args(["--baseline-revision", baseline])
+        .args(["--output", output.to_str().unwrap()])
+        .args(["--pyan3-timeout-secs", &pyan3_secs.to_string()])
         .output()
         .unwrap()
+}
+
+fn run(f: &Fixture) -> Output {
+    run_with(&f.root, &f.baseline, &f.out, 0)
 }
 
 fn read(f: &Fixture, o: Output) -> Value {
@@ -204,19 +202,7 @@ fn real_revision_ids_are_reported() {
 #[test]
 fn rejects_invalid_baseline_revision() {
     let f = fixture();
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            f.root.to_str().unwrap(),
-            "--baseline-revision",
-            "nonexistent-sha-does-not-exist",
-            "--output",
-            f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "0",
-        ])
-        .output()
-        .unwrap();
+    let o = run_with(&f.root, "nonexistent-sha-does-not-exist", &f.out, 0);
     assert!(!o.status.success());
 }
 
@@ -224,19 +210,7 @@ fn rejects_invalid_baseline_revision() {
 fn output_path_inside_project_dir_is_rejected() {
     let f = fixture();
     let inside = f.root.join("impact.json");
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            f.root.to_str().unwrap(),
-            "--baseline-revision",
-            &f.baseline,
-            "--output",
-            inside.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "0",
-        ])
-        .output()
-        .unwrap();
+    let o = run_with(&f.root, &f.baseline, &inside, 0);
     assert!(
         !o.status.success(),
         "should reject output inside project dir"
@@ -264,19 +238,7 @@ fn test_functions_in_classes_are_discovered() {
     git(&f.root, &["add", "."]);
     git(&f.root, &["commit", "-qm", "candidate"]);
 
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            f.root.to_str().unwrap(),
-            "--baseline-revision",
-            &new_baseline,
-            "--output",
-            f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "0",
-        ])
-        .output()
-        .unwrap();
+    let o = run_with(&f.root, &new_baseline, &f.out, 0);
     let v = read(&f, o);
     let selected = v["selected_tests"].as_array().unwrap();
     let names: Vec<_> = selected
@@ -317,19 +279,7 @@ fn django_tests_py_is_discovered() {
     git(&f.root, &["add", "."]);
     git(&f.root, &["commit", "-qm", "candidate"]);
 
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            f.root.to_str().unwrap(),
-            "--baseline-revision",
-            &new_baseline,
-            "--output",
-            f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "0",
-        ])
-        .output()
-        .unwrap();
+    let o = run_with(&f.root, &new_baseline, &f.out, 0);
     let v = read(&f, o);
     let selected = v["selected_tests"].as_array().unwrap();
     let names: Vec<_> = selected
@@ -413,19 +363,7 @@ fn benchmark_microservices_django_kafka_production_change_selects_all_15_tests()
 
     // Run TIA against the worktree with baseline as the reference revision.
     let out_path = wt_dir.path().join("result.json");
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            wt_root.to_str().unwrap(),
-            "--baseline-revision",
-            baseline,
-            "--output",
-            out_path.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "0",
-        ])
-        .output()
-        .expect("python-test-impact");
+    let o = run_with(&wt_root, baseline, &out_path, 0);
 
     // Cleanup worktree before any assertion so it isn't left behind on failure.
     let _ = Command::new("git")
@@ -496,19 +434,7 @@ fn pyan3_timeout_zero_skips_graph_phase() {
         "def compute(x):\n    return x + 2\n\ndef helper():\n    return 0\n",
     );
     commit(&f);
-    let out = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            f.root.to_str().unwrap(),
-            "--baseline-revision",
-            &f.baseline,
-            "--output",
-            f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "0",
-        ])
-        .output()
-        .unwrap();
+    let out = run(&f);
     let v = read(&f, out);
     // Conservative selection still works.
     assert_eq!(v["selection_mode"], "conservative_all", "{v}");
@@ -538,19 +464,7 @@ fn pyan3_absent_falls_back_to_conservative() {
     );
     commit(&f);
     // With timeout=0 the graph phase is explicitly skipped — no crash, full conservative selection.
-    let out = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            f.root.to_str().unwrap(),
-            "--baseline-revision",
-            &f.baseline,
-            "--output",
-            f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "0",
-        ])
-        .output()
-        .unwrap();
+    let out = run(&f);
     assert!(
         out.status.success(),
         "{}",
@@ -621,19 +535,7 @@ fn benchmark_kafka_ml_models_change_selects_all_14_tests() {
     );
 
     let out_path = wt_dir.path().join("result.json");
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            wt_root.to_str().unwrap(),
-            "--baseline-revision",
-            &baseline,
-            "--output",
-            out_path.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "0",
-        ])
-        .output()
-        .expect("python-test-impact");
+    let o = run_with(&wt_root, &baseline, &out_path, 0);
 
     let _ = Command::new("git")
         .args(["worktree", "remove", "--force", wt_root.to_str().unwrap()])
@@ -695,19 +597,7 @@ fn pytest_function_in_non_test_named_file_is_discovered() {
     git(&f.root, &["add", "."]);
     git(&f.root, &["commit", "-qm", "candidate"]);
 
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            f.root.to_str().unwrap(),
-            "--baseline-revision",
-            &new_baseline,
-            "--output",
-            f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "0",
-        ])
-        .output()
-        .unwrap();
+    let o = run_with(&f.root, &new_baseline, &f.out, 0);
     let v = read(&f, o);
     let names: Vec<_> = v["selected_tests"]
         .as_array()
@@ -743,19 +633,7 @@ fn unittest_testcase_subclass_in_non_test_named_file_is_discovered() {
     git(&f.root, &["add", "."]);
     git(&f.root, &["commit", "-qm", "candidate"]);
 
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            f.root.to_str().unwrap(),
-            "--baseline-revision",
-            &new_baseline,
-            "--output",
-            f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "0",
-        ])
-        .output()
-        .unwrap();
+    let o = run_with(&f.root, &new_baseline, &f.out, 0);
     let v = read(&f, o);
     let names: Vec<_> = v["selected_tests"]
         .as_array()
@@ -795,19 +673,7 @@ fn files_under_tests_dir_are_scanned_without_test_prefix() {
     git(&f.root, &["add", "."]);
     git(&f.root, &["commit", "-qm", "candidate"]);
 
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            f.root.to_str().unwrap(),
-            "--baseline-revision",
-            &new_baseline,
-            "--output",
-            f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "0",
-        ])
-        .output()
-        .unwrap();
+    let o = run_with(&f.root, &new_baseline, &f.out, 0);
     let v = read(&f, o);
     let names: Vec<_> = v["selected_tests"]
         .as_array()
@@ -847,19 +713,7 @@ fn decorated_class_tests_are_discovered() {
     git(&f.root, &["add", "."]);
     git(&f.root, &["commit", "-qm", "candidate"]);
 
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            f.root.to_str().unwrap(),
-            "--baseline-revision",
-            &new_baseline,
-            "--output",
-            f.out.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "0",
-        ])
-        .output()
-        .unwrap();
+    let o = run_with(&f.root, &new_baseline, &f.out, 0);
     let v = read(&f, o);
     let names: Vec<_> = v["selected_tests"]
         .as_array()
@@ -952,19 +806,7 @@ fn benchmark_mdk_callable_change_selects_6_tests_with_call_graph_precise() {
     );
 
     let out_path = wt_dir.path().join("result.json");
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            wt_root.to_str().unwrap(),
-            "--baseline-revision",
-            baseline,
-            "--output",
-            out_path.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "60",
-        ])
-        .output()
-        .expect("python-test-impact");
+    let o = run_with(&wt_root, baseline, &out_path, 60);
 
     let _ = Command::new("git")
         .args(["worktree", "remove", "--force", wt_root.to_str().unwrap()])
@@ -1083,19 +925,7 @@ fn call_graph_precise_selects_only_reachable_test() {
     git(&root, &["commit", "-qm", "change process"]);
 
     let out_path = dir.path().join("result.json");
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            root.to_str().unwrap(),
-            "--baseline-revision",
-            &baseline,
-            "--output",
-            out_path.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "30",
-        ])
-        .output()
-        .unwrap();
+    let o = run_with(&root, &baseline, &out_path, 30);
 
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     let v: Value = serde_json::from_slice(&fs::read(&out_path).unwrap()).unwrap();
@@ -1196,19 +1026,7 @@ fn benchmark_tbs_class_method_change_selects_3_tests_with_call_graph_precise() {
     );
 
     let out_path = wt_dir.path().join("result.json");
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            wt_root.to_str().unwrap(),
-            "--baseline-revision",
-            baseline,
-            "--output",
-            out_path.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "60",
-        ])
-        .output()
-        .expect("python-test-impact");
+    let o = run_with(&wt_root, baseline, &out_path, 60);
 
     let _ = Command::new("git")
         .args(["worktree", "remove", "--force", wt_root.to_str().unwrap()])
@@ -1337,19 +1155,7 @@ fn benchmark_mpd_orders_change_selects_5_tests_with_call_graph_precise() {
     );
 
     let out_path = wt_dir.path().join("result.json");
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            wt_root.to_str().unwrap(),
-            "--baseline-revision",
-            baseline,
-            "--output",
-            out_path.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "60",
-        ])
-        .output()
-        .expect("python-test-impact");
+    let o = run_with(&wt_root, baseline, &out_path, 60);
 
     let _ = Command::new("git")
         .args(["worktree", "remove", "--force", wt_root.to_str().unwrap()])
@@ -1471,19 +1277,7 @@ fn benchmark_textproc_tokenizer_change_selects_30_tests_with_call_graph_precise(
     );
 
     let out_path = wt_dir.path().join("result.json");
-    let o = Command::new(env!("CARGO_BIN_EXE_python-test-impact"))
-        .args([
-            "--project-dir",
-            wt_root.to_str().unwrap(),
-            "--baseline-revision",
-            baseline,
-            "--output",
-            out_path.to_str().unwrap(),
-            "--pyan3-timeout-secs",
-            "60",
-        ])
-        .output()
-        .expect("python-test-impact");
+    let o = run_with(&wt_root, baseline, &out_path, 60);
 
     let _ = Command::new("git")
         .args(["worktree", "remove", "--force", wt_root.to_str().unwrap()])
