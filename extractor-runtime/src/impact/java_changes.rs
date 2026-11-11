@@ -101,57 +101,34 @@ fn smallest_owner(node: Node<'_>, line: usize) -> Option<Node<'_>> {
     .then_some(node)
 }
 
-/// Returns a stable callable identity including parameter types for overload disambiguation.
+/// Returns a stable callable identity in the form `ClassName.method()`.
+///
+/// Parameters are omitted so the signature matches what all three matchers expect:
+/// `callable_signature_matches` (selection.rs), `callgraph_targets` (test-impact.rs),
+/// and `callgraph_targets_in_roots` (java_impact_inputs.rs).  Overload disambiguation
+/// is not needed at the call-graph matching level because the matchers resolve by
+/// class + method name only.
 fn method_signature(node: Node<'_>, code: &str) -> Option<String> {
     let class = enclosing_class(node, code)?;
     let method = node
         .child_by_field_name("name")?
         .utf8_text(code.as_bytes())
         .ok()?;
-    let params = parameter_types(node, code);
-    Some(format!("{class}.{method}({params})"))
+    Some(format!("{class}.{method}()"))
 }
 
-/// Returns a constructor identity including parameter types.
+/// Returns a constructor identity in the form `ClassName.ClassName()`.
+///
+/// The `Class.` prefix is required so that `split_once('.')` in the matchers
+/// can extract the owner class.  Parameters are omitted for the same reason as
+/// `method_signature`.
 fn constructor_signature(node: Node<'_>, code: &str) -> Option<String> {
+    let class = enclosing_class(node, code)?;
     let name = node
         .child_by_field_name("name")?
         .utf8_text(code.as_bytes())
         .ok()?;
-    let params = parameter_types(node, code);
-    Some(format!("{name}({params})"))
-}
-
-/// Extracts a comma-separated list of parameter type names from a method or constructor node.
-fn parameter_types(node: Node<'_>, code: &str) -> String {
-    let params_node = match node.child_by_field_name("parameters") {
-        Some(p) => p,
-        None => return String::new(),
-    };
-    let mut types = Vec::new();
-    let mut cursor = params_node.walk();
-    for child in params_node.children(&mut cursor) {
-        match child.kind() {
-            "formal_parameter" => {
-                if let Some(type_node) = child.child_by_field_name("type") {
-                    if let Ok(t) = type_node.utf8_text(code.as_bytes()) {
-                        types.push(t.to_owned());
-                    }
-                }
-            }
-            "spread_parameter" => {
-                // spread_parameter has no named "type" field — take the first named child.
-                let mut sc = child.walk();
-                if let Some(type_node) = child.named_children(&mut sc).next() {
-                    if let Ok(t) = type_node.utf8_text(code.as_bytes()) {
-                        types.push(format!("{t}..."));
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-    types.join(", ")
+    Some(format!("{class}.{name}()"))
 }
 
 /// Returns the enclosing class name for a method declaration.
@@ -216,10 +193,8 @@ mod tests {
         let code = "class Svc { int process(String name, int count) { return 0; } }";
         let tree = parse_java(code);
         let node = first_node_of_kind(tree.root_node(), "method_declaration").unwrap();
-        assert_eq!(
-            method_signature(node, code).unwrap(),
-            "Svc.process(String, int)"
-        );
+        // Parameters are dropped — matchers expect Class.method() with no param types.
+        assert_eq!(method_signature(node, code).unwrap(), "Svc.process()");
     }
 
     #[test]
@@ -227,10 +202,7 @@ mod tests {
         let code = "class Svc { void log(String fmt, Object... args) {} }";
         let tree = parse_java(code);
         let node = first_node_of_kind(tree.root_node(), "method_declaration").unwrap();
-        assert_eq!(
-            method_signature(node, code).unwrap(),
-            "Svc.log(String, Object...)"
-        );
+        assert_eq!(method_signature(node, code).unwrap(), "Svc.log()");
     }
 
     #[test]
@@ -238,11 +210,8 @@ mod tests {
         let code = "class Order { Order(String id, int qty) {} }";
         let tree = parse_java(code);
         let node = first_node_of_kind(tree.root_node(), "constructor_declaration").unwrap();
-        // constructor_signature should use the constructor name, not an enclosing class
-        assert_eq!(
-            constructor_signature(node, code).unwrap(),
-            "Order(String, int)"
-        );
+        // constructor_signature includes the Class. prefix so matchers can split on '.'.
+        assert_eq!(constructor_signature(node, code).unwrap(), "Order.Order()");
         // smallest_owner must pick up constructor_declaration
         let line = node.start_position().row;
         let owner = smallest_owner(tree.root_node(), line).unwrap();
@@ -256,11 +225,14 @@ mod tests {
         let result = map_java_line(tree.root_node(), 1, "mod", "Order.java", code);
         let elem = result.unwrap();
         assert_eq!(elem.kind, ChangedElementKind::Callable);
-        assert_eq!(elem.callable_signature.unwrap(), "Order(String)");
+        assert_eq!(elem.callable_signature.unwrap(), "Order.Order()");
     }
 
     #[test]
-    fn map_java_line_overloads_are_distinct() {
+    fn map_java_line_overloads_produce_same_signature() {
+        // Without parameter types, overloads are not distinguished at the signature
+        // level — both map to Class.method().  This causes over-selection (safe) rather
+        // than a missed selection.
         let code = "class Svc {\n  void run(String s) {}\n  void run(int i) {}\n}\n";
         let tree = parse_java(code);
         let sig1 = map_java_line(tree.root_node(), 1, "mod", "Svc.java", code)
@@ -271,8 +243,7 @@ mod tests {
             .unwrap()
             .callable_signature
             .unwrap();
-        assert_ne!(sig1, sig2, "overloads must produce distinct signatures");
-        assert_eq!(sig1, "Svc.run(String)");
-        assert_eq!(sig2, "Svc.run(int)");
+        assert_eq!(sig1, "Svc.run()");
+        assert_eq!(sig2, "Svc.run()");
     }
 }
