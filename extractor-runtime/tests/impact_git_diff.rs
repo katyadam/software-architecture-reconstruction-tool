@@ -206,3 +206,39 @@ fn git(root: &Path, arguments: &[&str]) {
         .expect("Git is available for fixture setup");
     assert!(status.success(), "git {arguments:?} failed");
 }
+
+#[test]
+fn deleted_method_is_attributed_as_callable_not_module() {
+    let repository = create_repository();
+    write(
+        &repository.0,
+        "pom.xml",
+        "<project><modelVersion>4.0.0</modelVersion></project>",
+    );
+    // Baseline has two methods; candidate removes one entirely.
+    write(
+        &repository.0,
+        "src/main/java/example/Service.java",
+        "package example;\nclass Service {\n  int kept() { return 1; }\n  int deleted() { return 2; }\n}\n",
+    );
+    git(&repository.0, &["add", "."]);
+    git(&repository.0, &["commit", "-m", "baseline"]);
+
+    write(
+        &repository.0,
+        "src/main/java/example/Service.java",
+        "package example;\nclass Service {\n  int kept() { return 1; }\n}\n",
+    );
+    git(&repository.0, &["add", "."]);
+    git(&repository.0, &["commit", "-m", "delete method"]);
+
+    let changes = analyze_changes(&repository.0, "HEAD~1").expect("changes analyzed");
+    assert!(
+        changes.iter().any(|c| {
+            c.source_path.ends_with("Service.java")
+                && c.kind == ChangedElementKind::Callable
+                && c.callable_signature.as_deref() == Some("Service.deleted()")
+        }),
+        "deleted method should be a Callable element, not module fallback: {changes:#?}"
+    );
+}

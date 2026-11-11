@@ -15,6 +15,7 @@ pub mod impact;
 pub mod imports;
 pub mod ir;
 pub mod java_analysis;
+pub mod python_impact;
 pub mod restcalls;
 
 pub use api::CodeElementsAggregate;

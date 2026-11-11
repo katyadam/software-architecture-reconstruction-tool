@@ -12,10 +12,6 @@ pub fn callgraph_targets_in_roots(
 ) -> Vec<String> {
     let mut targets = BTreeSet::new();
     for change in changes {
-        let method = change
-            .callable_signature
-            .as_deref()
-            .and_then(|s| s.split_once('.'));
         for callable in callables {
             let path = Path::new(&callable.file_path);
             if !path.ends_with(Path::new(&change.source_path))
@@ -31,9 +27,22 @@ pub fn callgraph_targets_in_roots(
                 .split_once('(')
                 .and_then(|(p, _)| p.split_whitespace().last());
             let matches = match change.kind {
-                ChangedElementKind::Callable => method.is_some_and(|(owner, member)| {
-                    owner == class && name == Some(member.trim_end_matches("()"))
-                }),
+                ChangedElementKind::Callable => {
+                    if let Some(sig) = change.callable_signature.as_deref() {
+                        // sig: "ClassName.method(types...)" for methods,
+                        //      "ClassName(types...)"        for constructors.
+                        // Split on first '(' to isolate the name part before params.
+                        let name_part = sig.split_once('(').map_or(sig, |(n, _)| n);
+                        if let Some((owner, member)) = name_part.rsplit_once('.') {
+                            owner == class && name == Some(member)
+                        } else {
+                            // No dot: constructor — name_part is the class name.
+                            name_part == class && callable.is_constructor
+                        }
+                    } else {
+                        false
+                    }
+                }
                 ChangedElementKind::Class => change.callable_signature.as_deref() == Some(class),
                 ChangedElementKind::Module => false,
             };
@@ -186,6 +195,56 @@ mod tests {
         assert_eq!(
             callgraph_targets_in_roots(&[root], &[change], &callables),
             ["La/Service$Inner#run/0"]
+        );
+    }
+
+    #[test]
+    fn configured_java_roots_matches_method_with_param_types() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("source/java");
+        std::fs::create_dir_all(root.join("pkg")).unwrap();
+        std::fs::write(
+            root.join("pkg/Svc.java"),
+            "package pkg; class Svc { int process(String name, int count) { return 0; } }",
+        )
+        .unwrap();
+        let callables =
+            crate::get_java_callables_in_roots_with_progress(&[root.clone()], false).unwrap();
+        let change = ChangedElement {
+            module_root: dir.path().to_string_lossy().into(),
+            source_path: "source/java/pkg/Svc.java".into(),
+            kind: ChangedElementKind::Callable,
+            // Signature format now includes parameter types.
+            callable_signature: Some("Svc.process(String, int)".into()),
+        };
+        assert_eq!(
+            callgraph_targets_in_roots(&[root], &[change], &callables),
+            ["Lpkg/Svc#process/2"]
+        );
+    }
+
+    #[test]
+    fn configured_java_roots_matches_constructor_with_param_types() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("source/java");
+        std::fs::create_dir_all(root.join("pkg")).unwrap();
+        std::fs::write(
+            root.join("pkg/Order.java"),
+            "package pkg; class Order { Order(String id) {} }",
+        )
+        .unwrap();
+        let callables =
+            crate::get_java_callables_in_roots_with_progress(&[root.clone()], false).unwrap();
+        let change = ChangedElement {
+            module_root: dir.path().to_string_lossy().into(),
+            source_path: "source/java/pkg/Order.java".into(),
+            kind: ChangedElementKind::Callable,
+            // Constructor signature has no class prefix.
+            callable_signature: Some("Order(String)".into()),
+        };
+        assert_eq!(
+            callgraph_targets_in_roots(&[root], &[change], &callables),
+            ["Lpkg/Order#<init>/1"]
         );
     }
 }

@@ -5,7 +5,7 @@ use crate::java_impact_inputs::{
 use extractor_runtime::{
     call_graph::{
         JavaSourceLayout, java_adapter::JavaAdapterProvider, resolve_reachability_with_java_layout,
-        wala::WalaJavaProvider,
+        spoon::SpoonJavaProvider, wala::WalaJavaProvider,
     },
     impact::{
         ModuleDependencyGraph, discover_java_tests_in_checkout, discover_java_tests_in_roots,
@@ -58,6 +58,26 @@ macro_rules! configured_provider {
 }
 configured_provider!(WalaJavaProvider, "WALA");
 configured_provider!(JavaAdapterProvider, "SootUp");
+
+// Spoon is source-only; it never needs bytecode artifacts and ignores the inputs in
+// analyze_prepared, so prepare_module just returns a default empty value.
+impl ConfiguredJavaProvider for SpoonJavaProvider {
+    fn label(&self) -> &str {
+        "Spoon"
+    }
+    fn prepare_module(&self, _module: &Path) -> Result<JavaBytecodeInputs, String> {
+        Ok(JavaBytecodeInputs::default())
+    }
+    fn analyze_prepared(
+        &self,
+        root: &Path,
+        tests: &[JavaTestCase],
+        targets: &[String],
+        _inputs: &JavaBytecodeInputs,
+    ) -> CallGraphOutcome {
+        self.analyze_test_roots(root, tests, targets)
+    }
+}
 
 pub fn analyze_configured_impact(
     project: &Path,
@@ -144,6 +164,17 @@ pub fn analyze_configured_impact(
         }
     };
     let known_modules = graph.modules().collect::<std::collections::BTreeSet<_>>();
+    // Drop tests from modules that the reactor (settings.gradle / root pom.xml) explicitly
+    // declared as subprojects but that were intentionally excluded from the manifest.
+    // Tests in builds that no reactor ever claimed are kept so the check below can
+    // trigger a conservative full run for them.
+    if inputs.module_inventory_complete && !inputs.modules.is_empty() {
+        let reactor_modules = ModuleDependencyGraph::reactor_claimed_modules(project);
+        tests.retain(|t| {
+            let m = PathBuf::from(&t.module_root);
+            inputs.modules.contains_key(&m) || !reactor_modules.contains(&m)
+        });
+    }
     if result.requires_full_test_run
         || tests
             .iter()
