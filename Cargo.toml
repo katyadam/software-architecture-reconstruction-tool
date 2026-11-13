@@ -19,6 +19,7 @@ resolver = "3"
 [workspace.dependencies]
 # Internal crates
 agentic-models = { path = "agentic/models" }
+agent-loop = { path = "agentic/agent-loop" }
 models = { path = "models" }
 statix = { path = "statix" }
 clients = { path = "clients" }
