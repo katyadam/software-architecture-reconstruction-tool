@@ -13,6 +13,7 @@ pub mod go_impact;
 pub mod go_package_impact;
 pub mod impact;
 pub mod imports;
+pub mod interaction_kind;
 pub mod ir;
 pub mod java_analysis;
 pub mod python_impact;
@@ -35,5 +36,6 @@ pub use impact::{
     TestImpactResult,
 };
 pub use imports::Import;
+pub use interaction_kind::InteractionKind;
 pub use restcalls::RestCall;
 pub use route_facts::RouteFact;
