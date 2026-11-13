@@ -233,6 +233,7 @@ pub struct FactId(pub String);
 mod tests {
     use super::*;
     use models::source_code::SourceSpan;
+    use models::{MessageDestinationKind, MessageRole};
 
     fn call(start: u32, end: u32) -> CodeElement {
         CodeElement::RestCall(RestCall {
@@ -255,6 +256,38 @@ mod tests {
             call(0, 0).point_id().0,
             "a/Client.java#h1#rest_call#http://orders/api"
         );
+    }
+
+    #[test]
+    fn protocol_follows_the_code_element() {
+        let edge = |protocol, destination_kind, destination: &str| {
+            CodeElement::Message(MessageEdge {
+                protocol,
+                role: MessageRole::Producer,
+                destination_kind,
+                destination: destination.into(),
+                exchange: None,
+                routing_key: None,
+                queue: None,
+                topic: None,
+                handler: None,
+                function_name: "get".into(),
+                function_hash: "h2".into(),
+                call_arguments: vec![],
+                file_path: "a/client.go".into(),
+            })
+        };
+        use CommunicationProtocol as C;
+        use MessageDestinationKind as D;
+        assert_eq!(call(0, 0).protocol(), Protocol::Http);
+        let endpoint = CodeElement::Endpoint(Endpoint::default());
+        assert_eq!(endpoint.protocol(), Protocol::Http);
+        let grpc = edge(C::Grpc, D::GrpcService, "orders.Orders/Get");
+        assert_eq!(grpc.protocol(), Protocol::Grpc);
+        let kafka = edge(C::Kafka, D::Topic, "orders.created");
+        assert_eq!(kafka.protocol(), Protocol::Kafka);
+        let rabbit = edge(C::RabbitMq, D::Queue, "orders");
+        assert_eq!(rabbit.protocol(), Protocol::RabbitMq);
     }
 
     #[test]
