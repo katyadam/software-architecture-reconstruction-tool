@@ -128,14 +128,14 @@ pub(crate) fn closure_routers<'a>(
         .iter()
         .filter_map(|call| {
             let (receiver, method) = call.metadata.function_name.rsplit_once('.')?;
-            let (prefix, literal) = match (method, call.metadata.arguments.as_slice()) {
-                ("Route", [prefix, literal, ..]) => (prefix.value.as_str(), literal),
+            let (prefix, literal) = match (method, call.raw_arguments.as_slice()) {
+                ("Route", [prefix, literal, ..]) => (prefix.as_str(), literal),
                 ("Group", [literal, ..]) => ("\"\"", literal),
                 _ => return None,
             };
             Some(ClosureRouter {
                 call,
-                parameter: closure_parameter(&literal.value, imports)?,
+                parameter: closure_parameter(literal, imports)?,
                 receiver: receiver.trim(),
                 prefix,
             })

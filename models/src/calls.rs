@@ -39,6 +39,10 @@ pub struct ParsedCallStatement {
     pub call_span: SourceSpan,
     /// Bytes of the innermost enclosing function; `None` at module level.
     pub function_span: Option<SourceSpan>,
+    /// Source text of each argument. Go fills `metadata.arguments` with
+    /// values evaluated in scope; route facts need the raw expression,
+    /// e.g. to tell the literal `"/api"` from the variable `api`.
+    pub raw_arguments: Vec<String>,
 }
 
 impl From<ParsedCallStatement> for CallStatement {

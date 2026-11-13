@@ -450,7 +450,7 @@ fn collect_local_assignments(
                 let value = evaluate_expression_node(value_node, code, &scope_values);
                 // Preserve the previous binding when the assignment references
                 // itself, e.g. `r.Body = wrap(r.Body)`.
-                if references_binding(&value, &name) {
+                if references_binding(value_node, code, &name) {
                     continue;
                 }
                 assignments.insert(
@@ -746,7 +746,7 @@ fn collect_calls_in_source_order(
                     let resolved = evaluate_expression_node(value, code, scope);
                     // Do not turn assignments such as `r.Body = wrap(r.Body)` into
                     // recursive scope bindings.
-                    if !references_binding(&resolved, &name) {
+                    if !references_binding(value, code, &name) {
                         scope.insert(name, resolved);
                     }
                 }
@@ -755,14 +755,12 @@ fn collect_calls_in_source_order(
                 let Some(function_node) = node.child_by_field_name("function") else {
                     continue;
                 };
+                let arguments = node.child_by_field_name("arguments");
                 call_statements.push(ParsedCallStatement {
+                    raw_arguments: raw_arguments(arguments, code),
                     metadata: CallStatement {
                         function_name: normalize_whitespace(node_text(function_node, code)),
-                        arguments: parse_arguments(
-                            node.child_by_field_name("arguments"),
-                            code,
-                            scope,
-                        ),
+                        arguments: parse_arguments(arguments, code, scope),
                         enclosing_function_name: Some(callable.signature.clone()),
                         enclosing_class_name: match &callable.namespace {
                             Namespace::Class(name) => Some(name.clone()),
@@ -791,6 +789,7 @@ fn collect_calls_in_source_order(
                     .map(|function| node_text(function, code))
                     .unwrap_or_else(|| node_text(channel, code));
                 call_statements.push(ParsedCallStatement {
+                    raw_arguments: vec![normalize_whitespace(node_text(message, code))],
                     metadata: CallStatement {
                         function_name: normalize_whitespace(channel_function),
                         arguments: vec![Argument {
@@ -836,6 +835,10 @@ fn collect_calls_in_source_order(
                         pending.push(TraversalItem::Node(argument));
                     }
                 }
+                // Chained calls: `a.X(..).Y(..)` holds `a.X(..)` in its function.
+                if let Some(function) = node.child_by_field_name("function") {
+                    pending.push(TraversalItem::Node(function));
+                }
             }
             TraversalItem::Node(node) if node.kind() == "send_statement" => {
                 pending.push(TraversalItem::EmitChannelSend(node));
@@ -871,16 +874,28 @@ fn collect_calls_in_source_order(
 /// Checks whether an expression refers to the assignment target as a complete Go token.
 /// A substring check incorrectly treats `c := grpc.Dial(...)` as self-referential because
 /// the one-letter variable occurs within `grpc`.
-fn references_binding(value: &str, name: &str) -> bool {
-    if name.is_empty() {
-        return false;
+/// Whether `value` mentions `name` as an identifier or selector, as in
+/// `r.Body = wrap(r.Body)`. Text inside string literals never counts, so
+/// `api := router.Group("/api")` is not self-referential.
+fn references_binding(value: Node, code: &str, name: &str) -> bool {
+    if matches!(value.kind(), "identifier" | "selector_expression")
+        && node_text(value, code) == name
+    {
+        return true;
     }
-    value.match_indices(name).any(|(index, _)| {
-        let before = value[..index].chars().next_back();
-        let after = value[index + name.len()..].chars().next();
-        !before.is_some_and(|character| character.is_ascii_alphanumeric() || character == '_')
-            && !after.is_some_and(|character| character.is_ascii_alphanumeric() || character == '_')
-    })
+    value
+        .named_children(&mut value.walk())
+        .any(|child| references_binding(child, code, name))
+}
+
+fn raw_arguments(node: Option<Node>, code: &str) -> Vec<String> {
+    let Some(node) = node else {
+        return Vec::new();
+    };
+    node.named_children(&mut node.walk())
+        .filter(|arg| arg.kind() != "comment")
+        .map(|arg| normalize_whitespace(node_text(arg, code)))
+        .collect()
 }
 
 fn parse_arguments(

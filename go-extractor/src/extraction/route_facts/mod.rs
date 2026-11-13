@@ -45,16 +45,16 @@ pub fn route_facts(file: &TypedFileRecord) -> Vec<RouteFact> {
     let mounted = file.call_statements.iter().filter_map(|call| {
         let c = &call.metadata;
         let (parent, method) = c.function_name.rsplit_once('.')?;
-        let [prefix, child] = c.arguments.as_slice() else {
+        let [prefix, child] = call.raw_arguments.as_slice() else {
             return None;
         };
-        let child = child.value.trim();
+        let child = child.trim();
         // `parent.Mount(prefix, child)`: chi / Fiber mounts.
         if method != "Mount" || !is_identifier(child) {
             return None;
         }
         let parent = scoped_router(&closures, call.call_span.start_byte, parent.trim());
-        attach(file, &call_scope(c), &parent, child, &prefix.value)
+        attach(file, &call_scope(c), &parent, child, prefix)
     });
     assigned.chain(closed).chain(mounted).collect()
 }

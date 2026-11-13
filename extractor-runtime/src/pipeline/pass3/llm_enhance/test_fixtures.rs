@@ -171,6 +171,7 @@ fn call(function_name: &str, arg: &str, enclosing: &str) -> ParsedCallStatement 
         },
         call_span: SourceSpan::new(0, 0),
         function_span: None,
+        raw_arguments: vec![],
     }
 }
 

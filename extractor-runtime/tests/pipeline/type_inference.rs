@@ -50,6 +50,7 @@ fn make_call_statement(
         },
         call_span: Default::default(),
         function_span: None,
+        raw_arguments: vec![],
     }
 }
 

@@ -414,6 +414,7 @@ mod tests {
             },
             call_span: SourceSpan::new(0, 0),
             function_span: None,
+            raw_arguments: vec![],
         }
     }
 

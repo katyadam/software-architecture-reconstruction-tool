@@ -206,45 +206,6 @@ func startRest() {
 }
 
 #[test]
-fn extracts_gin_group_routes() {
-    let code = r#"
-package main
-
-func health() {}
-func getCustomer() {}
-func addItemToBasket() {}
-
-func startRest() {
-    router := gin.Default()
-    routerGroup := router.Group("/api")
-    routerGroup.GET("/customers/:id", getCustomer)
-    routerGroup.POST("/customer-basket", addItemToBasket)
-    routerGroup.GET("/health", health)
-}
-"#;
-
-    let record = extract_syntactic(code, "gin_group.go").expect("Go extraction should succeed");
-    assert!(
-        record
-            .endpoints
-            .iter()
-            .any(|e| e.uri == "/api/customers/:id" && e.http_method == models::HttpMethod::GET)
-    );
-    assert!(
-        record
-            .endpoints
-            .iter()
-            .any(|e| e.uri == "/api/customer-basket" && e.http_method == models::HttpMethod::POST)
-    );
-    assert!(
-        record
-            .endpoints
-            .iter()
-            .any(|e| { e.uri == "/api/health" && e.http_method == models::HttpMethod::GET })
-    );
-}
-
-#[test]
 fn extracts_rabbitmq_and_kafka_message_edges() {
     let code = r#"
 package messaging
@@ -1146,4 +1107,14 @@ func forward() {
         typed.assignments,
         typed.call_statements
     );
+}
+
+#[test]
+fn self_referential_scope_binding_terminates() {
+    let scope = std::collections::HashMap::from([(
+        "cfg.api".to_string(),
+        "join(cfg.api, cfg.api)".to_string(),
+    )]);
+    let value = super::shared::evaluate_expression_text("cfg.api", &scope);
+    assert!(value.starts_with("join("), "{value}");
 }

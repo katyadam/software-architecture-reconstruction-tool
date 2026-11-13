@@ -70,6 +70,8 @@ struct Site<'a> {
     file: usize,
     scope: String,
     args: &'a [models::Argument],
+    /// Source text per argument, index-aligned with `args`.
+    raw: &'a [String],
 }
 
 /// `(file, scope key, variable)`.
@@ -129,8 +131,8 @@ impl<'a> Resolver<'a> {
                     .or_default()
                     .push((i, &c.parameters));
             }
-            for c in &file.call_statements {
-                let c = &c.metadata;
+            for call in &file.call_statements {
+                let c = &call.metadata;
                 let callee = bare(c.function_name.rsplit('.').next().unwrap_or_default());
                 r.calls.entry(callee).or_default().push(Site {
                     file: i,
@@ -141,6 +143,7 @@ impl<'a> Resolver<'a> {
                         .unwrap_or_default()
                         .to_string(),
                     args: &c.arguments,
+                    raw: &call.raw_arguments,
                 });
             }
         }
@@ -331,16 +334,19 @@ impl<'a> Resolver<'a> {
                 continue;
             }
             callers += 1;
-            let keyword = site.args.iter().find(|a| a.assigned_variable.trim() == var);
-            let positional = site
-                .args
-                .iter()
-                .filter(|a| a.assigned_variable.trim().is_empty())
+            let args = site.args.iter().enumerate();
+            let keyword = args
+                .clone()
+                .find(|(_, a)| a.assigned_variable.trim() == var);
+            let positional = args
+                .filter(|(_, a)| a.assigned_variable.trim().is_empty())
                 .nth(index);
-            if let Some(arg) = keyword.or(positional) {
+            if let Some((i, arg)) = keyword.or(positional) {
+                // Raw text: Go evaluates `arg.value` in scope, which loses the variable name.
+                let value = site.raw.get(i).unwrap_or(&arg.value);
                 merge(
                     &mut out,
-                    self.prefixes(site.file, &site.scope, arg.value.trim(), path),
+                    self.prefixes(site.file, &site.scope, value.trim(), path),
                 );
             }
         }
@@ -495,6 +501,7 @@ mod tests {
             },
             call_span: SourceSpan::default(),
             function_span: None,
+            raw_arguments: vec![],
         }
     }
 

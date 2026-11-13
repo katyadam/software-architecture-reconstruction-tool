@@ -29,6 +29,9 @@ impl<'a> PythonCallStatement<'a> {
         ParsedCallStatement {
             call_span: SourceSpan::new(self.node.start_byte() as u32, self.node.end_byte() as u32),
             function_span: source_span::innermost_function_span(&self.node),
+            raw_arguments: (self.call_statement.arguments.iter())
+                .map(|a| a.value.clone())
+                .collect(),
             metadata: self.call_statement,
         }
     }

@@ -103,10 +103,14 @@ pub fn identify_with_package_context(
             )
         })
         .collect();
+    // A fluent chain `b.AddProducer(..).AddConsumer(..)` yields its inner call
+    // twice: as a call itself and inside the outer call's chain.
+    let mut seen = std::collections::HashSet::new();
     file.raw_message_edges = file
         .call_statements
         .iter()
         .flat_map(|call| message_edge_strategies::identify_message_edges(file, &call.metadata))
+        .filter(|edge| seen.insert(edge.clone()))
         .collect();
 }
 

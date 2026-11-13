@@ -137,7 +137,9 @@ impl CallStatementsExtractor {
 
             let joined_trimmed_name = joined_name.trim_matches('.');
 
+            let raw_arguments = arguments.iter().map(|a| a.value.clone()).collect();
             calls.push(ParsedCallStatement {
+                raw_arguments,
                 metadata: CallStatement {
                     function_name: joined_trimmed_name.to_string()
                         + &statix::strings::normalize_whitespace(&args_string),

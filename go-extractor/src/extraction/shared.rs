@@ -220,9 +220,14 @@ fn resolve_bound_value(expr: &str, value: &str, scope: &HashMap<String, String>)
     evaluate_expression_text(value, scope)
 }
 
-fn substitute_scope_tokens(expr: &str, scope: &HashMap<String, String>) -> String {
+fn substitute_scope_tokens(
+    expr: &str,
+    scope: &HashMap<String, String>,
+    seen: &mut HashSet<String>,
+) -> String {
     let mut result = String::new();
     let mut token = String::new();
+    let mut expanded = HashSet::new();
 
     for ch in expr.chars() {
         if ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.') {
@@ -230,24 +235,39 @@ fn substitute_scope_tokens(expr: &str, scope: &HashMap<String, String>) -> Strin
             continue;
         }
 
-        flush_scope_token(&mut result, &mut token, scope);
+        flush_scope_token(&mut result, &mut token, scope, seen, &mut expanded);
         result.push(ch);
     }
 
-    flush_scope_token(&mut result, &mut token, scope);
+    flush_scope_token(&mut result, &mut token, scope, seen, &mut expanded);
+    // A token expanded here stays expanded: re-substituting it in the
+    // result would grow `x -> f(x) -> f(f(x))` forever.
+    seen.extend(expanded);
     result
 }
 
-fn flush_scope_token(result: &mut String, token: &mut String, scope: &HashMap<String, String>) {
+/// Shares `seen` with the caller so a binding that mentions itself, such as
+/// `api := router.Group("/api")`, cannot recurse forever.
+fn flush_scope_token(
+    result: &mut String,
+    token: &mut String,
+    scope: &HashMap<String, String>,
+    seen: &mut HashSet<String>,
+    expanded: &mut HashSet<String>,
+) {
     if token.is_empty() {
         return;
     }
 
     if token.contains('.')
+        && !seen.contains(token.as_str())
         && let Some(value) = resolve_scope_value(token, scope)
         && value.trim() != token.trim()
     {
-        result.push_str(&evaluate_expression_text(value, scope));
+        seen.insert(token.clone());
+        result.push_str(&evaluate_expression_text_inner(value, scope, seen));
+        seen.remove(token.as_str());
+        expanded.insert(token.clone());
     } else {
         result.push_str(token);
     }
@@ -324,7 +344,7 @@ fn evaluate_expression_text_inner(
             .cloned()
             .unwrap_or_else(|| trimmed.to_string())
     } else {
-        let substituted = substitute_scope_tokens(trimmed, scope);
+        let substituted = substitute_scope_tokens(trimmed, scope, seen);
         if substituted != trimmed {
             evaluate_expression_text_inner(&substituted, scope, seen)
         } else {
