@@ -48,7 +48,7 @@ pub(super) fn collect_callable_ir(
 
         if let Some(body) = child.child_by_field_name("body") {
             collect_local_assignments(body, code, &metadata.signature, assignments);
-            collect_call_statements(body, code, &metadata, call_statements);
+            collect_call_statements(body, code, &metadata, assignments, call_statements);
         }
 
         callables.push(callable);
@@ -296,6 +296,19 @@ fn parse_composite_literal(node: Node, code: &str) -> Expr {
 }
 
 fn collect_composite_literal_fields(node: Node, code: &str, fields: &mut Vec<(String, Expr)>) {
+    collect_composite_literal_fields_at_depth(node, code, fields, 0);
+}
+
+/// Collects nested literal fields while guarding against pathological generated sources.
+fn collect_composite_literal_fields_at_depth(
+    node: Node,
+    code: &str,
+    fields: &mut Vec<(String, Expr)>,
+    depth: usize,
+) {
+    if depth >= 32 {
+        return;
+    }
     for child in node.named_children(&mut node.walk()) {
         if child.kind() == "keyed_element" {
             let mut cursor = child.walk();
@@ -313,7 +326,7 @@ fn collect_composite_literal_fields(node: Node, code: &str, fields: &mut Vec<(St
             continue;
         }
 
-        collect_composite_literal_fields(child, code, fields);
+        collect_composite_literal_fields_at_depth(child, code, fields, depth + 1);
     }
 }
 
@@ -435,6 +448,11 @@ fn collect_local_assignments(
             let pairs = assignment_pairs(node, code);
             for (name, value_node) in pairs {
                 let value = evaluate_expression_node(value_node, code, &scope_values);
+                // Preserve the previous binding when the assignment references
+                // itself, e.g. `r.Body = wrap(r.Body)`.
+                if references_binding(&value, &name) {
+                    continue;
+                }
                 assignments.insert(
                     AssignmentKey {
                         scope: scope.clone(),
@@ -447,6 +465,14 @@ fn collect_local_assignments(
                     },
                 );
                 scope_values.insert(name.clone(), value);
+                collect_composite_field_assignments(
+                    &name,
+                    value_node,
+                    code,
+                    &scope,
+                    &scope_values,
+                    assignments,
+                );
                 if let Some(root) = selector_root(&name)
                     && scope_bindings(assignments, &Scope::Global).contains_key(root)
                 {
@@ -468,8 +494,126 @@ fn collect_local_assignments(
             collect_declaration_assignments(node, code, scope.clone(), assignments);
             scope_values.extend(scope_bindings(assignments, &scope));
         }
+        "range_clause" => {
+            let Some(iterable) = node.child_by_field_name("right") else {
+                return;
+            };
+            let Some(binding) = node.child_by_field_name("left") else {
+                return;
+            };
+            let Some(variable) = binding
+                .named_children(&mut binding.walk())
+                .filter(|child| child.kind() == "identifier")
+                .last()
+            else {
+                return;
+            };
+            let name = node_text(variable, code).to_string();
+            let value = evaluate_expression_node(iterable, code, &scope_values);
+            assignments.insert(
+                AssignmentKey {
+                    scope: scope.clone(),
+                    variable_name: name.clone(),
+                },
+                Assignment {
+                    variable_name: name.clone(),
+                    variable_type: "".to_string(),
+                    value: value.clone(),
+                },
+            );
+            scope_values.insert(name, value);
+        }
         _ => {}
     });
+}
+
+/// Records literal fields of local Go configuration records for later selector resolution.
+fn collect_composite_field_assignments(
+    base: &str,
+    node: Node,
+    code: &str,
+    scope: &Scope,
+    scope_values: &HashMap<String, String>,
+    assignments: &mut HashMap<AssignmentKey, Assignment>,
+) {
+    collect_composite_field_assignments_at_depth(
+        base,
+        node,
+        code,
+        scope,
+        scope_values,
+        assignments,
+        0,
+    );
+}
+
+/// Traverses struct-literal wrappers without following arbitrarily deep syntax trees.
+fn collect_composite_field_assignments_at_depth(
+    base: &str,
+    node: Node,
+    code: &str,
+    scope: &Scope,
+    scope_values: &HashMap<String, String>,
+    assignments: &mut HashMap<AssignmentKey, Assignment>,
+    depth: usize,
+) {
+    if depth >= 8 {
+        return;
+    }
+    if node.kind() != "composite_literal" {
+        if matches!(
+            node.kind(),
+            "literal_element" | "literal_value" | "keyed_element"
+        ) {
+            for child in node.named_children(&mut node.walk()) {
+                collect_composite_field_assignments_at_depth(
+                    base,
+                    child,
+                    code,
+                    scope,
+                    scope_values,
+                    assignments,
+                    depth + 1,
+                );
+            }
+        }
+        return;
+    }
+    let Some(body) = node.child_by_field_name("body") else {
+        return;
+    };
+    for element in body.named_children(&mut body.walk()) {
+        if element.kind() != "keyed_element" {
+            continue;
+        }
+        let mut cursor = element.walk();
+        let mut children = element.named_children(&mut cursor);
+        let (Some(key), Some(value)) = (children.next(), children.next()) else {
+            continue;
+        };
+        let name = format!("{base}.{}", node_text(key, code));
+        let resolved = evaluate_expression_node(value, code, scope_values);
+        assignments.insert(
+            AssignmentKey {
+                scope: scope.clone(),
+                variable_name: name.clone(),
+            },
+            Assignment {
+                variable_name: name.clone(),
+                variable_type: String::new(),
+                value: resolved,
+            },
+        );
+        collect_composite_field_assignments_at_depth(
+            &name,
+            value,
+            code,
+            scope,
+            scope_values,
+            assignments,
+            depth + 1,
+        );
+    }
 }
 
 fn assignment_pairs<'a>(node: Node<'a>, code: &'a str) -> Vec<(String, Node<'a>)> {
@@ -562,52 +706,196 @@ fn collect_call_statements(
     body: Node,
     code: &str,
     callable: &Callable,
+    assignments: &HashMap<AssignmentKey, Assignment>,
     call_statements: &mut Vec<ParsedCallStatement>,
 ) {
     let function_span = body
         .parent()
         .map(|f| SourceSpan::new(f.start_byte() as u32, f.end_byte() as u32));
-    walk_named(body, &mut |node| {
-        if node.kind() != "call_expression" {
-            return;
-        }
-
-        let Some(function_node) = node.child_by_field_name("function") else {
-            return;
-        };
-        let function_name = normalize_whitespace(node_text(function_node, code));
-        let arguments = node
-            .child_by_field_name("arguments")
-            .map(|args| parse_arguments(args, code))
-            .unwrap_or_default();
-
-        call_statements.push(ParsedCallStatement {
-            metadata: CallStatement {
-                function_name,
-                arguments,
-                enclosing_function_name: Some(callable.signature.clone()),
-                enclosing_class_name: match &callable.namespace {
-                    Namespace::Class(name) => Some(name.clone()),
-                    Namespace::Module(_) => None,
-                },
-                enclosing_function_hash: Some(callable.hash.clone()),
-                is_self_invoke: false,
-                is_super_invoke: false,
-                invoked_on: None,
-                source_span: SourceSpan::default(),
-                is_decorator: false,
-            },
-            call_span: SourceSpan::new(node.start_byte() as u32, node.end_byte() as u32),
-            function_span: function_span.clone(),
-        });
-    });
+    let mut scope = scope_bindings(assignments, &Scope::Global);
+    collect_calls_in_source_order(
+        body,
+        code,
+        callable,
+        function_span,
+        &mut scope,
+        call_statements,
+    );
 }
 
-fn parse_arguments(node: Node, code: &str) -> Vec<Argument> {
+fn collect_calls_in_source_order(
+    node: Node,
+    code: &str,
+    callable: &Callable,
+    function_span: Option<SourceSpan>,
+    scope: &mut HashMap<String, String>,
+    call_statements: &mut Vec<ParsedCallStatement>,
+) {
+    enum TraversalItem<'a> {
+        Node(Node<'a>),
+        ApplyAssignments(Vec<(String, Node<'a>)>),
+        EmitCall(Node<'a>),
+        EmitChannelSend(Node<'a>),
+    }
+
+    let mut pending = vec![TraversalItem::Node(node)];
+    while let Some(item) = pending.pop() {
+        match item {
+            TraversalItem::ApplyAssignments(pairs) => {
+                for (name, value) in pairs {
+                    let resolved = evaluate_expression_node(value, code, scope);
+                    // Do not turn assignments such as `r.Body = wrap(r.Body)` into
+                    // recursive scope bindings.
+                    if !references_binding(&resolved, &name) {
+                        scope.insert(name, resolved);
+                    }
+                }
+            }
+            TraversalItem::EmitCall(node) => {
+                let Some(function_node) = node.child_by_field_name("function") else {
+                    continue;
+                };
+                call_statements.push(ParsedCallStatement {
+                    metadata: CallStatement {
+                        function_name: normalize_whitespace(node_text(function_node, code)),
+                        arguments: parse_arguments(
+                            node.child_by_field_name("arguments"),
+                            code,
+                            scope,
+                        ),
+                        enclosing_function_name: Some(callable.signature.clone()),
+                        enclosing_class_name: match &callable.namespace {
+                            Namespace::Class(name) => Some(name.clone()),
+                            Namespace::Module(_) => None,
+                        },
+                        enclosing_function_hash: Some(callable.hash.clone()),
+                        is_self_invoke: false,
+                        is_super_invoke: false,
+                        invoked_on: None,
+                        source_span: SourceSpan::default(),
+                        is_decorator: false,
+                    },
+                    call_span: SourceSpan::new(node.start_byte() as u32, node.end_byte() as u32),
+                    function_span: function_span.clone(),
+                });
+            }
+            TraversalItem::EmitChannelSend(node) => {
+                let Some(channel) = node.child_by_field_name("channel") else {
+                    continue;
+                };
+                let Some(message) = node.child_by_field_name("value") else {
+                    continue;
+                };
+                let channel_function = channel
+                    .child_by_field_name("function")
+                    .map(|function| node_text(function, code))
+                    .unwrap_or_else(|| node_text(channel, code));
+                call_statements.push(ParsedCallStatement {
+                    metadata: CallStatement {
+                        function_name: normalize_whitespace(channel_function),
+                        arguments: vec![Argument {
+                            assigned_variable: "".to_string(),
+                            value: evaluate_expression_node(message, code, scope),
+                            datatype: None,
+                        }],
+                        enclosing_function_name: Some(callable.signature.clone()),
+                        enclosing_class_name: match &callable.namespace {
+                            Namespace::Class(name) => Some(name.clone()),
+                            Namespace::Module(_) => None,
+                        },
+                        enclosing_function_hash: Some(callable.hash.clone()),
+                        is_self_invoke: false,
+                        is_super_invoke: false,
+                        invoked_on: None,
+                        source_span: SourceSpan::default(),
+                        is_decorator: false,
+                    },
+                    call_span: SourceSpan::new(node.start_byte() as u32, node.end_byte() as u32),
+                    function_span: function_span.clone(),
+                });
+            }
+            TraversalItem::Node(node)
+                if matches!(
+                    node.kind(),
+                    "short_var_declaration" | "assignment_statement"
+                ) =>
+            {
+                let pairs = assignment_pairs(node, code);
+                pending.push(TraversalItem::ApplyAssignments(pairs.clone()));
+                for (_, value) in pairs.into_iter().rev() {
+                    pending.push(TraversalItem::Node(value));
+                }
+            }
+            TraversalItem::Node(node) if node.kind() == "call_expression" => {
+                pending.push(TraversalItem::EmitCall(node));
+                if let Some(arguments) = node.child_by_field_name("arguments") {
+                    let arguments = arguments
+                        .named_children(&mut arguments.walk())
+                        .collect::<Vec<_>>();
+                    for argument in arguments.into_iter().rev() {
+                        pending.push(TraversalItem::Node(argument));
+                    }
+                }
+            }
+            TraversalItem::Node(node) if node.kind() == "send_statement" => {
+                pending.push(TraversalItem::EmitChannelSend(node));
+                let children = node.named_children(&mut node.walk()).collect::<Vec<_>>();
+                for child in children.into_iter().rev() {
+                    pending.push(TraversalItem::Node(child));
+                }
+            }
+            TraversalItem::Node(node) if node.kind() == "range_clause" => {
+                if let (Some(iterable), Some(binding)) = (
+                    node.child_by_field_name("right"),
+                    node.child_by_field_name("left"),
+                ) && let Some(variable) = binding
+                    .named_children(&mut binding.walk())
+                    .filter(|child| child.kind() == "identifier")
+                    .last()
+                {
+                    let name = node_text(variable, code).to_string();
+                    let value = evaluate_expression_node(iterable, code, scope);
+                    scope.insert(name, value);
+                }
+            }
+            TraversalItem::Node(node) => {
+                let children = node.named_children(&mut node.walk()).collect::<Vec<_>>();
+                for child in children.into_iter().rev() {
+                    pending.push(TraversalItem::Node(child));
+                }
+            }
+        }
+    }
+}
+
+/// Checks whether an expression refers to the assignment target as a complete Go token.
+/// A substring check incorrectly treats `c := grpc.Dial(...)` as self-referential because
+/// the one-letter variable occurs within `grpc`.
+fn references_binding(value: &str, name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    value.match_indices(name).any(|(index, _)| {
+        let before = value[..index].chars().next_back();
+        let after = value[index + name.len()..].chars().next();
+        !before.is_some_and(|character| character.is_ascii_alphanumeric() || character == '_')
+            && !after.is_some_and(|character| character.is_ascii_alphanumeric() || character == '_')
+    })
+}
+
+fn parse_arguments(
+    node: Option<Node>,
+    code: &str,
+    scope: &HashMap<String, String>,
+) -> Vec<Argument> {
+    let Some(node) = node else {
+        return Vec::new();
+    };
     node.named_children(&mut node.walk())
+        .filter(|arg| arg.kind() != "comment")
         .map(|arg| Argument {
             assigned_variable: "".to_string(),
-            value: normalize_whitespace(node_text(arg, code)),
+            value: evaluate_expression_node(arg, code, scope),
             datatype: None,
         })
         .collect()

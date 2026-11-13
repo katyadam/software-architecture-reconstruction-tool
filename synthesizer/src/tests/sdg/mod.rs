@@ -117,11 +117,13 @@ mod tests {
         let configuration = ConfigurationData {
             service_descriptions: vec![
                 ServiceDescription {
+                    java_analysis: None,
                     name: "svc".to_string(),
                     base_dir_path: "svc".to_string(),
                     urls: vec!["http://svc:80".to_string()],
                 },
                 ServiceDescription {
+                    java_analysis: None,
                     name: "caller".to_string(),
                     base_dir_path: "caller".to_string(),
                     urls: vec!["http://caller:80".to_string()],
@@ -191,11 +193,13 @@ mod tests {
         let configuration = ConfigurationData {
             service_descriptions: vec![
                 ServiceDescription {
+                    java_analysis: None,
                     name: "ts-preserve-service".to_string(),
                     base_dir_path: "ts-preserve-service".to_string(),
                     urls: vec!["http://ts-preserve-service:14568".to_string()],
                 },
                 ServiceDescription {
+                    java_analysis: None,
                     name: "ts-notification-service".to_string(),
                     base_dir_path: "ts-notification-service".to_string(),
                     urls: vec!["http://ts-notification-service:17853".to_string()],
@@ -311,11 +315,13 @@ mod tests {
         let configuration = ConfigurationData {
             service_descriptions: vec![
                 ServiceDescription {
+                    java_analysis: None,
                     name: "svc".to_string(),
                     base_dir_path: "svc".to_string(),
                     urls: vec!["http://svc:80".to_string()],
                 },
                 ServiceDescription {
+                    java_analysis: None,
                     name: "caller".to_string(),
                     base_dir_path: "caller".to_string(),
                     urls: vec!["http://caller:80".to_string()],
@@ -411,6 +417,7 @@ mod tests {
         ConfigurationData {
             service_descriptions: vec![
                 ServiceDescription {
+                    java_analysis: None,
                     name: "user-service".to_string(),
                     base_dir_path: "crm/user-service".to_string(),
                     urls: vec![
@@ -419,6 +426,7 @@ mod tests {
                     ],
                 },
                 ServiceDescription {
+                    java_analysis: None,
                     name: "admin-user-service".to_string(),
                     base_dir_path: "crm/admin-user-service".to_string(),
                     urls: vec![
@@ -464,11 +472,13 @@ mod tests {
         let configuration = ConfigurationData {
             service_descriptions: vec![
                 ServiceDescription {
+                    java_analysis: None,
                     name: "medical-data-service".to_string(),
                     base_dir_path: "medical-data-service".to_string(),
                     urls: vec!["http://medical-data-service:5000".to_string()],
                 },
                 ServiceDescription {
+                    java_analysis: None,
                     name: "app-service".to_string(),
                     base_dir_path: "app-service".to_string(),
                     urls: vec!["http://app-service:8000".to_string()],
@@ -519,11 +529,13 @@ mod tests {
         let configuration = ConfigurationData {
             service_descriptions: vec![
                 ServiceDescription {
+                    java_analysis: None,
                     name: "medical-data-service".to_string(),
                     base_dir_path: "medical-data-service".to_string(),
                     urls: vec!["http://localhost:8000".to_string()],
                 },
                 ServiceDescription {
+                    java_analysis: None,
                     name: "app-service".to_string(),
                     base_dir_path: "app-service".to_string(),
                     urls: vec!["http://app-service:8000".to_string()],
@@ -572,11 +584,13 @@ mod tests {
         let configuration = ConfigurationData {
             service_descriptions: vec![
                 ServiceDescription {
+                    java_analysis: None,
                     name: "caller-service".to_string(),
                     base_dir_path: "caller-service".to_string(),
                     urls: vec!["http://caller-service:9000".to_string()],
                 },
                 ServiceDescription {
+                    java_analysis: None,
                     name: "loadtus-service".to_string(),
                     base_dir_path: "loadtus-service".to_string(),
                     urls: vec!["http://localhost:10005".to_string()],

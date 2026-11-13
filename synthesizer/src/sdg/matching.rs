@@ -233,6 +233,7 @@ mod tests {
 
     fn svc(name: &str, port: u16) -> ServiceDescription {
         ServiceDescription {
+            java_analysis: None,
             name: name.into(),
             base_dir_path: String::new(),
             urls: vec![format!("http://{name}:{port}")],

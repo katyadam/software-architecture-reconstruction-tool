@@ -41,16 +41,19 @@ async fn java_kafka_pipeline_links_services_by_topic() {
     let config = ConfigurationData {
         service_descriptions: vec![
             ServiceDescription {
+                java_analysis: None,
                 name: "order-service".to_string(),
                 base_dir_path: producer_dir,
                 urls: vec![],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "payment-service".to_string(),
                 base_dir_path: payment_dir,
                 urls: vec![],
             },
             ServiceDescription {
+                java_analysis: None,
                 name: "stock-service".to_string(),
                 base_dir_path: stock_dir,
                 urls: vec![],

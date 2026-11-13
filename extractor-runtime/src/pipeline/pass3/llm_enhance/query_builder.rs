@@ -93,6 +93,7 @@ mod tests {
     #[test]
     fn candidates_skip_origin_and_urlless() {
         let svc = |name: &str, url: Option<&str>| ServiceDescription {
+            java_analysis: None,
             name: name.to_string(),
             base_dir_path: format!("/proj/{name}"),
             urls: url.map(str::to_string).into_iter().collect(),
@@ -134,6 +135,7 @@ mod tests {
     #[test]
     fn rewrite_to_service_with_url() {
         let service = ServiceDescription {
+            java_analysis: None,
             name: "svc".to_string(),
             base_dir_path: "/proj/svc".to_string(),
             urls: vec!["http://svc:8000".to_string()],
@@ -147,6 +149,7 @@ mod tests {
     #[test]
     fn rewrite_to_service_no_url_is_unchanged() {
         let service = ServiceDescription {
+            java_analysis: None,
             name: "svc".to_string(),
             base_dir_path: "/proj/svc".to_string(),
             urls: vec![],

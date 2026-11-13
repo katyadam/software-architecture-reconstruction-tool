@@ -1,0 +1,18 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>fixture</groupId>
+  <artifactId>configured-java-inputs</artifactId>
+  <version>1.0</version>
+  <build>
+    <sourceDirectory>source/java</sourceDirectory>
+    <testSourceDirectory>checks/java</testSourceDirectory>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration><release>8</release></configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

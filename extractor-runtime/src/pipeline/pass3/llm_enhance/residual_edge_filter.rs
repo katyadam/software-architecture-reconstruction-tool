@@ -320,6 +320,7 @@ mod tests {
     fn config() -> ConfigurationData {
         ConfigurationData {
             service_descriptions: vec![ServiceDescription {
+                java_analysis: None,
                 name: "caller".to_string(),
                 base_dir_path: "proj/caller".to_string(),
                 urls: vec![],

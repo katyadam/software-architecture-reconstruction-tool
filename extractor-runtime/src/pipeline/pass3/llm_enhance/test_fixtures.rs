@@ -176,6 +176,7 @@ fn call(function_name: &str, arg: &str, enclosing: &str) -> ParsedCallStatement 
 
 fn service(name: &str, dir: &str, url: Option<&str>) -> ServiceDescription {
     ServiceDescription {
+        java_analysis: None,
         name: name.to_string(),
         base_dir_path: dir.to_string(),
         urls: url.map(str::to_string).into_iter().collect(),

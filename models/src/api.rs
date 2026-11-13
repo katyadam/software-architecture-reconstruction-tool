@@ -3,7 +3,9 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{CallStatement, Callable, Endpoint, Entity, Import, MessageEdge, RestCall};
+use crate::{
+    CallStatement, Callable, Endpoint, Entity, Import, MessageEdge, ResolvedCallEdge, RestCall,
+};
 
 #[derive(Debug, Default)]
 pub struct CodeElementsAggregate {
@@ -14,6 +16,8 @@ pub struct CodeElementsAggregate {
     pub message_edges: Vec<MessageEdge>,
     pub callables: Vec<Callable>,
     pub call_statements: Vec<CallStatement>,
+    /// Provider-derived call edges whose endpoints are known source callables.
+    pub resolved_call_edges: Vec<ResolvedCallEdge>,
 }
 
 impl CodeElementsAggregate {
@@ -25,6 +29,7 @@ impl CodeElementsAggregate {
         message_edges: Vec<MessageEdge>,
         callables: Vec<Callable>,
         call_statements: Vec<CallStatement>,
+        resolved_call_edges: Vec<ResolvedCallEdge>,
     ) -> Self {
         Self {
             imports,
@@ -34,6 +39,7 @@ impl CodeElementsAggregate {
             message_edges,
             callables,
             call_statements,
+            resolved_call_edges,
         }
     }
 }

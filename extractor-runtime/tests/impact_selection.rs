@@ -1,0 +1,321 @@
+use extractor_runtime::impact::{
+    include_potential_consumer_tests, select_tests, select_tests_with_reachability,
+};
+use models::{
+    ChangedElement, ChangedElementKind, JavaTestCase, SelectionReason,
+    call_graph::{CallGraphOutcome, CallGraphRequest, CallGraphStatus, ResolvedCallEdge},
+};
+use std::collections::BTreeMap;
+
+/// Builds a test identity suitable for focused selection assertions.
+fn test_case(name: &str) -> JavaTestCase {
+    JavaTestCase {
+        module_root: "orders".into(),
+        class_name: format!("Lorders/{name}Test"),
+        method_name: "coversChange".into(),
+        descriptor: "()V".into(),
+        callable_signature: format!("class:{name}Test/void coversChange()"),
+        source_path: format!("src/test/java/orders/{name}Test.java"),
+    }
+}
+
+/// Builds a callable change in the orders module.
+fn callable_change() -> ChangedElement {
+    ChangedElement {
+        module_root: "orders".into(),
+        source_path: "src/main/java/orders/OrderService.java".into(),
+        kind: ChangedElementKind::Callable,
+        callable_signature: Some("OrderService.changed()".into()),
+    }
+}
+
+/// Builds a successful provider outcome without uncertainty diagnostics.
+fn successful_outcome() -> CallGraphOutcome {
+    CallGraphOutcome::ok(
+        CallGraphRequest::new("orders/src/main/java", models::call_graph::Language::Java),
+        "wala-java",
+        "cha_bytecode",
+    )
+}
+
+#[test]
+fn includes_undiscovered_consumers_without_changing_local_reachability() {
+    let local = test_case("Local");
+    let mut consumer = test_case("Consumer");
+    consumer.module_root = "billing".into();
+    let mut result = models::TestImpactResult::new(
+        String::new(),
+        String::new(),
+        vec![callable_change()],
+        vec![],
+        vec![local.clone()],
+    );
+    include_potential_consumer_tests(&mut result, vec![local.clone(), consumer.clone()]);
+    assert_eq!(result.selected_tests.len(), 1);
+    assert_eq!(result.selected_tests[0].test, consumer);
+    assert_eq!(result.unselected_tests, vec![local]);
+    assert!(
+        matches!(&result.selected_tests[0].reasons[0], SelectionReason::ModuleFallback { diagnostic }
+        if diagnostic.starts_with("cross-module dependency scope unresolved"))
+    );
+}
+
+#[test]
+fn promotes_previously_unselected_consumers_and_deduplicates_on_repeated_application() {
+    let mut consumer = test_case("Consumer");
+    consumer.module_root = "billing".into();
+    let mut result = models::TestImpactResult::new(
+        String::new(),
+        String::new(),
+        vec![callable_change()],
+        vec![],
+        vec![consumer.clone()],
+    );
+    include_potential_consumer_tests(&mut result, vec![consumer.clone(), consumer.clone()]);
+    include_potential_consumer_tests(&mut result, vec![consumer]);
+    assert_eq!(result.selected_tests.len(), 1);
+    assert_eq!(result.selected_tests[0].reasons.len(), 1);
+    assert!(result.unselected_tests.is_empty());
+    assert_eq!(result.diagnostics.len(), 1);
+}
+
+#[test]
+fn test_only_changes_do_not_select_sibling_tests() {
+    let mut change = callable_change();
+    change.source_path = "orders/src/test/java/orders/OrderTest.java".into();
+    let mut consumer = test_case("Consumer");
+    consumer.module_root = "billing".into();
+    let mut result =
+        models::TestImpactResult::new(String::new(), String::new(), vec![change], vec![], vec![]);
+    include_potential_consumer_tests(&mut result, vec![consumer]);
+    assert!(result.selected_tests.is_empty());
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn root_changes_do_not_add_dependency_fallback_to_descendant_tests() {
+    let mut change = callable_change();
+    change.module_root = "/repo".into();
+    let mut child = test_case("Consumer");
+    child.module_root = "/repo/billing".into();
+    let mut result = models::TestImpactResult::new(
+        String::new(),
+        String::new(),
+        vec![change],
+        vec![],
+        vec![child.clone()],
+    );
+    include_potential_consumer_tests(&mut result, vec![child.clone()]);
+    assert!(result.selected_tests.is_empty());
+    assert_eq!(result.unselected_tests, vec![child]);
+}
+
+#[test]
+fn selects_only_the_test_that_reaches_a_changed_callable() {
+    let reaching = test_case("OrderService");
+    let unrelated = test_case("Inventory");
+
+    let result = select_tests(
+        vec![callable_change()],
+        vec![reaching.clone(), unrelated.clone()],
+        successful_outcome(),
+        vec![ResolvedCallEdge {
+            source_id: reaching.callable_signature.clone(),
+            target_id: "class:OrderService/void changed()".into(),
+        }],
+    );
+
+    assert_eq!(result.selected_tests.len(), 1);
+    assert_eq!(result.selected_tests[0].test, reaching);
+    assert_eq!(
+        result.selected_tests[0].reasons,
+        vec![SelectionReason::ChangedCallable {
+            signature: "OrderService.changed()".into(),
+        }]
+    );
+    assert_eq!(result.unselected_tests, vec![unrelated]);
+}
+
+#[test]
+fn selects_only_tests_listed_by_direct_wala_reachability() {
+    let reaching = test_case("OrderService");
+    let unrelated = test_case("Inventory");
+    let reachability = BTreeMap::from([(
+        "class:OrderService/void changed()".into(),
+        vec![format!(
+            "{}#{}{}",
+            reaching.class_name, reaching.method_name, reaching.descriptor
+        )],
+    )]);
+
+    let result = select_tests_with_reachability(
+        vec![callable_change()],
+        vec![reaching.clone(), unrelated.clone()],
+        successful_outcome(),
+        vec![],
+        &reachability,
+    );
+
+    assert_eq!(result.selected_tests.len(), 1);
+    assert_eq!(result.selected_tests[0].test, reaching);
+    assert_eq!(result.unselected_tests, vec![unrelated]);
+}
+
+#[test]
+fn does_not_fallback_when_direct_wala_reachability_is_empty() {
+    let reaching = test_case("OrderService");
+    let unrelated = test_case("Inventory");
+    let reachability = BTreeMap::from([("class:OrderService/void changed()".into(), vec![])]);
+
+    let result = select_tests_with_reachability(
+        vec![callable_change()],
+        vec![reaching.clone(), unrelated.clone()],
+        successful_outcome(),
+        vec![],
+        &reachability,
+    );
+
+    assert!(result.selected_tests.is_empty());
+    assert_eq!(result.unselected_tests, vec![reaching, unrelated]);
+    assert!(
+        !result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.starts_with("unresolved changed element:"))
+    );
+}
+
+#[test]
+fn uses_fully_qualified_jvm_test_identity_to_avoid_cross_package_selection() {
+    let first = JavaTestCase {
+        class_name: "Lfirst/ServiceTest".into(),
+        source_path: "src/test/java/first/ServiceTest.java".into(),
+        ..test_case("Service")
+    };
+    let second = JavaTestCase {
+        class_name: "Lsecond/ServiceTest".into(),
+        source_path: "src/test/java/second/ServiceTest.java".into(),
+        ..test_case("Service")
+    };
+
+    let result = select_tests(
+        vec![callable_change()],
+        vec![first.clone(), second.clone()],
+        successful_outcome(),
+        vec![ResolvedCallEdge {
+            source_id: "Lfirst/ServiceTest#coversChange()V".into(),
+            target_id: "class:OrderService/void changed()".into(),
+        }],
+    );
+
+    assert_eq!(result.selected_tests.len(), 1);
+    assert_eq!(result.selected_tests[0].test, first);
+    assert_eq!(result.unselected_tests, vec![second]);
+}
+
+#[test]
+fn falls_back_to_every_module_test_for_module_changes_and_analysis_uncertainty() {
+    let first = test_case("OrderService");
+    let second = test_case("Inventory");
+    let mut failed = successful_outcome();
+    failed.status = CallGraphStatus::Failed;
+    failed
+        .diagnostics
+        .push("test bytecode compilation failed".into());
+    let module_change = ChangedElement {
+        module_root: "orders".into(),
+        source_path: "pom.xml".into(),
+        kind: ChangedElementKind::Module,
+        callable_signature: None,
+    };
+
+    let result = select_tests(vec![module_change], vec![first, second], failed, vec![]);
+
+    assert_eq!(result.selected_tests.len(), 2);
+    assert!(result.unselected_tests.is_empty());
+    assert!(result.selected_tests.iter().all(|selected| {
+        selected
+            .reasons
+            .iter()
+            .any(|reason| matches!(reason, SelectionReason::ModuleFallback { .. }))
+            && selected
+                .reasons
+                .iter()
+                .any(|reason| matches!(reason, SelectionReason::AnalysisFailure { .. }))
+    }));
+}
+
+#[test]
+fn falls_back_when_a_changed_callable_cannot_be_reached_or_mapped() {
+    let first = test_case("OrderService");
+    let second = test_case("Inventory");
+
+    let result = select_tests(
+        vec![callable_change()],
+        vec![first, second],
+        successful_outcome(),
+        vec![],
+    );
+
+    assert_eq!(result.selected_tests.len(), 2);
+    assert!(result.selected_tests.iter().all(|selected| {
+        selected
+            .reasons
+            .iter()
+            .any(|reason| matches!(reason, SelectionReason::ModuleFallback { .. }))
+    }));
+}
+
+#[test]
+fn selects_tests_reaching_any_callable_in_a_changed_class() {
+    let reaching = test_case("OrderService");
+    let class_change = ChangedElement {
+        module_root: "orders".into(),
+        source_path: "src/main/java/orders/OrderService.java".into(),
+        kind: ChangedElementKind::Class,
+        callable_signature: Some("OrderService".into()),
+    };
+
+    let result = select_tests(
+        vec![class_change],
+        vec![reaching.clone()],
+        successful_outcome(),
+        vec![ResolvedCallEdge {
+            source_id: reaching.callable_signature.clone(),
+            target_id: "class:OrderService/void unchangedMethod()".into(),
+        }],
+    );
+
+    assert_eq!(result.selected_tests.len(), 1);
+    assert_eq!(
+        result.selected_tests[0].reasons,
+        vec![SelectionReason::ChangedClass {
+            class_name: "OrderService".into(),
+        }]
+    );
+}
+
+#[test]
+fn falls_back_when_wala_reports_an_unmatched_or_unresolved_mapping_diagnostic() {
+    let first = test_case("OrderService");
+    let second = test_case("Inventory");
+    let mut outcome = successful_outcome();
+    outcome
+        .diagnostics
+        .push("unmatched_entrypoint=Lorders/OrderServiceTest#coversChange()V".into());
+
+    let result = select_tests(
+        vec![callable_change()],
+        vec![first, second],
+        outcome,
+        vec![],
+    );
+
+    assert_eq!(result.selected_tests.len(), 2);
+    assert!(result.selected_tests.iter().all(|selected| {
+        selected
+            .reasons
+            .iter()
+            .any(|reason| matches!(reason, SelectionReason::ModuleFallback { .. }))
+    }));
+}

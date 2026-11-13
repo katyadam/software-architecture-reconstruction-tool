@@ -94,6 +94,7 @@ pub fn evaluate(
         message_edges,
         callables,
         call_statements,
+        resolved_call_edges: vec![],
     }
 }
 
@@ -166,5 +167,6 @@ pub async fn evaluate_with_llm(
         message_edges,
         callables,
         call_statements,
+        resolved_call_edges: vec![],
     }
 }

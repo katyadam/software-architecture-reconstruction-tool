@@ -160,11 +160,13 @@ mod tests {
         ConfigurationData {
             service_descriptions: vec![
                 ServiceDescription {
+                    java_analysis: None,
                     name: "caller-service".to_string(),
                     base_dir_path: "/proj/caller".to_string(),
                     urls: vec![],
                 },
                 ServiceDescription {
+                    java_analysis: None,
                     name: "medical-data-service".to_string(),
                     base_dir_path: "/proj/mds".to_string(),
                     urls: vec![],

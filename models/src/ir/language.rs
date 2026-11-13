@@ -73,3 +73,7 @@ mod tests {
         assert_eq!(Language::from_path(""), Language::Unknown);
     }
 }
+
+impl Language {
+    pub const ALL: [Self; 3] = [Self::Java, Self::Python, Self::Go];
+}

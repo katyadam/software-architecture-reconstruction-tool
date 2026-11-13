@@ -1,16 +1,18 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use cli::metadata::{self, RunMetadataInput};
-use cli::{get_all_code_elements, save_json};
+use cli::{enrich_with_wala_inputs, get_all_code_elements, save_json};
 use clients::typesafe::{SystemOneRequest, TypeSafeClient};
 use extractor_runtime::pipeline::pass3::{DdfaMode, Resolver};
 use models::ConfigurationData;
 use sage::resolver::client::SageClient;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::default;
 use std::path::PathBuf;
-use std::{fs, time::Instant};
+use std::{
+    fs,
+    time::{Duration, Instant},
+};
 use synthesizer::{
     connectors::dto::Constant, direct_cm_build, direct_imcg_build, direct_sdg_build_with_unmatched,
     tie_break,
@@ -62,6 +64,12 @@ struct Cli {
     /// Ask Jev to pick endpoints for ambiguous or unmatched REST calls
     #[arg(long, default_value_t = false)]
     jev_match: bool,
+    /// Optional standalone WALA adapter used to enrich Java call edges.
+    #[arg(long, value_name = "FILE")]
+    wala_adapter_jar: Option<PathBuf>,
+    /// Maximum time allowed for one WALA call-graph analysis.
+    #[arg(long, default_value_t = 300, value_name = "SECONDS")]
+    wala_timeout_seconds: u64,
 }
 
 #[derive(Deserialize)]
@@ -103,6 +111,33 @@ async fn main() -> Result<()> {
 
     let config: ConfigurationData = serde_json::from_str(&config_raw)
         .context("Failed to parse Configuration JSON - check your schema!")?;
+
+    let java_inputs = if args.wala_adapter_jar.is_some()
+        && config.service_descriptions.iter().any(|s| {
+            s.java_analysis
+                .as_ref()
+                .is_some_and(|a| a.artifacts_file.is_some() || !a.maven_profiles.is_empty())
+        }) {
+        let output = std::process::Command::new("git")
+            .current_dir(&args.project_dir)
+            .args(["rev-parse", "--verify", "HEAD"])
+            .output()
+            .context("Unable to read Java manifest candidate revision")?;
+        anyhow::ensure!(
+            output.status.success(),
+            "Java manifests require a candidate Git checkout: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let revision = String::from_utf8(output.stdout)?;
+        Some(extractor_runtime::java_analysis::load_java_analysis_inputs(
+            &args.project_dir,
+            &args.project_dir,
+            &config,
+            revision.trim(),
+        )?)
+    } else {
+        None
+    };
 
     let constants_dto = if let Some(path) = &args.constants_file {
         let raw = fs::read_to_string(path).context("Failed to read constants file from disk")?;
@@ -155,14 +190,21 @@ async fn main() -> Result<()> {
         .then(|| TypeSafeClient::new().expect("TypeSafe client to instantiate"));
 
     let extraction = Instant::now();
-    let all_code_elements = get_all_code_elements(
+    let all_code_elements = enrich_with_wala_inputs(
+        get_all_code_elements(
+            &args.project_dir,
+            &external_constants,
+            &config,
+            resolver,
+            typesafe_client.as_ref(),
+        )
+        .await?,
         &args.project_dir,
-        &external_constants,
         &config,
-        resolver,
-        typesafe_client.as_ref(),
-    )
-    .await?;
+        args.wala_adapter_jar.as_deref(),
+        Duration::from_secs(args.wala_timeout_seconds),
+        java_inputs.as_ref(),
+    );
     let extraction_elapsed = extraction.elapsed();
 
     println!("✅ Extraction successful!");
@@ -220,4 +262,28 @@ async fn main() -> Result<()> {
         extraction_elapsed, synthesis_elapsed
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::Parser;
+
+    #[test]
+    fn accepts_a_wala_analysis_timeout() {
+        let cli = Cli::try_parse_from([
+            "voyantclair",
+            "--project-dir",
+            "project",
+            "--config-file",
+            "config.json",
+            "--output-dir",
+            "output",
+            "--wala-timeout-seconds",
+            "12",
+        ])
+        .expect("the CLI should accept a WALA timeout");
+
+        assert_eq!(cli.wala_timeout_seconds, 12);
+    }
 }

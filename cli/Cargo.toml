@@ -5,18 +5,20 @@ edition = "2024"
 
 [dependencies]
 extractor-runtime = { workspace = true }
-synthesizer = { workspace = true }
+java-extractor = { workspace = true }
 models = { workspace = true }
 sage = { workspace = true }
+synthesizer = { workspace = true }
 
-clap = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
-serde = { workspace = true }
-serde_json = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
-uuid = { workspace = true }
-env_logger = { workspace = true }
-env-scraper = { path = "../env-scraper" }
+clap = { workspace = true }
 clients = { path = "../clients" }
 dotenvy = { workspace = true }
+env_logger = { workspace = true }
+env-scraper = { path = "../env-scraper" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = "3.22.0"
+tokio = { workspace = true, features = ["full"] }
+uuid = { workspace = true }

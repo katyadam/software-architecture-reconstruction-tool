@@ -157,6 +157,7 @@ mod tests {
 
     fn svc(name: &str) -> ServiceDescription {
         ServiceDescription {
+            java_analysis: None,
             name: name.to_string(),
             base_dir_path: format!("/proj/{name}"),
             urls: vec![format!("http://{name}:8000")],
@@ -280,6 +281,7 @@ mod tests {
             service_descriptions: vec![
                 svc("annotation-service"),
                 ServiceDescription {
+                    java_analysis: None,
                     name: "annotation-models".to_string(),
                     base_dir_path: "/proj/models".to_string(),
                     urls: vec![],

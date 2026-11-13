@@ -137,6 +137,7 @@ mod tests {
 
     fn svc(name: &str, urls: &[&str]) -> ServiceDescription {
         ServiceDescription {
+            java_analysis: None,
             name: name.to_string(),
             base_dir_path: format!("/proj/{name}"),
             urls: urls.iter().map(|u| u.to_string()).collect(),
