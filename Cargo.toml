@@ -1,5 +1,5 @@
 [workspace]
-members = ["agentic/models",
+members = ["agentic/*",
     "cli",
     "clients",
     "constant-scanner",

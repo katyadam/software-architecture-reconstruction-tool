@@ -1,6 +1,7 @@
 //! Output of the agentic SDG stages: matcher, verifier and rematcher all
 //! take and return [`Matches`].
 
+use models::source_code::SourceSpan;
 use models::{CommunicationProtocol, Endpoint, HttpMethod, MessageEdge, RestCall};
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +37,47 @@ pub struct Dependency {
     /// Rollup over `links`; `Business` wins any tie.
     pub kind: InteractionKind,
     pub links: Vec<Link>,
+}
+
+impl Dependency {
+    /// Lives here, not on `Link`: a link without a receiver needs `self.target`.
+    pub fn link_id(&self, link: &Link) -> LinkId {
+        let target = match &link.receiver {
+            Some(receiver) => LinkTarget::Receiver(receiver.id.clone()),
+            None => LinkTarget::Service(self.target.clone()),
+        };
+        LinkId {
+            initiator: link.initiator.id.clone(),
+            target,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct LinkId {
+    pub initiator: PointId,
+    pub target: LinkTarget,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum LinkTarget {
+    Receiver(PointId),
+    Service(ServiceId),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Verdict {
+    pub link: LinkId,
+    pub decision: Decision,
+    pub reason: String,
+    pub evidence: Vec<Evidence>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Decision {
+    Keep,
+    Drop,
+    Unverified,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -107,6 +149,18 @@ pub struct ConnectionPoint {
     pub element: CodeElement,
 }
 
+impl ConnectionPoint {
+    pub fn location(&self) -> Location {
+        self.element.location()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Location {
+    pub file: String,
+    pub span: Option<SourceSpan>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Side {
     Initiator,
@@ -157,35 +211,39 @@ impl CodeElement {
     }
 
     /// Stable across runs: no line numbers, which most elements lack.
+    /// Endpoints include the method, so `GET /x` and `POST /x` differ.
     pub fn point_id(&self) -> PointId {
-        let (kind, file, function_hash, raw, span) = match self {
-            Self::RestCall(c) => (
-                "rest_call",
-                &c.file_path,
-                &c.function_hash,
-                c.target_uri.as_str(),
-                Some((c.source_span.start_byte, c.source_span.end_byte)),
-            ),
+        let (kind, function_hash, raw) = match self {
+            Self::RestCall(c) => ("rest_call", &c.function_hash, c.target_uri.clone()),
             Self::Endpoint(e) => (
                 "endpoint",
-                &e.file_path,
                 &e.function_hash,
-                e.uri.as_str(),
-                None,
+                format!("{:?} {}", e.http_method, e.uri),
             ),
-            Self::Message(m) => (
-                "message",
-                &m.file_path,
-                &m.function_hash,
-                m.destination.as_str(),
-                None,
-            ),
+            Self::Message(m) => ("message", &m.function_hash, m.destination.clone()),
         };
+        let Location { file, span } = self.location();
         let mut id = format!("{file}#{function_hash}#{kind}#{raw}");
-        if let Some((start, end)) = span.filter(|(start, end)| start != end) {
-            id.push_str(&format!("#{start}-{end}"));
+        if let Some(s) = span {
+            id.push_str(&format!("#{}-{}", s.start_byte, s.end_byte));
         }
         PointId(id)
+    }
+
+    /// Only REST calls carry a span; an empty span counts as none.
+    pub fn location(&self) -> Location {
+        let (file, span) = match self {
+            Self::RestCall(c) => (
+                &c.file_path,
+                Some(c.source_span.clone()).filter(|s| s.start_byte != s.end_byte),
+            ),
+            Self::Endpoint(e) => (&e.file_path, None),
+            Self::Message(m) => (&m.file_path, None),
+        };
+        Location {
+            file: file.clone(),
+            span,
+        }
     }
 }
 
@@ -232,8 +290,111 @@ pub struct FactId(pub String);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use models::source_code::SourceSpan;
     use models::{MessageDestinationKind, MessageRole};
+
+    fn point(element: CodeElement, service: &str, side: Side) -> ConnectionPoint {
+        ConnectionPoint {
+            id: element.point_id(),
+            service: ServiceId(service.into()),
+            side,
+            protocol: element.protocol(),
+            address: Address::Unresolved { raw: "x".into() },
+            element,
+        }
+    }
+
+    fn endpoint(file: &str, uri: &str) -> CodeElement {
+        CodeElement::Endpoint(Endpoint {
+            file_path: file.into(),
+            uri: uri.into(),
+            ..Default::default()
+        })
+    }
+
+    fn link(receiver: Option<ConnectionPoint>) -> Link {
+        Link {
+            initiator: point(call(10, 20), "orders", Side::Initiator),
+            receiver,
+            kind: InteractionKind::Business,
+            match_source: MatchSource::Jev,
+            confidence: None,
+            evidence: vec![],
+        }
+    }
+
+    #[test]
+    fn link_id_uses_receiver_or_target_service() {
+        let dep = Dependency {
+            source: ServiceId("orders".into()),
+            target: ServiceId("payments".into()),
+            protocol: Protocol::Http,
+            kind: InteractionKind::Business,
+            links: vec![],
+        };
+        let initiator = call(10, 20).point_id();
+        let a = point(endpoint("p/A.java", "/a"), "payments", Side::Receiver);
+        let b = point(endpoint("p/B.java", "/b"), "payments", Side::Receiver);
+
+        let id = |target| LinkId {
+            initiator: initiator.clone(),
+            target,
+        };
+
+        let pair = dep.link_id(&link(Some(a.clone())));
+        assert_eq!(pair, id(LinkTarget::Receiver(a.id)));
+        assert_eq!(
+            dep.link_id(&link(None)),
+            id(LinkTarget::Service(ServiceId("payments".into())))
+        );
+        assert_ne!(pair, dep.link_id(&link(Some(b))));
+    }
+
+    #[test]
+    fn verdict_round_trips_through_json() {
+        let verdict = Verdict {
+            link: LinkId {
+                initiator: call(10, 20).point_id(),
+                target: LinkTarget::Service(ServiceId("payments".into())),
+            },
+            decision: Decision::Drop,
+            reason: "calls billing instead".into(),
+            evidence: vec![Evidence {
+                fact: Fact {
+                    id: FactId("f1".into()),
+                    tool: "define".into(),
+                    args: "BASE".into(),
+                    text: "BASE = \"http://billing\"".into(),
+                },
+                claim: Claim::TargetService,
+            }],
+        };
+        let json = serde_json::to_string(&verdict).unwrap();
+        assert_eq!(serde_json::from_str::<Verdict>(&json).unwrap(), verdict);
+    }
+
+    #[test]
+    fn location_has_span_only_for_rest_calls_with_one() {
+        let at = |element| point(element, "s", Side::Initiator).location();
+        let span = SourceSpan {
+            start_byte: 10,
+            end_byte: 20,
+        };
+        assert_eq!(
+            at(call(10, 20)),
+            Location {
+                file: "a/Client.java".into(),
+                span: Some(span),
+            }
+        );
+        assert_eq!(at(call(0, 0)).span, None);
+        assert_eq!(
+            at(endpoint("b/Routes.java", "/x")),
+            Location {
+                file: "b/Routes.java".into(),
+                span: None,
+            }
+        );
+    }
 
     fn call(start: u32, end: u32) -> CodeElement {
         CodeElement::RestCall(RestCall {
@@ -256,6 +417,23 @@ mod tests {
             call(0, 0).point_id().0,
             "a/Client.java#h1#rest_call#http://orders/api"
         );
+    }
+
+    #[test]
+    fn point_id_separates_methods_on_one_route() {
+        let route = |http_method| {
+            CodeElement::Endpoint(Endpoint {
+                file_path: "app.py".into(),
+                function_hash: "h3".into(),
+                http_method,
+                uri: "/x".into(),
+                ..Default::default()
+            })
+            .point_id()
+            .0
+        };
+        assert_eq!(route(HttpMethod::GET), "app.py#h3#endpoint#GET /x");
+        assert_eq!(route(HttpMethod::POST), "app.py#h3#endpoint#POST /x");
     }
 
     #[test]
