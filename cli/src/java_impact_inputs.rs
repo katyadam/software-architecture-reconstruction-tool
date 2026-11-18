@@ -32,7 +32,8 @@ pub fn callgraph_targets_in_roots(
                 .and_then(|(p, _)| p.split_whitespace().last());
             let matches = match change.kind {
                 ChangedElementKind::Callable => method.is_some_and(|(owner, member)| {
-                    owner == class && name == Some(member.trim_end_matches("()"))
+                    let member_name = member.split_once('(').map_or(member, |(n, _)| n);
+                    owner == class && name == Some(member_name)
                 }),
                 ChangedElementKind::Class => change.callable_signature.as_deref() == Some(class),
                 ChangedElementKind::Module => false,

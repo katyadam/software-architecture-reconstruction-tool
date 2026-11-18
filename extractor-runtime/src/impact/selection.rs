@@ -372,9 +372,7 @@ fn callable_signature_matches(graph_signature: &str, changed_signature: &str) ->
     let Some((class_name, method_with_parentheses)) = changed_signature.split_once('.') else {
         return false;
     };
-    let Some(method_name) = method_with_parentheses.strip_suffix("()") else {
-        return false;
-    };
+    let method_name = method_with_parentheses.split_once('(').map_or(method_with_parentheses, |(n, _)| n);
     signature_belongs_to_class(graph_signature, class_name)
         && graph_signature
             .split_once('/')
