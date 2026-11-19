@@ -14,7 +14,11 @@ use crate::session::{Session, SessionKey};
 /// Hex sha256 of model id, budget and task; changes when any changes.
 /// Own copy, not `statix::strings::hash_text`: statix pulls in tree-sitter.
 pub fn prompt_hash(model_id: &str, budget: usize, task: &str) -> String {
-    Sha256::digest(format!("{model_id}\0{budget}\0{task}"))
+    sha_hex(&format!("{model_id}\0{budget}\0{task}"))
+}
+
+pub(crate) fn sha_hex(text: &str) -> String {
+    Sha256::digest(text)
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect()

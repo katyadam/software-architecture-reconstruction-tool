@@ -35,7 +35,8 @@ pub enum Question {
 }
 
 impl Question {
-    fn choice(
+    /// Errors past `MAX_CHOICE_OPTIONS` instead of dropping options.
+    pub fn choice(
         instructions: &str,
         options: impl IntoIterator<Item = (String, String)>,
     ) -> Result<Self, TypeSafeError> {

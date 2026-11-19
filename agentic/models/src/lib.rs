@@ -70,7 +70,7 @@ pub struct Verdict {
     pub link: LinkId,
     pub decision: Decision,
     pub reason: String,
-    pub evidence: Vec<Evidence>,
+    pub evidence: Vec<Fact>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,8 +87,8 @@ pub struct Link {
     pub receiver: Option<ConnectionPoint>,
     pub kind: InteractionKind,
     pub match_source: MatchSource,
-    pub confidence: Option<f32>,
-    pub evidence: Vec<Evidence>,
+    pub confidence: Option<f64>,
+    pub evidence: Vec<Fact>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,7 +108,7 @@ pub struct Unmatched {
     pub banned: Vec<PointId>,
     /// The model's explanation, or the verdict reason.
     pub note: String,
-    pub evidence: Vec<Evidence>,
+    pub evidence: Vec<Fact>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -128,7 +128,7 @@ pub struct Excluded {
     pub point: ConnectionPoint,
     pub reason: ExcludedReason,
     pub note: String,
-    pub evidence: Vec<Evidence>,
+    pub evidence: Vec<Fact>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -255,13 +255,7 @@ pub enum Protocol {
     RabbitMq,
 }
 
-/// One claim, backed by one tool result the runtime recorded.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Evidence {
-    pub fact: Fact,
-    pub claim: Claim,
-}
-
+/// One tool result the runtime recorded; evidence is a list of these.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Fact {
     pub id: FactId,
@@ -269,13 +263,6 @@ pub struct Fact {
     pub args: String,
     /// Tool output, written by the runtime, never by the model.
     pub text: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Claim {
-    Address,
-    TargetService,
-    Receiver,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -358,14 +345,11 @@ mod tests {
             },
             decision: Decision::Drop,
             reason: "calls billing instead".into(),
-            evidence: vec![Evidence {
-                fact: Fact {
-                    id: FactId("f1".into()),
-                    tool: "define".into(),
-                    args: "BASE".into(),
-                    text: "BASE = \"http://billing\"".into(),
-                },
-                claim: Claim::TargetService,
+            evidence: vec![Fact {
+                id: FactId("f1".into()),
+                tool: "define".into(),
+                args: "BASE".into(),
+                text: "BASE = \"http://billing\"".into(),
             }],
         };
         let json = serde_json::to_string(&verdict).unwrap();
