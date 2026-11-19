@@ -16,15 +16,16 @@ const SYSTEM_ONE_URL: &str = "https://api.typesafe.ai/v1/systemone";
 pub const JEV_MODEL: &str = "jev-1.13.0";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// `S` is the call state Jev reads; residual REST calls by default.
 #[derive(Debug, Serialize)]
-pub struct SystemOneRequest {
-    pub state: ResidualCallState,
+pub struct SystemOneRequest<S = ResidualCallState> {
+    pub state: S,
     pub model: &'static str,
     pub questions: BTreeMap<String, Question>,
 }
 
-impl SystemOneRequest {
-    pub fn new(state: ResidualCallState, questions: BTreeMap<String, Question>) -> Self {
+impl<S> SystemOneRequest<S> {
+    pub fn new(state: S, questions: BTreeMap<String, Question>) -> Self {
         Self {
             state,
             model: JEV_MODEL,
@@ -50,9 +51,9 @@ impl TypeSafeClient {
     }
 
     // ponytail: no retry on 429/529; add backoff if rate limits bite.
-    pub async fn system_one(
+    pub async fn system_one<S: Serialize>(
         &self,
-        request: &SystemOneRequest,
+        request: &SystemOneRequest<S>,
     ) -> Result<SystemOneResponse, TypeSafeError> {
         let response = self
             .http

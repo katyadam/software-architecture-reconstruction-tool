@@ -68,12 +68,13 @@ fn call(id: &str) -> Result<Reply<String>, String> {
     })
 }
 
-fn answer(cites: &[&str]) -> Result<Reply<String>, String> {
+fn answer() -> Result<Reply<String>, String> {
     Ok(Reply {
-        step: Step::Final {
-            answer: "svc-b".into(),
-            cites: cites.iter().map(|c| FactId(c.to_string())).collect(),
-        },
+        step: Step::Final(Answer {
+            value: "svc-b".into(),
+            confidence: None,
+            note: None,
+        }),
         input_tokens: 150,
         output_tokens: 10,
     })
@@ -105,7 +106,7 @@ async fn run(name: &str, model: &mut Scripted, budget: usize) -> Session<String>
 }
 
 fn answered(s: &Session<String>) -> bool {
-    matches!(s.outcome, Outcome::Answer { .. })
+    matches!(s.outcome, Outcome::Answer(_))
 }
 
 fn model_error(s: &Session<String>) -> bool {
@@ -114,7 +115,7 @@ fn model_error(s: &Session<String>) -> bool {
 
 #[tokio::test]
 async fn tool_call_then_answer() {
-    let mut m = Scripted::new(vec![call("open:a.py"), answer(&["f1"])]);
+    let mut m = Scripted::new(vec![call("open:a.py"), answer()]);
     let s = run("tool-then-answer", &mut m, 6).await;
     assert!(answered(&s));
     assert_eq!((s.calls, s.facts.len()), (2, 1));
@@ -122,7 +123,7 @@ async fn tool_call_then_answer() {
 
 #[tokio::test]
 async fn answer_at_once() {
-    let mut m = Scripted::new(vec![answer(&[])]);
+    let mut m = Scripted::new(vec![answer()]);
     let s = run("answer-at-once", &mut m, 6).await;
     assert!(answered(&s));
     assert_eq!((s.calls, s.facts.len()), (1, 0));
@@ -130,7 +131,7 @@ async fn answer_at_once() {
 
 #[tokio::test]
 async fn facts_numbered_in_order() {
-    let mut m = Scripted::new(vec![call("open:b.py"), call("open:a.py"), answer(&["f2"])]);
+    let mut m = Scripted::new(vec![call("open:b.py"), call("open:a.py"), answer()]);
     let s = run("facts-numbered", &mut m, 6).await;
     let expected = |id: &str, file: &str| Fact {
         id: FactId(id.into()),
@@ -148,7 +149,7 @@ async fn facts_numbered_in_order() {
 async fn numbering_restarts_per_session() {
     let log = Log::open(&temp_log("numbering-restarts")).expect("open log");
     for subject in ["P", "Q"] {
-        let mut m = Scripted::new(vec![call("open:a.py"), answer(&["f1"])]);
+        let mut m = Scripted::new(vec![call("open:a.py"), answer()]);
         let s = run_session(&key(subject), "task", &mut m, &files(), 6, &log)
             .await
             .expect("session");
@@ -157,18 +158,27 @@ async fn numbering_restarts_per_session() {
 }
 
 #[tokio::test]
-async fn unknown_citation_is_model_error() {
-    let mut m = Scripted::new(vec![call("open:a.py"), answer(&["f2"])]);
-    assert!(model_error(&run("unknown-cite", &mut m, 6).await));
+async fn confidence_and_note_kept() {
+    let given = Answer {
+        value: "svc-b".to_string(),
+        confidence: Some(0.8),
+        note: Some("base URL is settings.mds_url".into()),
+    };
+    let reply = Ok(Reply {
+        step: Step::Final(given.clone()),
+        input_tokens: 1,
+        output_tokens: 1,
+    });
+    let mut m = Scripted::new(vec![reply]);
+    assert_eq!(
+        run("confidence-note", &mut m, 6).await.outcome,
+        Outcome::Answer(given)
+    );
 }
 
 #[tokio::test]
 async fn same_tool_different_files() {
-    let mut m = Scripted::new(vec![
-        call("open:a.py"),
-        call("open:b.py"),
-        answer(&["f1", "f2"]),
-    ]);
+    let mut m = Scripted::new(vec![call("open:a.py"), call("open:b.py"), answer()]);
     let s = run("same-tool", &mut m, 6).await;
     assert!(answered(&s));
     let args: Vec<_> = s
@@ -181,7 +191,7 @@ async fn same_tool_different_files() {
 
 #[tokio::test]
 async fn taken_option_not_offered_again() {
-    let mut m = Scripted::new(vec![call("open:a.py"), answer(&[])]);
+    let mut m = Scripted::new(vec![call("open:a.py"), answer()]);
     run("taken-not-offered", &mut m, 6).await;
     assert!(m.offered[0].contains(&"open:a.py".to_string()));
     assert!(!m.offered[1].contains(&"open:a.py".to_string()));
@@ -195,7 +205,7 @@ async fn call_to_unknown_option_is_model_error() {
 
 #[tokio::test]
 async fn budget_reached_forces_tool_free_call() {
-    let mut m = Scripted::new(vec![call("open:a.py"), call("open:b.py"), answer(&["f2"])]);
+    let mut m = Scripted::new(vec![call("open:a.py"), call("open:b.py"), answer()]);
     let s = run("budget-reached", &mut m, 2).await;
     assert!(answered(&s));
     assert_eq!((s.calls, s.facts.len()), (3, 2));
@@ -212,7 +222,7 @@ async fn budget_exhausted_when_last_call_is_a_tool() {
 
 #[tokio::test]
 async fn budget_zero_is_one_tool_free_call() {
-    let mut m = Scripted::new(vec![answer(&[])]);
+    let mut m = Scripted::new(vec![answer()]);
     let s = run("budget-zero", &mut m, 0).await;
     assert_eq!((s.calls, s.facts.len()), (1, 0));
     assert_eq!(m.offered, vec![Vec::<String>::new()]);
@@ -227,7 +237,7 @@ async fn provider_failure_is_model_error() {
 
 #[tokio::test]
 async fn tokens_summed() {
-    let mut m = Scripted::new(vec![call("open:a.py"), answer(&[])]);
+    let mut m = Scripted::new(vec![call("open:a.py"), answer()]);
     let s = run("tokens", &mut m, 6).await;
     assert_eq!((s.calls, s.input_tokens, s.output_tokens), (2, 250, 15));
 }
@@ -247,7 +257,7 @@ fn prompt_hash_follows_task_and_model() {
 async fn answer_logged_as_one_line() {
     let path = temp_log("answer-logged");
     let log = Log::open(&path).expect("open log");
-    let mut m = Scripted::new(vec![call("open:a.py"), answer(&["f1"])]);
+    let mut m = Scripted::new(vec![call("open:a.py"), answer()]);
     run_session(&key("P"), "task", &mut m, &files(), 6, &log)
         .await
         .expect("session");
@@ -258,7 +268,7 @@ async fn answer_logged_as_one_line() {
     assert_eq!(line["subject"], "P");
     assert_eq!(line["prompt_hash"], prompt_hash("fake-1", 6, "task"));
     assert_eq!(line["facts"][0]["id"], "f1");
-    assert_eq!(line["outcome"]["Answer"]["answer"], "svc-b");
+    assert_eq!(line["outcome"]["Answer"]["value"], "svc-b");
     assert_eq!(line["input_tokens"], 250);
 }
 
@@ -290,7 +300,7 @@ async fn rerun(
 #[tokio::test]
 async fn rerun_after_crash_replays() {
     let path = temp_log("rerun");
-    let (first, _) = rerun(&path, "task", vec![call("open:a.py"), answer(&["f1"])]).await;
+    let (first, _) = rerun(&path, "task", vec![call("open:a.py"), answer()]).await;
     let (second, calls) = rerun(&path, "task", vec![]).await;
     assert_eq!(calls, 0);
     assert!(second.replayed);
@@ -300,8 +310,8 @@ async fn rerun_after_crash_replays() {
 #[tokio::test]
 async fn changed_prompt_reruns() {
     let path = temp_log("changed-prompt");
-    rerun(&path, "task", vec![answer(&[])]).await;
-    let (s, calls) = rerun(&path, "task v2", vec![answer(&[])]).await;
+    rerun(&path, "task", vec![answer()]).await;
+    let (s, calls) = rerun(&path, "task v2", vec![answer()]).await;
     assert_eq!(calls, 1);
     assert!(!s.replayed);
 }
@@ -310,7 +320,7 @@ async fn changed_prompt_reruns() {
 async fn errored_point_retried() {
     let path = temp_log("errored-retried");
     rerun(&path, "task", vec![Err("timeout".into())]).await;
-    let (s, calls) = rerun(&path, "task", vec![answer(&[])]).await;
+    let (s, calls) = rerun(&path, "task", vec![answer()]).await;
     assert_eq!(calls, 1);
     assert!(answered(&s));
 }
@@ -318,7 +328,7 @@ async fn errored_point_retried() {
 #[tokio::test]
 async fn truncated_last_line_keeps_earlier_records() {
     let path = temp_log("truncated");
-    rerun(&path, "task", vec![answer(&[])]).await;
+    rerun(&path, "task", vec![answer()]).await;
     // Crash mid-write: half a record, no newline.
     let mut file = OpenOptions::new().append(true).open(&path).expect("open");
     file.write_all(br#"{"stage":"matcher","subj"#)
@@ -331,7 +341,7 @@ async fn truncated_last_line_keeps_earlier_records() {
 
     // The next record starts on its own line and loads.
     let log = Log::open(&path).expect("open log");
-    let mut m = Scripted::new(vec![answer(&[])]);
+    let mut m = Scripted::new(vec![answer()]);
     run_session(
         &SessionKey {
             stage: "verifier".into(),
@@ -366,7 +376,7 @@ async fn truncated_last_line_keeps_earlier_records() {
 #[tokio::test]
 async fn session_keyed_by_stage_and_subject() {
     let path = temp_log("keyed");
-    rerun(&path, "task", vec![answer(&[])]).await;
+    rerun(&path, "task", vec![answer()]).await;
     let log = Log::open(&path).expect("open log");
     let point = "svc-a/client.py#a1b2#rest_call#{base}/cases#10-40";
     let link = "svc-a/client.py#a1b2#rest_call#{base}/cases#10-40->svc-b";
@@ -384,7 +394,7 @@ async fn session_keyed_by_stage_and_subject() {
             subject: link.into(),
         },
     ] {
-        let mut m = Scripted::new(vec![answer(&[])]);
+        let mut m = Scripted::new(vec![answer()]);
         let s = run_session(&key, "task", &mut m, &files(), 6, &log)
             .await
             .expect("session");
@@ -410,7 +420,7 @@ async fn changed_budget_reruns() {
     let path = temp_log("changed-budget");
     let log = Log::open(&path).expect("open log");
     for budget in [0, 3] {
-        let mut m = Scripted::new(vec![answer(&[])]);
+        let mut m = Scripted::new(vec![answer()]);
         let s = run_session(&key("L"), "task", &mut m, &files(), budget, &log)
             .await
             .expect("session");
@@ -421,7 +431,7 @@ async fn changed_budget_reruns() {
 #[tokio::test]
 async fn invalid_utf8_line_skipped_not_fatal() {
     let path = temp_log("bad-utf8");
-    rerun(&path, "task", vec![answer(&[])]).await;
+    rerun(&path, "task", vec![answer()]).await;
     let mut file = OpenOptions::new().append(true).open(&path).expect("open");
     file.write_all(b"{\"stage\":\"m\xc3").expect("write");
     drop(file);

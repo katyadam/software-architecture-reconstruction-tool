@@ -2,7 +2,8 @@
 
 use std::collections::BTreeSet;
 
-use agentic_models::{Fact, FactId};
+use agentic_models::Fact;
+use serde::{Deserialize, Serialize};
 
 /// One callable option. `id` encodes tool and args, e.g. `open:a.py#settings`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,10 +26,17 @@ pub struct Request<'a> {
 pub enum Step<A> {
     /// Id of an offered option.
     Call(String),
-    Final {
-        answer: A,
-        cites: Vec<FactId>,
-    },
+    Final(Answer<A>),
+}
+
+/// A final answer; the session's facts are its evidence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Answer<A> {
+    pub value: A,
+    /// Probability of the pick (Jev).
+    pub confidence: Option<f64>,
+    /// The model's reason (system two).
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

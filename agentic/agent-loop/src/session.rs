@@ -7,14 +7,11 @@ use agentic_models::{Fact, FactId};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::log::{Log, prompt_hash};
-use crate::protocol::{Model, Request, Step, ToolOption, Tools};
+use crate::protocol::{Answer, Model, Request, Step, ToolOption, Tools};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Outcome<A> {
-    Answer {
-        answer: A,
-        cites: Vec<FactId>,
-    },
+    Answer(Answer<A>),
     BudgetExhausted,
     /// Provider failure or invalid reply; never logged.
     ModelError(String),
@@ -82,7 +79,7 @@ async fn converse<A, M: Model<A>, T: Tools>(
         };
         let outcome = match ask(model, task, &mut s, &options).await {
             Err(e) => Outcome::ModelError(e),
-            Ok(Step::Final { answer, cites }) => checked_answer(&s.facts, answer, cites),
+            Ok(Step::Final(answer)) => Outcome::Answer(answer),
             // Budget spent or nothing left to fetch.
             Ok(Step::Call(_)) if options.is_empty() => Outcome::BudgetExhausted,
             Ok(Step::Call(id)) => match options.iter().find(|o| o.id == id) {
@@ -116,14 +113,6 @@ async fn ask<A, M: Model<A>>(
     s.input_tokens += reply.input_tokens;
     s.output_tokens += reply.output_tokens;
     Ok(reply.step)
-}
-
-/// The answer, unless it cites a fact this session never recorded.
-fn checked_answer<A>(facts: &[Fact], answer: A, cites: Vec<FactId>) -> Outcome<A> {
-    match cites.iter().find(|c| !facts.iter().any(|f| f.id == **c)) {
-        Some(c) => Outcome::ModelError(format!("answer cites unknown fact {}", c.0)),
-        None => Outcome::Answer { answer, cites },
-    }
 }
 
 /// Runs the tool and records its output as the next `fN`.

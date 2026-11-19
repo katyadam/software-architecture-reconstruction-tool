@@ -268,6 +268,9 @@ name = "agent-loop"
 version = "0.1.0"
 dependencies = [
  "agentic-models",
+ "async-openai",
+ "clients",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2 0.11.0",
