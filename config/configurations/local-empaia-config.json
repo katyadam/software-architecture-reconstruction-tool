@@ -62,7 +62,7 @@
     },
     {
       "name": "medical-data-service",
-      "urls": ["http://medical-data-service:5000"],
+      "urls": ["http://medical-data-service:5000", "http://mds"],
       "base_dir_path": "../empaia/medical-data-service"
     },
     {
