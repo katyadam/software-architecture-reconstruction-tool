@@ -59,8 +59,7 @@ fn main() -> Result<()> {
     let external: HashMap<String, String> = constants.iter().cloned().collect();
 
     let ir = extract::extract(&args.project_dir, &external)?;
-    let (matches, metrics) =
-        agentic_matcher::match_static(&ir.endpoints, &ir.restcalls, &config, &constants)?;
+    let (matches, metrics) = agentic_matcher::match_static(&ir, &config, &constants)?;
     output::write_all(&args.output_dir, &matches, &metrics)?;
     println!("{}", serde_json::to_string(&metrics)?);
     Ok(())

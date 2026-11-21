@@ -202,11 +202,7 @@ impl CodeElement {
     pub fn protocol(&self) -> Protocol {
         match self {
             Self::RestCall(_) | Self::Endpoint(_) => Protocol::Http,
-            Self::Message(edge) => match edge.protocol {
-                CommunicationProtocol::Grpc => Protocol::Grpc,
-                CommunicationProtocol::Kafka => Protocol::Kafka,
-                CommunicationProtocol::RabbitMq => Protocol::RabbitMq,
-            },
+            Self::Message(edge) => Protocol::from(&edge.protocol),
         }
     }
 
@@ -247,12 +243,22 @@ impl CodeElement {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Protocol {
     Http,
     Grpc,
     Kafka,
     RabbitMq,
+}
+
+impl From<&CommunicationProtocol> for Protocol {
+    fn from(p: &CommunicationProtocol) -> Self {
+        match p {
+            CommunicationProtocol::Grpc => Self::Grpc,
+            CommunicationProtocol::Kafka => Self::Kafka,
+            CommunicationProtocol::RabbitMq => Self::RabbitMq,
+        }
+    }
 }
 
 /// One tool result the runtime recorded; evidence is a list of these.

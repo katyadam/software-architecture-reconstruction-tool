@@ -1,4 +1,5 @@
 use super::*;
+use crate::points::{endpoint, rest_call};
 use models::{Endpoint, HttpMethod, RestCall, configuration::ServiceDescription};
 
 fn svc(name: &str, port: u16) -> ServiceDescription {
@@ -10,8 +11,8 @@ fn svc(name: &str, port: u16) -> ServiceDescription {
     }
 }
 
-fn ep(service: &ServiceDescription, method: HttpMethod, uri: &str) -> Placed {
-    Placed::receiver(
+fn ep(service: &ServiceDescription, method: HttpMethod, uri: &str) -> Point {
+    endpoint(
         Endpoint {
             http_method: method,
             uri: uri.into(),
@@ -21,16 +22,27 @@ fn ep(service: &ServiceDescription, method: HttpMethod, uri: &str) -> Placed {
     )
 }
 
-fn call(method: HttpMethod, target: &str) -> Placed {
+fn call(method: HttpMethod, target: &str) -> Point {
     let data = RestCall {
         http_method: method,
         target_uri: target.into(),
         ..Default::default()
     };
-    Placed::initiator(data, svc("ts-basic-service", 15680), target.into())
+    rest_call(data, svc("ts-basic-service", 15680), target)
 }
 
-fn all_urls(endpoints: &[Placed]) -> Vec<String> {
+fn target(call: &Point) -> &str {
+    match &call.point.element {
+        agentic_models::CodeElement::RestCall(c) => &c.target_uri,
+        _ => "",
+    }
+}
+
+fn refs(endpoints: &[Point]) -> Vec<&Point> {
+    endpoints.iter().collect()
+}
+
+fn all_urls(endpoints: &[Point]) -> Vec<String> {
     let mut urls: Vec<String> = endpoints
         .iter()
         .flat_map(|e| e.service.urls.clone())
@@ -41,10 +53,10 @@ fn all_urls(endpoints: &[Placed]) -> Vec<String> {
     urls
 }
 
-fn run(call: &Placed, endpoints: &[Placed]) -> Vec<(String, MatchTag)> {
-    candidates(call, endpoints, &all_urls(endpoints))
+fn run(call: &Point, endpoints: &[Point]) -> Vec<(String, MatchTag)> {
+    candidates(call, target(call), &refs(endpoints), &all_urls(endpoints))
         .into_iter()
-        .map(|(e, t)| (e.target.clone(), t))
+        .map(|(e, t)| (path(e).to_string(), t))
         .collect()
 }
 
@@ -160,7 +172,7 @@ fn host_restricts_to_service() {
         HttpMethod::POST,
         "http://ts-consign-service:16111/api/v1/consignservice/consigns",
     );
-    let got = candidates(&c, &eps, &all_urls(&eps));
+    let got = candidates(&c, target(&c), &refs(&eps), &all_urls(&eps));
     assert_eq!(got.len(), 1);
     assert_eq!(got[0].0.service.name, "ts-consign-service");
     assert_eq!(got[0].1, MatchTag::Exact);
@@ -253,10 +265,10 @@ fn output_independent_of_endpoint_order() {
         HttpMethod::GET,
         "http://alias/api/v1/orderservice/order/{x}",
     );
-    let named = |eps: &[Placed]| -> Vec<(String, String, MatchTag)> {
-        candidates(&c, eps, &all_urls(eps))
+    let named = |eps: &[Point]| -> Vec<(String, String, MatchTag)> {
+        candidates(&c, target(&c), &refs(eps), &all_urls(eps))
             .into_iter()
-            .map(|(e, t)| (e.service.name.clone(), e.target.clone(), t))
+            .map(|(e, t)| (e.service.name.clone(), path(e).to_string(), t))
             .collect()
     };
     let forward = named(&eps);

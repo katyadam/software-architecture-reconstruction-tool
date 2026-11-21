@@ -1,14 +1,16 @@
-//! REST call -> endpoint candidates by path segment unification.
+//! HTTP adapter: REST call -> endpoint candidates by path segment unification.
 //! Copied from `synthesizer/src/sdg/matching.rs`; free to diverge.
 
 mod segments;
 
 use std::collections::BTreeSet;
 
-use models::interaction_kind::{host_of, is_reflexive};
+use agentic_models::{Address, InteractionKind};
+use models::HttpMethod;
+use models::interaction_kind::{InteractionSignals, classify, host_of, is_reflexive};
 use strsim::levenshtein;
 
-use crate::points::Placed;
+use crate::points::Point;
 use segments::{has_evidence, is_var, literals, match_tag, segments};
 
 /// How a candidate was found.
@@ -26,19 +28,19 @@ pub enum MatchTag {
 
 /// Endpoints `call` can reach, deterministic order (service name, uri).
 pub fn candidates<'a>(
-    call: &Placed,
-    endpoints: &'a [Placed],
+    call: &Point,
+    target: &str,
+    endpoints: &[&'a Point],
     all_urls: &[String],
-) -> Vec<(&'a Placed, MatchTag)> {
-    let (scope, host_known) = scope(call, endpoints, all_urls);
-    let target = &call.target;
+) -> Vec<(&'a Point, MatchTag)> {
+    let (scope, host_known) = scope(call, target, endpoints, all_urls);
     let c = segments(target);
     let leading_hole = !target.contains("://") && c.first().is_some_and(|s| is_var(s));
 
     let found = scope
         .iter()
         .filter_map(|e| {
-            let s = segments(&e.target);
+            let s = segments(path(e));
             match_tag(&c, &s, leading_hole, host_known)
                 .filter(|_| has_evidence(&c, &s))
                 .map(|t| (*e, t, s))
@@ -57,20 +59,25 @@ pub fn candidates<'a>(
 const DISSIMILARITY_PERCENT: f32 = 0.3;
 
 /// Candidate with its tag and endpoint path segments.
-type Found<'a, 's> = (&'a Placed, MatchTag, Vec<&'s str>);
+type Found<'a, 's> = (&'a Point, MatchTag, Vec<&'s str>);
 
 /// Same-method endpoints in the services `call` can reach; true when the host is known.
 fn scope<'a>(
-    call: &Placed,
-    endpoints: &'a [Placed],
+    call: &Point,
+    target: &str,
+    endpoints: &[&'a Point],
     all_urls: &[String],
-) -> (Vec<&'a Placed>, bool) {
-    let target = &call.target;
+) -> (Vec<&'a Point>, bool) {
     let own = &call.service;
     let host = host_of(target).to_ascii_lowercase();
 
-    let same_method = || endpoints.iter().filter(|e| e.method == call.method);
-    let owns_host = |e: &Placed| {
+    let same_method = || {
+        endpoints
+            .iter()
+            .copied()
+            .filter(|e| method(e) == method(call))
+    };
+    let owns_host = |e: &Point| {
         !host.is_empty()
             && e.service.name != own.name
             && e.service
@@ -99,20 +106,20 @@ fn scope<'a>(
 }
 
 /// Old Levenshtein argmin over `scope`, kept within `DISSIMILARITY_PERCENT`; ties -> smallest `sort_key`.
-fn fuzzy_fallback<'a>(target: &str, scope: &[&'a Placed]) -> Option<(&'a Placed, MatchTag)> {
+fn fuzzy_fallback<'a>(target: &str, scope: &[&'a Point]) -> Option<(&'a Point, MatchTag)> {
     scope
         .iter()
         .map(|e| (fuzzy_distance(e, target), *e))
         .min_by(|(da, a), (db, b)| da.cmp(db).then_with(|| sort_key(a).cmp(&sort_key(b))))
         .filter(|(d, e)| {
-            (*d as f32) < e.target.len().max(target.len()) as f32 * DISSIMILARITY_PERCENT
+            (*d as f32) < path(e).len().max(target.len()) as f32 * DISSIMILARITY_PERCENT
         })
         .map(|(_, e)| (e, MatchTag::Fuzzy))
 }
 
 /// Smallest distance from `target` to the endpoint uri under each service url, or bare.
-fn fuzzy_distance(e: &Placed, target: &str) -> usize {
-    let path = e.target.trim_start_matches('/');
+fn fuzzy_distance(e: &Point, target: &str) -> usize {
+    let path = path(e).trim_start_matches('/');
     e.service
         .urls
         .iter()
@@ -132,7 +139,7 @@ fn drop_suffix_if_full<'a, 's>(mut found: Vec<Found<'a, 's>>) -> Vec<Found<'a, '
 }
 
 /// Drops candidates whose literal matches are a strict subset of another's.
-fn drop_dominated<'a>(c: &[&str], found: Vec<Found<'a, '_>>) -> Vec<(&'a Placed, MatchTag)> {
+fn drop_dominated<'a>(c: &[&str], found: Vec<Found<'a, '_>>) -> Vec<(&'a Point, MatchTag)> {
     // ponytail: O(n^2) dominance scan, fine for per-call candidate counts.
     let lits: Vec<BTreeSet<usize>> = found.iter().map(|(_, _, s)| literals(c, s)).collect();
     found
@@ -144,8 +151,48 @@ fn drop_dominated<'a>(c: &[&str], found: Vec<Found<'a, '_>>) -> Vec<(&'a Placed,
 }
 
 /// Deterministic ordering key for a candidate.
-fn sort_key(e: &Placed) -> (&str, &str, &str, &str) {
-    (&e.service.name, &e.target, e.function_name(), e.file())
+fn sort_key(e: &Point) -> (&str, &str, &str, &str) {
+    (&e.service.name, path(e), e.function_name(), e.file())
+}
+
+fn method(p: &Point) -> Option<HttpMethod> {
+    match &p.point.address {
+        Address::Http { method, .. } => *method,
+        _ => None,
+    }
+}
+
+/// The address path: an endpoint's uri, a call's path without host.
+fn path(p: &Point) -> &str {
+    match &p.point.address {
+        Address::Http { path, .. } => path,
+        _ => "",
+    }
+}
+
+/// Copy of synthesizer `request_kind`: classify by the matched endpoint's
+/// path, falling back to the call target when there is none.
+pub fn request_kind(
+    call: &Point,
+    target: &str,
+    receiver: &Point,
+    all_urls: &[String],
+) -> InteractionKind {
+    let endpoint_uri = path(receiver);
+    let target_path = if endpoint_uri.is_empty() {
+        target
+    } else {
+        endpoint_uri
+    };
+    classify(
+        &InteractionSignals {
+            caller_file: call.file(),
+            target_path,
+            target_uri: target,
+        },
+        &call.service.urls,
+        all_urls,
+    )
 }
 
 #[cfg(test)]
