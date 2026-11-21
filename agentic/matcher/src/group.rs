@@ -3,16 +3,15 @@
 use std::collections::BTreeMap;
 
 use agentic_models::{
-    Dependency, InteractionKind, Link, MatchSource, Protocol, ServiceId, Unmatched, UnmatchedReason,
+    ConnectionPoint, Dependency, InteractionKind, Link, MatchSource, Protocol, ServiceId,
+    Unmatched, UnmatchedReason,
 };
 
-use crate::points::Point;
-
 /// One static link from `call` to `receiver`.
-pub fn link(call: &Point, receiver: &Point, kind: InteractionKind) -> Link {
+pub fn link(call: &ConnectionPoint, receiver: &ConnectionPoint, kind: InteractionKind) -> Link {
     Link {
-        initiator: call.point.clone(),
-        receiver: Some(receiver.point.clone()),
+        initiator: call.clone(),
+        receiver: Some(receiver.clone()),
         kind,
         match_source: MatchSource::Static,
         confidence: None,
@@ -20,9 +19,9 @@ pub fn link(call: &Point, receiver: &Point, kind: InteractionKind) -> Link {
     }
 }
 
-pub fn unmatched(call: &Point, reason: UnmatchedReason, note: String) -> Unmatched {
+pub fn unmatched(call: &ConnectionPoint, reason: UnmatchedReason, note: String) -> Unmatched {
     Unmatched {
-        point: call.point.clone(),
+        point: call.clone(),
         reason,
         tried: vec![],
         banned: vec![],
@@ -69,20 +68,14 @@ mod tests {
     use crate::points::tests::edge;
     use crate::points::{endpoint, message, rest_call};
     use agentic_models::Side;
-    use models::configuration::ServiceDescription;
     use models::substitute::Substituter;
     use models::{CommunicationProtocol, Endpoint, HttpMethod, MessageRole, RestCall};
 
-    fn svc(name: &str) -> ServiceDescription {
-        ServiceDescription {
-            name: name.into(),
-            base_dir_path: name.into(),
-            urls: vec![format!("http://{name}:8000")],
-            java_analysis: None,
-        }
+    fn svc(name: &str) -> ServiceId {
+        ServiceId(name.into())
     }
 
-    fn call(file: &str, target: &str) -> Point {
+    fn call(file: &str, target: &str) -> ConnectionPoint {
         let rc = RestCall {
             file_path: file.into(),
             target_uri: target.into(),
@@ -91,7 +84,7 @@ mod tests {
         rest_call(rc, svc("a"), target)
     }
 
-    fn ep(service: &str, uri: &str) -> Point {
+    fn ep(service: &str, uri: &str) -> ConnectionPoint {
         let e = Endpoint {
             http_method: HttpMethod::GET,
             uri: uri.into(),
@@ -101,9 +94,13 @@ mod tests {
         endpoint(e, svc(service))
     }
 
-    fn links(c: &Point, eps: &[Point], kind: InteractionKind) -> Vec<(ServiceId, Link)> {
+    fn links(
+        c: &ConnectionPoint,
+        eps: &[ConnectionPoint],
+        kind: InteractionKind,
+    ) -> Vec<(ServiceId, Link)> {
         eps.iter()
-            .map(|e| (e.point.service.clone(), link(c, e, kind)))
+            .map(|e| (e.service.clone(), link(c, e, kind)))
             .collect()
     }
 
@@ -160,7 +157,7 @@ mod tests {
         );
         let mut all = links(&http, &[ep("b", "/x")], InteractionKind::Business);
         all.push((
-            consumer.point.service.clone(),
+            consumer.service.clone(),
             link(&producer, &consumer, InteractionKind::Business),
         ));
         let got: Vec<_> = dependencies(all)

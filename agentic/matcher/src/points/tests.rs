@@ -47,12 +47,12 @@ fn address_splits_host_and_path() {
         target_uri: "{MDS}/v3/cases".into(),
         ..Default::default()
     };
-    let p = rest_call(call, svc("a", "a"), "http://mds:8000/v3/cases");
-    let Address::Http { host, path, .. } = &p.point.address else {
+    let p = rest_call(call, ServiceId("a".into()), "http://mds:8000/v3/cases");
+    let Address::Http { host, path, .. } = &p.address else {
         panic!("http address")
     };
     assert_eq!((host.as_deref(), path.as_str()), (Some("mds"), "/v3/cases"));
-    let CodeElement::RestCall(c) = &p.point.element else {
+    let CodeElement::RestCall(c) = &p.element else {
         panic!("rest call")
     };
     assert_eq!(c.target_uri, "{MDS}/v3/cases");
@@ -60,8 +60,8 @@ fn address_splits_host_and_path() {
 
 #[test]
 fn relative_target_has_no_host() {
-    let p = rest_call(RestCall::default(), svc("a", "a"), "/v3/cases");
-    let Address::Http { host, path, .. } = &p.point.address else {
+    let p = rest_call(RestCall::default(), ServiceId::default(), "/v3/cases");
+    let Address::Http { host, path, .. } = &p.address else {
         panic!("http address")
     };
     assert_eq!((host.as_deref(), path.as_str()), (None, "/v3/cases"));
@@ -117,6 +117,6 @@ fn build_splits_roles() {
         &mut metrics,
     );
     assert_eq!((pts.initiators.len(), pts.receivers.len()), (1, 1));
-    assert_eq!(pts.initiators[0].point.protocol, Protocol::RabbitMq);
+    assert_eq!(pts.initiators[0].protocol, Protocol::RabbitMq);
     assert_eq!(metrics.of(Protocol::RabbitMq).topology, 1);
 }

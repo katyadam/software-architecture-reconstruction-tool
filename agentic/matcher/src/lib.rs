@@ -6,12 +6,13 @@ mod group;
 mod http;
 mod metrics;
 mod points;
+mod services;
 
 use std::collections::BTreeMap;
 
 use agentic_models::{
-    Address, CodeElement, Link, Matches, Protocol, Sdg, Service, ServiceId, Unmatched,
-    UnmatchedReason,
+    Address, CodeElement, ConnectionPoint, Link, Matches, Protocol, Sdg, Service, ServiceId,
+    Unmatched, UnmatchedReason,
 };
 use models::ConfigurationData;
 use models::configuration::ServiceDescription;
@@ -19,7 +20,7 @@ use models::ir::evaluted::EvaluatedIR;
 use models::substitute::Substituter;
 
 pub use metrics::{Metrics, ProtocolMetrics};
-use points::Point;
+use services::Services;
 
 /// Matches the initiators of `ir` to its receivers; `constants` are `(name, value)` pairs.
 pub fn match_static(
@@ -27,20 +28,20 @@ pub fn match_static(
     config: &ConfigurationData,
     constants: &[(String, String)],
 ) -> Result<(Matches, Metrics), regex::Error> {
-    let services = &config.service_descriptions;
-    let all_urls: Vec<String> = services.iter().flat_map(|s| s.urls.clone()).collect();
+    let config = &config.service_descriptions;
+    let services = Services::new(config);
     let substituter = Substituter::new(constants)?;
     let mut metrics = Metrics::default();
-    let points = points::build(ir, services, &substituter, &mut metrics);
+    let points = points::build(ir, config, &substituter, &mut metrics);
 
-    let mut by_protocol: BTreeMap<Protocol, Vec<&Point>> = BTreeMap::new();
+    let mut by_protocol: BTreeMap<Protocol, Vec<&ConnectionPoint>> = BTreeMap::new();
     for r in &points.receivers {
-        metrics.of(r.point.protocol).receivers += 1;
-        by_protocol.entry(r.point.protocol).or_default().push(r);
+        metrics.of(r.protocol).receivers += 1;
+        by_protocol.entry(r.protocol).or_default().push(r);
     }
     let ctx = Ctx {
         by_protocol,
-        all_urls: &all_urls,
+        services: &services,
         substituter: &substituter,
     };
     let mut links = Vec::new();
@@ -52,7 +53,7 @@ pub fn match_static(
     let dependencies = group::dependencies(links);
     metrics.dependencies = dependencies.len();
     let sdg = Sdg {
-        services: sdg_services(services, &points.receivers),
+        services: sdg_services(config, &points.receivers),
         dependencies,
     };
     let matches = Matches {
@@ -65,29 +66,29 @@ pub fn match_static(
 
 /// What every initiator is matched against.
 struct Ctx<'a> {
-    by_protocol: BTreeMap<Protocol, Vec<&'a Point>>,
-    all_urls: &'a [String],
+    by_protocol: BTreeMap<Protocol, Vec<&'a ConnectionPoint>>,
+    services: &'a Services<'a>,
     substituter: &'a Substituter,
 }
 
 /// Dispatches one initiator on its address kind.
 fn match_one(
-    call: &Point,
+    call: &ConnectionPoint,
     ctx: &Ctx,
     metrics: &mut Metrics,
     links: &mut Vec<(ServiceId, Link)>,
     unmatched: &mut Vec<Unmatched>,
 ) {
-    let protocol = call.point.protocol;
+    let protocol = call.protocol;
     let receivers = ctx
         .by_protocol
         .get(&protocol)
         .map_or(&[][..], Vec::as_slice);
-    match (&call.point.address, &call.point.element) {
+    match (&call.address, &call.element) {
         (Address::Http { .. }, CodeElement::RestCall(c)) => {
             let target = ctx.substituter.apply(&c.target_uri);
-            let found = http::candidates(call, &target, receivers, ctx.all_urls);
-            let found: Vec<&Point> = found.into_iter().map(|(r, _)| r).collect();
+            let found = http::candidates(call, &target, receivers, ctx.services);
+            let found: Vec<&ConnectionPoint> = found.into_iter().map(|(r, _)| r).collect();
             metrics.record(protocol, &found);
             if found.is_empty() {
                 unmatched.push(group::unmatched(
@@ -97,8 +98,8 @@ fn match_one(
                 ));
             }
             for r in found {
-                let kind = http::request_kind(call, &target, r, ctx.all_urls);
-                links.push((r.point.service.clone(), group::link(call, r, kind)));
+                let kind = http::request_kind(call, &target, r, ctx.services);
+                links.push((r.service.clone(), group::link(call, r, kind)));
             }
         }
         (Address::Unresolved { .. }, _) => {
@@ -119,24 +120,24 @@ fn match_one(
 
 /// One service per name with its endpoints, sorted by name. Like the
 /// baseline, the last config entry of a name wins and endpoints' services are
-/// added when no config entry has them.
-fn sdg_services(services: &[ServiceDescription], receivers: &[Point]) -> Vec<Service> {
-    let service = |sd: &ServiceDescription| Service {
-        name: sd.name.clone(),
-        urls: sd.urls.clone(),
+/// added, with no urls, when no config entry has them.
+fn sdg_services(config: &[ServiceDescription], receivers: &[ConnectionPoint]) -> Vec<Service> {
+    let service = |name: &str, urls: &[String]| Service {
+        name: name.to_string(),
+        urls: urls.to_vec(),
         endpoints: vec![],
     };
-    let mut by_name: BTreeMap<&str, Service> = services
+    let mut by_name: BTreeMap<&str, Service> = config
         .iter()
-        .map(|sd| (sd.name.as_str(), service(sd)))
+        .map(|sd| (sd.name.as_str(), service(&sd.name, &sd.urls)))
         .collect();
     for r in receivers {
-        let CodeElement::Endpoint(e) = &r.point.element else {
+        let CodeElement::Endpoint(e) = &r.element else {
             continue;
         };
         by_name
-            .entry(&r.service.name)
-            .or_insert_with(|| service(&r.service))
+            .entry(&r.service.0)
+            .or_insert_with(|| service(&r.service.0, &[]))
             .endpoints
             .push(e.clone());
     }

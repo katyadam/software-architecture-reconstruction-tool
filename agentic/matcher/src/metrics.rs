@@ -2,10 +2,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use agentic_models::Protocol;
+use agentic_models::{ConnectionPoint, Protocol};
 use serde::Serialize;
-
-use crate::points::Point;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Metrics {
@@ -40,11 +38,11 @@ impl Metrics {
     }
 
     /// Counts one matched initiator by its candidates.
-    pub(crate) fn record(&mut self, protocol: Protocol, found: &[&Point]) {
+    pub(crate) fn record(&mut self, protocol: Protocol, found: &[&ConnectionPoint]) {
         let m = self.of(protocol);
         m.initiators += 1;
         m.links += found.len();
-        let services: BTreeSet<&str> = found.iter().map(|e| e.service.name.as_str()).collect();
+        let services: BTreeSet<&str> = found.iter().map(|e| e.service.0.as_str()).collect();
         match (found.len(), services.len()) {
             (0, _) => m.no_candidate += 1,
             (1, _) => m.single += 1,
@@ -72,20 +70,16 @@ impl Metrics {
 mod tests {
     use super::*;
     use crate::points::endpoint;
-    use models::configuration::ServiceDescription;
+    use agentic_models::ServiceId;
     use models::{Endpoint, HttpMethod};
 
-    fn ep(service: &str, uri: &str) -> Point {
+    fn ep(service: &str, uri: &str) -> ConnectionPoint {
         let e = Endpoint {
             http_method: HttpMethod::GET,
             uri: uri.into(),
             ..Default::default()
         };
-        let sd = ServiceDescription {
-            name: service.into(),
-            ..Default::default()
-        };
-        endpoint(e, sd)
+        endpoint(e, ServiceId(service.into()))
     }
 
     #[test]

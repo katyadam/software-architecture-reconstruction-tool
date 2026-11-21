@@ -1,4 +1,4 @@
-//! Connection points with their services, from every extracted element.
+//! Connection points from every extracted element, with their service ids.
 
 mod message;
 
@@ -11,57 +11,31 @@ use models::{Endpoint, MessageEdge, MessageRole, RestCall};
 
 use crate::metrics::Metrics;
 
-/// A connection point with the service it belongs to.
-#[derive(Debug, Clone)]
-pub struct Point {
-    pub point: ConnectionPoint,
-    pub service: ServiceDescription,
-}
-
-impl Point {
-    fn new(
-        side: Side,
-        element: CodeElement,
-        service: ServiceDescription,
-        address: Address,
-    ) -> Self {
-        let point = ConnectionPoint {
-            id: element.point_id(),
-            service: ServiceId(service.name.clone()),
-            side,
-            protocol: element.protocol(),
-            address,
-            element,
-        };
-        Self { point, service }
-    }
-
-    pub fn function_name(&self) -> &str {
-        match &self.point.element {
-            CodeElement::RestCall(c) => &c.function_name,
-            CodeElement::Endpoint(e) => &e.function_name,
-            CodeElement::Message(m) => &m.function_name,
-        }
-    }
-
-    pub fn file(&self) -> &str {
-        match &self.point.element {
-            CodeElement::RestCall(c) => &c.file_path,
-            CodeElement::Endpoint(e) => &e.file_path,
-            CodeElement::Message(m) => &m.file_path,
-        }
+fn point(
+    side: Side,
+    element: CodeElement,
+    service: ServiceId,
+    address: Address,
+) -> ConnectionPoint {
+    ConnectionPoint {
+        id: element.point_id(),
+        service,
+        side,
+        protocol: element.protocol(),
+        address,
+        element,
     }
 }
 
 /// `target` is the call target after constant substitution.
-pub fn rest_call(call: RestCall, service: ServiceDescription, target: &str) -> Point {
+pub fn rest_call(call: RestCall, service: ServiceId, target: &str) -> ConnectionPoint {
     let host = Some(host_of(target).to_string()).filter(|h| !h.is_empty());
     let address = Address::Http {
         method: Some(call.http_method),
         host,
         path: path_of(target).to_string(),
     };
-    Point::new(
+    point(
         Side::Initiator,
         CodeElement::RestCall(call),
         service,
@@ -69,13 +43,13 @@ pub fn rest_call(call: RestCall, service: ServiceDescription, target: &str) -> P
     )
 }
 
-pub fn endpoint(endpoint: Endpoint, service: ServiceDescription) -> Point {
+pub fn endpoint(endpoint: Endpoint, service: ServiceId) -> ConnectionPoint {
     let address = Address::Http {
         method: Some(endpoint.http_method),
         host: None,
         path: endpoint.uri.clone(),
     };
-    Point::new(
+    point(
         Side::Receiver,
         CodeElement::Endpoint(endpoint),
         service,
@@ -97,17 +71,17 @@ fn side_of(role: &MessageRole) -> Option<Side> {
 pub fn message(
     edge: MessageEdge,
     side: Side,
-    service: ServiceDescription,
+    service: ServiceId,
     substituter: &Substituter,
-) -> Point {
+) -> ConnectionPoint {
     let address = message::address(&edge, substituter);
-    Point::new(side, CodeElement::Message(edge), service, address)
+    point(side, CodeElement::Message(edge), service, address)
 }
 
 #[derive(Debug, Default)]
 pub struct Points {
-    pub initiators: Vec<Point>,
-    pub receivers: Vec<Point>,
+    pub initiators: Vec<ConnectionPoint>,
+    pub receivers: Vec<ConnectionPoint>,
 }
 
 /// Every element of `ir` as a point. Unassigned initiators are dropped,
@@ -120,20 +94,20 @@ pub fn build(
 ) -> Points {
     let mut out = Points::default();
     for c in &ir.restcalls {
-        if let Some(sd) = assigned(
+        let found = assigned(
             &c.file_path,
             Protocol::Http,
             Side::Initiator,
             services,
             metrics,
-        ) {
+        );
+        if let Some(id) = found {
             let target = substituter.apply(&c.target_uri);
-            out.initiators
-                .push(rest_call(c.clone(), sd.clone(), &target));
+            out.initiators.push(rest_call(c.clone(), id, &target));
         }
     }
     for e in &ir.endpoints {
-        let sd = assigned(
+        let found = assigned(
             &e.file_path,
             Protocol::Http,
             Side::Receiver,
@@ -141,7 +115,7 @@ pub fn build(
             metrics,
         );
         out.receivers
-            .push(endpoint(e.clone(), sd.cloned().unwrap_or_default()));
+            .push(endpoint(e.clone(), found.unwrap_or_default()));
     }
     for m in &ir.message_edges {
         add_message(m, services, substituter, metrics, &mut out);
@@ -161,33 +135,30 @@ fn add_message(
         metrics.of(protocol).topology += 1;
         return;
     };
-    let sd = assigned(&m.file_path, protocol, side, services, metrics);
-    match (side, sd) {
-        (Side::Initiator, Some(sd)) => {
-            let p = message(m.clone(), side, sd.clone(), substituter);
-            out.initiators.push(p);
+    match (
+        side,
+        assigned(&m.file_path, protocol, side, services, metrics),
+    ) {
+        (Side::Initiator, Some(id)) => {
+            out.initiators
+                .push(message(m.clone(), side, id, substituter))
         }
         (Side::Initiator, None) => {}
-        (Side::Receiver, sd) => {
-            let p = message(
-                m.clone(),
-                side,
-                sd.cloned().unwrap_or_default(),
-                substituter,
-            );
+        (Side::Receiver, id) => {
+            let p = message(m.clone(), side, id.unwrap_or_default(), substituter);
             out.receivers.push(p);
         }
     }
 }
 
 /// The file's service; when there is none, logs it and counts it per protocol.
-fn assigned<'s>(
+fn assigned(
     file: &str,
     protocol: Protocol,
     side: Side,
-    services: &'s [ServiceDescription],
+    services: &[ServiceDescription],
     metrics: &mut Metrics,
-) -> Option<&'s ServiceDescription> {
+) -> Option<ServiceId> {
     let found = assign_service(file, services);
     if found.is_none() {
         eprintln!("[matcher] unassigned: {file}");
@@ -197,7 +168,7 @@ fn assigned<'s>(
             Side::Receiver => m.unassigned_receivers += 1,
         }
     }
-    found
+    found.map(|sd| ServiceId(sd.name.clone()))
 }
 
 /// `target` without scheme and authority; a relative target is kept whole.

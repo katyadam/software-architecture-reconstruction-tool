@@ -241,6 +241,22 @@ impl CodeElement {
             span,
         }
     }
+
+    pub fn file(&self) -> &str {
+        match self {
+            Self::RestCall(c) => &c.file_path,
+            Self::Endpoint(e) => &e.file_path,
+            Self::Message(m) => &m.file_path,
+        }
+    }
+
+    pub fn function_name(&self) -> &str {
+        match self {
+            Self::RestCall(c) => &c.function_name,
+            Self::Endpoint(e) => &e.function_name,
+            Self::Message(m) => &m.function_name,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -274,7 +290,7 @@ pub struct Fact {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct PointId(pub String);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ServiceId(pub String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
