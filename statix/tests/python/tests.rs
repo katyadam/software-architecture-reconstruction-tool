@@ -66,6 +66,32 @@ def get_url() -> str:
 }
 
 #[test]
+fn python_adjacent_fstrings_join_into_one_literal() {
+    let code = r#"
+def tile_url() -> str:
+    url = f"{base}/v3/slides/{slide_id}/tile" f"/level/{level}"
+    wrapped = (
+        f"{base}/v3/slides/{slide_id}/tile"  # tile part
+        f"/level/{level}"
+    )
+    return url
+"#;
+    let tree = get_python_tree(code);
+    let map = parse_python(&tree, code);
+    let result = symbolic_evaluation(
+        &map,
+        "str tile_url()",
+        Box::new(PythonCallableMatcher::new()),
+    )
+    .expect("evaluation should succeed");
+
+    let joined = Expr::Literal("{base}/v3/slides/{slide_id}/tile/level/{level}".to_string());
+    assert_eq!(result.return_value, joined);
+    let wrapped = &result.final_env.get("wrapped").expect("wrapped in env").1;
+    assert_eq!(*wrapped, joined, "parentheses and comments are skipped");
+}
+
+#[test]
 fn python_integer_literal_declaration_and_return() {
     let code = r#"
 def get_port() -> int:
