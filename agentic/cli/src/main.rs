@@ -1,6 +1,7 @@
-//! Agentic SDG reconstruction. This slice: static matching only, no model.
+//! Agentic SDG reconstruction: static matching, then Jev with `--jev`.
 
 mod extract;
+mod jev;
 mod legacy;
 mod output;
 
@@ -8,8 +9,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use agentic_matcher::jev::JevResult;
 use anyhow::{Context, Result};
 use clap::Parser;
+use clients::typesafe::TypeSafeClient;
 use models::ConfigurationData;
 use serde::Deserialize;
 
@@ -28,6 +31,9 @@ struct Cli {
     /// Output directory; `match/` and `final/` go below it.
     #[arg(short = 'o', long)]
     output_dir: PathBuf,
+    /// Let Jev decide the calls static rules leave open; needs `TYPESAFE_API_KEY`.
+    #[arg(long)]
+    jev: bool,
 }
 
 #[derive(Deserialize)]
@@ -41,8 +47,13 @@ struct Constants {
     constants: Vec<Constant>,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = Cli::parse();
+    let client = match args.jev {
+        true => Some(TypeSafeClient::new().context("--jev needs TYPESAFE_API_KEY")?),
+        false => None,
+    };
     anyhow::ensure!(
         args.project_dir.is_dir(),
         "project directory does not exist"
@@ -58,8 +69,14 @@ fn main() -> Result<()> {
     };
     let external: HashMap<String, String> = constants.iter().cloned().collect();
 
-    let ir = extract::extract(&args.project_dir, &external)?;
-    let (matches, metrics) = agentic_matcher::match_static(&ir, &config, &constants)?;
+    let extracted = extract::extract(&args.project_dir, &external)?;
+    let plan = agentic_matcher::plan(&extracted.ir, &config, &constants, args.jev)?;
+    let r = match &client {
+        Some(c) => jev::run(c, &plan, &extracted, &config, &external, &args.output_dir).await?,
+        None => JevResult::default(),
+    };
+    let (matches, mut metrics) = plan.finish(r.links, r.unmatched);
+    metrics.jev = client.is_some().then_some(r.metrics);
     output::write_all(&args.output_dir, &matches, &metrics)?;
     println!("{}", serde_json::to_string(&metrics)?);
     Ok(())

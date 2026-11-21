@@ -4,8 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+agent-loop = { workspace = true }
 agentic-models = { workspace = true }
+agentic-tools = { workspace = true }
+clients = { workspace = true }
+extractor-runtime = { workspace = true }
 models = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 strsim = { workspace = true }
+
+[dev-dependencies]
+extractor-runtime = { workspace = true, features = ["test-fixtures"] }
+tokio = { workspace = true, features = ["macros", "rt"] }

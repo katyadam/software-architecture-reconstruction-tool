@@ -281,25 +281,34 @@ dependencies = [
 name = "agentic-cli"
 version = "0.1.0"
 dependencies = [
+ "agent-loop",
  "agentic-matcher",
  "agentic-models",
+ "agentic-tools",
  "anyhow",
  "clap",
+ "clients",
  "extractor-runtime",
  "models",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
 name = "agentic-matcher"
 version = "0.1.0"
 dependencies = [
+ "agent-loop",
  "agentic-models",
+ "agentic-tools",
+ "clients",
+ "extractor-runtime",
  "models",
  "regex",
  "serde",
  "strsim",
+ "tokio",
 ]
 
 [[package]]

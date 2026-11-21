@@ -312,22 +312,28 @@ fn two_hole_call_has_no_candidates() {
 }
 
 #[test]
-fn glued_host_falls_back_to_fuzzy() {
+fn no_fuzzy_guess() {
     let mds = svc("medical-data-service", 5000);
-    let eps = [
-        ep(&mds, HttpMethod::GET, "/jobs"),
-        ep(&mds, HttpMethod::GET, "/scopes/{id}/x"),
-    ];
-    let c = call(HttpMethod::GET, "http://medical-data-service:5000url");
-    assert_eq!(run(&c, &eps), vec![("/jobs".into(), MatchTag::Fuzzy)]);
+    let eps = [ep(&mds, HttpMethod::GET, "/v3/cases")];
+    assert!(run(&call(HttpMethod::GET, "/v3/case"), &eps).is_empty());
+    let glued = call(HttpMethod::GET, "http://medical-data-service:5000url");
+    assert!(run(&glued, &[ep(&mds, HttpMethod::GET, "/jobs")]).is_empty());
 }
 
 #[test]
-fn fuzzy_rejects_beyond_threshold() {
-    let eps = [ep(
-        &svc("ts-route-service", 11178),
-        HttpMethod::GET,
-        "/api/v1/routeservice/routes",
-    )];
-    assert!(run(&call(HttpMethod::GET, "{requestUrl}"), &eps).is_empty());
+fn static_link_fact() {
+    let mds = svc("medical-data-service", 8000);
+    let eps = [ep(&mds, HttpMethod::GET, "/v3/cases/{case_id}")];
+    let target = "http://medical-data-service:8000/v3/cases/{id}";
+    let c = call(HttpMethod::GET, target);
+    let [(r, tag)] = found(&c, &eps)[..] else {
+        panic!("one candidate");
+    };
+    let fact = static_fact(tag, r, target);
+    assert_eq!((fact.id.0.as_str(), fact.tool.as_str()), ("f1", "static"));
+    assert_eq!(fact.args, "template");
+    assert_eq!(
+        fact.text,
+        format!("medical-data-service | GET /v3/cases/{{case_id}} <- {target}")
+    );
 }

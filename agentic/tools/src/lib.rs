@@ -3,6 +3,8 @@
 
 mod receivers;
 
+pub use receivers::{address_key, row};
+
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 

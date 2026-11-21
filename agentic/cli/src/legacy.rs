@@ -22,7 +22,9 @@ pub struct Connection {
 
 #[derive(Debug, Serialize)]
 pub struct Request {
-    /// `None` when only the target service is known.
+    /// Left out when only the target service is known; score.py reads a
+    /// missing endpoint as none, but fails on `null`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub endpoint: Option<Endpoint>,
     /// The original element, so test-path detection sees the real file.
     pub restcall: RestCall,
@@ -125,5 +127,12 @@ mod tests {
         assert_eq!(req["restcall"]["target_uri"], "{MDS}/v3/cases");
         assert_eq!(req["endpoint"]["uri"], "/v3/cases");
         assert_eq!(v["message_connections"], serde_json::json!([]));
+        let mut sdg = matches.sdg;
+        sdg.dependencies[0].links[0].receiver = None;
+        let v = serde_json::to_value(legacy(&sdg)).expect("serializes");
+        let req = v["connections"][0]["requests"][0]
+            .as_object()
+            .expect("request");
+        assert!(!req.contains_key("endpoint"));
     }
 }

@@ -21,6 +21,7 @@ resolver = "3"
 agentic-models = { path = "agentic/models" }
 agent-loop = { path = "agentic/agent-loop" }
 agentic-matcher = { path = "agentic/matcher" }
+agentic-tools = { path = "agentic/tools" }
 models = { path = "models" }
 statix = { path = "statix" }
 clients = { path = "clients" }
