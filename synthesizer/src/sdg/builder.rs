@@ -1,15 +1,15 @@
-use std::{borrow::Cow, cmp::Reverse, collections::HashMap};
+use std::collections::HashMap;
 
+use models::substitute::Substituter;
 use models::{
-    configuration::ServiceDescription, ConfigurationData, Endpoint, MessageEdge, RestCall,
+    ConfigurationData, Endpoint, MessageEdge, RestCall, configuration::ServiceDescription,
 };
-use regex::Regex;
 
 use crate::{
     connectors::dto::Constant,
     errors::builder::BuilderError,
-    sdg::interaction_kind::{classify, InteractionKind, InteractionSignals},
-    sdg::matching::{candidates, MatchTag},
+    sdg::interaction_kind::{InteractionKind, InteractionSignals, classify},
+    sdg::matching::{MatchTag, candidates},
     sdg::message_connection_strategies,
     sdg::model::{
         AssignedEndpoint, AssignedMessageEdge, AssignedRestCall, Connection, MessageConnection,
@@ -195,44 +195,15 @@ impl SdgBuilderImpl {
         restcalls: &mut [AssignedRestCall],
         constants: &[Constant],
     ) -> Result<(), BuilderError> {
-        if constants.is_empty() {
-            return Ok(());
-        }
-
-        let mut sorted_constants = constants.to_vec();
-        sorted_constants.sort_by_key(|b| Reverse(b.name.len()));
-
-        let lookup_table: HashMap<&str, &str> = sorted_constants
+        let pairs: Vec<(String, String)> = constants
             .iter()
-            .map(|constant| (constant.name.as_str(), constant.value.as_str()))
+            .map(|c| (c.name.clone(), c.value.clone()))
             .collect();
-
-        // Java emits unresolved constants as holes `{HOST}`; bare names need
-        // word boundaries so `HOST` never matches inside `HOSTNAME`.
-        let names = sorted_constants
-            .iter()
-            .map(|constant| regex::escape(&constant.name))
-            .collect::<Vec<String>>()
-            .join("|");
-        let pattern = format!(r"\{{(?:{names})\}}|\b(?:{names})\b");
-        let re = Regex::new(&pattern)
+        let substituter = Substituter::new(&pairs)
             .map_err(|_| BuilderError::Error("Failed to compile constants regex".to_owned()))?;
-
         for restcall in restcalls {
-            let substituted =
-                re.replace_all(&restcall.data.target_uri, |caps: &regex::Captures| {
-                    let key = caps[0].trim_start_matches('{').trim_end_matches('}');
-                    if let Some(value) = lookup_table.get(key) {
-                        value.to_string()
-                    } else {
-                        caps[0].to_string()
-                    }
-                });
-            if let Cow::Owned(changed_uri) = substituted {
-                restcall.data.target_uri = changed_uri;
-            }
+            restcall.data.target_uri = substituter.apply(&restcall.data.target_uri);
         }
-
         Ok(())
     }
 

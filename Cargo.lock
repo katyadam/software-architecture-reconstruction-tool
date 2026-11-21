@@ -278,6 +278,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentic-cli"
+version = "0.1.0"
+dependencies = [
+ "agentic-matcher",
+ "agentic-models",
+ "anyhow",
+ "clap",
+ "extractor-runtime",
+ "models",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "agentic-matcher"
+version = "0.1.0"
+dependencies = [
+ "agentic-models",
+ "models",
+ "regex",
+ "serde",
+ "strsim",
+]
+
+[[package]]
 name = "agentic-models"
 version = "0.1.0"
 dependencies = [
@@ -2751,6 +2776,7 @@ name = "models"
 version = "0.1.0"
 dependencies = [
  "neo4rs",
+ "regex",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

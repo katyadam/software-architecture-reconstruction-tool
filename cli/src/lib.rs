@@ -4,9 +4,10 @@ pub mod go_impact_output;
 pub mod java_impact_inputs;
 use clients::typesafe::TypeSafeClient;
 use extractor_runtime::call_graph::{CallGraphProvider, resolve_edges, wala::WalaJavaProvider};
+use extractor_runtime::pipeline::collect_files;
 use extractor_runtime::pipeline::pass3::{Resolver, evaluate_with_llm, pass_attr, pass_module};
-use extractor_runtime::pipeline::{build_project_ir, dispatch_syntactic, evaluate};
-use models::{Callable, CodeElementsAggregate, ConfigurationData, ir::syntax::FileRecord};
+use extractor_runtime::pipeline::{build_project_ir, collect_syntactic_records, evaluate};
+use models::{Callable, CodeElementsAggregate, ConfigurationData};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -190,45 +191,6 @@ pub fn save_json<T: serde::Serialize>(dir: &Path, filename: &str, data: &T) -> R
     Ok(())
 }
 
-fn collect_syntactic_records(
-    paths: Vec<PathBuf>,
-    report_progress: bool,
-) -> Result<Vec<FileRecord>> {
-    let files_to_process = paths.len();
-    if report_progress {
-        println!("Total files found: {files_to_process}");
-    }
-
-    let mut file_records = Vec::new();
-    for (i, path) in paths.iter().enumerate() {
-        let code = match fs::read_to_string(path) {
-            Ok(content) => content,
-            Err(e) => {
-                eprintln!(
-                    "⚠️  Skipping file {:?}: {}",
-                    path.file_name().unwrap_or_default(),
-                    e
-                );
-                continue;
-            }
-        };
-        if report_progress {
-            println!(
-                "Extracting ({}/{files_to_process}): {:?}",
-                i + 1,
-                path.file_name().unwrap_or_default()
-            );
-        }
-        if let Some(record) = dispatch_syntactic(&code, path.to_str().unwrap_or_default())
-            .with_context(|| format!("Error dispatching file: {:?}", path))?
-        {
-            file_records.push(record);
-        }
-    }
-
-    Ok(file_records)
-}
-
 /// Adds uniquely resolved WALA Java edges for configured service directories when enabled.
 ///
 /// A missing adapter JAR, a deadline breach, or a non-Java service leaves syntactic extraction unchanged.
@@ -351,26 +313,6 @@ pub fn enrich_with_wala_inputs(
         }
     }
     aggregate
-}
-
-/// Recursively collects project files while excluding Git metadata and generated build output.
-pub fn collect_files(dir: &PathBuf) -> Result<Vec<PathBuf>> {
-    let mut results = Vec::new();
-    if dir.is_dir() {
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if matches!(entry.file_name().to_str(), Some(".git" | "target")) {
-                continue;
-            }
-            if path.is_dir() {
-                results.extend(collect_files(&path)?);
-            } else {
-                results.push(path);
-            }
-        }
-    }
-    Ok(results)
 }
 
 #[cfg(test)]

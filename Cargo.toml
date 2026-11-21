@@ -20,6 +20,7 @@ resolver = "3"
 # Internal crates
 agentic-models = { path = "agentic/models" }
 agent-loop = { path = "agentic/agent-loop" }
+agentic-matcher = { path = "agentic/matcher" }
 models = { path = "models" }
 statix = { path = "statix" }
 clients = { path = "clients" }
