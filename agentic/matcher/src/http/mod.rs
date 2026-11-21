@@ -5,10 +5,10 @@ mod segments;
 
 use std::collections::BTreeSet;
 
-use agentic_models::{Address, ConnectionPoint, InteractionKind};
+use agentic_models::{Address, ConnectionPoint, Fact, FactId, InteractionKind};
+use agentic_tools::address_key;
 use models::HttpMethod;
 use models::interaction_kind::{InteractionSignals, classify, host_of, is_reflexive};
-use strsim::levenshtein;
 
 use crate::services::Services;
 use segments::{has_evidence, is_var, literals, match_tag, segments};
@@ -22,8 +22,30 @@ pub enum MatchTag {
     Template,
     /// Matched on a trailing run of segments only.
     Suffix,
-    /// Levenshtein fallback, no unified candidate.
-    Fuzzy,
+}
+
+impl MatchTag {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Exact => "exact",
+            Self::Template => "template",
+            Self::Suffix => "suffix",
+        }
+    }
+}
+
+/// The runtime fact behind a static link: `<service> | <address> <- <target>`.
+pub fn static_fact(tag: MatchTag, receiver: &ConnectionPoint, target: &str) -> Fact {
+    Fact {
+        id: FactId("f1".into()),
+        tool: "static".into(),
+        args: tag.name().into(),
+        text: format!(
+            "{} | {} <- {target}",
+            receiver.service.0,
+            address_key(&receiver.address)
+        ),
+    }
 }
 
 /// Endpoints `call` can reach, deterministic order (service name, uri).
@@ -48,17 +70,9 @@ pub fn candidates<'a>(
         .collect();
 
     let mut kept = drop_dominated(&c, drop_suffix_if_full(found));
-    if kept.is_empty() {
-        return fuzzy_fallback(target, &scope, services)
-            .into_iter()
-            .collect();
-    }
     kept.sort_by(|(a, _), (b, _)| sort_key(a).cmp(&sort_key(b)));
     kept
 }
-
-/// Max Levenshtein distance, as a fraction of the longer uri, for a fuzzy match.
-const DISSIMILARITY_PERCENT: f32 = 0.3;
 
 /// Candidate with its tag and endpoint path segments.
 type Found<'a, 's> = (&'a ConnectionPoint, MatchTag, Vec<&'s str>);
@@ -97,35 +111,6 @@ fn scope<'a>(
     }
 }
 
-/// Old Levenshtein argmin over `scope`, kept within `DISSIMILARITY_PERCENT`; ties -> smallest `sort_key`.
-fn fuzzy_fallback<'a>(
-    target: &str,
-    scope: &[&'a ConnectionPoint],
-    services: &Services,
-) -> Option<(&'a ConnectionPoint, MatchTag)> {
-    scope
-        .iter()
-        .map(|e| (fuzzy_distance(e, target, services), *e))
-        .min_by(|(da, a), (db, b)| da.cmp(db).then_with(|| sort_key(a).cmp(&sort_key(b))))
-        .filter(|(d, e)| {
-            (*d as f32) < path(e).len().max(target.len()) as f32 * DISSIMILARITY_PERCENT
-        })
-        .map(|(_, e)| (e, MatchTag::Fuzzy))
-}
-
-/// Smallest distance from `target` to the endpoint uri under each service url, or bare.
-fn fuzzy_distance(e: &ConnectionPoint, target: &str, services: &Services) -> usize {
-    let path = path(e).trim_start_matches('/');
-    services
-        .urls(&e.service)
-        .iter()
-        .map(String::as_str)
-        .chain([""])
-        .map(|u| levenshtein(&format!("{}/{path}", u.trim_end_matches('/')), target))
-        .min()
-        .unwrap_or(usize::MAX)
-}
-
 /// Drops Suffix matches when any Exact or Template match exists.
 fn drop_suffix_if_full<'a, 's>(mut found: Vec<Found<'a, 's>>) -> Vec<Found<'a, 's>> {
     if found.iter().any(|(_, t, _)| *t != MatchTag::Suffix) {
@@ -159,7 +144,7 @@ fn sort_key(e: &ConnectionPoint) -> (&str, &str, &str, &str) {
     )
 }
 
-fn method(p: &ConnectionPoint) -> Option<HttpMethod> {
+pub fn method(p: &ConnectionPoint) -> Option<HttpMethod> {
     match &p.address {
         Address::Http { method, .. } => *method,
         _ => None,
@@ -167,7 +152,7 @@ fn method(p: &ConnectionPoint) -> Option<HttpMethod> {
 }
 
 /// The address path: an endpoint's uri, a call's path without host.
-fn path(p: &ConnectionPoint) -> &str {
+pub fn path(p: &ConnectionPoint) -> &str {
     match &p.address {
         Address::Http { path, .. } => path,
         _ => "",
@@ -179,10 +164,10 @@ fn path(p: &ConnectionPoint) -> &str {
 pub fn request_kind(
     call: &ConnectionPoint,
     target: &str,
-    receiver: &ConnectionPoint,
+    receiver: Option<&ConnectionPoint>,
     services: &Services,
 ) -> InteractionKind {
-    let endpoint_uri = path(receiver);
+    let endpoint_uri = receiver.map_or("", path);
     let target_path = if endpoint_uri.is_empty() {
         target
     } else {

@@ -9,7 +9,7 @@ pub use similar::similar;
 use agentic_models::{Address, ConnectionPoint};
 
 /// `GET /v3/cases`, `svc/Method`, `broker:name`.
-pub(crate) fn address_key(address: &Address) -> String {
+pub fn address_key(address: &Address) -> String {
     match address {
         Address::Http { method, path, .. } => match method {
             Some(m) => format!("{m:?} {path}"),
@@ -26,6 +26,6 @@ pub(crate) fn address_key(address: &Address) -> String {
 }
 
 /// `<point id> | <service> | <address>`.
-pub(crate) fn row(r: &ConnectionPoint) -> String {
+pub fn row(r: &ConnectionPoint) -> String {
     format!("{} | {} | {}", r.id.0, r.service.0, address_key(&r.address))
 }

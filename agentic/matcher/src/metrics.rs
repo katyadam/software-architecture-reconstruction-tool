@@ -10,10 +10,32 @@ pub struct Metrics {
     /// Only protocols with at least one extracted element.
     pub protocols: BTreeMap<Protocol, ProtocolMetrics>,
     pub dependencies: usize,
+    /// Present only when Jev ran.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jev: Option<JevMetrics>,
+}
+
+/// Jev usage and outcomes.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct JevMetrics {
+    pub initiators: usize,
+    pub sessions: usize,
+    /// Read from the log, no model call.
+    pub replayed: usize,
+    pub model_calls: usize,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub receiver_links: usize,
+    /// Links with a target service and no receiver.
+    pub service_links: usize,
+    /// By reason name.
+    pub unmatched: BTreeMap<String, usize>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct ProtocolMetrics {
+    /// Counts up to `cross_service_tie` describe the static candidates, before
+    /// Jev; Jev outcomes are in `Metrics::jev`.
     pub initiators: usize,
     pub no_candidate: usize,
     /// The protocol has no matching rules yet; nothing was tried.
@@ -41,7 +63,6 @@ impl Metrics {
     pub(crate) fn record(&mut self, protocol: Protocol, found: &[&ConnectionPoint]) {
         let m = self.of(protocol);
         m.initiators += 1;
-        m.links += found.len();
         let services: BTreeSet<&str> = found.iter().map(|e| e.service.0.as_str()).collect();
         match (found.len(), services.len()) {
             (0, _) => m.no_candidate += 1,
@@ -102,6 +123,6 @@ mod tests {
             h.no_candidate,
         );
         assert_eq!(got, (1, 1, 1, 1));
-        assert_eq!((h.initiators, h.links), (4, 5));
+        assert_eq!(h.initiators, 4);
     }
 }

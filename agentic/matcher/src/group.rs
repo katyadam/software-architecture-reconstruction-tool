@@ -3,19 +3,24 @@
 use std::collections::BTreeMap;
 
 use agentic_models::{
-    ConnectionPoint, Dependency, InteractionKind, Link, MatchSource, Protocol, ServiceId,
+    ConnectionPoint, Dependency, Fact, InteractionKind, Link, MatchSource, Protocol, ServiceId,
     Unmatched, UnmatchedReason,
 };
 
-/// One static link from `call` to `receiver`.
-pub fn link(call: &ConnectionPoint, receiver: &ConnectionPoint, kind: InteractionKind) -> Link {
+/// One static link from `call` to `receiver`, with the rule fact behind it.
+pub fn link(
+    call: &ConnectionPoint,
+    receiver: &ConnectionPoint,
+    kind: InteractionKind,
+    fact: Fact,
+) -> Link {
     Link {
         initiator: call.clone(),
         receiver: Some(receiver.clone()),
         kind,
         match_source: MatchSource::Static,
         confidence: None,
-        evidence: vec![],
+        evidence: vec![fact],
     }
 }
 
@@ -84,6 +89,10 @@ mod tests {
         rest_call(rc, svc("a"), target)
     }
 
+    fn fact() -> Fact {
+        crate::http::static_fact(crate::http::MatchTag::Exact, &ep("b", "/x"), "/x")
+    }
+
     fn ep(service: &str, uri: &str) -> ConnectionPoint {
         let e = Endpoint {
             http_method: HttpMethod::GET,
@@ -100,7 +109,7 @@ mod tests {
         kind: InteractionKind,
     ) -> Vec<(ServiceId, Link)> {
         eps.iter()
-            .map(|e| (e.service.clone(), link(c, e, kind)))
+            .map(|e| (e.service.clone(), link(c, e, kind, fact())))
             .collect()
     }
 
@@ -158,7 +167,7 @@ mod tests {
         let mut all = links(&http, &[ep("b", "/x")], InteractionKind::Business);
         all.push((
             consumer.service.clone(),
-            link(&producer, &consumer, InteractionKind::Business),
+            link(&producer, &consumer, InteractionKind::Business, fact()),
         ));
         let got: Vec<_> = dependencies(all)
             .iter()
