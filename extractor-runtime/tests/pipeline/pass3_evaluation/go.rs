@@ -181,7 +181,7 @@ func (c *Client) GetBasketItems(customerID string) {
     );
 
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &external_constants,
         &HashMap::new(),
         &HashMap::new(),

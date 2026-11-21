@@ -1,0 +1,14 @@
+[package]
+name = "agentic-tools"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+agent-loop = { workspace = true }
+agentic-models = { workspace = true }
+extractor-runtime = { workspace = true }
+models = { workspace = true }
+strsim = { workspace = true }
+
+[dev-dependencies]
+extractor-runtime = { workspace = true, features = ["test-fixtures"] }

@@ -28,7 +28,7 @@ def fetch():
     let project_ir = build_project_ir(vec![record]);
     let per_file_attrs = pass_attr::resolve_all(&project_ir, &HashMap::new());
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &per_file_attrs,
         &HashMap::new(),
@@ -67,7 +67,7 @@ def fetch():
     let project_ir = build_project_ir(vec![record]);
     let per_file_attrs = pass_attr::resolve_all(&project_ir, &HashMap::new());
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &per_file_attrs,
         &HashMap::new(),
@@ -115,7 +115,7 @@ def fetch():
     let project_ir = build_project_ir(vec![config_record, client_record]);
     let per_file_attrs = pass_attr::resolve_all(&project_ir, &HashMap::new());
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &per_file_attrs,
         &HashMap::new(),
@@ -164,7 +164,7 @@ def fetch():
     }
 
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &per_file_attrs,
         &HashMap::new(),
@@ -208,7 +208,7 @@ def fetch():
     );
 
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &external_constants,
         &per_file_attrs,
         &HashMap::new(),
@@ -263,7 +263,7 @@ def get_logger():
 
     // The REST call to the literal URI should still resolve correctly.
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &per_file_attrs,
         &HashMap::new(),
@@ -337,7 +337,7 @@ def fetch_b():
     );
 
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &per_file_attrs,
         &HashMap::new(),

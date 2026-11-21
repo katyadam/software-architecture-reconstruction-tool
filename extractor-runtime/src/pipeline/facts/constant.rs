@@ -30,7 +30,7 @@ pub(super) fn constant_lines(ctx: &FactCtx, name: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::super::{Action, Explored, fetch};
-    use crate::pipeline::pass3::llm_enhance::test_fixtures::{ORIGIN, world};
+    use crate::pipeline::facts::test_fixtures::{ORIGIN, world};
 
     #[test]
     fn constant_lists_every_match_sorted() {
@@ -42,7 +42,7 @@ mod tests {
             &mut Explored::new(ORIGIN),
         );
         assert_eq!(
-            fact.body,
+            fact.1,
             "MDS_URL = http://mds:8000 (env/constants file)\n\
              PYTEST_MDS_URL = http://localhost:8000 (env/constants file)"
         );

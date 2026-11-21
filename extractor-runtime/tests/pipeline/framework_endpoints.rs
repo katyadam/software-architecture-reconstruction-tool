@@ -105,7 +105,7 @@ fn evaluated(
     let project_ir = pipeline::build_project_ir(records);
     let attrs = pass_attr::resolve_all(&project_ir, external_constants);
     let module_consts = pass_module::resolve_all(&project_ir, external_constants, &attrs);
-    pipeline::evaluate(project_ir, external_constants, &attrs, &module_consts)
+    pipeline::evaluate(&project_ir, external_constants, &attrs, &module_consts)
 }
 
 fn endpoint_uris(records: Vec<models::ir::syntax::FileRecord>) -> Vec<String> {

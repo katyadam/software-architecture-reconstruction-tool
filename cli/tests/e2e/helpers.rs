@@ -57,7 +57,7 @@ pub fn extract_from_dirs(dirs: &[&Path]) -> CodeElementsAggregate {
     let per_file_module_consts =
         pass_module::resolve_all(&project_ir, &external_constants, &per_file_attrs);
     let evaluated_ir = pipeline::evaluate(
-        project_ir,
+        &project_ir,
         &external_constants,
         &per_file_attrs,
         &per_file_module_consts,

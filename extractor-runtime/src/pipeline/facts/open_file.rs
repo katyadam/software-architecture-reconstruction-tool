@@ -54,14 +54,7 @@ pub(super) fn file_options(ctx: &FactCtx, explored: &Explored) -> Vec<Action> {
 }
 
 fn mentioned(ctx: &FactCtx, codeword: &str) -> bool {
-    ctx.rc.target_uri.contains(codeword)
-        || ctx
-            .state
-            .snippet
-            .as_deref()
-            .unwrap_or_default()
-            .contains(codeword)
-        || ctx.bindings.values().any(|v| v.contains(codeword))
+    ctx.subject.mentions.iter().any(|m| m.contains(codeword))
 }
 
 /// Re-checks the language guard: a stale option must not cross languages.
@@ -111,7 +104,7 @@ fn file_lines(file: &TypedFileRecord, symbol: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::super::{Action, Explored, MAX_FILE_OPTIONS, available, fetch, ids};
-    use crate::pipeline::pass3::llm_enhance::test_fixtures::{ORIGIN, file, world};
+    use crate::pipeline::facts::test_fixtures::{ORIGIN, file, world};
     use models::ir::language::Language;
 
     #[test]
@@ -129,8 +122,7 @@ mod tests {
             codeword: "Stub".to_string(),
         };
         let fact = fetch(&ctx, &java, &mut explored);
-        assert_eq!(fact.body, "(nothing found)");
-        assert_eq!(fact.language, "Python");
+        assert_eq!(fact.1, "(nothing found)");
         assert!(!ids(&ctx, &available(&ctx, &explored)).is_empty());
     }
 
@@ -144,9 +136,9 @@ mod tests {
             codeword: "settings".to_string(),
         };
         let fact = fetch(&ctx, &open, &mut explored);
-        assert_eq!(fact.action, "open:proj/caller/settings.py#settings");
+        assert_eq!(fact.0, "open:proj/caller/settings.py#settings");
         assert_eq!(
-            fact.body,
+            fact.1,
             "TIMEOUT = 10\nclass Settings(BaseSettings): mds_url: str"
         );
 
@@ -179,7 +171,7 @@ mod tests {
             w.ir.files.push(file(&path, Language::Python));
             w.link(ORIGIN, &format!("mod_{i:02}"), &path);
         }
-        w.state.snippet = Some("use(mod_29)".to_string());
+        w.subject.mentions.push("use(mod_29)".to_string());
         let ctx = w.ctx();
         let opens: Vec<String> = ids(&ctx, &available(&ctx, &Explored::new(ORIGIN)))
             .into_iter()

@@ -169,7 +169,7 @@ fn get_code_elements_from_paths_with_progress(
         pass_module::resolve_all(&project_ir, external_constants, &per_file_attrs);
 
     let evaluated_ir = evaluate(
-        project_ir,
+        &project_ir,
         external_constants,
         &per_file_attrs,
         &per_file_module_consts,

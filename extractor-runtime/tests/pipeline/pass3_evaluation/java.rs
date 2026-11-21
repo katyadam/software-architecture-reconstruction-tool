@@ -27,7 +27,7 @@ class UserClient {
         "UserClient.java",
     ));
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),
@@ -74,7 +74,7 @@ class UserClient {
         .raw_restcalls
         .push(java_restcall("void fetchUsers()", "url", "UserClient.java"));
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),
@@ -128,7 +128,7 @@ class LocalClient {
             "LocalClient.java",
         ));
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),

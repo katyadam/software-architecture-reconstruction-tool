@@ -15,10 +15,14 @@ use clients::typesafe::{
 };
 use log::warn;
 use models::{
-    CallStatement, ConfigurationData, ParsedCallStatement, RestCall, callables::Namespace,
-    ir::project::ProjectIR, source_code::SourceSpan,
+    CallStatement, ConfigurationData, RestCall, callables::Namespace, ir::project::ProjectIR,
 };
 
+use crate::pipeline::facts::{
+    Subject,
+    site::{read_span, relative_file, source_call, strip_args},
+    symbols,
+};
 use crate::pipeline::pass3::llm_enhance::signals::render_import;
 use crate::pipeline::pass3::restcalls::{EvalState, OperandBindings, is_restcall_evaluated_enough};
 
@@ -183,7 +187,8 @@ pub(super) fn residual_call_state(
         .files
         .iter()
         .find(|f| f.file_path == rc.file_path);
-    let parsed = file.and_then(|f| source_call(rc, &f.call_statements));
+    let parsed =
+        file.and_then(|f| source_call(&rc.function_hash, &rc.call_arguments, &f.call_statements));
     let source = parsed.map(|c| &c.metadata);
 
     ResidualCallState {
@@ -207,37 +212,24 @@ pub(super) fn residual_call_state(
     }
 }
 
-/// `CallStatement` `rc` was identified from: same file, enclosing function and arguments.
-// ponytail: same function + same args on two receivers -> first wins; add a call-site span to RestCall if it bites.
-fn source_call<'a>(
+/// The fact subject of `state`, so DDFA facts read exactly what its prompt shows.
+pub(super) fn subject(
     rc: &RestCall,
-    calls: &'a [ParsedCallStatement],
-) -> Option<&'a ParsedCallStatement> {
-    calls.iter().find(|c| {
-        c.metadata
-            .enclosing_function_hash
-            .as_deref()
-            .unwrap_or_default()
-            == rc.function_hash
-            && c.metadata.arguments == rc.call_arguments
-    })
-}
-
-/// Source text of `span`, read from disk on demand; `None` if unreadable.
-fn read_span(file_path: &str, span: &SourceSpan) -> Option<String> {
-    match std::fs::read(file_path) {
-        Ok(bytes) => slice_span(&bytes, span),
-        Err(e) => {
-            warn!("jev: cannot read {file_path} for snippet: {e}");
-            None
-        }
+    bindings: &OperandBindings,
+    state: &ResidualCallState,
+) -> Subject {
+    let mut mentions = vec![rc.target_uri.clone()];
+    mentions.extend(state.snippet.clone());
+    mentions.extend(bindings.values().cloned());
+    Subject {
+        file: rc.file_path.clone(),
+        function_hash: rc.function_hash.clone(),
+        enclosing_function: state.enclosing.function.clone(),
+        enclosing_class: state.enclosing.class.clone(),
+        receiver_type: state.receiver.as_ref().and_then(|r| r.datatype.clone()),
+        symbols: symbols(bindings.values().map(String::as_str)),
+        mentions,
     }
-}
-
-/// `None` if `span` is out of range or not UTF-8.
-fn slice_span(bytes: &[u8], span: &SourceSpan) -> Option<String> {
-    let text = bytes.get(span.start_byte as usize..span.end_byte as usize)?;
-    std::str::from_utf8(text).ok().map(str::to_string)
 }
 
 /// `self._client.get` -> `self._client`, typed by pass2 `invoked_on`.
@@ -247,29 +239,6 @@ fn receiver(call: &CallStatement) -> Option<Receiver> {
         expr: expr.to_string(),
         datatype: call.invoked_on.clone(),
     })
-}
-
-/// Java `function_name` carries args: `rt.exchange(url, x)` -> `rt.exchange`.
-/// Python/Go names don't end in `)`, so `requests.Session().get` stays intact.
-// ponytail: paren counting ignores string literals; a paren inside a literal arg mis-splits.
-pub(super) fn strip_args(function_name: &str) -> &str {
-    if !function_name.ends_with(')') {
-        return function_name;
-    }
-    let mut depth = 0;
-    for (i, c) in function_name.char_indices().rev() {
-        match c {
-            ')' => depth += 1,
-            '(' => {
-                depth -= 1;
-                if depth == 0 {
-                    return &function_name[..i];
-                }
-            }
-            _ => {}
-        }
-    }
-    function_name
 }
 
 /// `self._client.get(url, timeout=10)`; HTTP method stands in when callee is unknown.
@@ -291,30 +260,12 @@ fn render_call(rc: &RestCall, callee: Option<&str>) -> String {
     }
 }
 
-/// From service base dir on; file name only otherwise. Never the absolute path.
-pub(super) fn relative_file(file_path: &str, config: &ConfigurationData) -> String {
-    config
-        .service_descriptions
-        .iter()
-        .find_map(|s| {
-            file_path
-                .find(&s.base_dir_path)
-                .map(|i| file_path[i..].to_string())
-        })
-        .or_else(|| {
-            Path::new(file_path)
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-        })
-        .unwrap_or_default()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use models::configuration::ServiceDescription;
     use models::ir::project::{ClassHierarchy, ImportGraph};
-    use models::{RestCall, source_code::SourceSpan};
+    use models::{ParsedCallStatement, RestCall, source_code::SourceSpan};
     use std::collections::HashMap;
 
     fn config() -> ConfigurationData {
@@ -419,6 +370,27 @@ mod tests {
     }
 
     #[test]
+    fn rest_call_subject_equals_ddfa_subject() {
+        use crate::pipeline::facts::test_fixtures::file;
+        let mut client = file(
+            "/proj/caller/client.py",
+            models::ir::language::Language::Python,
+        );
+        client
+            .call_statements
+            .push(call_statement("self._client.get", "h1", vec![]));
+        let mut pir = pir();
+        pir.files.push(client);
+        let rc = restcall("self._mds_url + url");
+        let bindings =
+            OperandBindings::from([("self._mds_url".to_string(), "settings.mds_url".to_string())]);
+        let state = residual_call_state(&rc, &bindings, &pir, &config());
+        let ours = Subject::rest_call(&rc, &bindings, &pir);
+        assert_eq!(ours.receiver_type.as_deref(), Some("httpx.Client"));
+        assert_eq!(ours, subject(&rc, &bindings, &state));
+    }
+
+    #[test]
     fn source_call_matches_hash_and_args() {
         let arg = models::Argument {
             assigned_variable: String::new(),
@@ -435,7 +407,9 @@ mod tests {
             ..restcall("url")
         };
 
-        let found = &source_call(&rc, &calls).expect("match").metadata;
+        let found = &source_call(&rc.function_hash, &rc.call_arguments, &calls)
+            .expect("match")
+            .metadata;
         assert_eq!(found.enclosing_function_hash.as_deref(), Some("h1"));
         assert_eq!(
             render_call(&rc, Some(strip_args(&found.function_name))),
@@ -444,29 +418,6 @@ mod tests {
         let r = receiver(found).expect("receiver");
         assert_eq!(r.expr, "self._client");
         assert_eq!(r.datatype.as_deref(), Some("httpx.Client"));
-    }
-
-    #[test]
-    fn slice_span_cuts_function_and_rejects_bad_spans() {
-        let code = "import x\n\ndef f(s):\n    return s.get(u)\n";
-        let start = code.find("def").expect("def") as u32;
-        let end = code.trim_end().len() as u32;
-        assert_eq!(
-            slice_span(code.as_bytes(), &SourceSpan::new(start, end)).as_deref(),
-            Some("def f(s):\n    return s.get(u)")
-        );
-        assert_eq!(slice_span(code.as_bytes(), &SourceSpan::new(0, 999)), None);
-        assert_eq!(slice_span("é".as_bytes(), &SourceSpan::new(0, 1)), None);
-    }
-
-    #[test]
-    fn strip_args_only_strips_trailing_call() {
-        assert_eq!(strip_args("rt.exchange(url, a(b))"), "rt.exchange");
-        assert_eq!(strip_args("b.uri(x).get(y)"), "b.uri(x).get");
-        assert_eq!(
-            strip_args("requests.Session().get"),
-            "requests.Session().get"
-        );
     }
 
     #[test]

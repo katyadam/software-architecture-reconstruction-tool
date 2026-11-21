@@ -1,46 +1,47 @@
-//! DDFA facts: what Jev may acquire about a residual, and fetching it.
-//! Lookups stay in the origin file's language; non-file lookups also stay
-//! in the origin service.
+//! Code facts a model may acquire about one call site, and fetching them.
+//! Used by DDFA and the agentic tools. Lookups stay in the origin file's
+//! language; non-file lookups also stay in the origin service.
 
 mod callers;
 mod constant;
 mod define;
+mod imports;
 mod open_file;
 mod receiver;
+pub(crate) mod site;
+mod subject;
+#[cfg(any(test, feature = "test-fixtures"))]
+pub mod test_fixtures;
 
 use std::collections::{BTreeSet, HashMap};
 
-use clients::typesafe::{
-    question::{MAX_CHOICE_OPTIONS, resolve::Opt},
-    state::{Fact, ResidualCallState},
-};
 use models::{
-    Assignment, AssignmentKey, ConfigurationData, Entity, RestCall, Scope,
+    Assignment, AssignmentKey, ConfigurationData, Entity, Scope,
     ir::project::{ProjectIR, TypedFileRecord},
 };
 
-use crate::pipeline::pass3::llm_enhance::residual_edge_filter::relative_file;
-use crate::pipeline::pass3::restcalls::OperandBindings;
 use callers::{callers_lines, enclosing_name};
 use constant::constant_lines;
-use define::{define_lines, symbols};
+use define::define_lines;
+pub use define::symbols;
+pub use imports::imports_lines;
 use open_file::{file_options, open_file};
 use receiver::{receiver_entity, receiver_lines};
+use site::relative_file;
+pub use subject::Subject;
 
 /// Max `OpenFile` options per step.
-pub(super) const MAX_FILE_OPTIONS: usize = 20;
+pub const MAX_FILE_OPTIONS: usize = 20;
 /// Max lines of one fact body.
 const MAX_FACT_LINES: usize = 40;
 const NOTHING: &str = "(nothing found)";
 
-pub(super) struct FactCtx<'a> {
+pub struct FactCtx<'a> {
     pub project_ir: &'a ProjectIR,
     pub config: &'a ConfigurationData,
     /// Constants file + scraped env, as fed to symbolic evaluation.
     pub external_constants: &'a HashMap<String, String>,
-    pub rc: &'a RestCall,
-    pub bindings: &'a OperandBindings,
-    pub state: &'a ResidualCallState,
+    pub subject: &'a Subject,
     /// File of the residual; its language bounds every lookup.
     pub origin: &'a TypedFileRecord,
     /// `base_dir_path` of the origin service; empty -> origin file only.
@@ -48,7 +49,7 @@ pub(super) struct FactCtx<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum Action {
+pub enum Action {
     /// Where a name from the operand bindings is assigned or declared.
     Define(String),
     /// Call sites of the enclosing function.
@@ -62,8 +63,8 @@ pub(super) enum Action {
 }
 
 impl Action {
-    /// Choice option: stable id + description for Jev.
-    pub(super) fn option(&self, ctx: &FactCtx) -> Opt {
+    /// Stable id + description for the model.
+    pub fn option(&self, ctx: &FactCtx) -> (String, String) {
         match self {
             Action::Define(name) => (
                 format!("define:{name}"),
@@ -73,7 +74,7 @@ impl Action {
                 "callers".to_string(),
                 format!(
                     "Call sites of `{}` and the arguments they pass.",
-                    ctx.state.enclosing.function
+                    ctx.subject.enclosing_function
                 ),
             ),
             Action::Receiver => (
@@ -98,14 +99,14 @@ impl Action {
 
 /// What was acquired so far.
 #[derive(Debug)]
-pub(super) struct Explored {
+pub struct Explored {
     taken: BTreeSet<String>,
     /// Files whose imports are offered; starts with the origin.
     opened: Vec<String>,
 }
 
 impl Explored {
-    pub(super) fn new(origin: &str) -> Self {
+    pub fn new(origin: &str) -> Self {
         Self {
             taken: BTreeSet::new(),
             opened: vec![origin.to_string()],
@@ -121,10 +122,10 @@ fn find_file<'a>(ir: &'a ProjectIR, path: &str) -> Option<&'a TypedFileRecord> {
     ir.files.iter().find(|f| f.file_path == path)
 }
 
-/// Not yet taken actions, best first; one Choice slot left for `stop`.
-pub(super) fn available(ctx: &FactCtx, explored: &Explored) -> Vec<Action> {
+/// Not yet taken actions, best first; the caller caps how many it offers.
+pub fn available(ctx: &FactCtx, explored: &Explored) -> Vec<Action> {
     let mut actions = Vec::new();
-    for name in symbols(ctx.bindings) {
+    for name in ctx.subject.symbols.iter().cloned() {
         let has_constant = !constant_lines(ctx, &name).is_empty();
         actions.push(Action::Define(name.clone()));
         if has_constant {
@@ -139,12 +140,11 @@ pub(super) fn available(ctx: &FactCtx, explored: &Explored) -> Vec<Action> {
     }
     actions.extend(file_options(ctx, explored));
     actions.retain(|a| !explored.taken.contains(&a.option(ctx).0));
-    actions.truncate(MAX_CHOICE_OPTIONS - 1);
     actions
 }
 
-/// Marks `action` taken; an empty lookup yields `(nothing found)`.
-pub(super) fn fetch(ctx: &FactCtx, action: &Action, explored: &mut Explored) -> Fact {
+/// Marks `action` taken; returns its id and body. An empty lookup yields `(nothing found)`.
+pub fn fetch(ctx: &FactCtx, action: &Action, explored: &mut Explored) -> (String, String) {
     let (id, _) = action.option(ctx);
     explored.taken.insert(id.clone());
     let lines = match action {
@@ -154,14 +154,11 @@ pub(super) fn fetch(ctx: &FactCtx, action: &Action, explored: &mut Explored) -> 
         Action::Constant(name) => constant_lines(ctx, name),
         Action::OpenFile { path, codeword } => open_file(ctx, path, codeword, explored),
     };
-    Fact {
-        action: id,
-        language: ctx.origin.language.to_string(),
-        body: render(lines),
-    }
+    (id, render(lines))
 }
 
-fn render(lines: Vec<String>) -> String {
+/// At most `MAX_FACT_LINES` lines, then `... N more`; empty -> `(nothing found)`.
+pub fn render(lines: Vec<String>) -> String {
     if lines.is_empty() {
         return NOTHING.to_string();
     }
@@ -210,7 +207,7 @@ fn entity_line(e: &Entity) -> String {
 }
 
 /// `relative_file` minus leading `./` / `../` segments (cwd-relative base dirs).
-fn fact_path(path: &str, config: &ConfigurationData) -> String {
+pub fn fact_path(path: &str, config: &ConfigurationData) -> String {
     let rel = relative_file(path, config);
     let mut s = rel.as_str();
     while let Some(rest) = s.strip_prefix("../").or_else(|| s.strip_prefix("./")) {
@@ -235,7 +232,7 @@ fn ids(ctx: &FactCtx, actions: &[Action]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipeline::pass3::llm_enhance::test_fixtures::{ORIGIN, world};
+    use crate::pipeline::facts::test_fixtures::{ORIGIN, world};
 
     #[test]
     fn first_step_offers_every_kind() {

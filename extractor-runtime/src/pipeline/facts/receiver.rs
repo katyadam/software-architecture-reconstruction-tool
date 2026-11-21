@@ -6,13 +6,12 @@ use super::{FactCtx, entity_line, fact_path, scoped_files};
 
 /// Receiver datatype if it is a project class, else the enclosing class.
 pub(super) fn receiver_entity<'a>(ctx: &FactCtx<'a>) -> Option<(&'a TypedFileRecord, &'a Entity)> {
-    let datatype = ctx
-        .state
-        .receiver
-        .as_ref()
-        .and_then(|r| r.datatype.as_deref())
+    let subject = ctx.subject;
+    let datatype = subject
+        .receiver_type
+        .as_deref()
         .and_then(|t| t.rsplit('.').next());
-    [datatype, ctx.state.enclosing.class.as_deref()]
+    [datatype, subject.enclosing_class.as_deref()]
         .into_iter()
         .flatten()
         .find_map(|name| {
@@ -53,7 +52,7 @@ pub(super) fn receiver_lines(ctx: &FactCtx) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::super::{Action, Explored, fetch};
-    use crate::pipeline::pass3::llm_enhance::test_fixtures::{ORIGIN, world};
+    use crate::pipeline::facts::test_fixtures::{ORIGIN, world};
 
     #[test]
     fn receiver_falls_back_to_enclosing_class() {
@@ -62,7 +61,7 @@ mod tests {
         // `httpx.AsyncClient` is not a project entity -> enclosing `MdsClient`.
         let fact = fetch(&ctx, &Action::Receiver, &mut Explored::new(ORIGIN));
         assert_eq!(
-            fact.body,
+            fact.1,
             "proj/caller/client.py: class MdsClient: _mds_url = settings.mds_url"
         );
     }

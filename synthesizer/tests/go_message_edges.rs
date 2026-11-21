@@ -27,7 +27,7 @@ func serve(s *grpc.Server) {
         go_extract(server, "services/product/main.go").expect("server should parse"),
     ]);
     let elements = CodeElementsAggregate::from(evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),
@@ -89,7 +89,7 @@ func serve(s *grpc.Server) {
         go_extract(server, "services/product/main.go").expect("server should parse"),
     ]);
     let elements = CodeElementsAggregate::from(evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),
@@ -148,7 +148,7 @@ func subscribe() {
         project_ir.files[0].call_statements
     );
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),
@@ -210,7 +210,7 @@ func bind(channel any) {
         go_extract(binding, "services/billing/binding.go").expect("binding should parse"),
     ]);
     let elements = CodeElementsAggregate::from(evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),
@@ -291,7 +291,7 @@ func receive(consumer *event.Consumer) {
             .expect("consumer call should parse"),
     ]);
     let elements = CodeElementsAggregate::from(evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),
@@ -354,7 +354,7 @@ func Consume(channel any) {
         go_extract(consumer, "services/inventory/consumer.go").expect("consumer should parse"),
     ]);
     let elements = CodeElementsAggregate::from(evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),
@@ -435,7 +435,7 @@ func consume(channel any) {
         go_extract(payment_consumer, "product-service/consumer.go").expect("consumer should parse"),
     ]);
     let elements = CodeElementsAggregate::from(evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),

@@ -2,7 +2,6 @@
 
 mod ddfa;
 mod dispatch;
-mod facts;
 mod matcher;
 mod oracle;
 mod query_builder;
