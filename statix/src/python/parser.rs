@@ -177,6 +177,21 @@ fn parse_expr(node: Node, source: &str) -> Result<Expr, ParseError> {
         "string" => Ok(Expr::Literal(crate::strings::clean_python_string(
             &node_text(node, source)?,
         ))),
+        // `f"a" "b"`: Python joins adjacent literals. Comments between them are skipped.
+        "concatenated_string" => node
+            .named_children(&mut node.walk())
+            .filter(|part| part.kind() == "string")
+            .map(|part| {
+                Ok(crate::strings::clean_python_string(&node_text(
+                    part, source,
+                )?))
+            })
+            .collect::<Result<String, ParseError>>()
+            .map(Expr::Literal),
+        "parenthesized_expression" => node
+            .named_children(&mut node.walk())
+            .find(|inner| inner.kind() != "comment")
+            .map_or(Ok(Expr::Empty), |inner| parse_expr(inner, source)),
         "integer" => Ok(Expr::Literal(node_text(node, source)?)),
         "true" => Ok(Expr::Literal("True".to_string())),
         "false" => Ok(Expr::Literal("False".to_string())),
