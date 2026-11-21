@@ -19,7 +19,7 @@ def fetch_by_status(status: Status):
 
     let project_ir = build_project_ir(vec![record]);
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),
@@ -64,7 +64,7 @@ def fetch_items():
 
     let project_ir = build_project_ir(vec![constants_record, client_record]);
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),
@@ -99,7 +99,7 @@ def fetch_items():
 
     let project_ir = build_project_ir(vec![constants_record, client_record]);
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),
@@ -132,7 +132,7 @@ def helper():
         project_ir.files[0].raw_restcalls
     );
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),
@@ -168,7 +168,7 @@ def fetch():
 
     let project_ir = build_project_ir(vec![global_record, local_record]);
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &HashMap::new(),
         &HashMap::new(),
@@ -183,4 +183,31 @@ def fetch():
         evaluated.restcalls[0].target_uri, "/local",
         "local callable definition must take priority over global"
     );
+}
+
+#[test]
+fn bindings_line_up_with_restcalls() {
+    let code = r#"
+def fetch(case_id):
+    requests.get("/api/health")
+    requests.get(settings.mds_url + "/cases/" + case_id)
+"#;
+    let record = python_extract(code, "client.py").expect("Python extraction should succeed");
+    let project_ir = build_project_ir(vec![record]);
+    let (evaluated, bindings) = extractor_runtime::pipeline::pass3::evaluate_with_bindings(
+        &project_ir,
+        &HashMap::new(),
+        &HashMap::new(),
+        &HashMap::new(),
+    );
+    assert_eq!(bindings.len(), evaluated.restcalls.len());
+    assert!(
+        bindings.iter().any(|b| !b.is_empty()),
+        "no residual: {:?}",
+        evaluated.restcalls
+    );
+    for (rc, b) in evaluated.restcalls.iter().zip(&bindings) {
+        let residual = rc.target_uri.contains("mds_url");
+        assert_eq!(!b.is_empty(), residual, "{} -> {b:?}", rc.target_uri);
+    }
 }

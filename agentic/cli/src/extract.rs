@@ -15,5 +15,5 @@ pub fn extract(project: &Path, constants: &HashMap<String, String>) -> Result<Ev
     let ir = build_project_ir(records);
     let attrs = pass_attr::resolve_all(&ir, constants);
     let module_consts = pass_module::resolve_all(&ir, constants, &attrs);
-    Ok(evaluate(ir, constants, &attrs, &module_consts))
+    Ok(evaluate(&ir, constants, &attrs, &module_consts))
 }

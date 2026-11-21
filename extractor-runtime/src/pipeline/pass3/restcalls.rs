@@ -21,7 +21,7 @@ use super::callables::{build_file_local_callables, build_merged_enums};
 use super::language_backend::evaluation_for;
 
 /// Residual operand -> rendered `final_env` binding, e.g. `self._mds_url` -> `settings.mds_url`.
-pub(crate) type OperandBindings = BTreeMap<String, String>;
+pub type OperandBindings = BTreeMap<String, String>;
 
 /// Bindings are empty unless the output is a residual.
 pub(super) fn evaluate_restcalls(

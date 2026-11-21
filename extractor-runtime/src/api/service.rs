@@ -160,7 +160,7 @@ fn run_extraction_pipeline(collected: &[(String, String, i64)]) -> EvaluatedIR {
     let per_file_module_consts =
         pass_module::resolve_all(&project_ir, &external_constants, &per_file_attrs);
     pipeline::evaluate(
-        project_ir,
+        &project_ir,
         &external_constants,
         &per_file_attrs,
         &per_file_module_consts,

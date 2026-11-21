@@ -6,14 +6,15 @@ use log::{debug, info, warn};
 use models::{ConfigurationData, RestCall, ir::project::ProjectIR};
 use sage::resolver::client::SageClient;
 
+use crate::pipeline::facts::FactCtx;
 use crate::pipeline::pass3::llm_enhance::{
     ddfa::{DdfaMode, Limits, Resolution, resolve},
-    facts::FactCtx,
     matcher::{IndexedService, build_index, deterministic_match},
     oracle::{ServiceOracle, service_for_url},
     query_builder::{build_query_for_restcall, candidate_services, rewrite_target_uri_to_service},
     residual_edge_filter::{
-        ResidualTriage, emit, print_triage_footer, print_triage_header, residual_call_state, triage,
+        ResidualTriage, emit, print_triage_footer, print_triage_header, residual_call_state,
+        subject, triage,
     },
     scorer::{ProducedEdge, score},
     signals,
@@ -267,18 +268,17 @@ async fn query_ddfa(
         .iter()
         .find(|s| rc.file_path.contains(&s.base_dir_path))
         .map_or("", |s| s.base_dir_path.as_str());
+    let subject = subject(rc, bindings, &state);
     let fctx = FactCtx {
         project_ir: ctx.project_ir,
         config: ctx.config,
         external_constants: ctx.external_constants,
-        rc,
-        bindings,
-        state: &state,
+        subject: &subject,
         origin,
         service_dir,
     };
     let ask = async |req: &SystemOneRequest| client.system_one(req).await;
-    match resolve(mode, &fctx, &services, &ctx.limits, ask).await {
+    match resolve(mode, &fctx, &state, &services, &ctx.limits, ask).await {
         Ok(resolution) => {
             emit(&ddfa_row(rc, &resolution));
             match resolution

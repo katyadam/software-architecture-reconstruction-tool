@@ -7,13 +7,33 @@ use clients::{
     error::TypeSafeError,
     typesafe::{
         SystemOneRequest,
-        question::resolve::{self, ENOUGH, NEXT, NONE, Opt, STOP, TARGET},
+        question::{
+            MAX_CHOICE_OPTIONS,
+            resolve::{self, ENOUGH, NEXT, NONE, Opt, STOP, TARGET},
+        },
         response::{Answer, SystemOneResponse},
+        state::{Fact, ResidualCallState},
     },
 };
 use models::configuration::ServiceDescription;
 
-use super::facts::{Explored, FactCtx, available, fetch};
+use crate::pipeline::facts::{Action, Explored, FactCtx, available, fetch};
+
+/// Facts not yet taken, best first; one Choice slot left for `stop`.
+fn offered(ctx: &FactCtx, explored: &Explored) -> Vec<Action> {
+    let mut actions = available(ctx, explored);
+    actions.truncate(MAX_CHOICE_OPTIONS - 1);
+    actions
+}
+
+fn acquire(ctx: &FactCtx, action: &Action, explored: &mut Explored) -> Fact {
+    let (action, body) = fetch(ctx, action, explored);
+    Fact {
+        action,
+        language: ctx.origin.language.to_string(),
+        body,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DdfaMode {
@@ -66,6 +86,7 @@ pub(super) struct Resolution {
 pub(super) async fn resolve<F>(
     mode: DdfaMode,
     ctx: &FactCtx<'_>,
+    state: &ResidualCallState,
     services: &[&ServiceDescription],
     limits: &Limits,
     mut ask: F,
@@ -74,7 +95,7 @@ where
     F: AsyncFnMut(&SystemOneRequest) -> Result<SystemOneResponse, TypeSafeError>,
 {
     let targets = target_options(services);
-    let mut state = ctx.state.clone();
+    let mut state = state.clone();
     let mut explored = Explored::new(&ctx.origin.file_path);
     let mut out = Resolution {
         service: None,
@@ -84,11 +105,8 @@ where
     };
 
     if mode == DdfaMode::Once {
-        for action in available(ctx, &explored)
-            .into_iter()
-            .take(limits.once_facts)
-        {
-            let fact = fetch(ctx, &action, &mut explored);
+        for action in offered(ctx, &explored).into_iter().take(limits.once_facts) {
+            let fact = acquire(ctx, &action, &mut explored);
             out.trail.push(fact.action.clone());
             state.facts.push(fact);
         }
@@ -105,7 +123,7 @@ where
 
     let mut step = 0;
     loop {
-        let actions = available(ctx, &explored);
+        let actions = offered(ctx, &explored);
         let options: Vec<Opt> = actions.iter().map(|a| a.option(ctx)).collect();
         let request =
             SystemOneRequest::new(state.clone(), resolve::acquire_step(&targets, &options)?);
@@ -125,7 +143,7 @@ where
             out.service = chosen_target(&response.answers, limits.target_min);
             return Ok(out);
         };
-        let fact = fetch(ctx, action, &mut explored);
+        let fact = acquire(ctx, action, &mut explored);
         out.trail.push(fact.action.clone());
         state.facts.push(fact);
         step += 1;
@@ -187,7 +205,7 @@ fn chosen_target(answers: &HashMap<String, Answer>, min: f64) -> Option<String> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipeline::pass3::llm_enhance::test_fixtures::world;
+    use crate::pipeline::pass3::llm_enhance::test_fixtures::ddfa_world;
     use clients::typesafe::response::Usage;
 
     const LIMITS: Limits = Limits {
@@ -234,9 +252,10 @@ mod tests {
         limits: &Limits,
         script: Vec<Result<SystemOneResponse, TypeSafeError>>,
     ) -> (Result<Resolution, TypeSafeError>, Vec<serde_json::Value>) {
-        let w = world();
-        let ctx = w.ctx();
+        let w = ddfa_world();
+        let ctx = w.facts.ctx();
         let services: Vec<&ServiceDescription> = w
+            .facts
             .config
             .service_descriptions
             .iter()
@@ -247,6 +266,7 @@ mod tests {
         let out = resolve(
             mode,
             &ctx,
+            &w.state,
             &services,
             limits,
             async |req: &SystemOneRequest| {
@@ -351,6 +371,8 @@ mod tests {
             .collect();
         assert_eq!(keys, vec![TARGET]);
         assert_eq!(asked[0]["state"]["facts"].as_array().map(Vec::len), Some(5));
+        // Every fact carries the origin's language.
+        assert_eq!(asked[0]["state"]["facts"][0]["language"], "Python");
     }
 
     #[tokio::test]

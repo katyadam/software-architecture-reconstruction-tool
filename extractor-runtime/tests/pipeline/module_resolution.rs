@@ -18,7 +18,7 @@ fn run_pipeline(
     let per_file_module_consts =
         pass_module::resolve_all(&project_ir, external_constants, &per_file_attrs);
     evaluate(
-        project_ir,
+        &project_ir,
         external_constants,
         &per_file_attrs,
         &per_file_module_consts,
@@ -487,7 +487,7 @@ def fetch():
     let per_file_module_consts =
         pass_module::resolve_all(&project_ir, &HashMap::new(), &per_file_attrs);
     let evaluated = evaluate(
-        project_ir,
+        &project_ir,
         &HashMap::new(),
         &per_file_attrs,
         &per_file_module_consts,

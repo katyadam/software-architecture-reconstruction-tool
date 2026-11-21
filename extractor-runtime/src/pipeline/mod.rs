@@ -1,3 +1,4 @@
+pub mod facts;
 pub mod files;
 pub mod pass1;
 pub mod pass2;

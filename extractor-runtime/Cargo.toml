@@ -43,3 +43,7 @@ tree-sitter-python = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.22.0"
+
+[features]
+# Exposes the facts test fixture to other crates' tests.
+test-fixtures = []

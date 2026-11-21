@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use clients::typesafe::TypeSafeClient;
 use models::{
-    ConfigurationData,
+    ConfigurationData, RestCall,
     ir::{evaluted::EvaluatedIR, project::ProjectIR},
 };
 
@@ -23,6 +23,7 @@ use crate::pipeline::pass3::{
 };
 
 pub use llm_enhance::{DdfaMode, Resolver};
+pub use restcalls::OperandBindings;
 
 /// Pass 3: Produce `EvaluatedIR` from `ProjectIR`.
 ///
@@ -40,62 +41,44 @@ pub use llm_enhance::{DdfaMode, Resolver};
 /// `ImportKind::Constant` pull their value from this map into the consumer's
 /// evaluation env.
 pub fn evaluate(
-    project_ir: ProjectIR,
+    project_ir: &ProjectIR,
     external_constants: &HashMap<String, String>,
     per_file_attrs: &HashMap<String, HashMap<String, String>>,
     per_file_module_consts: &PerFileModuleConsts,
 ) -> EvaluatedIR {
-    let restcalls = restcalls::evaluate_restcalls(
-        &project_ir,
+    evaluate_with_bindings(
+        project_ir,
+        external_constants,
+        per_file_attrs,
+        per_file_module_consts,
+    )
+    .0
+}
+
+/// `evaluate`, plus each REST call's operand bindings: `bindings[i]` belongs
+/// to `restcalls[i]`, and is empty unless that call stayed a residual.
+pub fn evaluate_with_bindings(
+    project_ir: &ProjectIR,
+    external_constants: &HashMap<String, String>,
+    per_file_attrs: &HashMap<String, HashMap<String, String>>,
+    per_file_module_consts: &PerFileModuleConsts,
+) -> (EvaluatedIR, Vec<OperandBindings>) {
+    let (restcalls, bindings): (Vec<_>, Vec<_>) = restcalls::evaluate_restcalls(
+        project_ir,
         external_constants,
         per_file_attrs,
         per_file_module_consts,
     )
     .into_iter()
-    .map(|(rc, _)| rc)
-    .collect();
-    let message_edges = message_edges::evaluate_message_edges(
-        &project_ir,
-        external_constants,
-        per_file_attrs,
-        per_file_module_consts,
-    );
-
-    let endpoints = route_prefixes::evaluate_endpoints(
-        &project_ir,
-        external_constants,
-        per_file_attrs,
-        per_file_module_consts,
-    );
-
-    let entities = project_ir
-        .files
-        .iter()
-        .flat_map(|f| f.entities.clone())
-        .collect();
-
-    let callables = project_ir
-        .files
-        .iter()
-        .flat_map(|f| f.callables.iter().map(|pc| pc.metadata.clone()))
-        .filter(|c| c.name != MODULE_CALLABLE_NAME)
-        .collect();
-
-    let call_statements = project_ir
-        .files
-        .iter()
-        .flat_map(|f| f.call_statements.iter().map(|c| c.metadata.clone()))
-        .collect();
-
-    EvaluatedIR {
-        entities,
-        endpoints,
+    .unzip();
+    let ir = assemble(
+        project_ir,
         restcalls,
-        message_edges,
-        callables,
-        call_statements,
-        resolved_call_edges: vec![],
-    }
+        external_constants,
+        per_file_attrs,
+        per_file_module_consts,
+    );
+    (ir, bindings)
 }
 
 /// Pass 3 with residual resolution by `resolver`.
@@ -127,46 +110,50 @@ pub async fn evaluate_with_llm(
         &project_ir,
     )
     .await;
+    assemble(
+        &project_ir,
+        restcalls,
+        external_constants,
+        per_file_attrs,
+        per_file_module_consts,
+    )
+}
+
+/// Everything but the REST calls, evaluated from `project_ir`.
+fn assemble(
+    project_ir: &ProjectIR,
+    restcalls: Vec<RestCall>,
+    external_constants: &HashMap<String, String>,
+    per_file_attrs: &HashMap<String, HashMap<String, String>>,
+    per_file_module_consts: &PerFileModuleConsts,
+) -> EvaluatedIR {
     let message_edges = message_edges::evaluate_message_edges(
-        &project_ir,
+        project_ir,
         external_constants,
         per_file_attrs,
         per_file_module_consts,
     );
-
     let endpoints = route_prefixes::evaluate_endpoints(
-        &project_ir,
+        project_ir,
         external_constants,
         per_file_attrs,
         per_file_module_consts,
     );
-
-    let entities = project_ir
-        .files
-        .iter()
-        .flat_map(|f| f.entities.clone())
-        .collect();
-
-    let callables = project_ir
-        .files
-        .iter()
-        .flat_map(|f| f.callables.iter().map(|pc| pc.metadata.clone()))
-        .filter(|c| c.name != MODULE_CALLABLE_NAME)
-        .collect();
-
-    let call_statements = project_ir
-        .files
-        .iter()
-        .flat_map(|f| f.call_statements.iter().map(|c| c.metadata.clone()))
-        .collect();
-
+    let files = &project_ir.files;
     EvaluatedIR {
-        entities,
+        entities: files.iter().flat_map(|f| f.entities.clone()).collect(),
         endpoints,
         restcalls,
         message_edges,
-        callables,
-        call_statements,
+        callables: files
+            .iter()
+            .flat_map(|f| f.callables.iter().map(|pc| pc.metadata.clone()))
+            .filter(|c| c.name != MODULE_CALLABLE_NAME)
+            .collect(),
+        call_statements: files
+            .iter()
+            .flat_map(|f| f.call_statements.iter().map(|c| c.metadata.clone()))
+            .collect(),
         resolved_call_edges: vec![],
     }
 }

@@ -3,14 +3,13 @@
 use std::collections::BTreeSet;
 
 use super::{FactCtx, assignment_line, entity_line, fact_path, scoped_files};
-use crate::pipeline::pass3::restcalls::OperandBindings;
 
 /// Names worth defining: last segment of identifiers in binding values
 /// (`settings.mds_url` -> `mds_url`); skips `unresolved` and `: type`.
 // ponytail: tokens inside string literals count too; strip quotes if noise bites.
-pub(super) fn symbols(bindings: &OperandBindings) -> BTreeSet<String> {
-    bindings
-        .values()
+pub fn symbols<'a>(values: impl IntoIterator<Item = &'a str>) -> BTreeSet<String> {
+    values
+        .into_iter()
         .map(|v| v.split(": ").next().unwrap_or(v))
         .flat_map(|v| v.split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '.')))
         .filter(|t| !t.is_empty() && *t != "unresolved")
@@ -45,7 +44,7 @@ pub(super) fn define_lines(ctx: &FactCtx, name: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::super::{Action, Explored, fetch};
-    use crate::pipeline::pass3::llm_enhance::test_fixtures::{ORIGIN, entity, file, world};
+    use crate::pipeline::facts::test_fixtures::{ORIGIN, entity, file, world};
     use models::ir::language::Language;
 
     #[test]
@@ -58,7 +57,7 @@ mod tests {
             &mut Explored::new(ORIGIN),
         );
         assert_eq!(
-            fact.body,
+            fact.1,
             "proj/caller/settings.py: class Settings(BaseSettings): mds_url: str"
         );
     }
@@ -80,6 +79,6 @@ mod tests {
             &Action::Define("mds_url".to_string()),
             &mut Explored::new(ORIGIN),
         );
-        assert!(!fact.body.contains("JSettings"));
+        assert!(!fact.1.contains("JSettings"));
     }
 }

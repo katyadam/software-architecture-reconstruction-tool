@@ -2,12 +2,12 @@
 
 use models::Argument;
 
+use super::site::strip_args;
 use super::{FactCtx, fact_path, scoped_files};
-use crate::pipeline::pass3::llm_enhance::residual_edge_filter::strip_args;
 
 pub(super) fn enclosing_name<'a>(ctx: &FactCtx<'a>) -> Option<&'a str> {
     ctx.project_ir
-        .enclosing_callable(&ctx.rc.file_path, &ctx.rc.function_hash)
+        .enclosing_callable(&ctx.subject.file, &ctx.subject.function_hash)
         .map(|c| c.metadata.name.as_str())
 }
 
@@ -50,7 +50,7 @@ fn render_args(args: &[Argument]) -> String {
 #[cfg(test)]
 mod tests {
     use super::super::{Action, Explored, fetch};
-    use crate::pipeline::pass3::llm_enhance::test_fixtures::{ORIGIN, world};
+    use crate::pipeline::facts::test_fixtures::{ORIGIN, world};
 
     #[test]
     fn callers_show_call_sites_with_args() {
@@ -58,7 +58,7 @@ mod tests {
         let ctx = w.ctx();
         let fact = fetch(&ctx, &Action::Callers, &mut Explored::new(ORIGIN));
         assert_eq!(
-            fact.body,
+            fact.1,
             "proj/caller/api.py: in get_case: self.client.fetch_case(case_id)"
         );
     }
