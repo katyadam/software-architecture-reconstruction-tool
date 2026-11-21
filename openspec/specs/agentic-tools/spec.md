@@ -1,7 +1,9 @@
 # agentic-tools Specification
 
 ## Purpose
-Read-only tools an agentic stage offers a model for one initiator point: code facts from the extracted project, and the receivers it could reach.
+Read-only tools an agentic stage offers a model for one initiator point, in two sets:
+- code facts, read from the source around the call: `define:<name>`, `constant:<name>`, `callers`, `receiver`, `open:<file>#<codeword>` and `imports`
+- receiver facts, read from the receiver points the call could reach: `similar` and `service:<name>`
 
 ## Requirements
 
@@ -10,14 +12,14 @@ The tool set SHALL be built for one initiator point, as defined in `agentic-matc
 
 #### Scenario: REST call
 - **WHEN** the tool set is built for a REST call initiator in `workbench-service`
-- **THEN** it offers code facts, `similar`, `imports`, and one `service:<name>` option per configured service with an HTTP receiver
+- **THEN** it offers the code facts `define:`, `constant:`, `callers`, `receiver`, `open:` and `imports`, the receiver fact `similar`, and one `service:<name>` option per configured service with an HTTP receiver
 
 #### Scenario: Message producer
 - **WHEN** the tool set is built for a RabbitMQ producer with destination `Queues.queueName`
 - **THEN** it offers `define:queueName`, and `similar` ranks RabbitMQ receivers only
 
-### Requirement: Code facts equal to DDFA
-The code fact options SHALL be `define:<name>`, `constant:<name>`, `callers`, `receiver` and `open:<file>#<codeword>`. They SHALL have the same ids, offer order and output as the DDFA residual facts for the same call and bindings. Every lookup SHALL stay in the origin file's language. A lookup that is not about one file SHALL also stay in the origin service. Symbol names SHALL come from a REST call's operand bindings, or from the identifiers in a message edge's raw destination.
+### Requirement: Code facts shared with the baseline
+The code facts `define:<name>`, `constant:<name>`, `callers`, `receiver` and `open:<file>#<codeword>` SHALL come from one implementation, shared with the baseline's DDFA residual resolution. They SHALL have the same ids, offer order and output as DDFA gives for the same call and bindings. `imports` SHALL live in the same implementation, but SHALL NOT be offered by DDFA, so the baseline stays unchanged. Every lookup SHALL stay in the origin file's language. A lookup that is not about one file SHALL also stay in the origin service. Symbol names SHALL come from a REST call's operand bindings, or from the identifiers in a message edge's raw destination.
 
 #### Scenario: DDFA unchanged
 - **WHEN** the DDFA residual facts run on the existing fixtures

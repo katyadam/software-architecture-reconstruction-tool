@@ -5,6 +5,7 @@
 mod callers;
 mod constant;
 mod define;
+mod imports;
 mod open_file;
 mod receiver;
 pub(crate) mod site;
@@ -23,6 +24,7 @@ use callers::{callers_lines, enclosing_name};
 use constant::constant_lines;
 use define::define_lines;
 pub use define::symbols;
+pub use imports::imports_lines;
 use open_file::{file_options, open_file};
 use receiver::{receiver_entity, receiver_lines};
 use site::relative_file;

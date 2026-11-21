@@ -1,7 +1,6 @@
 //! Read-only tools for one initiator point: code facts from the extracted
 //! project, and the receivers it could reach. No model, no writes.
 
-mod imports;
 mod receivers;
 
 use std::cell::RefCell;
@@ -166,7 +165,7 @@ impl Tools for PointTools<'_> {
         let lines = match option.tool.as_str() {
             "similar" => receivers::similar(self.point, self.ctx.receivers),
             "service" => receivers::of_service(self.point, self.ctx.receivers, &option.args),
-            "imports" => imports::neighbours(self.origin, self.ctx.project, self.ctx.config),
+            "imports" => facts::imports_lines(&self.facts()),
             _ => return self.code(&option.id),
         };
         facts::render(lines)
