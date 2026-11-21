@@ -5,7 +5,7 @@ use crate::{
 
 /// Pass 3 output: fully resolved, ready for synthesis.
 /// This replaces the current CodeElementsAggregate stored in S3.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct EvaluatedIR {
     pub entities: Vec<Entity>,
     pub endpoints: Vec<Endpoint>, // Fully resolved URIs (with prefix chains)

@@ -1,6 +1,6 @@
-//! `Matches` in the synthesizer's SDG JSON shape, which score.py reads.
+//! HTTP dependencies of `Matches` in the synthesizer's SDG JSON shape, which score.py reads.
 
-use agentic_models::{CodeElement, ConnectionPoint, InteractionKind, Sdg};
+use agentic_models::{CodeElement, ConnectionPoint, InteractionKind, Protocol, Sdg};
 use models::{Endpoint, RestCall};
 use serde::Serialize;
 
@@ -33,6 +33,7 @@ pub fn legacy(sdg: &Sdg) -> LegacySdg {
     let connections = sdg
         .dependencies
         .iter()
+        .filter(|d| d.protocol == Protocol::Http)
         .map(|d| Connection {
             source_id: d.source.0.clone(),
             target_id: d.target.0.clone(),
@@ -76,6 +77,7 @@ mod tests {
     use super::*;
     use agentic_matcher::match_static;
     use models::configuration::ServiceDescription;
+    use models::ir::evaluted::EvaluatedIR;
     use models::{ConfigurationData, HttpMethod};
 
     fn svc(name: &str) -> ServiceDescription {
@@ -105,7 +107,12 @@ mod tests {
             ..Default::default()
         };
         let constants = [("MDS".to_string(), "http://mds:8000".to_string())];
-        let (matches, _) = match_static(&[ep], &[call], &config, &constants).expect("matches");
+        let ir = EvaluatedIR {
+            endpoints: vec![ep],
+            restcalls: vec![call],
+            ..Default::default()
+        };
+        let (matches, _) = match_static(&ir, &config, &constants).expect("matches");
         let v = serde_json::to_value(legacy(&matches.sdg)).expect("serializes");
         let conn = &v["connections"][0];
         assert_eq!(

@@ -1,76 +1,59 @@
-//! Static matcher: REST calls -> endpoints into `Matches`, no model.
-//! Every candidate becomes a link, as the synthesizer baseline does.
+//! Static matcher: initiators -> receivers into `Matches`, no model.
+//! Points come from every protocol; only HTTP has matching rules so far.
+//! Every HTTP candidate becomes a link, as the synthesizer baseline does.
 
-mod candidates;
 mod group;
+mod http;
 mod metrics;
 mod points;
+mod services;
 
 use std::collections::BTreeMap;
 
-use agentic_models::{CodeElement, Matches, Sdg, Service};
-use models::configuration::{ServiceDescription, assign_service};
+use agentic_models::{
+    Address, CodeElement, ConnectionPoint, Link, Matches, Protocol, Sdg, Service, ServiceId,
+    Unmatched, UnmatchedReason,
+};
+use models::ConfigurationData;
+use models::configuration::ServiceDescription;
+use models::ir::evaluted::EvaluatedIR;
 use models::substitute::Substituter;
-use models::{ConfigurationData, Endpoint, RestCall};
 
-use candidates::candidates;
-pub use metrics::Metrics;
-use points::Placed;
+pub use metrics::{Metrics, ProtocolMetrics};
+use services::Services;
 
-/// Matches `calls` to `endpoints`; `constants` are `(name, value)` pairs.
+/// Matches the initiators of `ir` to its receivers; `constants` are `(name, value)` pairs.
 pub fn match_static(
-    endpoints: &[Endpoint],
-    calls: &[RestCall],
+    ir: &EvaluatedIR,
     config: &ConfigurationData,
     constants: &[(String, String)],
 ) -> Result<(Matches, Metrics), regex::Error> {
-    let services = &config.service_descriptions;
-    let all_urls: Vec<String> = services.iter().flat_map(|s| s.urls.clone()).collect();
+    let config = &config.service_descriptions;
+    let services = Services::new(config);
     let substituter = Substituter::new(constants)?;
     let mut metrics = Metrics::default();
+    let points = points::build(ir, config, &substituter, &mut metrics);
 
-    // Unassigned endpoints stay candidates under the empty service, as in the
-    // baseline: they can still dominate or win fuzzy matching.
-    let receivers: Vec<Placed> = endpoints
-        .iter()
-        .map(|e| {
-            let sd = assign_or_log(&e.file_path, services, &mut metrics.unassigned_receivers);
-            Placed::receiver(e.clone(), sd.cloned().unwrap_or_default())
-        })
-        .collect();
-    let initiators: Vec<Placed> = calls
-        .iter()
-        .filter_map(|c| {
-            let sd = assign_or_log(&c.file_path, services, &mut metrics.unassigned_initiators)?;
-            Some(Placed::initiator(
-                c.clone(),
-                sd.clone(),
-                substituter.apply(&c.target_uri),
-            ))
-        })
-        .collect();
-    metrics.receivers = receivers.len();
-
+    let mut by_protocol: BTreeMap<Protocol, Vec<&ConnectionPoint>> = BTreeMap::new();
+    for r in &points.receivers {
+        metrics.of(r.protocol).receivers += 1;
+        by_protocol.entry(r.protocol).or_default().push(r);
+    }
+    let ctx = Ctx {
+        by_protocol,
+        services: &services,
+        substituter: &substituter,
+    };
     let mut links = Vec::new();
     let mut unmatched = Vec::new();
-    for call in &initiators {
-        let found = candidates(call, &receivers, &all_urls);
-        metrics.record(&found);
-        if found.is_empty() {
-            unmatched.push(group::no_candidate(call));
-        }
-        for (receiver, _) in found {
-            links.push((
-                receiver.point.service.clone(),
-                group::link(call, receiver, &all_urls),
-            ));
-        }
+    for call in &points.initiators {
+        match_one(call, &ctx, &mut metrics, &mut links, &mut unmatched);
     }
 
     let dependencies = group::dependencies(links);
     metrics.dependencies = dependencies.len();
     let sdg = Sdg {
-        services: sdg_services(services, &receivers),
+        services: sdg_services(config, &points.receivers),
         dependencies,
     };
     let matches = Matches {
@@ -81,44 +64,82 @@ pub fn match_static(
     Ok((matches, metrics))
 }
 
-/// The file's service; when there is none, logs it and bumps `unassigned`.
-fn assign_or_log<'s>(
-    file: &str,
-    services: &'s [ServiceDescription],
-    unassigned: &mut usize,
-) -> Option<&'s ServiceDescription> {
-    let found = assign_service(file, services);
-    if found.is_none() {
-        eprintln!("[matcher] unassigned: {file}");
-        *unassigned += 1;
+/// What every initiator is matched against.
+struct Ctx<'a> {
+    by_protocol: BTreeMap<Protocol, Vec<&'a ConnectionPoint>>,
+    services: &'a Services<'a>,
+    substituter: &'a Substituter,
+}
+
+/// Dispatches one initiator on its address kind.
+fn match_one(
+    call: &ConnectionPoint,
+    ctx: &Ctx,
+    metrics: &mut Metrics,
+    links: &mut Vec<(ServiceId, Link)>,
+    unmatched: &mut Vec<Unmatched>,
+) {
+    let protocol = call.protocol;
+    let receivers = ctx
+        .by_protocol
+        .get(&protocol)
+        .map_or(&[][..], Vec::as_slice);
+    match (&call.address, &call.element) {
+        (Address::Http { .. }, CodeElement::RestCall(c)) => {
+            let target = ctx.substituter.apply(&c.target_uri);
+            let found = http::candidates(call, &target, receivers, ctx.services);
+            let found: Vec<&ConnectionPoint> = found.into_iter().map(|(r, _)| r).collect();
+            metrics.record(protocol, &found);
+            if found.is_empty() {
+                unmatched.push(group::unmatched(
+                    call,
+                    UnmatchedReason::NoCandidate,
+                    String::new(),
+                ));
+            }
+            for r in found {
+                let kind = http::request_kind(call, &target, r, ctx.services);
+                links.push((r.service.clone(), group::link(call, r, kind)));
+            }
+        }
+        (Address::Unresolved { .. }, _) => {
+            metrics.unresolved(protocol);
+            unmatched.push(group::unmatched(
+                call,
+                UnmatchedReason::AddressUnresolved,
+                String::new(),
+            ));
+        }
+        _ => {
+            metrics.no_rules(protocol);
+            let note = format!("no rules for {protocol:?}");
+            unmatched.push(group::unmatched(call, UnmatchedReason::NoCandidate, note));
+        }
     }
-    found
 }
 
 /// One service per name with its endpoints, sorted by name. Like the
-/// baseline, the last config entry of a name wins and receivers' services are
-/// added when no config entry has them.
-fn sdg_services(services: &[ServiceDescription], receivers: &[Placed]) -> Vec<Service> {
-    let service = |sd: &ServiceDescription| Service {
-        name: sd.name.clone(),
-        urls: sd.urls.clone(),
+/// baseline, the last config entry of a name wins and endpoints' services are
+/// added, with no urls, when no config entry has them.
+fn sdg_services(config: &[ServiceDescription], receivers: &[ConnectionPoint]) -> Vec<Service> {
+    let service = |name: &str, urls: &[String]| Service {
+        name: name.to_string(),
+        urls: urls.to_vec(),
         endpoints: vec![],
     };
-    let mut by_name: BTreeMap<&str, Service> = services
+    let mut by_name: BTreeMap<&str, Service> = config
         .iter()
-        .map(|sd| (sd.name.as_str(), service(sd)))
+        .map(|sd| (sd.name.as_str(), service(&sd.name, &sd.urls)))
         .collect();
     for r in receivers {
+        let CodeElement::Endpoint(e) = &r.element else {
+            continue;
+        };
         by_name
-            .entry(&r.service.name)
-            .or_insert_with(|| service(&r.service));
-    }
-    for r in receivers {
-        if let (Some(s), CodeElement::Endpoint(e)) =
-            (by_name.get_mut(r.service.name.as_str()), &r.point.element)
-        {
-            s.endpoints.push(e.clone());
-        }
+            .entry(&r.service.0)
+            .or_insert_with(|| service(&r.service.0, &[]))
+            .endpoints
+            .push(e.clone());
     }
     by_name.into_values().collect()
 }
@@ -126,6 +147,8 @@ fn sdg_services(services: &[ServiceDescription], receivers: &[Placed]) -> Vec<Se
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::points::tests::{edge, ir};
+    use models::{CommunicationProtocol, Endpoint, MessageRole};
 
     fn svc(name: &str, base: &str) -> ServiceDescription {
         ServiceDescription {
@@ -149,8 +172,8 @@ mod tests {
         let config = ConfigurationData {
             service_descriptions: vec![svc("mds", "p/mds1"), svc("mds", "p/mds2")],
         };
-        let eps = [ep("p/mds1/a.py"), ep("p/mds2/b.py"), ep("p/tools/c.py")];
-        let (m, metrics) = match_static(&eps, &[], &config, &[]).expect("matches");
+        let eps = vec![ep("p/mds1/a.py"), ep("p/mds2/b.py"), ep("p/tools/c.py")];
+        let (m, metrics) = match_static(&ir(eps, vec![], vec![]), &config, &[]).expect("matches");
         let got: Vec<_> = m
             .sdg
             .services
@@ -158,6 +181,26 @@ mod tests {
             .map(|s| (s.name.as_str(), s.endpoints.len()))
             .collect();
         assert_eq!(got, vec![("", 1), ("mds", 2)]);
-        assert_eq!((metrics.receivers, metrics.unassigned_receivers), (3, 1));
+        let http = &metrics.protocols[&Protocol::Http];
+        assert_eq!((http.receivers, http.unassigned_receivers), (3, 1));
+    }
+
+    #[test]
+    fn message_without_rules_is_unmatched() {
+        let config = ConfigurationData {
+            service_descriptions: vec![svc("a", "a")],
+        };
+        let producer = edge(
+            CommunicationProtocol::Kafka,
+            MessageRole::Producer,
+            "orders",
+        );
+        let (m, metrics) =
+            match_static(&ir(vec![], vec![], vec![producer]), &config, &[]).expect("matches");
+        assert_eq!(m.unmatched.len(), 1);
+        assert_eq!(m.unmatched[0].reason, UnmatchedReason::NoCandidate);
+        assert_eq!(m.unmatched[0].note, "no rules for Kafka");
+        assert_eq!(metrics.protocols[&Protocol::Kafka].no_rules, 1);
+        assert!(m.sdg.dependencies.is_empty());
     }
 }
