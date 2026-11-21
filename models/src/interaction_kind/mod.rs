@@ -1,5 +1,5 @@
 //! Which architectural view a service interaction belongs to.
-//! Classification rules live in synthesizer's `interaction_kind` module.
+//! Classification rules live in `classify`.
 
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -17,7 +17,7 @@ use utoipa::ToSchema;
 ///
 /// Reordering these variants changes the `min()` rollup. Per-request
 /// precedence is a second, independent encoding -- the order of the
-/// early returns in synthesizer's `classify` -- and must be kept consistent
+/// early returns in `classify` -- and must be kept consistent
 /// with this ordering by hand; reordering here does not itself change it.
 #[derive(
     Debug, Serialize, Deserialize, ToSchema, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default,
@@ -42,3 +42,7 @@ impl InteractionKind {
         kinds.min().unwrap_or_default()
     }
 }
+
+mod classify;
+
+pub use classify::{InteractionSignals, classify, host_of, is_reflexive};

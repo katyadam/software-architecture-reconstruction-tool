@@ -20,6 +20,7 @@ pub mod python_impact;
 pub mod restcalls;
 pub mod route_facts;
 pub mod source_code;
+pub mod substitute;
 
 pub use api::CodeElementsAggregate;
 pub use assignments::{Assignment, AssignmentKey, Scope};

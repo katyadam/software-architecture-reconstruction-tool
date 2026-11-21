@@ -1,18 +1,11 @@
-use models::configuration::ServiceDescription;
+use models::configuration::{ServiceDescription, assign_service};
 
+/// Default (empty) description when no service holds `file_name`.
 pub fn assign_service_description_to_file(
     file_name: &str,
     service_descs: &[ServiceDescription],
 ) -> ServiceDescription {
-    let normalized_file = file_name.replace('\\', "/");
-    service_descs
-        .iter()
-        .find(|sd| {
-            let normalized_base = sd.base_dir_path.replace('\\', "/");
-            normalized_file.starts_with(&normalized_base)
-                || normalized_file.ends_with(&normalized_base)
-                || normalized_file.contains(&format!("/{normalized_base}/"))
-        })
+    assign_service(file_name, service_descs)
         .cloned()
         .unwrap_or_default()
 }
