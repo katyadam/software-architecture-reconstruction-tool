@@ -38,6 +38,13 @@ pub struct PointTools<'a> {
     explored: RefCell<Explored>,
 }
 
+impl PointTools<'_> {
+    /// Source text of the point's call expression, when the call site is found.
+    pub fn call(&self) -> Option<&str> {
+        self.subject.call.as_deref()
+    }
+}
+
 impl<'a> PointTools<'a> {
     /// `None` for a receiver, or when the point's file is not in the project.
     pub fn new(

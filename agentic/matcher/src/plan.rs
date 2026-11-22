@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use agentic_models::{
-    Address, CodeElement, ConnectionPoint, Link, Matches, Protocol, Sdg, Service, ServiceId,
-    Unmatched, UnmatchedReason,
+    Address, CodeElement, ConnectionPoint, Excluded, Link, Matches, Protocol, Sdg, Service,
+    ServiceId, Unmatched, UnmatchedReason,
 };
 use models::ConfigurationData;
 use models::configuration::ServiceDescription;
@@ -83,6 +83,7 @@ impl Plan {
         mut self,
         links: Vec<(ServiceId, Link)>,
         unmatched: Vec<Unmatched>,
+        excluded: Vec<Excluded>,
     ) -> (Matches, Metrics) {
         self.links.extend(links);
         self.unmatched.extend(unmatched);
@@ -99,7 +100,7 @@ impl Plan {
         let matches = Matches {
             sdg,
             unmatched: self.unmatched,
-            excluded: vec![],
+            excluded,
         };
         (matches, metrics)
     }

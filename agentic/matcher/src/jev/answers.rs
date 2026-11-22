@@ -9,13 +9,14 @@ use clients::typesafe::question::MAX_CHOICE_OPTIONS;
 use models::configuration::ServiceDescription;
 use strsim::normalized_levenshtein;
 
-use super::Pick;
+use super::{Pick, Target};
 use crate::http::{method, path};
 
 /// Endpoint answers kept; one choice slot stays for `none`.
 const MAX_ENDPOINTS: usize = MAX_CHOICE_OPTIONS - 1;
 
-/// Configured services with a receiver of `call`'s protocol, own included.
+/// Configured services with a receiver of `call`'s protocol, own included,
+/// then the two answers for calls that reach no configured service.
 pub fn services(
     call: &ConnectionPoint,
     config: &[ServiceDescription],
@@ -29,14 +30,17 @@ pub fn services(
             *counts.entry(name).or_default() += 1;
         }
     }
-    let options = counts
+    let mut options: Vec<AnswerOption<Pick>> = counts
         .into_iter()
         .map(|(name, n)| AnswerOption {
             label: name.to_string(),
             description: format!("{n} {:?} receivers", call.protocol),
-            value: Some(name.to_string()),
+            value: Some(Target::Point(name.to_string())),
         })
         .collect();
+    if !options.is_empty() {
+        options.extend(not_a_service());
+    }
     Answers {
         options,
         none: None,
@@ -72,11 +76,29 @@ pub fn endpoints(
                 address_key(&r.address),
                 r.element.function_name()
             ),
-            value: Some(r.id.0.clone()),
+            value: Some(Target::Point(r.id.0.clone())),
         })
         .collect();
     Answers {
         options,
         none: None,
     }
+}
+
+/// The fixed answers for calls that reach no configured service.
+fn not_a_service() -> [AnswerOption<Pick>; 2] {
+    [
+        AnswerOption {
+            label: "external".into(),
+            description: "A network call to a system that is not a configured service, \
+                          e.g. Vault, a Docker registry, an arbitrary URL."
+                .into(),
+            value: Some(Target::External),
+        },
+        AnswerOption {
+            label: "in-process".into(),
+            description: "No network call: a database layer, cache, dict or SDK object.".into(),
+            value: Some(Target::InProcess),
+        },
+    ]
 }

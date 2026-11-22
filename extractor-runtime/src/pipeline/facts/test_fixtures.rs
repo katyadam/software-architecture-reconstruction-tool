@@ -264,6 +264,7 @@ pub fn world() -> World {
                 "unresolved: str".to_string(),
                 "settings.mds_url".to_string(),
             ],
+            call: None,
         },
     };
     world.link(ORIGIN, "settings", "/proj/caller/settings.py");
