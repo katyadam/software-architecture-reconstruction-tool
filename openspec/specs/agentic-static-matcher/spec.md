@@ -88,6 +88,7 @@ Each HTTP link's kind SHALL be computed by the same classification as the synthe
 The run SHALL write, under the output directory:
 - `match/sdg.json`: the SDG of `Matches`, all protocols.
 - `match/unmatched.json`: the unmatched points, all protocols.
+- `match/excluded.json`: the excluded points, all protocols, sorted by point id. Without `--jev`, it holds an empty list.
 - `match/sdg.legacy.json`: the HTTP dependencies of the SDG in the synthesizer's JSON shape (`services`, `connections` with `source_id`, `target_id`, `kind`, `requests` of `endpoint` and `restcall`, and an empty `message_connections`). The `restcall` SHALL be the original element.
 - `match/metrics.json`: the counts below.
 - `final/sdg.json` and `final/sdg.legacy.json`: copies of the match files, since no later stage ran.
@@ -100,6 +101,10 @@ Services and dependencies SHALL be sorted by name and protocol, so two runs on t
 #### Scenario: Deterministic output
 - **WHEN** the run is repeated on the same input, in any checkout
 - **THEN** every output file is byte-identical
+
+#### Scenario: Static run has no excluded points
+- **WHEN** the run is given no `--jev`
+- **THEN** `match/excluded.json` holds an empty list
 
 ### Requirement: Fan-out metrics
 `metrics.json` SHALL count per protocol, over initiators: total, no candidate, no rules for the protocol, unresolved address, exactly one candidate, several candidates in one service, and candidates in several services. Per protocol it SHALL also count receivers, topology elements, unassigned initiators, unassigned receivers and links. It SHALL count dependencies in total. A protocol with no extracted element SHALL be absent.

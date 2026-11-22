@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use agent_loop::adapters::Answers;
 use agent_loop::{Answer, Log, Model, Outcome, Reply, Request, Session, Step};
 use agentic_models::{
-    ConnectionPoint, Fact, FactId, MatchSource, PointId, ServiceId, UnmatchedReason,
+    ConnectionPoint, ExcludedReason, Fact, FactId, MatchSource, PointId, ServiceId, UnmatchedReason,
 };
 use agentic_tools::ToolCtx;
 use extractor_runtime::pipeline::facts::test_fixtures::{ORIGIN, World, world};
@@ -13,7 +13,7 @@ use extractor_runtime::pipeline::pass3::OperandBindings;
 use models::{Endpoint, HttpMethod, RestCall};
 
 use super::outcome::{self, Resolved, Sessions};
-use super::{JevCtx, JevFactory, Pick, Stage, answers, resolve, task};
+use super::{JevCtx, JevFactory, Pick, Stage, Target, answers, resolve, task};
 use crate::plan::Pending;
 use crate::points::{endpoint, rest_call};
 use crate::services::Services;
@@ -68,9 +68,11 @@ fn mds() -> Vec<ConnectionPoint> {
 fn task_lists_bindings_and_candidates() {
     let eps = mds();
     let p = pending(vec![eps[0].clone()]);
-    let text = task::service_task(&p, Some(&bindings()));
+    let code = "self._client.get(\n        self._mds_url + case_id)";
+    let text = task::service_task(&p, Some(&bindings()), Some(code));
     let expected = format!(
         "call: GET self._mds_url + case_id\n\
+         code: self._client.get( self._mds_url + case_id)\n\
          substituted: {TARGET}\n\
          from: caller, {ORIGIN}, fetch_case\n\
          binding: self._mds_url = settings.mds_url\n\
@@ -84,9 +86,15 @@ fn task_lists_bindings_and_candidates() {
 
 #[test]
 fn task_without_candidate() {
-    let text = task::service_task(&pending(vec![]), None);
+    let text = task::service_task(&pending(vec![]), None, None);
     assert!(text.ends_with("\ncandidate: none"), "{text}");
-    assert!(!text.contains("binding:"));
+    assert!(!text.contains("binding:") && !text.contains("code:"));
+    let long = "x".repeat(400);
+    let text = task::service_task(&pending(vec![]), None, Some(&long));
+    assert!(
+        text.contains(&format!("code: {} ...\n", "x".repeat(300))),
+        "{text}"
+    );
 }
 
 // --- answer sets ---
@@ -101,9 +109,39 @@ fn services_need_a_receiver_of_the_protocol() {
     let eps = mds();
     let receivers: Vec<&ConnectionPoint> = eps.iter().collect();
     let a = answers::services(&call(), &w.config.service_descriptions, &receivers);
-    assert_eq!(labels(&a), vec!["mds"]);
+    assert_eq!(labels(&a), vec!["mds", "external", "not-a-service"]);
     assert_eq!(a.options[0].description, "2 Http receivers");
+    assert_eq!(a.options[1].value, Some(Target::External));
+    assert_eq!(a.options[2].value, Some(Target::NotAService));
     assert_eq!(a.none, None);
+}
+
+#[test]
+fn service_named_like_a_fixed_answer_collides() {
+    // The duplicate label makes the Jev adapter fail the session as a
+    // model error (`reserved_or_duplicate_ids_are_errors` in agent-loop).
+    let mut w = world();
+    let sd = &mut w.config.service_descriptions[1];
+    sd.name = "external".into();
+    let eps = [ep("external", HttpMethod::GET, "/x")];
+    let receivers: Vec<&ConnectionPoint> = eps.iter().collect();
+    let a = answers::services(&call(), &w.config.service_descriptions, &receivers);
+    assert_eq!(labels(&a), vec!["external", "external", "not-a-service"]);
+}
+
+#[test]
+fn service_wording_rules_out_local_calls() {
+    let answer = Stage::Service.wording().answer;
+    for word in [
+        "data-store client",
+        "cache",
+        "SDK",
+        "not-a-service",
+        "own endpoints",
+    ] {
+        assert!(answer.contains(word), "{word} missing: {answer}");
+    }
+    assert!(!Stage::Endpoint.wording().answer.contains("not-a-service"));
 }
 
 #[test]
@@ -112,7 +150,7 @@ fn endpoints_filter_method() {
     let receivers: Vec<&ConnectionPoint> = eps.iter().collect();
     let a = answers::endpoints(&call(), "mds", &receivers);
     assert_eq!(labels(&a), vec!["e1"]);
-    assert_eq!(a.options[0].value, Some(eps[0].id.0.clone()));
+    assert_eq!(a.options[0].value, Some(Target::Point(eps[0].id.0.clone())));
     assert!(
         answers::endpoints(&call(), "auth", &receivers)
             .options
@@ -129,7 +167,7 @@ fn endpoints_capped_to_closest() {
     let receivers: Vec<&ConnectionPoint> = eps.iter().collect();
     let a = answers::endpoints(&call(), "mds", &receivers);
     assert_eq!(a.options.len(), 254);
-    let close = Some(eps[300].id.0.clone());
+    let close = Some(Target::Point(eps[300].id.0.clone()));
     assert!(a.options.iter().any(|o| o.value == close));
 }
 
@@ -154,7 +192,11 @@ fn session(outcome: Outcome<Pick>, facts: usize) -> Session<Pick> {
 
 fn answer(value: Option<&str>, confidence: f64) -> Outcome<Pick> {
     Outcome::Answer(Answer {
-        value: value.map(str::to_string),
+        value: value.map(|v| match v {
+            "external" => Target::External,
+            "not-a-service" => Target::NotAService,
+            id => Target::Point(id.to_string()),
+        }),
         confidence: Some(confidence),
         note: value.is_none().then(|| "below 0.5: mds 0.3".to_string()),
     })
@@ -179,7 +221,28 @@ fn decide(service: Outcome<Pick>, endpoint: Option<Outcome<Pick>>) -> Resolved {
 fn unmatched_reason(r: Resolved) -> (UnmatchedReason, String) {
     match r {
         Resolved::Unmatched(u) => (u.reason, u.note),
-        Resolved::Link(..) => panic!("expected unmatched"),
+        _ => panic!("expected unmatched"),
+    }
+}
+
+#[test]
+fn non_service_picks_are_excluded_with_facts() {
+    for (pick, reason) in [
+        ("not-a-service", ExcludedReason::NotAService),
+        ("external", ExcludedReason::External),
+    ] {
+        let Resolved::Excluded(e) = decide(answer(Some(pick), 0.9), None) else {
+            panic!("expected excluded");
+        };
+        let note = format!(
+            "confidence 0.9; candidates: {}, {}",
+            mds()[0].id.0,
+            mds()[1].id.0
+        );
+        assert_eq!((e.reason, e.note), (reason, note));
+        assert_eq!(e.point.id, call().id);
+        let ids: Vec<_> = e.evidence.iter().map(|f| f.id.0.as_str()).collect();
+        assert_eq!(ids, vec!["f1", "f2"]);
     }
 }
 
@@ -402,15 +465,22 @@ async fn end_to_end_outcomes() {
         (Ok("mds"), Ok("none"), "service"),
         (Ok("none"), Ok("e1"), "NoFit"),
         (Err("jev: 503"), Ok("e1"), "ModelError"),
+        (Ok("external"), Ok("e1"), "External"),
+        (Ok("not-a-service"), Ok("e1"), "NotAService"),
     ];
     let mut total = crate::JevMetrics::default();
     for (i, (service, endpoint, want)) in cases.into_iter().enumerate() {
         let log = Log::open(&temp_log(&format!("e2e-{i}"))).expect("log");
         let out = run(&w, &Script::new(service, endpoint), &log).await;
-        let got = match (out.links.first(), out.unmatched.first()) {
-            (Some((_, l)), _) if l.receiver.is_some() => "receiver".to_string(),
-            (Some(_), _) => "service".to_string(),
-            (_, Some(u)) => format!("{:?}", u.reason),
+        let got = match (
+            out.links.first(),
+            out.unmatched.first(),
+            out.excluded.first(),
+        ) {
+            (Some((_, l)), ..) if l.receiver.is_some() => "receiver".to_string(),
+            (Some(_), ..) => "service".to_string(),
+            (_, Some(u), _) => format!("{:?}", u.reason),
+            (.., Some(e)) => format!("{:?}", e.reason),
             _ => panic!("no outcome"),
         };
         assert_eq!(got, want);
@@ -428,13 +498,22 @@ async fn end_to_end_outcomes() {
         for (k, v) in m.unmatched {
             *total.unmatched.entry(k).or_default() += v;
         }
+        for (k, v) in m.excluded {
+            *total.excluded.entry(k).or_default() += v;
+        }
     }
-    assert_eq!(total.initiators, 4);
-    // Two sessions each for the receiver and service cases, one for the rest.
-    assert_eq!(total.sessions, 6);
+    assert_eq!(total.initiators, 6);
+    // Two sessions each for the receiver and service cases, one for the rest:
+    // no endpoint session after `external` or `not-a-service`.
+    assert_eq!(total.sessions, 8);
     assert_eq!((total.receiver_links, total.service_links), (1, 1));
     let reasons: Vec<_> = total.unmatched.into_iter().collect();
     assert_eq!(reasons, vec![("ModelError".into(), 1), ("NoFit".into(), 1)]);
+    let excluded: Vec<_> = total.excluded.into_iter().collect();
+    assert_eq!(
+        excluded,
+        vec![("External".into(), 1), ("NotAService".into(), 1)]
+    );
 }
 
 #[tokio::test]

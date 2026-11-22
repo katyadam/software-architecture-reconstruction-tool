@@ -229,6 +229,7 @@ pub(super) fn subject(
         receiver_type: state.receiver.as_ref().and_then(|r| r.datatype.clone()),
         symbols: symbols(bindings.values().map(String::as_str)),
         mentions,
+        call: None,
     }
 }
 

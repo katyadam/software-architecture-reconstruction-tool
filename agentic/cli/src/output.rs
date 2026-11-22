@@ -19,6 +19,7 @@ pub fn write_all(out: &Path, matches: &Matches, metrics: &Metrics) -> Result<()>
         write(dir, "sdg.legacy.json", &legacy)?;
     }
     write(&stage, "unmatched.json", &matches.unmatched)?;
+    write(&stage, "excluded.json", &matches.excluded)?;
     write(&stage, "metrics.json", metrics)
 }
 

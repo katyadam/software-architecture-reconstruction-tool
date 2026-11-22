@@ -2,11 +2,11 @@
 
 use agent_loop::{Answer, Outcome, Session};
 use agentic_models::{
-    ConnectionPoint, Fact, FactId, InteractionKind, Link, MatchSource, ServiceId, Unmatched,
-    UnmatchedReason,
+    ConnectionPoint, Excluded, ExcludedReason, Fact, FactId, InteractionKind, Link, MatchSource,
+    ServiceId, Unmatched, UnmatchedReason,
 };
 
-use super::Pick;
+use super::{Pick, Target};
 use crate::http::request_kind;
 use crate::plan::Pending;
 use crate::services::Services;
@@ -15,6 +15,7 @@ use crate::services::Services;
 pub enum Resolved {
     Link(ServiceId, Box<Link>),
     Unmatched(Box<Unmatched>),
+    Excluded(Box<Excluded>),
 }
 
 /// The point's sessions and what they can pick from.
@@ -31,10 +32,18 @@ pub fn resolve(p: &Pending, s: &Sessions, services: &Services) -> Resolved {
     let unmatched = |reason, note| self::unmatched(p, reason, note, evidence.clone());
     let (service, service_conf) = match &s.service.outcome {
         Outcome::Answer(Answer {
-            value: Some(name),
+            value: Some(target),
             confidence,
             ..
-        }) => (name, *confidence),
+        }) => match target {
+            Target::Point(name) => (name, *confidence),
+            Target::External => {
+                return excluded(p, ExcludedReason::External, *confidence, evidence);
+            }
+            Target::NotAService => {
+                return excluded(p, ExcludedReason::NotAService, *confidence, evidence);
+            }
+        },
         Outcome::Answer(a) => {
             return unmatched(UnmatchedReason::NoFit, a.note.clone().unwrap_or_default());
         }
@@ -46,7 +55,7 @@ pub fn resolve(p: &Pending, s: &Sessions, services: &Services) -> Resolved {
     let (receiver, confidence) = match s.endpoint.map(|e| &e.outcome) {
         Some(Outcome::ModelError(e)) => return unmatched(UnmatchedReason::ModelError, e.clone()),
         Some(Outcome::Answer(Answer {
-            value: Some(id),
+            value: Some(Target::Point(id)),
             confidence,
             ..
         })) => match s.receivers.iter().find(|r| r.id.0 == *id) {
@@ -82,6 +91,27 @@ pub fn unmatched(
         reason,
         tried: p.candidates.iter().map(|r| r.id.clone()).collect(),
         banned: vec![],
+        note,
+        evidence,
+    }))
+}
+
+/// `p` left out of the SDG; the note keeps the answer's confidence and the
+/// static candidates, so an audit sees receivers the static rules found.
+fn excluded(
+    p: &Pending,
+    reason: ExcludedReason,
+    confidence: Option<f64>,
+    evidence: Vec<Fact>,
+) -> Resolved {
+    let mut note = confidence.map_or(String::new(), |c| format!("confidence {c}"));
+    if !p.candidates.is_empty() {
+        let ids: Vec<&str> = p.candidates.iter().map(|r| r.id.0.as_str()).collect();
+        note.push_str(&format!("; candidates: {}", ids.join(", ")));
+    }
+    Resolved::Excluded(Box::new(Excluded {
+        point: p.call.clone(),
+        reason,
         note,
         evidence,
     }))

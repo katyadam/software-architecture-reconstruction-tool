@@ -21,6 +21,8 @@ pub struct Subject {
     pub symbols: BTreeSet<String>,
     /// Text an import codeword may appear in; mentioned imports are offered first.
     pub mentions: Vec<String>,
+    /// Source text of the call expression; `None` when the call site is not found.
+    pub call: Option<String>,
 }
 
 impl Subject {
@@ -56,6 +58,7 @@ struct Site {
     class: Option<String>,
     receiver_type: Option<String>,
     snippet: Option<String>,
+    call: Option<String>,
 }
 
 impl Site {
@@ -82,6 +85,7 @@ impl Site {
             snippet: parsed
                 .and_then(|c| c.function_span.as_ref())
                 .and_then(|span| read_span(file, span)),
+            call: parsed.and_then(|c| read_span(file, &c.call_span)),
         }
     }
 
@@ -94,6 +98,7 @@ impl Site {
             receiver_type: self.receiver_type,
             symbols,
             mentions,
+            call: self.call,
         }
     }
 }

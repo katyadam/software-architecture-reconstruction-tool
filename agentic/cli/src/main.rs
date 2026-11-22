@@ -75,7 +75,7 @@ async fn main() -> Result<()> {
         Some(c) => jev::run(c, &plan, &extracted, &config, &external, &args.output_dir).await?,
         None => JevResult::default(),
     };
-    let (matches, mut metrics) = plan.finish(r.links, r.unmatched);
+    let (matches, mut metrics) = plan.finish(r.links, r.unmatched, r.excluded);
     metrics.jev = client.is_some().then_some(r.metrics);
     output::write_all(&args.output_dir, &matches, &metrics)?;
     println!("{}", serde_json::to_string(&metrics)?);

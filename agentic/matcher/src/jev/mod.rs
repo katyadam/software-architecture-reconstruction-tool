@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::io;
 
 use agent_loop::{Log, Outcome, Session, SessionKey, run_session};
-use agentic_models::{Link, PointId, ServiceId, Unmatched, UnmatchedReason};
+use agentic_models::{Excluded, Link, PointId, ServiceId, Unmatched, UnmatchedReason};
 use agentic_tools::{PointTools, ToolCtx};
 use extractor_runtime::pipeline::pass3::OperandBindings;
 
@@ -19,7 +19,7 @@ use crate::plan::Pending;
 use crate::services::Services;
 use outcome::{Resolved, Sessions};
 
-pub use wording::{JevFactory, Pick, Stage};
+pub use wording::{JevFactory, Pick, Stage, Target};
 
 /// Tool calls per session.
 const BUDGET: usize = 6;
@@ -33,6 +33,7 @@ pub struct JevCtx<'a> {
 pub struct JevResult {
     pub links: Vec<(ServiceId, Link)>,
     pub unmatched: Vec<Unmatched>,
+    pub excluded: Vec<Excluded>,
     pub metrics: JevMetrics,
 }
 
@@ -65,6 +66,7 @@ pub async fn resolve<F: JevFactory>(
         match resolved {
             Resolved::Link(target, link) => out.links.push((target, *link)),
             Resolved::Unmatched(u) => out.unmatched.push(*u),
+            Resolved::Excluded(e) => out.excluded.push(*e),
         }
     }
     Ok(out)
@@ -80,7 +82,7 @@ async fn one<F: JevFactory>(
 ) -> io::Result<Resolved> {
     let p = run.p;
     let receivers = ctx.tools.receivers;
-    let task = task::service_task(p, ctx.bindings.get(&p.call.id));
+    let task = task::service_task(p, ctx.bindings.get(&p.call.id), run.tools.call());
     let answers = answers::services(&p.call, &ctx.tools.config.service_descriptions, receivers);
     if answers.options.is_empty() {
         let note = format!("no service has {:?} receivers", p.call.protocol);
@@ -89,7 +91,7 @@ async fn one<F: JevFactory>(
     let service = run.session(Stage::Service, &task, answers, metrics).await?;
     let mut endpoint = None;
     if let Outcome::Answer(a) = &service.outcome
-        && let Some(name) = &a.value
+        && let Some(Target::Point(name)) = &a.value
     {
         let answers = answers::endpoints(&p.call, name, receivers);
         if !answers.options.is_empty() {
@@ -155,6 +157,9 @@ impl JevMetrics {
             Resolved::Link(..) => self.service_links += 1,
             Resolved::Unmatched(u) => {
                 *self.unmatched.entry(format!("{:?}", u.reason)).or_default() += 1
+            }
+            Resolved::Excluded(e) => {
+                *self.excluded.entry(format!("{:?}", e.reason)).or_default() += 1
             }
         }
     }

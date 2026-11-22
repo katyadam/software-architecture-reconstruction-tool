@@ -9,13 +9,14 @@ use clients::typesafe::question::MAX_CHOICE_OPTIONS;
 use models::configuration::ServiceDescription;
 use strsim::normalized_levenshtein;
 
-use super::Pick;
+use super::{Pick, Target};
 use crate::http::{method, path};
 
 /// Endpoint answers kept; one choice slot stays for `none`.
 const MAX_ENDPOINTS: usize = MAX_CHOICE_OPTIONS - 1;
 
-/// Configured services with a receiver of `call`'s protocol, own included.
+/// Configured services with a receiver of `call`'s protocol, own included,
+/// then the two answers for calls that reach no configured service.
 pub fn services(
     call: &ConnectionPoint,
     config: &[ServiceDescription],
@@ -29,14 +30,17 @@ pub fn services(
             *counts.entry(name).or_default() += 1;
         }
     }
-    let options = counts
+    let mut options: Vec<AnswerOption<Pick>> = counts
         .into_iter()
         .map(|(name, n)| AnswerOption {
             label: name.to_string(),
             description: format!("{n} {:?} receivers", call.protocol),
-            value: Some(name.to_string()),
+            value: Some(Target::Point(name.to_string())),
         })
         .collect();
+    if !options.is_empty() {
+        options.extend(not_a_service());
+    }
     Answers {
         options,
         none: None,
@@ -72,11 +76,31 @@ pub fn endpoints(
                 address_key(&r.address),
                 r.element.function_name()
             ),
-            value: Some(r.id.0.clone()),
+            value: Some(Target::Point(r.id.0.clone())),
         })
         .collect();
     Answers {
         options,
         none: None,
     }
+}
+
+/// The fixed answers for calls that reach no configured service.
+fn not_a_service() -> [AnswerOption<Pick>; 2] {
+    [
+        AnswerOption {
+            label: "external".into(),
+            description: "Calls a system outside the configured services, \
+                          e.g. a third-party API, a secret store or a container registry."
+                .into(),
+            value: Some(Target::External),
+        },
+        AnswerOption {
+            label: "not-a-service".into(),
+            description: "Does not call a service's API: an in-memory map or cache, \
+                          a database or other data-store client, or a library/SDK object."
+                .into(),
+            value: Some(Target::NotAService),
+        },
+    ]
 }

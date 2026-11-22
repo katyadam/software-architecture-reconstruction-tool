@@ -30,6 +30,8 @@ pub struct JevMetrics {
     pub service_links: usize,
     /// By reason name.
     pub unmatched: BTreeMap<String, usize>,
+    /// By reason name.
+    pub excluded: BTreeMap<String, usize>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]

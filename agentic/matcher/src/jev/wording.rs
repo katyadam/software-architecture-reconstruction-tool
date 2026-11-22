@@ -4,8 +4,18 @@ use agent_loop::Model;
 use agent_loop::adapters::{Answers, JevWording};
 use clients::typesafe::question::NoulCriteria;
 
-/// A service name or a receiver point id; `None` when nothing fits.
-pub type Pick = Option<String>;
+/// What a session picked; `None` when nothing fits.
+pub type Pick = Option<Target>;
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Target {
+    /// A service name, or a receiver point id in the endpoint stage.
+    Point(String),
+    /// A call to a system outside the configured services.
+    External,
+    /// No call to a service's API: a map or cache, a data-store client or a library.
+    NotAService,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stage {
@@ -25,7 +35,10 @@ impl Stage {
     pub fn wording(self) -> JevWording {
         let (answer, enough) = match self {
             Self::Service => (
-                "Which service does this call reach?",
+                "Which service does this call reach? A call on an in-memory map or cache, \
+                 a database or other data-store client, or a library/SDK object is not a \
+                 service call: answer not-a-service. \
+                 Pick the caller's own service only for an HTTP call to its own endpoints.",
                 "Do the facts show which service this call reaches?",
             ),
             Self::Endpoint => (

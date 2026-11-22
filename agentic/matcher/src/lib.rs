@@ -24,7 +24,7 @@ pub fn match_static(
     config: &ConfigurationData,
     constants: &[(String, String)],
 ) -> Result<(Matches, Metrics), regex::Error> {
-    Ok(plan(ir, config, constants, false)?.finish(vec![], vec![]))
+    Ok(plan(ir, config, constants, false)?.finish(vec![], vec![], vec![]))
 }
 
 #[cfg(test)]
@@ -146,7 +146,7 @@ mod tests {
             evidence: vec![],
         };
         let jev = vec![(agentic_models::ServiceId("c".into()), jev_link)];
-        let (m, metrics) = p.finish(jev, vec![]);
+        let (m, metrics) = p.finish(jev, vec![], vec![]);
         let links: Vec<_> = m.sdg.dependencies.iter().flat_map(|d| &d.links).collect();
         assert_eq!(links.len(), 2);
         assert_eq!(links[0].evidence[0].args, "template");
