@@ -275,6 +275,21 @@ fn parse_if(
     source: &str,
     scope_vars: &mut HashSet<String>,
 ) -> Result<Stmt, ParseError> {
+    // Every elif_clause and the else_clause are sibling `alternative` children.
+    let alternatives: Vec<Node> = node
+        .children_by_field_name("alternative", &mut node.walk())
+        .collect();
+    parse_conditional(node, &alternatives, source, scope_vars)
+}
+
+/// `node` has the condition and consequence (if_statement or elif_clause);
+/// `rest` holds the alternatives after it, nested as the else branch.
+fn parse_conditional(
+    node: Node,
+    rest: &[Node],
+    source: &str,
+    scope_vars: &mut HashSet<String>,
+) -> Result<Stmt, ParseError> {
     let condition_node = node
         .child_by_field_name("condition")
         .ok_or(ParseError::FieldNotFound("if condition".to_string()))?;
@@ -283,21 +298,28 @@ fn parse_if(
     let consequence_node = node
         .child_by_field_name("consequence")
         .ok_or(ParseError::FieldNotFound("if consequence".to_string()))?;
+    // Like `parse_try`: the evaluator runs each branch in its own scope, so a
+    // variable first bound in the then branch is a Declaration in the else branch too.
+    let mut else_scope = scope_vars.clone();
     let then_branch = parse_block(consequence_node, source, scope_vars)?;
 
-    let mut else_branch = None;
-    if let Some(alt_node) = node.child_by_field_name("alternative") {
-        if alt_node.kind() == "if_statement" || alt_node.kind() == "elif_clause" {
-            // elif_clause has the same condition/consequence fields as if_statement
-            else_branch = Some(vec![parse_if(alt_node, source, scope_vars)?]);
-        } else {
-            // else_clause: actual statements are in its `body` field, not on the node itself
-            let body_node = alt_node
+    let else_branch = match rest.split_first() {
+        None => None,
+        Some((alt, later)) if alt.kind() == "elif_clause" => Some(vec![parse_conditional(
+            *alt,
+            later,
+            source,
+            &mut else_scope,
+        )?]),
+        // else_clause: actual statements are in its `body` field, not on the node itself
+        Some((alt, _)) => {
+            let body_node = alt
                 .child_by_field_name("body")
                 .ok_or(ParseError::FieldNotFound("else body".to_string()))?;
-            else_branch = Some(parse_block(body_node, source, scope_vars)?);
+            Some(parse_block(body_node, source, &mut else_scope)?)
         }
-    }
+    };
+    scope_vars.extend(else_scope);
 
     Ok(Stmt::If {
         condition,

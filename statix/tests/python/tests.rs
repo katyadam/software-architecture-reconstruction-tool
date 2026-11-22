@@ -972,3 +972,41 @@ def unrelated() -> str:
         "captured scope for inner should contain `secret`"
     );
 }
+
+#[test]
+fn python_variable_first_bound_in_every_branch_joins() {
+    // Bound only inside the branches; elif and else are sibling alternatives.
+    let code = r#"
+class MpsClient:
+    async def app_info(self) -> dict:
+        if settings.is_compute_provider:
+            route = "/v1/compute/apps"
+        elif settings.is_customer:
+            route = "/v1/customer/apps"
+        else:
+            route = "/v1/public/apps"
+        return await self.client.get(route)
+"#;
+    let tree = get_python_tree(code);
+    let map = parse_python(&tree, code);
+    let result = symbolic_evaluation(
+        &map,
+        "dict app_info(Any)",
+        Box::new(PythonCallableMatcher::new()),
+    )
+    .expect("a variable bound only inside if/elif/else should not fail evaluation");
+
+    let lit = |s: &str| Expr::Literal(s.to_string());
+    let expected = Expr::Joined {
+        vals: vec![
+            lit("/v1/compute/apps"),
+            Expr::Joined {
+                vals: vec![lit("/v1/customer/apps"), lit("/v1/public/apps")],
+            },
+        ],
+    };
+    assert_eq!(
+        result.final_env.get("route").expect("route in env").1,
+        expected
+    );
+}
