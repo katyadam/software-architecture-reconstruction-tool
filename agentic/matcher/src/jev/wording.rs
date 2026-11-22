@@ -11,10 +11,10 @@ pub type Pick = Option<Target>;
 pub enum Target {
     /// A service name, or a receiver point id in the endpoint stage.
     Point(String),
-    /// A network call to a system that is not a configured service.
+    /// A call to a system outside the configured services.
     External,
-    /// No network call: a database layer, cache, dict or SDK object.
-    InProcess,
+    /// No call to a service's API: a map or cache, a data-store client or a library.
+    NotAService,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,8 +35,9 @@ impl Stage {
     pub fn wording(self) -> JevWording {
         let (answer, enough) = match self {
             Self::Service => (
-                "Which service does this call reach? A call through a database layer, \
-                 cache, dict or SDK object is not a service call: answer in-process. \
+                "Which service does this call reach? A call on an in-memory map or cache, \
+                 a database or other data-store client, or a library/SDK object is not a \
+                 service call: answer not-a-service. \
                  Pick the caller's own service only for an HTTP call to its own endpoints.",
                 "Do the facts show which service this call reaches?",
             ),

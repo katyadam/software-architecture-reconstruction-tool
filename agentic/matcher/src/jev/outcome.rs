@@ -40,8 +40,8 @@ pub fn resolve(p: &Pending, s: &Sessions, services: &Services) -> Resolved {
             Target::External => {
                 return excluded(p, ExcludedReason::External, *confidence, evidence);
             }
-            Target::InProcess => {
-                return excluded(p, ExcludedReason::InProcess, *confidence, evidence);
+            Target::NotAService => {
+                return excluded(p, ExcludedReason::NotAService, *confidence, evidence);
             }
         },
         Outcome::Answer(a) => {

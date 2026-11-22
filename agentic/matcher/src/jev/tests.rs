@@ -109,10 +109,10 @@ fn services_need_a_receiver_of_the_protocol() {
     let eps = mds();
     let receivers: Vec<&ConnectionPoint> = eps.iter().collect();
     let a = answers::services(&call(), &w.config.service_descriptions, &receivers);
-    assert_eq!(labels(&a), vec!["mds", "external", "in-process"]);
+    assert_eq!(labels(&a), vec!["mds", "external", "not-a-service"]);
     assert_eq!(a.options[0].description, "2 Http receivers");
     assert_eq!(a.options[1].value, Some(Target::External));
-    assert_eq!(a.options[2].value, Some(Target::InProcess));
+    assert_eq!(a.options[2].value, Some(Target::NotAService));
     assert_eq!(a.none, None);
 }
 
@@ -126,22 +126,22 @@ fn service_named_like_a_fixed_answer_collides() {
     let eps = [ep("external", HttpMethod::GET, "/x")];
     let receivers: Vec<&ConnectionPoint> = eps.iter().collect();
     let a = answers::services(&call(), &w.config.service_descriptions, &receivers);
-    assert_eq!(labels(&a), vec!["external", "external", "in-process"]);
+    assert_eq!(labels(&a), vec!["external", "external", "not-a-service"]);
 }
 
 #[test]
 fn service_wording_rules_out_local_calls() {
     let answer = Stage::Service.wording().answer;
     for word in [
-        "database layer",
+        "data-store client",
         "cache",
         "SDK",
-        "in-process",
+        "not-a-service",
         "own endpoints",
     ] {
         assert!(answer.contains(word), "{word} missing: {answer}");
     }
-    assert!(!Stage::Endpoint.wording().answer.contains("in-process"));
+    assert!(!Stage::Endpoint.wording().answer.contains("not-a-service"));
 }
 
 #[test]
@@ -194,7 +194,7 @@ fn answer(value: Option<&str>, confidence: f64) -> Outcome<Pick> {
     Outcome::Answer(Answer {
         value: value.map(|v| match v {
             "external" => Target::External,
-            "in-process" => Target::InProcess,
+            "not-a-service" => Target::NotAService,
             id => Target::Point(id.to_string()),
         }),
         confidence: Some(confidence),
@@ -228,7 +228,7 @@ fn unmatched_reason(r: Resolved) -> (UnmatchedReason, String) {
 #[test]
 fn non_service_picks_are_excluded_with_facts() {
     for (pick, reason) in [
-        ("in-process", ExcludedReason::InProcess),
+        ("not-a-service", ExcludedReason::NotAService),
         ("external", ExcludedReason::External),
     ] {
         let Resolved::Excluded(e) = decide(answer(Some(pick), 0.9), None) else {
@@ -466,7 +466,7 @@ async fn end_to_end_outcomes() {
         (Ok("none"), Ok("e1"), "NoFit"),
         (Err("jev: 503"), Ok("e1"), "ModelError"),
         (Ok("external"), Ok("e1"), "External"),
-        (Ok("in-process"), Ok("e1"), "InProcess"),
+        (Ok("not-a-service"), Ok("e1"), "NotAService"),
     ];
     let mut total = crate::JevMetrics::default();
     for (i, (service, endpoint, want)) in cases.into_iter().enumerate() {
@@ -504,7 +504,7 @@ async fn end_to_end_outcomes() {
     }
     assert_eq!(total.initiators, 6);
     // Two sessions each for the receiver and service cases, one for the rest:
-    // no endpoint session after `external` or `in-process`.
+    // no endpoint session after `external` or `not-a-service`.
     assert_eq!(total.sessions, 8);
     assert_eq!((total.receiver_links, total.service_links), (1, 1));
     let reasons: Vec<_> = total.unmatched.into_iter().collect();
@@ -512,7 +512,7 @@ async fn end_to_end_outcomes() {
     let excluded: Vec<_> = total.excluded.into_iter().collect();
     assert_eq!(
         excluded,
-        vec![("External".into(), 1), ("InProcess".into(), 1)]
+        vec![("External".into(), 1), ("NotAService".into(), 1)]
     );
 }
 

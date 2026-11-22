@@ -90,15 +90,17 @@ fn not_a_service() -> [AnswerOption<Pick>; 2] {
     [
         AnswerOption {
             label: "external".into(),
-            description: "A network call to a system that is not a configured service, \
-                          e.g. Vault, a Docker registry, an arbitrary URL."
+            description: "Calls a system outside the configured services, \
+                          e.g. a third-party API, a secret store or a container registry."
                 .into(),
             value: Some(Target::External),
         },
         AnswerOption {
-            label: "in-process".into(),
-            description: "No network call: a database layer, cache, dict or SDK object.".into(),
-            value: Some(Target::InProcess),
+            label: "not-a-service".into(),
+            description: "Does not call a service's API: an in-memory map or cache, \
+                          a database or other data-store client, or a library/SDK object."
+                .into(),
+            value: Some(Target::NotAService),
         },
     ]
 }

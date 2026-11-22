@@ -135,8 +135,8 @@ pub struct Excluded {
 pub enum ExcludedReason {
     /// Talks to a system outside the analysed project, e.g. a third-party API.
     External,
-    /// No network call at all: a database layer, cache or SDK call taken for a REST call.
-    InProcess,
+    /// No call to a service's API: a map, cache, data-store or library call taken for a REST call.
+    NotAService,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -492,7 +492,7 @@ mod tests {
         let matches = Matches {
             excluded: vec![Excluded {
                 point: point.clone(),
-                reason: ExcludedReason::InProcess,
+                reason: ExcludedReason::NotAService,
                 note: "confidence 0.9".into(),
                 evidence: vec![],
             }],
