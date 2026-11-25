@@ -52,7 +52,7 @@ fn get_resolved_parts(
         let lookup_key = part.trim_end_matches(".value");
         let expr = analysis_result.final_env.get(lookup_key);
 
-        if part.starts_with('"') && part.ends_with('"') {
+        if part.len() >= 2 && part.starts_with('"') && part.ends_with('"') {
             all_parts.push(vec![part[1..part.len() - 1].to_string()]);
             continue;
         }
@@ -173,4 +173,29 @@ fn resolve_fstring(
         resolved_parts.push(vec![current_literal]);
     }
     resolved_parts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_result() -> AnalysisResult {
+        AnalysisResult {
+            return_value: Expr::Literal(String::new()),
+            final_env: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn lone_quote_part_does_not_panic() {
+        // `"a+" + x` splits on `+` into `"a`, `"` and `x`; the lone `"` used to panic.
+        let uris = generate_target_uris("\"a+\" + x", &empty_result(), &HashMap::new());
+        assert_eq!(uris, vec!["\"a\"x".to_string()]);
+    }
+
+    #[test]
+    fn empty_literal_part_resolves_to_empty_string() {
+        let uris = generate_target_uris("\"\" + \"/api\"", &empty_result(), &HashMap::new());
+        assert_eq!(uris, vec!["/api".to_string()]);
+    }
 }
