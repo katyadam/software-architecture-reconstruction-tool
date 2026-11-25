@@ -33,6 +33,17 @@ pub mod message_edges;
 mod queries;
 pub mod restcalls;
 
+/// Rejects trees the recursive Java walks would overflow the stack on.
+pub(crate) fn reject_deep_tree(tree: &tree_sitter::Tree) -> Result<(), ExtractionError> {
+    if statix::util::tree_depth_exceeds(tree, statix::util::MAX_TREE_DEPTH) {
+        return Err(ExtractionError::Process(format!(
+            "syntax tree deeper than {} levels",
+            statix::util::MAX_TREE_DEPTH
+        )));
+    }
+    Ok(())
+}
+
 pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, ExtractionError> {
     use statix::java::matcher::java_convert_full_header_to_mangled_name;
 
@@ -44,6 +55,7 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
     let tree = parser
         .parse(code, None)
         .ok_or_else(|| ExtractionError::Process("Error parsing code".into()))?;
+    reject_deep_tree(&tree)?;
 
     let mut assignments = None;
     let mut imports = None;

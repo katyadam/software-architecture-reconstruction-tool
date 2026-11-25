@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 pub mod configured_java_impact;
 pub mod go_impact_output;
 pub mod java_impact_inputs;
@@ -91,10 +91,14 @@ pub fn get_java_callables_in_roots_with_progress(
                 continue;
             }
         };
-        callables.extend(
-            java_extractor::extract_syntactic_callables(&source, &path.to_string_lossy())
-                .with_context(|| format!("Unable to extract Java callables from {path:?}"))?,
-        );
+        match java_extractor::extract_syntactic_callables(&source, &path.to_string_lossy()) {
+            Ok(found) => callables.extend(found),
+            Err(error) => eprintln!(
+                "⚠️  Skipping file {:?}: {}",
+                path.file_name().unwrap_or_default(),
+                error
+            ),
+        }
     }
     Ok(callables)
 }
@@ -180,10 +184,14 @@ fn collect_syntactic_records(
                 path.file_name().unwrap_or_default()
             );
         }
-        if let Some(record) = dispatch_syntactic(&code, path.to_str().unwrap_or_default())
-            .with_context(|| format!("Error dispatching file: {:?}", path))?
-        {
-            file_records.push(record);
+        match dispatch_syntactic(&code, path.to_str().unwrap_or_default()) {
+            Ok(Some(record)) => file_records.push(record),
+            Ok(None) => {}
+            Err(e) => eprintln!(
+                "⚠️  Skipping file {:?}: {}",
+                path.file_name().unwrap_or_default(),
+                e
+            ),
         }
     }
 

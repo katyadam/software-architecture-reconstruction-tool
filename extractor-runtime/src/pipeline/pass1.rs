@@ -1,5 +1,9 @@
 use models::{api::ExtractionError, ir::syntax::FileRecord};
 
+/// Larger Java, Python and Go files are skipped: real source files are far smaller, and the
+/// extractors hold whole files and their syntax trees in memory.
+pub const MAX_SOURCE_BYTES: usize = 4 * 1024 * 1024;
+
 /// Counterpart to [`dispatch`]: extracts a single file into a [`FileRecord`]
 /// (Pass 1 only — no cross-file resolution).
 pub fn dispatch_syntactic(
@@ -8,6 +12,13 @@ pub fn dispatch_syntactic(
 ) -> Result<Option<FileRecord>, ExtractionError> {
     let path = std::path::Path::new(file_path);
     let ext = path.extension().and_then(|e| e.to_str());
+    if matches!(ext, Some("java" | "py" | "go")) && text.len() > MAX_SOURCE_BYTES {
+        log::warn!(
+            "Skipping {file_path}: {} bytes exceeds the {MAX_SOURCE_BYTES}-byte extraction limit",
+            text.len()
+        );
+        return Ok(None);
+    }
     match ext {
         Some("java") => java_extractor::extraction::extract_syntactic(text, file_path).map(Some),
         Some("py") => {
