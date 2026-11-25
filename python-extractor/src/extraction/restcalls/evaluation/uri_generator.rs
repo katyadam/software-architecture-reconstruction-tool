@@ -57,7 +57,7 @@ fn get_resolved_parts(
 
         match expr {
             Some((_, Expr::Literal(s))) => {
-                if s.contains('{') || s.starts_with('f') {
+                if s.contains('{') {
                     all_parts.extend(resolve_fstring(s, analysis_result, enums_map));
                 } else {
                     all_parts.push(vec![s.clone()]);
@@ -106,10 +106,12 @@ fn resolve_fstring(
     let mut resolved_parts = Vec::new();
     let mut current_literal = String::new();
 
-    let content = string_literal
-        .strip_prefix('f')
-        .unwrap_or(string_literal)
-        .trim_matches(|c| c == '"' || c == '\'');
+    // Only a real f-string prefix: resolved values like `frontend/{x}` keep their `f` (#58).
+    let content = match string_literal.strip_prefix('f') {
+        Some(rest) if rest.starts_with(['"', '\'']) => rest,
+        _ => string_literal,
+    }
+    .trim_matches(|c| c == '"' || c == '\'');
 
     let mut chars = content.chars().peekable();
 
@@ -215,6 +217,30 @@ mod tests {
         assert_eq!(uris[0], "a".repeat(20));
         assert_eq!(uris[1], "a".repeat(19) + "b");
         assert_eq!(uris[255], "a".repeat(12) + &"b".repeat(8));
+    }
+
+    #[test]
+    fn leading_f_of_plain_value_is_kept() {
+        let mut env = empty_result();
+        env.final_env.insert(
+            "HOST".to_string(),
+            (None, Expr::Literal("frontend/{x}".to_string())),
+        );
+        let uris = generate_target_uris("HOST + \"/y\"", &env, &HashMap::new());
+        assert_eq!(uris, vec!["frontend/{x}/y"]);
+    }
+
+    #[test]
+    fn fstring_prefix_is_stripped() {
+        let uris = generate_target_uris("f\"frontend/{id}\"", &empty_result(), &HashMap::new());
+        assert_eq!(uris, vec!["frontend/{id}"]);
+    }
+
+    #[test]
+    fn cleaned_target_starting_with_f_is_kept() {
+        // `requests.get(f"files/{id}")` reaches evaluation already unquoted.
+        let uris = generate_target_uris("files/{id}", &empty_result(), &HashMap::new());
+        assert_eq!(uris, vec!["files/{id}"]);
     }
 
     #[test]
