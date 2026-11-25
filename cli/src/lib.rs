@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 pub mod configured_java_impact;
 pub mod go_impact_output;
 pub mod java_impact_inputs;
+pub mod messaging_links;
 use extractor_runtime::call_graph::{CallGraphProvider, resolve_edges, wala::WalaJavaProvider};
 use extractor_runtime::pipeline::pass3::{pass_attr, pass_module};
 use extractor_runtime::pipeline::{build_project_ir, dispatch_syntactic, evaluate};
