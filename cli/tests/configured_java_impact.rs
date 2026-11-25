@@ -391,3 +391,201 @@ fn gradle_excluded_submodule_tests_are_dropped_and_analysis_is_precise() {
         "excluded submodule must not force full run"
     );
 }
+
+#[test]
+fn kafka_producer_change_selects_consumer_service_tests() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("project");
+    fs::create_dir(&root).unwrap();
+    git(&root, &["init", "-q"]);
+    git(&root, &["config", "user.name", "Fixture"]);
+    git(&root, &["config", "user.email", "fixture@example.invalid"]);
+
+    // Gradle multi-module structure.
+    write(
+        &root,
+        "settings.gradle",
+        "include ':order-service'\ninclude ':payment-service'",
+    );
+    write(&root, "build.gradle", "");
+    write(&root, "order-service/build.gradle", "");
+    write(&root, "payment-service/build.gradle", "");
+
+    // Kafka producer in order-service (baseline).
+    write(
+        &root,
+        "order-service/src/main/java/OrderPublisher.java",
+        "import org.springframework.kafka.core.KafkaTemplate;\n\
+         public class OrderPublisher {\n\
+             private final KafkaTemplate<String, String> kafka;\n\
+             public OrderPublisher(KafkaTemplate<String, String> kafka) { this.kafka = kafka; }\n\
+             public void publish(String payload) { kafka.send(\"orders\", payload); }\n\
+         }\n",
+    );
+    // Kafka consumer in payment-service.
+    write(
+        &root,
+        "payment-service/src/main/java/PaymentConsumer.java",
+        "import org.springframework.kafka.annotation.KafkaListener;\n\
+         public class PaymentConsumer {\n\
+             @KafkaListener(topics = \"orders\")\n\
+             public void consume(String payload) {}\n\
+         }\n",
+    );
+    // Test class for payment-service.
+    write(
+        &root,
+        "payment-service/src/test/java/PaymentConsumerTest.java",
+        "import org.junit.Test;\n\
+         public class PaymentConsumerTest {\n\
+             @Test public void processesPayment() {}\n\
+         }\n",
+    );
+
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "baseline"]);
+    let baseline = git(&root, &["rev-parse", "HEAD"]);
+
+    // Candidate: modify publisher — triggers cross-service propagation.
+    write(
+        &root,
+        "order-service/src/main/java/OrderPublisher.java",
+        "import org.springframework.kafka.core.KafkaTemplate;\n\
+         public class OrderPublisher {\n\
+             private final KafkaTemplate<String, String> kafka;\n\
+             public OrderPublisher(KafkaTemplate<String, String> kafka) { this.kafka = kafka; }\n\
+             public void publish(String payload) {\n\
+                 System.out.println(\"publishing: \" + payload);\n\
+                 kafka.send(\"orders\", payload);\n\
+             }\n\
+         }\n",
+    );
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "candidate: change publisher"]);
+    let candidate = git(&root, &["rev-parse", "HEAD"]);
+
+    let order_root = root.join("order-service");
+    let payment_root = root.join("payment-service");
+    fs::create_dir_all(order_root.join("target/test-classes")).unwrap();
+    fs::create_dir_all(payment_root.join("target/test-classes")).unwrap();
+
+    // A placeholder JAR file satisfies the provider validation check even though WALA
+    // is never actually invoked — the payment-service module hits the messaging path before
+    // any call-graph analysis, and order-service has no tests to analyze.
+    let fake_jar = dir.path().join("fake-wala.jar");
+    fs::write(&fake_jar, b"PK").unwrap();
+
+    let manifest_path = dir.path().join("inputs.json");
+    let config_path = dir.path().join("config.json");
+    let result_path = dir.path().join("result.json");
+
+    write(
+        dir.path(),
+        "inputs.json",
+        &json!({
+            "schema_version": 1,
+            "candidate_revision": candidate,
+            "build_context": {
+                "tool": "gradle",
+                "requested_profiles": [],
+                "active_profiles": [],
+                "java_version": "17"
+            },
+            "module_inventory_complete": true,
+            "modules": [
+                {
+                    "root": order_root.to_string_lossy().as_ref(),
+                    "source_roots": [],
+                    "test_source_roots": [],
+                    "application_class_dirs": [],
+                    "test_class_dirs": [order_root.join("target/test-classes").to_string_lossy().as_ref()],
+                    "classpath": [],
+                    "dependencies": [],
+                    "dependency_inventory_complete": true,
+                    "test_inventory_complete": true,
+                    "tests": []
+                },
+                {
+                    "root": payment_root.to_string_lossy().as_ref(),
+                    "source_roots": [],
+                    "test_source_roots": [payment_root.join("src/test/java").to_string_lossy().as_ref()],
+                    "application_class_dirs": [],
+                    "test_class_dirs": [payment_root.join("target/test-classes").to_string_lossy().as_ref()],
+                    "classpath": [],
+                    "dependencies": [],
+                    "dependency_inventory_complete": true,
+                    "test_inventory_complete": true,
+                    "tests": [{
+                        "module_root": payment_root.to_string_lossy().as_ref(),
+                        "class_name": "PaymentConsumerTest",
+                        "method_name": "processesPayment",
+                        "descriptor": "()V",
+                        "callable_signature": "PaymentConsumerTest.processesPayment()V",
+                        "source_path": "src/test/java/PaymentConsumerTest.java"
+                    }]
+                }
+            ]
+        })
+        .to_string(),
+    );
+    write(
+        dir.path(),
+        "config.json",
+        &json!({
+            "service_descriptions": [{
+                "name": "kafka-tia-test",
+                "base_dir_path": root.to_string_lossy().as_ref(),
+                "urls": [],
+                "java_analysis": {"artifacts_file": manifest_path}
+            }]
+        })
+        .to_string(),
+    );
+
+    let out = Command::new(env!("CARGO_BIN_EXE_test-impact"))
+        .args(["--project-dir"])
+        .arg(&root)
+        .args(["--baseline-revision", &baseline, "--config-file"])
+        .arg(&config_path)
+        .arg("--wala-adapter-jar")
+        .arg(&fake_jar)
+        .args(["--output"])
+        .arg(&result_path)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let result: Value = serde_json::from_slice(&fs::read(&result_path).unwrap()).unwrap();
+
+    // The PaymentConsumerTest must be selected via messaging propagation.
+    let selected = result["selected_tests"].as_array().unwrap();
+    let payment_test = selected
+        .iter()
+        .find(|t| t["test"]["method_name"] == "processesPayment")
+        .unwrap_or_else(|| {
+            panic!("PaymentConsumerTest.processesPayment must be selected; result: {result}")
+        });
+
+    // The selection reason must be MessagingConsumer.
+    let reasons = payment_test["reasons"].as_array().unwrap();
+    let messaging_reason = reasons
+        .iter()
+        .find(|r| r.get("messaging_consumer").is_some())
+        .unwrap_or_else(|| {
+            panic!("selection reason must be messaging_consumer; reasons: {reasons:?}\nresult: {result}")
+        });
+
+    assert_eq!(
+        messaging_reason["messaging_consumer"]["destination"],
+        "orders",
+        "messaging destination must match Kafka topic"
+    );
+    assert_eq!(
+        messaging_reason["messaging_consumer"]["protocol"],
+        "kafka",
+        "messaging protocol must be kafka"
+    );
+}

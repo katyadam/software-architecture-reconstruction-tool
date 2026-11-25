@@ -2,6 +2,7 @@
 use crate::java_impact_inputs::{
     apply_configured_execution_scope, callgraph_targets_in_roots, module_source_layout,
 };
+use crate::messaging_links::MessagingLink;
 use extractor_runtime::{
     call_graph::{
         JavaSourceLayout, java_adapter::JavaAdapterProvider, resolve_reachability_with_java_layout,
@@ -19,7 +20,7 @@ use models::{
     call_graph::{CallGraphOutcome, CallGraphStatus},
 };
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     time::Instant,
 };
@@ -87,6 +88,7 @@ pub fn analyze_configured_impact(
     inputs: &ConfiguredJavaInputs,
     provider: Option<&dyn ConfiguredJavaProvider>,
     quiet: bool,
+    messaging_links: &[MessagingLink],
 ) -> anyhow::Result<TestImpactResult> {
     let mut result =
         TestImpactResult::new(baseline.into(), candidate.into(), changes, vec![], vec![]);
@@ -195,6 +197,12 @@ pub fn analyze_configured_impact(
             .or_default()
             .push(test);
     }
+    // Collect changed source files once for messaging lookup.
+    let changed_files: BTreeSet<String> = result
+        .changed_elements
+        .iter()
+        .map(|c| c.source_path.clone())
+        .collect();
     let mut prepared: BTreeMap<PathBuf, JavaBytecodeInputs> = BTreeMap::new();
     for (module, tests) in by_module {
         let relevant: Vec<_> = result
@@ -212,7 +220,16 @@ pub fn analyze_configured_impact(
             })
             .cloned()
             .collect();
+        // Messaging propagation: if any changed file is a producer whose consumer
+        // belongs to this module, select all tests in the consumer module.
         if relevant.is_empty() {
+            if let Some(link) = messaging_links.iter().find(|link| {
+                changed_files.contains(&link.producer_file)
+                    && project.join(&link.consumer_file).starts_with(&module)
+            }) {
+                select_messaging_consumer(&mut result, tests, link);
+                continue;
+            }
             result.unselected_tests.extend(tests);
             continue;
         }
@@ -348,5 +365,30 @@ fn select_broad(result: &mut TestImpactResult, tests: Vec<JavaTestCase>, reason:
             reasons: vec![SelectionReason::ModuleFallback {
                 diagnostic: reason.clone(),
             }],
+        }));
+}
+
+fn select_messaging_consumer(
+    result: &mut TestImpactResult,
+    tests: Vec<JavaTestCase>,
+    link: &MessagingLink,
+) {
+    let reason = SelectionReason::MessagingConsumer {
+        destination: link.destination.clone(),
+        protocol: link.protocol_label().into(),
+        producer_file: link.producer_file.clone(),
+    };
+    let diagnostic = format!(
+        "messaging consumer: {} ({}) → {}",
+        link.destination,
+        link.protocol_label(),
+        link.consumer_file
+    );
+    result.diagnostics.push(diagnostic);
+    result
+        .selected_tests
+        .extend(tests.into_iter().map(|test| SelectedTest {
+            test,
+            reasons: vec![reason.clone()],
         }));
 }
