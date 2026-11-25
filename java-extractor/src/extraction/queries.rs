@@ -62,12 +62,6 @@ pub const ENDPOINTS_QUERY: &str = r#"
     name: (_) @callable_name
     parameters: (_) @callable_params
 ) @callable
-
-(class_declaration
-	(modifiers
-		(annotation) @class_annotation
-	)
-)
 "#;
 
 pub const CALLABLES_QUERY: &str = r#"
