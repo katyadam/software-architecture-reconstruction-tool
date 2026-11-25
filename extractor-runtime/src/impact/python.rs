@@ -9,7 +9,10 @@ use super::{
     python_graph::graph_suggestions,
     python_tests::discover_python_tests,
 };
-use crate::call_graph::pyan3::{Pyan3Provider, Pyan3Status};
+use crate::call_graph::{
+    pyan3::{Pyan3Provider, Pyan3Status},
+    pycg::{PyCGProvider, PyCGStatus},
+};
 use models::{
     call_graph::Language,
     python_impact::*,
@@ -33,6 +36,8 @@ pub struct PythonImpactOptions {
     pub baseline_revision: String,
     /// `None` or `Some(Duration::ZERO)` skips the pyan3 call-graph phase entirely.
     pub pyan3_timeout: Option<Duration>,
+    /// When `Some`, PyCG is tried first; falls back to pyan3 on failure or not-installed.
+    pub pycg_timeout: Option<Duration>,
 }
 
 pub fn analyze_python_impact(
@@ -77,57 +82,101 @@ pub fn analyze_python_impact(
     let map_ms = map_start.elapsed().as_millis() as u64;
 
     // --- optional call-graph phase ---
-    let effective_timeout = options.pyan3_timeout.unwrap_or(Duration::ZERO);
-    let (graph_suggested_tests, analysis_stage) = if effective_timeout.is_zero() {
-        (
-            vec![],
-            skipped_stage("pyan3 call-graph phase skipped (timeout=0 or not configured)"),
-        )
-    } else {
-        eprintln!("python_impact_phase=callgraph");
-        let pyan3 = Pyan3Provider::new(effective_timeout);
-        // Scope pyan3 to the service root containing the changed files rather than the
-        // whole project root. Multi-service monorepos cause pyan3 to drop edges when
-        // given too many files; scoping to the relevant service preserves method-level nodes.
-        let pyan3_scope = find_python_scope(&project_root, &changed_elements);
-        let result = pyan3.analyze_project(&pyan3_scope);
-        let duration_ms = result.duration_ms;
-        let (status, mut diag) = match result.status {
-            Pyan3Status::Ok => (PythonStageStatus::Ok, result.diagnostics),
-            Pyan3Status::NotInstalled => {
-                let mut d = result.diagnostics;
-                d.insert(0, "pyan3 not installed; graph phase skipped".into());
-                (PythonStageStatus::Skipped, d)
+    // Try PyCG first when configured; fall back to pyan3 on failure or not-installed.
+    let pycg_success: Option<(Vec<_>, PythonStageReport)> =
+        if let Some(t) = options.pycg_timeout.filter(|t| !t.is_zero()) {
+            eprintln!("python_impact_phase=callgraph_pycg");
+            let scope = find_python_scope(&project_root, &changed_elements);
+            let res = PyCGProvider::new(t).analyze_project(&scope);
+            let duration_ms = res.duration_ms;
+            if matches!(res.status, PyCGStatus::Ok) && !res.edges.is_empty() {
+                let targets: Vec<&str> = changed_elements
+                    .iter()
+                    .filter_map(|e| e.target.as_deref())
+                    .collect();
+                let (suggestions, mut diag) = if !targets.is_empty() {
+                    let s = graph_suggestions(&targets, &discovered_tests, &res.edges);
+                    let mut d = res.diagnostics;
+                    d.push(format!(
+                        "pycg suggested {}/{} tests reachable from changed callables",
+                        s.len(),
+                        discovered_tests.len()
+                    ));
+                    (s, d)
+                } else {
+                    (vec![], res.diagnostics)
+                };
+                diag.push(format!("analysis_duration_ms={duration_ms}"));
+                Some((
+                    suggestions,
+                    PythonStageReport {
+                        status: PythonStageStatus::Ok,
+                        diagnostics: diag,
+                        duration_ms,
+                    },
+                ))
+            } else {
+                None
             }
-            Pyan3Status::Failed => {
-                let mut d = result.diagnostics;
-                d.insert(0, "pyan3 failed; falling back to conservative selection".into());
-                (PythonStageStatus::Failed, d)
-            }
-        };
-        let targets: Vec<&str> = changed_elements
-            .iter()
-            .filter_map(|e| e.target.as_deref())
-            .collect();
-        let suggestions = if matches!(status, PythonStageStatus::Ok) && !targets.is_empty() {
-            let s = graph_suggestions(&targets, &discovered_tests, &result.edges);
-            diag.push(format!(
-                "pyan3 suggested {}/{} tests reachable from changed callables",
-                s.len(),
-                discovered_tests.len()
-            ));
-            s
         } else {
-            vec![]
+            None
         };
-        (
-            suggestions,
-            PythonStageReport {
-                status,
-                diagnostics: diag,
-                duration_ms,
-            },
-        )
+
+    let (graph_suggested_tests, analysis_stage) = if let Some(r) = pycg_success {
+        r
+    } else {
+        let effective_timeout = options.pyan3_timeout.unwrap_or(Duration::ZERO);
+        if effective_timeout.is_zero() {
+            (
+                vec![],
+                skipped_stage("pyan3 call-graph phase skipped (timeout=0 or not configured)"),
+            )
+        } else {
+            eprintln!("python_impact_phase=callgraph");
+            let pyan3 = Pyan3Provider::new(effective_timeout);
+            // Scope pyan3 to the service root containing the changed files rather than the
+            // whole project root. Multi-service monorepos cause pyan3 to drop edges when
+            // given too many files; scoping to the relevant service preserves method-level nodes.
+            let pyan3_scope = find_python_scope(&project_root, &changed_elements);
+            let result = pyan3.analyze_project(&pyan3_scope);
+            let duration_ms = result.duration_ms;
+            let (status, mut diag) = match result.status {
+                Pyan3Status::Ok => (PythonStageStatus::Ok, result.diagnostics),
+                Pyan3Status::NotInstalled => {
+                    let mut d = result.diagnostics;
+                    d.insert(0, "pyan3 not installed; graph phase skipped".into());
+                    (PythonStageStatus::Skipped, d)
+                }
+                Pyan3Status::Failed => {
+                    let mut d = result.diagnostics;
+                    d.insert(0, "pyan3 failed; falling back to conservative selection".into());
+                    (PythonStageStatus::Failed, d)
+                }
+            };
+            let targets: Vec<&str> = changed_elements
+                .iter()
+                .filter_map(|e| e.target.as_deref())
+                .collect();
+            let suggestions = if matches!(status, PythonStageStatus::Ok) && !targets.is_empty() {
+                let s = graph_suggestions(&targets, &discovered_tests, &result.edges);
+                diag.push(format!(
+                    "pyan3 suggested {}/{} tests reachable from changed callables",
+                    s.len(),
+                    discovered_tests.len()
+                ));
+                s
+            } else {
+                vec![]
+            };
+            (
+                suggestions,
+                PythonStageReport {
+                    status,
+                    diagnostics: diag,
+                    duration_ms,
+                },
+            )
+        }
     };
 
     // --- selection phase ---

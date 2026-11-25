@@ -22,6 +22,9 @@ struct Arguments {
     /// Seconds to allow pyan3 to run for call-graph annotation (0 = skip graph phase).
     #[arg(long, default_value = "30")]
     pyan3_timeout_secs: u64,
+    /// Seconds to allow PyCG to run (0 = skip; PyCG is tried first when non-zero).
+    #[arg(long, default_value = "0")]
+    pycg_timeout_secs: u64,
 }
 
 fn main() -> Result<()> {
@@ -32,10 +35,16 @@ fn main() -> Result<()> {
     } else {
         Some(Duration::from_secs(a.pyan3_timeout_secs))
     };
+    let pycg_timeout = if a.pycg_timeout_secs == 0 {
+        None
+    } else {
+        Some(Duration::from_secs(a.pycg_timeout_secs))
+    };
     let options = PythonImpactOptions {
         project_dir: a.project_dir,
         baseline_revision: a.baseline_revision,
         pyan3_timeout,
+        pycg_timeout,
     };
     let report = analyze_python_impact(&options)?;
     write_report_atomic(&output, &report)?;
