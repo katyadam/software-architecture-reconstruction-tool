@@ -740,3 +740,42 @@ def read_items():
         "a call in the function body must not be flagged"
     );
 }
+
+#[test]
+fn splits_arguments_by_syntax_not_text() {
+    let code = r#"
+def f():
+    requests.get(BASE + "/x?id=1")
+    requests.get(BASE + "/a,b")
+    requests.get(timeout=5, url=BASE + "/x")
+    requests.post(  # comment
+        url,
+        json = {"a": 1, "b": g(2, 3)},
+    )
+"#;
+    let tree = get_tree(code);
+    let calls: Vec<CallStatement> = CallsExtractor
+        .extract(ExtractParams::new(&tree, code))
+        .into_iter()
+        .map(PythonCallStatement::to_language_agnostic)
+        .filter(|c| c.function_name.starts_with("requests"))
+        .collect();
+    let args: Vec<Vec<(&str, &str)>> = calls
+        .iter()
+        .map(|c| {
+            c.arguments
+                .iter()
+                .map(|a| (a.assigned_variable.as_str(), a.value.as_str()))
+                .collect()
+        })
+        .collect();
+    assert_eq!(
+        args,
+        vec![
+            vec![("", r#"BASE + "/x?id=1""#)],
+            vec![("", r#"BASE + "/a,b""#)],
+            vec![("timeout", "5"), ("url", r#"BASE + "/x""#)],
+            vec![("", "url"), ("json", r#"{"a": 1, "b": g(2, 3)}"#)],
+        ]
+    );
+}
