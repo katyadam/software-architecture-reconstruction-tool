@@ -57,6 +57,9 @@ struct Arguments {
     /// Suppress source-extraction progress output while retaining diagnostics and JSON output.
     #[arg(long)]
     quiet: bool,
+    /// Skip cross-service messaging link extraction (disables MessagingConsumer propagation).
+    #[arg(long)]
+    no_messaging_analysis: bool,
 }
 
 /// Runs conservative TIA and writes a JSON result even when analysis must fall back broadly.
@@ -82,6 +85,16 @@ fn run(arguments: Arguments) -> Result<()> {
         } else {
             Some(select_provider(&arguments, provider_kind)?)
         };
+        let module_roots: Vec<PathBuf> = inputs.modules.keys().cloned().collect();
+        let messaging_links = if arguments.no_messaging_analysis || module_roots.len() < 2 {
+            vec![]
+        } else {
+            cli::messaging_links::extract_messaging_links(&project, &module_roots)
+                .unwrap_or_else(|e| {
+                    eprintln!("[tia] messaging link extraction failed: {e}");
+                    vec![]
+                })
+        };
         let result = cli::configured_java_impact::analyze_configured_impact(
             &project,
             &arguments.baseline_revision,
@@ -90,6 +103,7 @@ fn run(arguments: Arguments) -> Result<()> {
             &inputs,
             provider.as_ref().map(SelectedJavaProvider::configured),
             arguments.quiet,
+            &messaging_links,
         )?;
         return write_result(&arguments.output, &result);
     }
