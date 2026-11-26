@@ -5,6 +5,9 @@ use statix::symbolic::AnalysisResult;
 
 type ResolvedPart = Vec<String>;
 
+/// Upper bound on URIs generated for one call target (see #57).
+const MAX_TARGET_URIS: usize = 256;
+
 /// Resolves a URI template into every possible concrete URI.
 ///
 /// The template is a Python string-concatenation expression (parts separated by `+`).
@@ -15,7 +18,8 @@ type ResolvedPart = Vec<String>;
 /// - f-string literals are resolved by [`resolve_fstring`].
 ///
 /// The resolved parts are combined via Cartesian product, so two parts with 2 and
-/// 3 possible values respectively produce 6 URIs.
+/// 3 possible values respectively produce 6 URIs. At most `MAX_TARGET_URIS` (256) are
+/// returned: the first ones in that combination order.
 pub fn generate_target_uris(
     template: &str,
     analysis_result: &AnalysisResult,
@@ -27,16 +31,10 @@ pub fn generate_target_uris(
     resolved_parts
         .into_iter()
         .fold(vec!["".to_string()], |acc, parts| {
-            let mut next_acc = Vec::with_capacity(acc.len() * parts.len());
-            for base in &acc {
-                for part in &parts {
-                    let mut new_uri = String::with_capacity(base.len() + part.len());
-                    new_uri.push_str(base);
-                    new_uri.push_str(part);
-                    next_acc.push(new_uri);
-                }
-            }
-            next_acc
+            acc.iter()
+                .flat_map(|base| parts.iter().map(move |part| format!("{base}{part}")))
+                .take(MAX_TARGET_URIS)
+                .collect()
         })
 }
 
@@ -197,5 +195,34 @@ mod tests {
     fn empty_literal_part_resolves_to_empty_string() {
         let uris = generate_target_uris("\"\" + \"/api\"", &empty_result(), &HashMap::new());
         assert_eq!(uris, vec!["/api".to_string()]);
+    }
+
+    fn joined(env: &mut AnalysisResult, name: &str, vals: &[&str]) {
+        let vals = vals.iter().map(|v| Expr::Literal(v.to_string())).collect();
+        env.final_env
+            .insert(name.to_string(), (None, Expr::Joined { vals }));
+    }
+
+    #[test]
+    fn expansion_is_capped_deterministically() {
+        let mut env = empty_result();
+        let names: Vec<String> = (0..20).map(|i| format!("v{i}")).collect();
+        for name in &names {
+            joined(&mut env, name, &["a", "b"]);
+        }
+        let uris = generate_target_uris(&names.join(" + "), &env, &HashMap::new());
+        assert_eq!(uris.len(), MAX_TARGET_URIS);
+        assert_eq!(uris[0], "a".repeat(20));
+        assert_eq!(uris[1], "a".repeat(19) + "b");
+        assert_eq!(uris[255], "a".repeat(12) + &"b".repeat(8));
+    }
+
+    #[test]
+    fn small_expansion_is_unchanged() {
+        let mut env = empty_result();
+        joined(&mut env, "x", &["a", "b"]);
+        joined(&mut env, "y", &["1", "2", "3"]);
+        let uris = generate_target_uris("x + y", &env, &HashMap::new());
+        assert_eq!(uris, vec!["a1", "a2", "a3", "b1", "b2", "b3"]);
     }
 }
