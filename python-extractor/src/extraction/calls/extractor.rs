@@ -69,6 +69,31 @@ fn find_enclosing_information(
     (function_name_full, class_name, function_hash)
 }
 
+/// One `Argument` per top-level argument of `args` (an `argument_list` node).
+/// Keyword arguments keep their name; comments are skipped.
+fn extract_arguments(args: Node, code: &str) -> Vec<Argument> {
+    let mut cursor = args.walk();
+    args.named_children(&mut cursor)
+        .filter(|arg| arg.kind() != "comment")
+        .map(|arg| {
+            let (name, value) = match (
+                arg.child_by_field_name("name"),
+                arg.child_by_field_name("value"),
+            ) {
+                (Some(name), Some(value)) if arg.kind() == "keyword_argument" => {
+                    (node_text(name, code), node_text(value, code))
+                }
+                _ => ("", node_text(arg, code)),
+            };
+            Argument {
+                assigned_variable: name.to_string(),
+                value: value.to_string(),
+                datatype: None,
+            }
+        })
+        .collect()
+}
+
 pub struct CallsExtractor;
 
 impl Extractor for CallsExtractor {
@@ -103,37 +128,7 @@ impl Extractor for CallsExtractor {
                     params.code[capture.node.start_byte()..capture.node.end_byte()].to_string();
                 match query.capture_names()[capture.index as usize] {
                     "call.ident" => function_name = value,
-                    "call.args" => {
-                        let trimmed = if value.starts_with('(') && value.ends_with(')') {
-                            &value[1..value.len() - 1]
-                        } else {
-                            value.as_str()
-                        };
-                        arguments = if trimmed.is_empty() {
-                            vec![]
-                        } else {
-                            trimmed
-                                .split(',')
-                                .map(str::trim)
-                                .map(|arg| {
-                                    if arg.contains("=") {
-                                        let spl: Vec<&str> = arg.split("=").collect();
-                                        Argument {
-                                            assigned_variable: spl.first().unwrap().to_string(),
-                                            value: spl.get(1).unwrap().to_string(),
-                                            datatype: None,
-                                        }
-                                    } else {
-                                        Argument {
-                                            assigned_variable: "".to_string(),
-                                            value: arg.to_string(),
-                                            datatype: None,
-                                        }
-                                    }
-                                })
-                                .collect()
-                        };
-                    }
+                    "call.args" => arguments = extract_arguments(capture.node, params.code),
                     "call" => {
                         call_node = Some(capture.node);
                         (
