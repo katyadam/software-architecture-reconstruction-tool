@@ -8,6 +8,7 @@ pub enum CommunicationProtocol {
     RabbitMq,
     Kafka,
     Grpc,
+    Http,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema, Clone)]
