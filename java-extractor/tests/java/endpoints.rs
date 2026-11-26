@@ -354,3 +354,127 @@ fn test_endpoint_edge_cases() {
     );
     assert_eq!(search_endpoint.uri, s!("/api/v1/products/search"));
 }
+
+/// `(method, uri)` of every endpoint extracted from inline Java source.
+fn routes(code: &str) -> Vec<(HttpMethod, String)> {
+    let tree = get_tree(code);
+    EndpointsExtractor
+        .extract(code, &tree, "Inline.java")
+        .into_iter()
+        .map(|e| (e.http_method, e.uri))
+        .collect()
+}
+
+// Issue #71 B1: only @Path/@RequestMapping on the class form the prefix.
+#[test]
+fn test_class_prefix_ignores_produces() {
+    let code = r#"
+@Path("/users")
+@Produces(MediaType.APPLICATION_JSON)
+public class UserResource {
+    @GET
+    @Path("/{id}")
+    public User get(String id) { return null; }
+}"#;
+    assert_eq!(routes(code), vec![(HttpMethod::GET, s!("/users/{id}"))]);
+}
+
+#[test]
+fn test_class_prefix_ignores_cross_origin() {
+    let code = r#"
+@RequestMapping("/api")
+@CrossOrigin("*")
+public class A {
+    @GetMapping("/a")
+    public String a() { return ""; }
+}"#;
+    assert_eq!(routes(code), vec![(HttpMethod::GET, s!("/api/a"))]);
+}
+
+#[test]
+fn test_class_prefix_not_overwritten_by_later_annotation() {
+    let code = r#"
+@RequestMapping("/api/v1")
+@Api(tags = "x")
+public class A {
+    @GetMapping("/a")
+    public String a() { return ""; }
+}"#;
+    assert_eq!(routes(code), vec![(HttpMethod::GET, s!("/api/v1/a"))]);
+}
+
+// Issue #71 B2: each class keeps its own prefix.
+#[test]
+fn test_class_prefix_per_class_in_one_file() {
+    let code = r#"
+@RequestMapping("/one")
+class One {
+    @GetMapping("/x")
+    public String x() { return ""; }
+}
+@RequestMapping("/two")
+class Two {
+    @GetMapping("/x")
+    public String x() { return ""; }
+}"#;
+    assert_eq!(
+        routes(code),
+        vec![
+            (HttpMethod::GET, s!("/one/x")),
+            (HttpMethod::GET, s!("/two/x"))
+        ]
+    );
+}
+
+// Issue #71 B3: `method =` sets the verb, `value =` still gives the path.
+#[test]
+fn test_request_mapping_method_argument() {
+    let code = r#"
+public class A {
+    @RequestMapping(value = "/a", method = RequestMethod.POST)
+    public String a() { return ""; }
+}"#;
+    assert_eq!(routes(code), vec![(HttpMethod::POST, s!("/a"))]);
+}
+
+// Issue #71 B4: Feign clients call endpoints, they do not serve them.
+#[test]
+fn test_feign_client_is_not_endpoint() {
+    let code = r#"
+@FeignClient(name = "x")
+@RequestMapping("/api")
+public interface XClient {
+    @GetMapping("/x")
+    String x();
+}"#;
+    assert_eq!(routes(code), vec![]);
+}
+
+// Issue #71 B6: every class prefix in an array yields an endpoint.
+#[test]
+fn test_class_prefix_array() {
+    let code = r#"
+@RequestMapping({"/a", "/b"})
+public class A {
+    @GetMapping("/x")
+    public String x() { return ""; }
+}"#;
+    assert_eq!(
+        routes(code),
+        vec![(HttpMethod::GET, s!("/a/x")), (HttpMethod::GET, s!("/b/x"))]
+    );
+}
+
+// An anonymous class does not inherit the outer class prefix.
+#[test]
+fn test_anonymous_class_has_no_outer_prefix() {
+    let code = r#"
+@RequestMapping("/api")
+public class A {
+    Object r = new R() {
+        @GetMapping("/x")
+        public String x() { return ""; }
+    };
+}"#;
+    assert_eq!(routes(code), vec![(HttpMethod::GET, s!("/x"))]);
+}
