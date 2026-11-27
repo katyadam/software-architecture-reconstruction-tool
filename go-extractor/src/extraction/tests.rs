@@ -934,3 +934,34 @@ func forward() {
         typed.call_statements
     );
 }
+
+#[test]
+fn major_version_import_paths_use_package_name_as_alias() {
+    let code = r#"
+package api
+
+import (
+    "github.com/go-chi/chi/v5"
+    "github.com/labstack/echo/v4"
+    "k8s.io/api/core/v1"
+    web "github.com/gofiber/fiber/v2"
+)
+
+func listItems() {}
+
+func routes() {
+    router := chi.NewMux()
+    router.Get("/items", listItems)
+}
+"#;
+
+    let record = extract_syntactic(code, "api/routes.go").expect("Go extraction should succeed");
+    let aliases = record
+        .imports
+        .iter()
+        .map(|import| import.module_alias.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(aliases, ["chi", "echo", "v1", "web"]);
+    assert_eq!(record.endpoints.len(), 1);
+    assert_eq!(record.endpoints[0].uri, "/items");
+}
