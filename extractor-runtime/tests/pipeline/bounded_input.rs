@@ -81,5 +81,8 @@ fn source_just_under_depth_cap_is_extracted() {
 #[test]
 fn oversized_file_is_skipped() {
     let source = format!("x = 1\n{}", "#".repeat(MAX_SOURCE_BYTES));
-    assert!(matches!(dispatch_syntactic(&source, "big.py"), Ok(None)));
+    match dispatch_syntactic(&source, "big.py") {
+        Err(error) => assert!(error.to_string().contains("extraction limit"), "{error}"),
+        Ok(_) => panic!("oversized file must be rejected"),
+    }
 }

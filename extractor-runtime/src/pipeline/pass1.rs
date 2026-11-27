@@ -12,12 +12,12 @@ pub fn dispatch_syntactic(
 ) -> Result<Option<FileRecord>, ExtractionError> {
     let path = std::path::Path::new(file_path);
     let ext = path.extension().and_then(|e| e.to_str());
+    // An error, not Ok(None): callers report errors (CLI prints, service logs), so the skip is visible.
     if matches!(ext, Some("java" | "py" | "go")) && text.len() > MAX_SOURCE_BYTES {
-        log::warn!(
-            "Skipping {file_path}: {} bytes exceeds the {MAX_SOURCE_BYTES}-byte extraction limit",
+        return Err(ExtractionError::Process(format!(
+            "{} bytes exceeds the {MAX_SOURCE_BYTES}-byte extraction limit",
             text.len()
-        );
-        return Ok(None);
+        )));
     }
     match ext {
         Some("java") => java_extractor::extraction::extract_syntactic(text, file_path).map(Some),
