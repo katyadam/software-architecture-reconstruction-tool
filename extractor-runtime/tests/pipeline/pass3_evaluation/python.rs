@@ -184,3 +184,42 @@ def fetch():
         "local callable definition must take priority over global"
     );
 }
+
+#[test]
+fn python_inline_url_arguments_keep_query_comma_and_url_keyword() {
+    let code = r#"
+BASE = "http://svc"
+
+def query():
+    requests.get(BASE + "/x?id=1")
+
+def comma():
+    requests.get(BASE + "/a,b")
+
+def keyword_url():
+    requests.get(timeout=5, url=BASE + "/x")
+"#;
+
+    let record = python_extract(code, "client.py").expect("Python extraction should succeed");
+    let evaluated = evaluate(
+        build_project_ir(vec![record]),
+        &HashMap::new(),
+        &HashMap::new(),
+        &HashMap::new(),
+    );
+    let target = |function: &str| -> String {
+        let targets: Vec<&str> = evaluated
+            .restcalls
+            .iter()
+            .filter(|r| r.function_name.starts_with(function))
+            .map(|r| r.target_uri.as_str())
+            .collect();
+        assert_eq!(targets.len(), 1, "{function}: {targets:?}");
+        targets[0].to_string()
+    };
+
+    // ends_with: whether the inline `BASE` is resolved is not what this test covers.
+    assert!(target("query").ends_with("/x?id=1"));
+    assert!(target("comma").ends_with("/a,b"));
+    assert!(target("keyword_url").ends_with("/x"));
+}

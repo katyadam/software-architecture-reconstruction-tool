@@ -23,65 +23,37 @@ impl Clone for Box<dyn CallableMatcher> {
 
 /// Shared fallback matching logic used by both Java and Python matchers.
 ///
-/// First tries an exact match via mangled name. Falls back to matching by
-/// function name + highest number of matching parameter types.
-/// Uses `winner.is_none() || matched > highest` so zero-param callees resolve correctly.
+/// Picks the callable with the same name and arity that has the most matching
+/// parameter types (an exact match matches them all). A candidate with zero
+/// matching types still counts, so zero-param callees resolve correctly.
+/// Ties go to the smallest key: `HashMap` order changes between runs (#62).
 pub fn find_closest_callable_impl(
     callables: &HashMap<String, ParsedCallable>,
     name: &str,
     params: &[VarType],
 ) -> Option<String> {
     let mut highest: usize = 0;
-    let mut winner: Option<String> = None;
-    let mangled_name = name.to_owned()
-        + "("
-        + &params
-            .iter()
-            .map(|t| t.as_deref().unwrap_or(""))
-            .collect::<Vec<_>>()
-            .join(",")
-        + ")";
+    let mut winner: Option<&String> = None;
 
     for header in callables.keys() {
-        // Prefer exact match by mangled name
-        if let Some(m_to_cmp) = mangle_header(header)
-            && mangled_name == m_to_cmp
-        {
-            return Some(header.clone());
+        let Some((cur_name, cur_params)) = parse_callable_header_manual(header) else {
+            continue;
+        };
+        if cur_name != name || cur_params.len() != params.len() {
+            continue;
         }
-        // Fallback: match by name + parameter types overlap
-        if let Some((cur_name, cur_params)) = parse_callable_header_manual(header) {
-            if cur_name != name || cur_params.len() != params.len() {
-                continue;
-            }
-            let matched = params
-                .iter()
-                .zip(cur_params.iter())
-                .filter(|(a, b)| a == b)
-                .count();
-            if winner.is_none() || matched > highest {
-                highest = matched;
-                winner = Some(header.clone());
-            }
+        let matched = params
+            .iter()
+            .zip(cur_params.iter())
+            .filter(|(a, b)| a == b)
+            .count();
+        if winner.is_none_or(|w| matched > highest || (matched == highest && header < w)) {
+            highest = matched;
+            winner = Some(header);
         }
     }
 
-    winner
-}
-
-/// Mangle a full callable header string into `name(Type1,Type2)` form,
-/// stripping return type and parameter names.
-pub fn mangle_header(header: &str) -> Option<String> {
-    let (name, params) = parse_callable_header_manual(header)?;
-    Some(
-        name + "("
-            + &params
-                .iter()
-                .map(|t| t.as_deref().unwrap_or(""))
-                .collect::<Vec<_>>()
-                .join(",")
-            + ")",
-    )
+    winner.cloned()
 }
 
 /// Parse a callable header string into `(name, [param_types])`.

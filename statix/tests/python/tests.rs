@@ -1010,3 +1010,64 @@ class MpsClient:
         expected
     );
 }
+
+// ── Determinism (#62) ─────────────────────────────────────────────────────────
+
+#[test]
+fn python_callee_with_several_candidates_resolves_the_same_every_time() {
+    // `base` exists twice, with keys `str base()` and `Any base()`; both match the call.
+    let code = r#"
+def base() -> str:
+    return "http://a"
+
+def base():
+    return "http://b"
+
+def get_url() -> str:
+    return base() + "/x"
+"#;
+    let tree = get_python_tree(code);
+    let mut results: Vec<Expr> = (0..64)
+        .map(|_| {
+            // A fresh map gets a fresh hash seed, so iteration order varies.
+            let map = parse_python(&tree, code);
+            symbolic_evaluation(
+                &map,
+                "str get_url()",
+                Box::new(PythonCallableMatcher::new()),
+            )
+            .expect("evaluation should succeed")
+            .return_value
+        })
+        .collect();
+    results.dedup();
+    assert_eq!(
+        results.len(),
+        1,
+        "resolved to different values: {results:?}"
+    );
+}
+
+#[test]
+fn python_call_with_unknown_arg_does_not_match_zero_param_callable() {
+    // `f(unknown)` has one arg of unknown type; it must not resolve to `f()`.
+    let code = r#"
+def f():
+    return "http://a"
+
+def f(x):
+    return "http://b"
+
+def get_url() -> str:
+    return f(unknown)
+"#;
+    let tree = get_python_tree(code);
+    let map = parse_python(&tree, code);
+    let result = symbolic_evaluation(
+        &map,
+        "str get_url()",
+        Box::new(PythonCallableMatcher::new()),
+    )
+    .expect("evaluation should succeed");
+    assert_eq!(result.return_value, Expr::Literal("http://b".to_string()));
+}

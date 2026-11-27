@@ -19,5 +19,6 @@ pub fn extract_syntactic_callables(
     let tree = parser
         .parse(code, None)
         .ok_or_else(|| ExtractionError::Process("Error parsing code".into()))?;
+    extraction::reject_deep_tree(&tree)?;
     Ok(CallablesExtractor.extract(code, &tree, file_name))
 }

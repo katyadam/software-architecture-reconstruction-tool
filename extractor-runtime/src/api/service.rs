@@ -4,7 +4,7 @@ use actix_multipart::{Field, Multipart};
 use actix_web::{HttpResponse, Responder, Result};
 use awc::body::BoxBody;
 use futures_util::StreamExt as _;
-use log::info;
+use log::{info, warn};
 use models::{api::ProcessFilesIdentifier, ir::evaluted::EvaluatedIR};
 use uuid::Uuid;
 
@@ -145,7 +145,7 @@ fn run_extraction_pipeline(collected: &[(String, String, i64)]) -> EvaluatedIR {
                 Ok(Some(record)) => Some(record),
                 Ok(None) => None,
                 Err(e) => {
-                    info!("Pass 1 error for {name}: {e}");
+                    warn!("Skipping {name}, Pass 1 error: {e}");
                     None
                 }
             },

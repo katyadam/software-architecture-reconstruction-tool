@@ -26,7 +26,11 @@ impl MethodCallIdentificationStrategy {
     }
 
     fn identify_target_uri(&self, call_args: &[Argument]) -> Option<String> {
-        let raw = &call_args.first()?.value;
+        let raw = &call_args
+            .iter()
+            .find(|arg| arg.assigned_variable == "url")
+            .or_else(|| call_args.first())?
+            .value;
         let uri = statix::strings::clean_python_string(raw);
         let is_string_literal = raw.contains('"') || raw.contains('\'');
         // String literals with no `/` are not URIs (e.g. dict key lookups like `.get("key")`).

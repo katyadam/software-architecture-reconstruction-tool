@@ -18,7 +18,18 @@ pub(super) fn collect_imports(root: Node, code: &str) -> Vec<Import> {
             return;
         };
         let path = strip_quotes(node_text(path_node, code)).to_string();
-        let default_alias = path.rsplit('/').next().unwrap_or(&path);
+        // Go major-version suffix (`chi/v5`, v2+) is not the package name.
+        // shortcut: a package actually named `v2` (k8s.io/api/autoscaling/v2) gets its parent's name.
+        let mut segments = path.rsplit('/');
+        let last = segments.next().unwrap_or(&path);
+        let is_major_version = last
+            .strip_prefix('v')
+            .and_then(|n| n.parse::<u32>().ok())
+            .is_some_and(|n| n >= 2);
+        let default_alias = match segments.next() {
+            Some(package) if is_major_version => package,
+            _ => last,
+        };
         let alias = node
             .child_by_field_name("name")
             .map(|name| node_text(name, code))
