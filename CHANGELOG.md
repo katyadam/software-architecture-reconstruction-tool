@@ -1,3 +1,14 @@
+# Unreleased
+
+- Python: no crash on a lone quote part in a REST call target (#56)
+- Python: REST call URI combinations capped at 256 per call (#57)
+- Python: `f` prefix stripped only from real f-strings (#58)
+- Python: call arguments split by syntax, `url=` preferred as REST target (#59)
+- Deterministic callee choice when several callables match a call (#62, partial; see #101)
+- Go: major-version imports (`chi/v5`) use the package name as alias (#68)
+- Syntax tree depth and source size limits; the CLI skips files it can't extract instead of aborting (#70)
+- Java: class route prefix only from the enclosing `@RequestMapping`/`@Path`, `method=` read, `@FeignClient` skipped, prefix arrays (#71)
+
 # 0.6.0
 
 - Multi pass approach for better precision
