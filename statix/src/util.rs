@@ -10,6 +10,32 @@ pub fn load_file(filename: &str) -> Result<String, std::io::Error> {
     fs::read_to_string(filename)
 }
 
+/// Deepest syntax tree the Java and Python extractors walk. Their AST walks are
+/// recursive; in a debug build they overflow a 2 MiB stack at ~400 levels.
+pub const MAX_TREE_DEPTH: usize = 256;
+
+/// True when `tree` nests deeper than `max` levels. Iterative, so it is safe on
+/// any input.
+pub fn tree_depth_exceeds(tree: &Tree, max: usize) -> bool {
+    let mut cursor = tree.walk();
+    let mut depth = 1;
+    loop {
+        if depth > max {
+            return true;
+        }
+        if cursor.goto_first_child() {
+            depth += 1;
+            continue;
+        }
+        while !cursor.goto_next_sibling() {
+            if !cursor.goto_parent() {
+                return false;
+            }
+            depth -= 1;
+        }
+    }
+}
+
 /// Extract the text of a named field child of `node`.
 /// Replaces the repeated 4-line pattern:
 /// `node.child_by_field_name(field).ok_or(...)?.utf8_text(...)?.to_string()`

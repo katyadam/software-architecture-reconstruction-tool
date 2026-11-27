@@ -31,6 +31,12 @@ pub fn extract_syntactic(code: &str, file_name: &str) -> Result<FileRecord, Extr
     let tree = parser
         .parse(code, None)
         .ok_or_else(|| ExtractionError::Process("Error parsing code".into()))?;
+    if statix::util::tree_depth_exceeds(&tree, statix::util::MAX_TREE_DEPTH) {
+        return Err(ExtractionError::Process(format!(
+            "syntax tree deeper than {} levels",
+            statix::util::MAX_TREE_DEPTH
+        )));
+    }
 
     let params = ExtractParams::new(&tree, code).file_name(file_name);
 

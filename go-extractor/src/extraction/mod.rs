@@ -117,14 +117,25 @@ pub fn resolve_project_message_edges(files: &mut [TypedFileRecord]) {
     message_edge_project::resolve_message_edges(files);
 }
 
+/// The Go walks use smaller frames than Java and Python: in a debug build they
+/// overflow a 2 MiB stack at ~765 levels, so Go allows more than
+/// [`statix::util::MAX_TREE_DEPTH`].
+const MAX_GO_TREE_DEPTH: usize = 512;
+
 fn parse_go_tree(code: &str) -> Result<Tree, ExtractionError> {
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_go::LANGUAGE.into())
         .map_err(|err| ExtractionError::Process(format!("failed to load Go grammar: {err}")))?;
-    parser
+    let tree = parser
         .parse(code, None)
-        .ok_or_else(|| ExtractionError::Process("failed to parse Go source".to_string()))
+        .ok_or_else(|| ExtractionError::Process("failed to parse Go source".to_string()))?;
+    if statix::util::tree_depth_exceeds(&tree, MAX_GO_TREE_DEPTH) {
+        return Err(ExtractionError::Process(format!(
+            "syntax tree deeper than {MAX_GO_TREE_DEPTH} levels"
+        )));
+    }
+    Ok(tree)
 }
 
 #[cfg(test)]
